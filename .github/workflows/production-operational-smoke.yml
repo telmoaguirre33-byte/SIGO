@@ -6,6 +6,7 @@ on:
     paths:
       - 'supabase/migrations/**'
       - 'scripts/production-operational-smoke.sql'
+      - 'scripts/production-transaction-smoke.sql'
       - 'scripts/production-arca-readiness.sql'
       - '.github/workflows/production-operational-smoke.yml'
   workflow_dispatch:
@@ -171,9 +172,19 @@ jobs:
         run: |
           set -euo pipefail
           echo "Running read-only SIGO production checks: initial stock, product invariants, scanner identities and monetary transaction integrity."
-          psql "$SIGO_SMOKE_DB_URL" -X -v ON_ERROR_STOP=1 -f scripts/production-operational-smoke.sql | tee /tmp/sigo-production-smoke.log
+          psql "$SIGO_SMOKE_DB_URL" -X -v ON_ERROR_STOP=1 -f scripts/production-operational-smoke.sql 2>&1 | tee /tmp/sigo-production-smoke.log
           grep -q 'SIGO_SMOKE_TEST_PRODUCT' /tmp/sigo-production-smoke.log
           echo "SIGO_PRODUCTION_OPERATIONAL_SMOKE_COMPLETED"
+
+      - name: Prove cash sale stock and cash with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Running transactional SIGO sale smoke in production. Every test write is rolled back."
+          psql "$SIGO_SMOKE_DB_URL" -X -v ON_ERROR_STOP=1 -f scripts/production-transaction-smoke.sql 2>&1 | tee /tmp/sigo-production-transaction-smoke.log
+          grep -q 'SIGO_PRODUCTION_TRANSACTION_SMOKE_OK' /tmp/sigo-production-transaction-smoke.log
+          grep -q 'SIGO_PRODUCTION_TRANSACTION_SMOKE_ROLLED_BACK' /tmp/sigo-production-transaction-smoke.log
+          echo "SIGO_PRODUCTION_TRANSACTION_SMOKE_COMPLETED"
 
       - name: Read ARCA production readiness
         shell: bash
