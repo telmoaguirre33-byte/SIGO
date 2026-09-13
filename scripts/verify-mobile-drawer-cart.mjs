@@ -43,13 +43,21 @@ for (const required of [
   ".sigo-mobile-menu-trigger",
   ".sigo-mobile-cart-trigger",
   ".sigo-mobile-drawer",
+  ".sigo-operation-only .content",
+  "padding-top:82px",
+  "position:absolute",
   "@media (max-width:760px)",
 ]) {
   if (!css.includes(required)) throw new Error(`Mobile menu CSS safeguard missing: ${required}`);
+}
+
+const actionsBlock = css.match(/\.sigo-mobile-operations-actions\s*\{([\s\S]*?)\}/)?.[1] ?? "";
+if (/position\s*:\s*fixed/i.test(actionsBlock)) {
+  throw new Error("Mobile menu/cart regression: quick actions must not remain fixed over operation content");
 }
 
 if (!main.includes("<MobileOperationsMenu />") || !main.includes('"./mobile-operations-menu.css"')) {
   throw new Error("Mobile menu must remain mounted in the production shell");
 }
 
-console.log("Mobile drawer/cart verified: hamburger remains visible independently of auxiliary tenant refresh, with cart and topic navigation mounted for phone operation.");
+console.log("Mobile drawer/cart verified: hamburger remains visible, cart stays accessible, and quick actions reserve space instead of covering the operation title.");
