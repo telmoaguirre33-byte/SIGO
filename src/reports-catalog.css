@@ -14,6 +14,21 @@
 .sigo-detail-title h3 { margin:0; }
 .sigo-health-inline { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; padding:12px 14px; border-radius:14px; background:#f7f9fd; color:#526174; }
 .sigo-health-inline strong { color:#172033; }
+.sigo-stock-risk-note { margin:18px 0 12px; color:#5a6880; line-height:1.5; }
+.sigo-stock-risk-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:14px; }
+.sigo-stock-risk-item { border:1px solid #e3e8f1; border-radius:16px; padding:14px 15px; background:#fff; box-shadow:0 8px 20px rgba(31,41,55,.05); }
+.sigo-stock-risk-item > div { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+.sigo-stock-risk-item strong { color:#172033; line-height:1.25; }
+.sigo-stock-risk-item > div > span { flex:0 0 auto; font-size:11px; font-weight:800; letter-spacing:.04em; border-radius:999px; padding:5px 8px; background:#eef2f7; color:#526174; }
+.sigo-stock-risk-item p { margin:9px 0 5px; color:#5f6d82; line-height:1.4; font-size:13px; }
+.sigo-stock-risk-item small { color:#34445c; font-weight:700; }
+.sigo-stock-risk-item.risk-sin_stock { border-color:#f2b8b5; background:#fff7f6; }
+.sigo-stock-risk-item.risk-sin_stock > div > span { background:#fde2e0; color:#a3312d; }
+.sigo-stock-risk-item.risk-urgente { border-color:#f4c59e; background:#fff9f2; }
+.sigo-stock-risk-item.risk-urgente > div > span { background:#ffead6; color:#9b4c0c; }
+.sigo-stock-risk-item.risk-proximo { border-color:#ead98c; background:#fffdf3; }
+.sigo-stock-risk-item.risk-proximo > div > span { background:#fff3b5; color:#7d6212; }
+.sigo-stock-risk-item.risk-revisar > div > span { background:#e4efff; color:#2d5b9a; }
 
 @media (max-width:760px) {
   .sigo-reports-page { width:100%; }
@@ -25,6 +40,8 @@
   .sigo-report-card > span:last-child { font-size:18px; line-height:1.42; }
   .sigo-report-icon { width:72px; height:72px; font-size:36px; border-radius:22px; }
   .sigo-report-detail { border-radius:22px; scroll-margin-top:190px; }
+  .sigo-stock-risk-grid { grid-template-columns:1fr; }
+  .sigo-stock-risk-item > div { flex-direction:column; gap:8px; }
 }
 
 @media (max-width:430px) {
