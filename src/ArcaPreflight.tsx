@@ -21,6 +21,9 @@ type PreflightResult = {
     wsfeReachable?: boolean;
   };
   autenticacionRealValidada?: boolean;
+  autenticacionRealEstado?: string;
+  autenticacionRealAntiguedadMinutos?: number | null;
+  emisionHabilitable?: boolean;
   ultimaPruebaAt?: string | null;
   nota?: string;
   error?: string;
@@ -28,6 +31,14 @@ type PreflightResult = {
 
 function marca(ok?: boolean) {
   return ok ? "✓" : "—";
+}
+
+function textoAntiguedad(minutos?: number | null) {
+  if (minutos == null || !Number.isFinite(minutos)) return "";
+  if (minutos < 60) return ` · hace ${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  const resto = minutos % 60;
+  return ` · hace ${horas} h${resto ? ` ${resto} min` : ""}`;
 }
 
 export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
@@ -80,7 +91,7 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
 
       {result ? (
         <div className="arca-security-note" role="status">
-          <strong>{result.ok ? "Preparación técnica completa" : "Preparación incompleta"}</strong>
+          <strong>{result.emisionHabilitable ? "ARCA listo para emisión" : result.ok ? "Preparación técnica completa" : "Preparación incompleta"}</strong>
           <span>{marca(checks?.configuracion)} Configuración fiscal encontrada</span>
           <span>{marca(checks?.configuracionActiva)} Configuración ARCA activa</span>
           <span>{marca(checks?.ambienteValido)} Ambiente válido{result.ambiente ? ` · ${result.ambiente}` : ""}</span>
@@ -90,7 +101,8 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
           <span>{marca(checks?.puntoVenta)} Punto de venta activo y válido{checks?.puntosVentaActivos?.length ? ` · ${checks.puntosVentaActivos.join(", ")}` : ""}</span>
           <span>{marca(checks?.wsaaReachable)} WSAA accesible desde el backend</span>
           <span>{marca(checks?.wsfeReachable)} WSFEv1 accesible desde el backend</span>
-          <span>{result.autenticacionRealValidada ? "✓" : "—"} Autenticación WSAA real validada</span>
+          <span>{result.autenticacionRealValidada ? "✓" : "—"} Autenticación WSAA real {result.autenticacionRealEstado ? `· ${result.autenticacionRealEstado}` : ""}{textoAntiguedad(result.autenticacionRealAntiguedadMinutos)}</span>
+          <span>{result.emisionHabilitable ? "✓ Emisión habilitable: preflight + WSAA vigente" : "— Emisión todavía bloqueada hasta tener WSAA vigente"}</span>
           <span>{result.nota || "La emisión permanece bloqueada hasta validar WSAA con el certificado de la empresa."}</span>
         </div>
       ) : null}
