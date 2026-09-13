@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import ArcaLauncher from "./ArcaLauncher";
 import ConfiguracionLauncher from "./ConfiguracionLauncher";
+import IngresosLauncher from "./IngresosLauncher";
 import SigoAyuda from "./SigoAyuda";
 import SigoAuthGate from "./SigoAuthGate";
 import SigoRoot from "./SigoRoot";
@@ -23,6 +24,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <SigoRoot />
         <ArcaLauncher />
         <ConfiguracionLauncher />
+        <IngresosLauncher />
         <SigoAyuda />
       </>
     </SigoAuthGate>
