@@ -29,6 +29,12 @@
     font:inherit;
   }
 
+  .sigo-mobile-menu-trigger {
+    border-color:#dce5f0;
+    background:rgba(255,255,255,.98);
+    color:#172033;
+  }
+
   .sigo-mobile-operations-actions span { font-size:19px; line-height:1; }
   .sigo-mobile-operations-actions strong { font-size:12px; }
   .sigo-mobile-cart-trigger {
