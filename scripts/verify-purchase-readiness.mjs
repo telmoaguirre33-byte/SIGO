@@ -51,8 +51,11 @@ if (preflightCall < 0 || rpcCall < 0 || preflightCall > rpcCall) {
 }
 
 const preflightBlockStart = compras.indexOf('async function verificarProductosCompraAntesDeConfirmar');
-const confirmStart = compras.indexOf('export async function confirmarCompraSigo');
-const preflightBlock = compras.slice(preflightBlockStart, confirmStart);
+const preflightBlockEnd = compras.indexOf('\nfunction fechaIsoValida', preflightBlockStart);
+if (preflightBlockStart < 0 || preflightBlockEnd < 0 || preflightBlockEnd <= preflightBlockStart) {
+  throw new Error('Purchase readiness regression: product preflight boundaries could not be verified');
+}
+const preflightBlock = compras.slice(preflightBlockStart, preflightBlockEnd);
 if (/\.insert\(|\.update\(|\.upsert\(|\.delete\(|\.rpc\(/.test(preflightBlock)) {
   throw new Error('Purchase readiness regression: product preflight must remain read-only');
 }
