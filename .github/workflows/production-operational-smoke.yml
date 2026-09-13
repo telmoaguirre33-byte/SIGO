@@ -111,16 +111,59 @@ jobs:
           sudo apt-get install -y postgresql-client
           psql --version
 
-      - name: Verify migrations are current
+      - name: Wait until production migrations are current
         shell: bash
         run: |
           set -euo pipefail
-          state="$(supabase migration list --db-url "$SIGO_SMOKE_DB_URL")"
-          echo "$state"
-          if echo "$state" | grep -E '\|[[:space:]]+[0-9]{14}[[:space:]]*\|' | grep -qE '\|[[:space:]]*\|'; then
-            echo "::error title=Production migrations pending::Operational smoke will not certify a database with unapplied migrations."
-            exit 1
-          fi
+
+          migration_issues() {
+            local state="$1"
+            SIGO_MIGRATION_STATE="$state" python3 - <<'PY'
+          import os
+          import re
+
+          issues = []
+          state = os.environ.get("SIGO_MIGRATION_STATE", "")
+          for raw in state.splitlines():
+              parts = raw.split("|")
+              if len(parts) < 2:
+                  continue
+              local = re.sub(r"\D", "", parts[0])
+              remote = re.sub(r"\D", "", parts[1])
+              if len(local) == 14 and not remote:
+                  issues.append(f"pending:{local}")
+              elif len(remote) == 14 and not local:
+                  issues.append(f"remote-only:{remote}")
+              elif len(local) == 14 and len(remote) == 14 and local != remote:
+                  issues.append(f"mismatch:{local}:{remote}")
+          print("\n".join(issues))
+          PY
+          }
+
+          last_state=""
+          for attempt in $(seq 1 24); do
+            state="$(supabase migration list --db-url "$SIGO_SMOKE_DB_URL")"
+            last_state="$state"
+            issues="$(migration_issues "$state")"
+            if [ -z "$issues" ]; then
+              echo "$state"
+              echo "Production migration state is current."
+              exit 0
+            fi
+
+            echo "Production migrations are not current yet (attempt ${attempt}/24):"
+            echo "$issues"
+            if printf '%s\n' "$issues" | grep -qE '^(remote-only|mismatch):'; then
+              echo "$state"
+              echo "::error title=Production migration history mismatch::Operational smoke refuses to certify divergent migration history."
+              exit 1
+            fi
+            sleep 5
+          done
+
+          echo "$last_state"
+          echo "::error title=Production migrations pending::Operational smoke waited for deployment but production still has unapplied migrations."
+          exit 1
 
       - name: Run production operational smoke
         shell: bash
