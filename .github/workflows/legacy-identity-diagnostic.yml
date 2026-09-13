@@ -1,0 +1,143 @@
+name: SIGO Legacy Identity Diagnostic
+
+on:
+  push:
+    branches: [qa-legacy-identities-20260913]
+    paths:
+      - '.github/workflows/legacy-identity-diagnostic.yml'
+  workflow_dispatch:
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Resolve production database
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_url() {
+            local candidate="$1"
+            echo "::add-mask::$candidate"
+            if timeout 10s supabase migration list --db-url "$candidate" >/dev/null 2>/tmp/sigo-legacy-db-error.txt; then
+              echo "SIGO_LEGACY_DB_URL=$candidate" >> "$GITHUB_ENV"
+              return 0
+            fi
+            return 1
+          }
+          if [ -n "${SUPABASE_DB_URL:-}" ] && test_url "$SUPABASE_DB_URL"; then exit 0; fi
+          if [ -n "${SUPABASE_POOLER_URL:-}" ] && test_url "$SUPABASE_POOLER_URL"; then exit 0; fi
+          if [ -z "${SUPABASE_PROJECT_REF:-}" ] || [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then
+            echo "::error title=Legacy diagnostic blocked::Production database credentials are incomplete."
+            exit 1
+          fi
+          encoded_password="$(python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+          print(quote(os.environ['SUPABASE_DB_PASSWORD'], safe=''))
+          PY
+          )"
+          echo "::add-mask::$encoded_password"
+          direct="postgresql://postgres:${encoded_password}@db.${SUPABASE_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require"
+          if test_url "$direct"; then exit 0; fi
+          regions=(sa-east-1 us-east-1 us-east-2 us-west-1 us-west-2 ca-central-1 eu-west-1 eu-west-2 eu-west-3 eu-central-1 eu-central-2 eu-north-1 ap-southeast-1 ap-southeast-2 ap-northeast-1 ap-northeast-2 ap-south-1)
+          for region in "${regions[@]}"; do
+            for generation in aws-0 aws-1; do
+              candidate="postgresql://postgres.${SUPABASE_PROJECT_REF}:${encoded_password}@${generation}-${region}.pooler.supabase.com:5432/postgres?sslmode=require"
+              if test_url "$candidate"; then exit 0; fi
+            done
+          done
+          cat /tmp/sigo-legacy-db-error.txt >&2 || true
+          exit 1
+
+      - name: Ensure psql
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update -y
+            sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+
+      - name: Read legacy duplicate identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$SIGO_LEGACY_DB_URL" -X -v ON_ERROR_STOP=1 <<'SQL'
+          begin transaction read only;
+          \pset pager off
+          \pset border 2
+          \pset null '(null)'
+
+          select 'SIGO_LEGACY_IDENTITY_DIAGNOSTIC' as marker,
+                 count(*) as legacy_pending
+          from public.productos
+          where upper(btrim(coalesce(codigo_interno,''))) like 'LEGACY-DUP-%';
+
+          with legacy as (
+            select
+              p.id,
+              p.empresa_id,
+              p.codigo_interno,
+              p.codigo_barras,
+              p.nombre,
+              p.descripcion,
+              p.categoria,
+              p.proveedor,
+              p.stock_actual,
+              p.costo_actual,
+              p.precio_venta,
+              nullif((regexp_match(coalesce(p.descripcion,''), 'Código de origen repetido/no disponible para unicidad: ([^.]+)\.'))[1], '') as codigo_origen
+            from public.productos p
+            where upper(btrim(coalesce(p.codigo_interno,''))) like 'LEGACY-DUP-%'
+          )
+          select
+            l.id as legacy_id,
+            l.codigo_interno as legacy_codigo,
+            l.codigo_origen,
+            l.nombre as legacy_nombre,
+            l.categoria,
+            l.proveedor,
+            l.stock_actual,
+            l.costo_actual,
+            l.precio_venta,
+            coalesce(string_agg(
+              concat_ws(' | ',
+                c.id::text,
+                c.nombre,
+                nullif(c.codigo_interno,''),
+                nullif(c.codigo_barras,''),
+                'stock=' || coalesce(c.stock_actual::text,'null'),
+                'costo=' || coalesce(c.costo_actual::text,'null'),
+                'precio=' || coalesce(c.precio_venta::text,'null')
+              ), E'\n'
+              order by c.nombre, c.id
+            ), 'SIN_CANDIDATO') as candidatos_codigo_origen
+          from legacy l
+          left join public.productos c
+            on c.empresa_id = l.empresa_id
+           and c.id <> l.id
+           and l.codigo_origen is not null
+           and (
+             btrim(coalesce(c.codigo_interno,'')) = btrim(l.codigo_origen)
+             or btrim(coalesce(c.codigo_barras,'')) = btrim(l.codigo_origen)
+           )
+          group by l.id,l.codigo_interno,l.codigo_origen,l.nombre,l.categoria,l.proveedor,l.stock_actual,l.costo_actual,l.precio_venta
+          order by l.codigo_origen nulls last, l.nombre, l.id;
+
+          rollback;
+          SQL
