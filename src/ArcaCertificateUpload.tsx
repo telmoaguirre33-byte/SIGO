@@ -61,13 +61,24 @@ export default function ArcaCertificateUpload({ empresaId, onUploaded }: { empre
       if (!response.ok) {
         const code = String(payload?.error || "");
         if (code === "ARCA_CONFIG_REQUIRED") throw new Error("Primero guardá CUIT y ambiente en Datos de facturación.");
+        if (code === "ARCA_CUIT_REQUIRED") throw new Error("Configurá un CUIT emisor válido antes de vincular el certificado.");
         if (code === "CERTIFICADO_CLAVE_NO_COINCIDEN") throw new Error("El certificado y la clave privada no corresponden al mismo par criptográfico.");
         if (code === "CERTIFICADO_VENCIDO") throw new Error("El certificado está vencido. Generá o vinculá uno vigente en ARCA.");
+        if (code === "CERTIFICADO_AUN_NO_VIGENTE") throw new Error("El certificado todavía no está vigente. Revisá su fecha de inicio antes de usarlo.");
+        if (code === "CERTIFICADO_VIGENCIA_INVALIDA") throw new Error("El certificado no informa un período de vigencia válido.");
+        if (code === "CERTIFICADO_SERIALNUMBER_INVALIDO") throw new Error("El certificado no identifica el CUIT en serialNumber con el formato exigido por ARCA.");
+        if (code === "CERTIFICADO_CUIT_NO_COINCIDE") {
+          const configurado = String(payload?.cuitConfigurado || "");
+          const certificadoCuit = String(payload?.cuitCertificado || "");
+          const detalle = configurado && certificadoCuit ? ` Configurado: ${configurado}. Certificado: ${certificadoCuit}.` : "";
+          throw new Error(`El CUIT del certificado no coincide con el CUIT emisor de SIGO.${detalle}`);
+        }
         if (code === "CERTIFICADO_O_CLAVE_NO_LEGIBLE") throw new Error("No se pudo leer el certificado o la clave privada. Revisá formato PEM y contraseña.");
         throw new Error("No se pudo guardar el certificado de forma segura.");
       }
 
-      setOk(`Certificado vinculado. Vence: ${payload.vence ? new Date(payload.vence).toLocaleDateString("es-AR") : "fecha no informada"}.`);
+      const cuit = payload?.cuit ? ` CUIT: ${payload.cuit}.` : "";
+      setOk(`Certificado vinculado.${cuit} Vence: ${payload.vence ? new Date(payload.vence).toLocaleDateString("es-AR") : "fecha no informada"}.`);
       setCertificado(null);
       setClavePrivada(null);
       setPassphrase("");
@@ -85,7 +96,7 @@ export default function ArcaCertificateUpload({ empresaId, onUploaded }: { empre
       <div className="panel-header">
         <div>
           <h3>Certificado digital de ARCA</h3>
-          <p>Subí el certificado X.509 y su clave privada. Se guardan en almacenamiento privado aislado por empresa.</p>
+          <p>Subí el certificado X.509 y su clave privada. SIGO valida vigencia, CUIT y correspondencia criptográfica antes de guardarlos en almacenamiento privado por empresa.</p>
         </div>
       </div>
 
@@ -98,7 +109,7 @@ export default function ArcaCertificateUpload({ empresaId, onUploaded }: { empre
             onChange={(event) => setCertificado(event.target.files?.[0] ?? null)}
             required
           />
-          <small>Ej.: certificate.pem o certificado.crt. Máximo 256 KB.</small>
+          <small>Ej.: certificate.pem o certificado.crt. Máximo 256 KB. Debe corresponder al mismo CUIT configurado en SIGO.</small>
         </div>
         <div className="form-group form-span-2">
           <label>Clave privada *</label>
