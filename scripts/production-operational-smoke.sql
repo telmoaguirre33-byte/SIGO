@@ -10,11 +10,15 @@ declare
   v_libreria_lotes integer;
   v_computacion_lotes integer;
   v_total_lotes integer;
+  v_distinct_lotes integer;
   v_libreria_source integer;
   v_libreria_verified integer;
   v_computacion_source integer;
   v_computacion_verified integer;
   v_import_tenants integer;
+  v_lot_accounting_mismatches integer;
+  v_lot_verification_mismatches integer;
+  v_source_file_mismatches integer;
   v_catalogo integer;
   v_cost_null integer;
   v_stock_null integer;
@@ -42,6 +46,7 @@ begin
     count(*) filter (where import_key like 'resguardo-stock-sigo-2026-09-09-libreria-%'),
     count(*) filter (where import_key like 'resguardo-stock-sigo-2026-09-09-sertec-%'),
     count(*) filter (where import_key like 'resguardo-stock-sigo-2026-09-09-libreria-%' or import_key like 'resguardo-stock-sigo-2026-09-09-sertec-%'),
+    count(distinct import_key) filter (where import_key like 'resguardo-stock-sigo-2026-09-09-libreria-%' or import_key like 'resguardo-stock-sigo-2026-09-09-sertec-%'),
     coalesce(sum(source_rows) filter (where import_key like 'resguardo-stock-sigo-2026-09-09-libreria-%'), 0),
     coalesce(sum(verified_rows) filter (where import_key like 'resguardo-stock-sigo-2026-09-09-libreria-%'), 0),
     coalesce(sum(source_rows) filter (where import_key like 'resguardo-stock-sigo-2026-09-09-sertec-%'), 0),
@@ -51,6 +56,7 @@ begin
     v_libreria_lotes,
     v_computacion_lotes,
     v_total_lotes,
+    v_distinct_lotes,
     v_libreria_source,
     v_libreria_verified,
     v_computacion_source,
@@ -58,8 +64,8 @@ begin
     v_import_tenants
   from public.sigo_importaciones_stock;
 
-  if v_libreria_lotes <> 10 or v_computacion_lotes <> 5 or v_total_lotes <> 15 then
-    raise exception 'SIGO_PROD_SMOKE_LOTS_FAILED libreria=% computacion=% total=%', v_libreria_lotes, v_computacion_lotes, v_total_lotes;
+  if v_libreria_lotes <> 10 or v_computacion_lotes <> 5 or v_total_lotes <> 15 or v_distinct_lotes <> 15 then
+    raise exception 'SIGO_PROD_SMOKE_LOTS_FAILED libreria=% computacion=% total=% distinct=%', v_libreria_lotes, v_computacion_lotes, v_total_lotes, v_distinct_lotes;
   end if;
   if v_libreria_source <> 983 or v_libreria_verified <> 983 then
     raise exception 'SIGO_PROD_SMOKE_LIBRERIA_FAILED source=% verified=%', v_libreria_source, v_libreria_verified;
@@ -77,6 +83,36 @@ begin
        and i.empresa_id <> v_empresa_id
   ) then
     raise exception 'SIGO_PROD_SMOKE_TENANT_SPLIT';
+  end if;
+
+  select count(*)
+    into v_lot_accounting_mismatches
+    from public.sigo_importaciones_stock i
+   where (i.import_key like 'resguardo-stock-sigo-2026-09-09-libreria-%' or i.import_key like 'resguardo-stock-sigo-2026-09-09-sertec-%')
+     and i.inserted_rows + i.skipped_existing <> i.source_rows;
+
+  if v_lot_accounting_mismatches <> 0 then
+    raise exception 'SIGO_PROD_SMOKE_LOT_ACCOUNTING_FAILED count=%', v_lot_accounting_mismatches;
+  end if;
+
+  select count(*)
+    into v_lot_verification_mismatches
+    from public.sigo_importaciones_stock i
+   where (i.import_key like 'resguardo-stock-sigo-2026-09-09-libreria-%' or i.import_key like 'resguardo-stock-sigo-2026-09-09-sertec-%')
+     and i.verified_rows <> i.source_rows;
+
+  if v_lot_verification_mismatches <> 0 then
+    raise exception 'SIGO_PROD_SMOKE_LOT_VERIFICATION_FAILED count=%', v_lot_verification_mismatches;
+  end if;
+
+  select count(*)
+    into v_source_file_mismatches
+    from public.sigo_importaciones_stock i
+   where (i.import_key like 'resguardo-stock-sigo-2026-09-09-libreria-%' or i.import_key like 'resguardo-stock-sigo-2026-09-09-sertec-%')
+     and btrim(coalesce(i.source_file, '')) <> 'Resguardo_stock_SIGO.xlsx';
+
+  if v_source_file_mismatches <> 0 then
+    raise exception 'SIGO_PROD_SMOKE_SOURCE_FILE_FAILED count=%', v_source_file_mismatches;
   end if;
 
   select
@@ -210,7 +246,7 @@ begin
     raise exception 'SIGO_PROD_SMOKE_CASH_MISMATCH count=%', v_cash_mismatches;
   end if;
 
-  raise notice 'SIGO_PRODUCTION_OPERATIONAL_SMOKE_OK tenant=% catalog=% libreria=983 computacion=417 total=1400 lots=15 legacy_pending=% scanner_safe=% purchases=% sales=% purchase_mismatch=0 sale_mismatch=0 cash_mismatch=0',
+  raise notice 'SIGO_PRODUCTION_OPERATIONAL_SMOKE_OK tenant=% catalog=% libreria=983 computacion=417 total=1400 lots=15 lot_accounting_mismatch=0 lot_verification_mismatch=0 source_file_mismatch=0 legacy_pending=% scanner_safe=% purchases=% sales=% purchase_mismatch=0 sale_mismatch=0 cash_mismatch=0',
     v_empresa_id, v_catalogo, v_legacy_pending, v_sellable_scanner_safe, v_confirmed_purchases, v_confirmed_sales;
 end
 $$;
