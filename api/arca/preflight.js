@@ -1,4 +1,6 @@
 const PREFLIGHT_TIMEOUT_MS = 8_000;
+const AUTH_REAL_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const AUTH_REAL_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
 
 const ARCA_ENDPOINTS = {
   homologacion: {
@@ -37,6 +39,27 @@ function puntosVentaValidos(puntos) {
   const validos = numeros.every((numero) => Number.isInteger(numero) && numero >= 1 && numero <= 99999);
   const unicos = new Set(numeros).size === numeros.length;
   return { ok: validos && unicos, numeros: validos && unicos ? numeros : [] };
+}
+
+function autenticacionRealEstado(config) {
+  if (config?.ultima_prueba_ok !== true) {
+    return { ok: false, estado: "NO_VALIDADA", antiguedadMinutos: null };
+  }
+  if (!config?.ultima_prueba_at) {
+    return { ok: false, estado: "SIN_FECHA", antiguedadMinutos: null };
+  }
+  const pruebaMs = Date.parse(config.ultima_prueba_at);
+  if (!Number.isFinite(pruebaMs)) {
+    return { ok: false, estado: "FECHA_INVALIDA", antiguedadMinutos: null };
+  }
+  const edadMs = Date.now() - pruebaMs;
+  if (edadMs < -AUTH_REAL_FUTURE_TOLERANCE_MS) {
+    return { ok: false, estado: "FECHA_FUTURA", antiguedadMinutos: null };
+  }
+  if (edadMs > AUTH_REAL_MAX_AGE_MS) {
+    return { ok: false, estado: "VENCIDA", antiguedadMinutos: Math.floor(edadMs / 60_000) };
+  }
+  return { ok: true, estado: "VIGENTE", antiguedadMinutos: Math.max(0, Math.floor(edadMs / 60_000)) };
 }
 
 async function rpcPermitido(url, anonKey, auth, empresaId, permiso) {
@@ -145,6 +168,7 @@ export default async function handler(req, res) {
 
     const configuracionActiva = config.activo === true;
     const certificado = certificadoEstado(config);
+    const autenticacionReal = autenticacionRealEstado(config);
     const cuitOk = cuitArgentinoValido(config.cuit_emisor);
     const servicioOk = config.wsaa_service === "wsfe" && config.wsfe_version === "WSFEv1";
     const pv = puntosVentaValidos(puntos);
@@ -153,10 +177,11 @@ export default async function handler(req, res) {
     const [wsaa, wsfe] = await Promise.all([probarEndpoint(endpoints.wsaa), probarEndpoint(endpoints.wsfe)]);
     const redOk = wsaa.reachable && wsfe.reachable;
     const ok = Boolean(configuracionActiva && ambienteValido && cuitOk && servicioOk && puntoVentaOk && certificado.ok && redOk);
+    const emisionHabilitable = Boolean(ok && autenticacionReal.ok);
 
     return json(res, 200, {
       ok,
-      etapa: ok ? "LISTO_PARA_WSAA" : "PREPARACION_INCOMPLETA",
+      etapa: emisionHabilitable ? "WSAA_VALIDADO" : ok ? "LISTO_PARA_WSAA" : "PREPARACION_INCOMPLETA",
       ambiente,
       checks: {
         configuracion: true,
@@ -177,9 +202,12 @@ export default async function handler(req, res) {
         wsaa: endpoints.wsaa,
         wsfe: endpoints.wsfe,
       },
-      autenticacionRealValidada: config.ultima_prueba_ok === true,
+      autenticacionRealValidada: autenticacionReal.ok,
+      autenticacionRealEstado: autenticacionReal.estado,
+      autenticacionRealAntiguedadMinutos: autenticacionReal.antiguedadMinutos,
+      emisionHabilitable,
       ultimaPruebaAt: config.ultima_prueba_at ?? null,
-      nota: "Esta prevalidación no firma TRA, no usa la clave fiscal y no habilita CAE. La emisión sólo puede habilitarse después de una autenticación WSAA real con certificado gestionado fuera del frontend.",
+      nota: "Esta prevalidación no firma TRA, no usa la clave fiscal y no habilita CAE por sí sola. Una autenticación WSAA previa sólo se considera vigente durante 12 horas; después SIGO exige validarla otra vez antes de habilitar emisión.",
     });
   } catch (error) {
     console.error("SIGO ARCA preflight error", error);
