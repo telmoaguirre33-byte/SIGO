@@ -29,8 +29,13 @@ for (const required of [
   "Configuración",
   "Ayuda",
   ".sigo-cart-menu-item, .sigo-cart-context-button",
+  'const puedeVender = empresa ? ["owner", "admin", "seller"].includes(empresa.rol) : true',
 ]) {
   if (!menu.includes(required)) throw new Error(`Mobile menu safeguard missing: ${required}`);
+}
+
+if (menu.includes("if (!empresa) return null")) {
+  throw new Error("Mobile menu must not disappear while auxiliary tenant resolution is loading or unavailable");
 }
 
 for (const required of [
@@ -47,4 +52,4 @@ if (!main.includes("<MobileOperationsMenu />") || !main.includes('"./mobile-oper
   throw new Error("Mobile menu must remain mounted in the production shell");
 }
 
-console.log("Mobile drawer/cart verified: hamburger topic menu and visible cart are mounted for phone operation.");
+console.log("Mobile drawer/cart verified: hamburger remains visible independently of auxiliary tenant refresh, with cart and topic navigation mounted for phone operation.");
