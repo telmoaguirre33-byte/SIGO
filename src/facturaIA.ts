@@ -27,6 +27,7 @@ export type FacturaCompraIA = {
 
 const TIPOS_IMAGEN_PERMITIDOS = new Set(["image/jpeg", "image/png", "image/webp"]);
 const GTIN_LENGTHS = new Set([8, 12, 13, 14]);
+const MAX_INVOICE_ITEMS = 300;
 const CLIENT_TIMEOUT_MS = 55_000;
 
 function leerComoDataUrl(blob: Blob): Promise<string> {
@@ -108,6 +109,15 @@ function normalizarCodigoBarras(value: unknown): string | null {
   return gtinValido(codigo) === false ? null : codigo.slice(0, 80);
 }
 
+function normalizarCodigoProveedor(value: unknown): string | null {
+  if (value == null) return null;
+  const codigo = String(value)
+    .replace(/[\u0000-\u001F\u007F]/g, "")
+    .trim()
+    .slice(0, 80);
+  return codigo || null;
+}
+
 function normalizarDescripcion(value: string) {
   return value
     .normalize("NFD")
@@ -117,17 +127,28 @@ function normalizarDescripcion(value: string) {
     .trim();
 }
 
+function fechaIsoCalendarioValida(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const fecha = new Date(Date.UTC(year, month - 1, day));
+  return fecha.getUTCFullYear() === year && fecha.getUTCMonth() === month - 1 && fecha.getUTCDate() === day;
+}
+
 function validarCodigosNoAmbiguos(items: FacturaItemIA[]) {
   const porCodigo = new Map<string, Set<string>>();
   for (const item of items) {
-    if (!item.codigo_barras) continue;
-    const clave = item.codigo_barras.toUpperCase();
-    const nombres = porCodigo.get(clave) ?? new Set<string>();
-    nombres.add(normalizarDescripcion(item.descripcion));
-    porCodigo.set(clave, nombres);
+    const codigos = new Set([item.codigo_barras, item.codigo]
+      .filter(Boolean)
+      .map((codigo) => String(codigo).trim().toUpperCase())
+      .filter(Boolean));
+    for (const clave of codigos) {
+      const nombres = porCodigo.get(clave) ?? new Set<string>();
+      nombres.add(normalizarDescripcion(item.descripcion));
+      porCodigo.set(clave, nombres);
+    }
   }
   if ([...porCodigo.values()].some((nombres) => nombres.size > 1)) {
-    throw new Error("La factura contiene un código de barras asociado a productos distintos. Revisá esas líneas manualmente antes de ingresar stock.");
+    throw new Error("La factura contiene un mismo código asociado a productos distintos. Revisá esas líneas manualmente antes de ingresar stock.");
   }
 }
 
@@ -135,12 +156,16 @@ function validarFactura(data: unknown): FacturaCompraIA {
   if (!data || typeof data !== "object") throw new Error("La IA no devolvió una factura válida.");
   const factura = data as Partial<FacturaCompraIA>;
   const items = Array.isArray(factura.items) ? factura.items : [];
+  if (items.length > MAX_INVOICE_ITEMS) {
+    throw new Error(`La factura contiene más de ${MAX_INVOICE_ITEMS} líneas. Dividí la carga o ingresala manualmente para evitar una compra parcial.`);
+  }
+
   const validos = items
     .map((item) => item as Partial<FacturaItemIA>)
     .filter((item) => typeof item.descripcion === "string" && item.descripcion.trim())
     .map((item) => ({
       descripcion: String(item.descripcion).trim(),
-      codigo: item.codigo ? String(item.codigo).trim() : null,
+      codigo: normalizarCodigoProveedor(item.codigo),
       codigo_barras: normalizarCodigoBarras(item.codigo_barras),
       cantidad: Number(item.cantidad ?? 0),
       costo_unitario: Number(item.costo_unitario ?? 0),
@@ -163,25 +188,54 @@ function validarFactura(data: unknown): FacturaCompraIA {
     throw new Error(`La factura fue detectada en ${moneda}. SIGO no la aplicará automáticamente como pesos; cargala manualmente o convertí los importes antes de ingresar stock.`);
   }
 
+  const advertenciasCliente: string[] = [];
   const totalLeido = factura.total == null ? null : Number(factura.total);
   const total = totalLeido != null && Number.isFinite(totalLeido) && totalLeido >= 0 ? totalLeido : null;
   const cuitLeido = proveedor.cuit ? String(proveedor.cuit).replace(/\D/g, "") : "";
+  const fechaLeida = factura.fecha ? String(factura.fecha).trim() : "";
+  const fecha = fechaLeida && fechaIsoCalendarioValida(fechaLeida) ? fechaLeida : null;
+  if (fechaLeida && !fecha) {
+    advertenciasCliente.push("La fecha leída no es una fecha calendario válida; revisala antes de confirmar la compra.");
+  }
+
+  const bajaConfianza = validos.filter((item) => item.confianza < 0.5).length;
+  if (bajaConfianza > 0) {
+    advertenciasCliente.push(`${bajaConfianza} línea${bajaConfianza === 1 ? "" : "s"} tiene${bajaConfianza === 1 ? "" : "n"} confianza menor al 50%; revisá cantidad, costo y producto antes de ingresar stock.`);
+  }
+
+  if (total != null) {
+    const sumaLineas = validos.reduce((suma, item) => {
+      const totalLinea = item.total_linea;
+      const calculado = item.cantidad * item.costo_unitario;
+      return suma + (totalLinea != null && Number.isFinite(totalLinea) && totalLinea >= 0 ? totalLinea : calculado);
+    }, 0);
+    if (sumaLineas > 0) {
+      const diferencia = Math.abs(total - sumaLineas);
+      const tolerancia = Math.max(20, total * 0.05);
+      if (diferencia > tolerancia) {
+        advertenciasCliente.push("El total de la factura difiere de la suma de las líneas leídas. Revisá impuestos, descuentos y productos antes de confirmar.");
+      }
+    }
+  }
 
   return {
     proveedor: {
       razon_social: proveedor.razon_social ? String(proveedor.razon_social).trim() : null,
       cuit: cuitArgentinoValido(cuitLeido) ? cuitLeido : null,
     },
-    fecha: factura.fecha ? String(factura.fecha) : null,
+    fecha,
     tipo_comprobante: factura.tipo_comprobante ? String(factura.tipo_comprobante).trim() : null,
     numero_comprobante: factura.numero_comprobante ? String(factura.numero_comprobante).trim() : null,
     moneda: moneda ?? "ARS",
     total,
     confianza_general: Math.max(0, Math.min(1, Number(factura.confianza_general ?? 0))),
     items: validos,
-    advertencias: Array.isArray(factura.advertencias)
-      ? factura.advertencias.map((item) => String(item).trim()).filter(Boolean).slice(0, 20)
-      : [],
+    advertencias: [...new Set([
+      ...(Array.isArray(factura.advertencias)
+        ? factura.advertencias.map((item) => String(item).trim()).filter(Boolean).slice(0, 20)
+        : []),
+      ...advertenciasCliente,
+    ])].slice(0, 30),
   };
 }
 
