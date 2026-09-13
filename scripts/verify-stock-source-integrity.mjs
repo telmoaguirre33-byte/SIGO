@@ -94,3 +94,10 @@ const collisions = duplicateIdentities.size;
 console.log(
   `Stock source integrity OK: Libreria=${libreriaRows} Computacion=${computacionRows} Total=${total} batches=${importKeys.size} source_collisions=${collisions}; collisions are preserved as deterministic LEGACY-DUP products for physical code review`,
 );
+
+if (collisions > 0) {
+  console.log('Stock source collision identities requiring physical review:');
+  for (const [code, refs] of [...duplicateIdentities.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    console.log(`- ${code}: ${[...refs].join(' | ')}`);
+  }
+}
