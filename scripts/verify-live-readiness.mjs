@@ -34,13 +34,21 @@ for (const [needle, label] of [
   ['catalogoLeido !== catalogoProductos', 'full paged catalog check'],
   ['costosActualesNull !== 0', 'non-null current-cost check'],
   ['empresasImportadas !== 1', 'single import tenant check'],
-  ['contarIdentidadesDuplicadas', 'duplicate barcode/internal-code detector'],
+  ['detectarIdentidadesDuplicadas', 'duplicate barcode/internal-code detector'],
   ['identidadesDuplicadas !== 0', 'ambiguous scanner identity block'],
   ['LEGACY_DUP_PREFIX = "LEGACY-DUP-"', 'legacy collision marker'],
   ['legacyDupPendientes !== 0', 'physical barcode review block'],
   ['productosSinCodigo !== 0', 'missing product identity block'],
   ['stockNegativo !== 0', 'negative stock block'],
+  ['stockNull !== 0', 'null stock block'],
   ['vendiblesConStock === 0', 'real sale candidate check'],
+  ['productoPrueba', 'explicit real sale test candidate'],
+  ['bloqueosIdentidad', 'actionable identity blocker detail'],
+  ['test_product_code=', 'test product evidence code'],
+  ['test_product_stock=', 'test product stock evidence'],
+  ['test_product_price=', 'test product price evidence'],
+  ['identity_blockers=', 'identity blocker evidence'],
+  ['null_stock=', 'null-stock evidence'],
   ['.is("costo_actual", null)', 'null current-cost query'],
   ['.range(desde, desde + PAGE_SIZE - 1)', 'catalog pagination beyond 1,000 rows'],
   ['head: true', 'read-only count query'],
@@ -64,4 +72,4 @@ for (const [needle, label] of [
   requireText(matriz, needle, label);
 }
 
-console.log('Live operational readiness guard OK: read-only unique 983 + 417 = 1,400 verification, exactly 15 unique batches, full catalog pagination, scanner identity, LEGACY-DUP physical review and sellable-stock checks');
+console.log('Live operational readiness guard OK: read-only unique 983 + 417 = 1,400 verification, exactly 15 unique batches, full catalog pagination, scanner identity diagnostics, explicit sellable test product, null-stock block and actionable LEGACY-DUP evidence');
