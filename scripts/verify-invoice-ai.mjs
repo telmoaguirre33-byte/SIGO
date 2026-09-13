@@ -20,8 +20,12 @@ if (!compras.includes('preciosFacturaPendientes > 0')) throw new Error('Invoice 
 if (!compras.includes('stockActual: null')) throw new Error('Invoice AI regression: AI must not write stock before purchase confirmation');
 
 const api = fs.readFileSync('api/compras/analizar-factura.js', 'utf8');
-if (!api.includes('itemsRaw.slice(0, MAX_INVOICE_ITEMS)') && !api.includes('raw.items.slice(0, MAX_INVOICE_ITEMS)')) {
-  throw new Error('Invoice AI regression: server must cap invoice line count');
+const rejectsOversizedInvoice = api.includes('itemsRaw.length > MAX_INVOICE_ITEMS') && api.includes('TOO_MANY_INVOICE_ITEMS');
+if (!rejectsOversizedInvoice) {
+  throw new Error('Invoice AI regression: server must reject invoice responses beyond the safe line limit');
+}
+if (api.includes('itemsRaw.slice(0, MAX_INVOICE_ITEMS)') || api.includes('raw.items.slice(0, MAX_INVOICE_ITEMS)')) {
+  throw new Error('Invoice AI regression: server must never silently truncate invoice lines before stock preparation');
 }
 if (!api.includes('cuitArgentinoValido(cuitLeido)')) throw new Error('Invoice AI regression: server must validate Argentine CUIT check digit');
 if (!api.includes('Number.isFinite')) throw new Error('Invoice AI regression: server must reject non-finite numeric values');
@@ -29,8 +33,8 @@ if (!api.includes('signal: controller.signal')) throw new Error('Invoice AI regr
 if (!api.includes('Código de barras descartado por dígito verificador inválido')) {
   throw new Error('Invoice AI regression: invalid GTINs must not be auto-applied');
 }
-if (!api.includes('AMBIGUOUS_INVOICE_BARCODES')) {
-  throw new Error('Invoice AI regression: conflicting invoice barcodes must block automatic stock preparation');
+if (!api.includes('AMBIGUOUS_INVOICE_CODES')) {
+  throw new Error('Invoice AI regression: conflicting barcode or supplier-code identities must block automatic stock preparation');
 }
 
 const client = fs.readFileSync('src/facturaIA.ts', 'utf8');
