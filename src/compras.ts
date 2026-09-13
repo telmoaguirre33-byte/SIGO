@@ -37,9 +37,20 @@ export type VerificacionCompraSigo = {
   detalle: string;
 };
 
+type ProductoCompraPreflight = {
+  id: string;
+  nombre: string | null;
+  codigo_interno: string | null;
+  codigo_barras: string | null;
+  stock_actual: number | null;
+  costo_actual: number | null;
+};
+
 const MAX_COMPRA_ITEMS = 300;
 const MAX_CANTIDAD_ITEM = 1_000_000;
 const MAX_COSTO_UNITARIO = 1_000_000_000_000;
+const PAGINA_PRODUCTOS_PREFLIGHT = 1000;
+const MAX_PRODUCTOS_PREFLIGHT = 10000;
 
 function validarEmailOpcional(email?: string): string | null {
   const limpio = email?.trim() ?? "";
@@ -63,6 +74,84 @@ function normalizarDocumento(value?: string | null): string {
     .replace(/[\u0300-\u036f]/g, "")
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, "");
+}
+
+function normalizarIdentidadProducto(value?: string | null): string {
+  return (value ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function esIdentidadPendienteProducto(producto: Pick<ProductoCompraPreflight, "codigo_interno" | "codigo_barras">): boolean {
+  return [producto.codigo_interno, producto.codigo_barras]
+    .some((codigo) => String(codigo ?? "").trim().toUpperCase().startsWith("LEGACY-DUP-"));
+}
+
+function indexarIdentidadesProductos(
+  productos: ProductoCompraPreflight[],
+  selector: (producto: ProductoCompraPreflight) => string | null,
+): Map<string, string[]> {
+  const mapa = new Map<string, string[]>();
+  for (const producto of productos) {
+    const identidad = normalizarIdentidadProducto(selector(producto));
+    if (!identidad) continue;
+    const ids = mapa.get(identidad) ?? [];
+    ids.push(producto.id);
+    mapa.set(identidad, ids);
+  }
+  return mapa;
+}
+
+async function leerCatalogoActivoCompra(empresaId: string): Promise<ProductoCompraPreflight[]> {
+  const productos: ProductoCompraPreflight[] = [];
+  let desde = 0;
+
+  while (desde < MAX_PRODUCTOS_PREFLIGHT) {
+    const { data, error } = await supabase
+      .from("productos")
+      .select("id,nombre,codigo_interno,codigo_barras,stock_actual,costo_actual")
+      .eq("empresa_id", empresaId)
+      .eq("activo", true)
+      .range(desde, desde + PAGINA_PRODUCTOS_PREFLIGHT - 1);
+    if (error) throw new Error(`No se pudo validar el catálogo antes de confirmar la compra: ${error.message}`);
+
+    const pagina = (data ?? []) as ProductoCompraPreflight[];
+    productos.push(...pagina);
+    if (pagina.length < PAGINA_PRODUCTOS_PREFLIGHT) return productos;
+    desde += PAGINA_PRODUCTOS_PREFLIGHT;
+  }
+
+  throw new Error("El catálogo activo supera el límite seguro de prevalidación de compra.");
+}
+
+async function verificarProductosCompraAntesDeConfirmar(empresaId: string, items: CompraItemInput[]): Promise<void> {
+  const catalogo = await leerCatalogoActivoCompra(empresaId);
+  const porId = new Map(catalogo.map((producto) => [producto.id, producto]));
+  const porCodigoBarras = indexarIdentidadesProductos(catalogo, (producto) => producto.codigo_barras);
+  const porCodigoInterno = indexarIdentidadesProductos(catalogo, (producto) => producto.codigo_interno);
+
+  for (const item of items) {
+    const producto = porId.get(item.producto_id);
+    if (!producto) {
+      throw new Error("Uno de los productos no existe, está inactivo o no pertenece a la empresa activa.");
+    }
+    if (producto.stock_actual == null || !Number.isFinite(Number(producto.stock_actual))) {
+      throw new Error(`El producto "${producto.nombre ?? item.producto_id}" tiene stock inválido o NULL. Corregilo antes de ingresar una compra.`);
+    }
+    if (producto.costo_actual == null || !Number.isFinite(Number(producto.costo_actual))) {
+      throw new Error(`El producto "${producto.nombre ?? item.producto_id}" tiene costo_actual inválido o NULL. Corregilo antes de ingresar una compra.`);
+    }
+    if (esIdentidadPendienteProducto(producto)) {
+      throw new Error(`El producto "${producto.nombre ?? item.producto_id}" tiene una identidad LEGACY-DUP pendiente. Verificá el código físico antes de ingresar stock.`);
+    }
+
+    const codigoBarras = normalizarIdentidadProducto(producto.codigo_barras);
+    if (codigoBarras && (porCodigoBarras.get(codigoBarras)?.length ?? 0) > 1) {
+      throw new Error(`Código de barras ambiguo en "${producto.nombre ?? item.producto_id}". Resolvé el duplicado antes de ingresar stock.`);
+    }
+    const codigoInterno = normalizarIdentidadProducto(producto.codigo_interno);
+    if (codigoInterno && (porCodigoInterno.get(codigoInterno)?.length ?? 0) > 1) {
+      throw new Error(`Código interno ambiguo en "${producto.nombre ?? item.producto_id}". Resolvé el duplicado antes de ingresar stock.`);
+    }
+  }
 }
 
 function fechaIsoValida(value?: string): boolean {
@@ -237,6 +326,10 @@ export async function confirmarCompraSigo(input: {
     }
   }
 
+  // Última barrera de lectura antes del único RPC que modifica compra/stock/costos.
+  // Evita dirigir stock a productos inactivos, con valores operativos NULL o identidades ambiguas.
+  await verificarProductosCompraAntesDeConfirmar(empresaId, items);
+
   const { data, error } = await supabase.rpc("confirmar_compra_sigo", {
     p_empresa_id: empresaId,
     p_proveedor_id: proveedorId,
@@ -299,12 +392,22 @@ export async function verificarCompraSigo(input: {
       if (!detalle || !producto) {
         return { estado: "REVISAR", detalle: "Falta el detalle de compra o el producto conciliado." };
       }
+      if (producto.stock_actual == null || !Number.isFinite(Number(producto.stock_actual))) {
+        return { estado: "REVISAR", detalle: "El stock persistido quedó NULL o inválido después de confirmar la compra." };
+      }
+      if (producto.costo_actual == null || !Number.isFinite(Number(producto.costo_actual))) {
+        return { estado: "REVISAR", detalle: "El costo_actual persistido quedó NULL o inválido después de confirmar la compra." };
+      }
+      const stockAntesValor = input.stockAntes[item.producto_id];
+      if (stockAntesValor == null || !Number.isFinite(Number(stockAntesValor))) {
+        return { estado: "REVISAR", detalle: "No hay una lectura válida del stock anterior para conciliar la compra." };
+      }
 
       const cantidadDetalle = Number(detalle.cantidad ?? 0);
       const costoDetalle = Number(detalle.costo_unitario ?? 0);
-      const stockEsperado = Number(input.stockAntes[item.producto_id] ?? 0) + Number(item.cantidad);
-      const stockActual = Number(producto.stock_actual ?? 0);
-      const costoActual = Number(producto.costo_actual ?? producto.costo_ultima_compra ?? 0);
+      const stockEsperado = Number(stockAntesValor) + Number(item.cantidad);
+      const stockActual = Number(producto.stock_actual);
+      const costoActual = Number(producto.costo_actual);
       const precioVenta = Number(producto.precio_venta ?? 0);
 
       if (Math.abs(cantidadDetalle - Number(item.cantidad)) > 0.0001 || Math.abs(costoDetalle - Number(item.costo_unitario)) > 0.0001) {
