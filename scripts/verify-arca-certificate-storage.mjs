@@ -30,7 +30,15 @@ for (const token of [
   "certificate.pem",
   "certificado_fingerprint",
   "certificado_vence",
+  "normalizarCuit",
+  "extraerCuitCertificado",
+  "vigenteDesdeAt",
+  "CERTIFICADO_AUN_NO_VIGENTE",
+  "CERTIFICADO_VIGENCIA_INVALIDA",
+  "CERTIFICADO_SERIALNUMBER_INVALIDO",
+  "CERTIFICADO_CUIT_NO_COINCIDE",
   "CERTIFICADO_CLAVE_NO_COINCIDEN",
+  "cuitCertificado !== cuitConfigurado",
   "activo: false",
   "ultima_prueba_ok: false",
 ]) {
@@ -53,6 +61,10 @@ for (const token of [
   "Contraseña de la clave privada",
   "no se almacena",
   "No ingreses tu clave fiscal",
+  "CERTIFICADO_AUN_NO_VIGENTE",
+  "CERTIFICADO_SERIALNUMBER_INVALIDO",
+  "CERTIFICADO_CUIT_NO_COINCIDE",
+  "mismo CUIT configurado",
 ]) {
   if (!ui.includes(token)) throw new Error(`ARCA certificate UI safeguard missing: ${token}`);
 }
