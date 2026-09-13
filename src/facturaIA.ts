@@ -22,9 +22,11 @@ export type FacturaCompraIA = {
   total: number | null;
   confianza_general: number;
   items: FacturaItemIA[];
+  advertencias: string[];
 };
 
 const TIPOS_IMAGEN_PERMITIDOS = new Set(["image/jpeg", "image/png", "image/webp"]);
+const GTIN_LENGTHS = new Set([8, 12, 13, 14]);
 const CLIENT_TIMEOUT_MS = 55_000;
 
 function leerComoDataUrl(blob: Blob): Promise<string> {
@@ -75,6 +77,60 @@ function normalizarMoneda(value: unknown): string | null {
   return moneda.slice(0, 12);
 }
 
+function cuitArgentinoValido(value: unknown): boolean {
+  const cuit = String(value ?? "").replace(/\D/g, "");
+  if (!/^\d{11}$/.test(cuit)) return false;
+  const pesos = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+  const suma = pesos.reduce((total, peso, index) => total + Number(cuit[index]) * peso, 0);
+  const resto = 11 - (suma % 11);
+  const esperado = resto === 11 ? 0 : resto === 10 ? 9 : resto;
+  return esperado === Number(cuit[10]);
+}
+
+function gtinValido(value: string): boolean | null {
+  const codigo = value.replace(/[\s-]+/g, "");
+  if (!/^\d+$/.test(codigo) || !GTIN_LENGTHS.has(codigo.length)) return null;
+  const cuerpo = codigo.slice(0, -1);
+  const digito = Number(codigo.at(-1));
+  let suma = 0;
+  let peso = 3;
+  for (let index = cuerpo.length - 1; index >= 0; index -= 1) {
+    suma += Number(cuerpo[index]) * peso;
+    peso = peso === 3 ? 1 : 3;
+  }
+  return ((10 - (suma % 10)) % 10) === digito;
+}
+
+function normalizarCodigoBarras(value: unknown): string | null {
+  if (value == null) return null;
+  const codigo = String(value).trim().replace(/[\s-]+/g, "");
+  if (!codigo) return null;
+  return gtinValido(codigo) === false ? null : codigo.slice(0, 80);
+}
+
+function normalizarDescripcion(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function validarCodigosNoAmbiguos(items: FacturaItemIA[]) {
+  const porCodigo = new Map<string, Set<string>>();
+  for (const item of items) {
+    if (!item.codigo_barras) continue;
+    const clave = item.codigo_barras.toUpperCase();
+    const nombres = porCodigo.get(clave) ?? new Set<string>();
+    nombres.add(normalizarDescripcion(item.descripcion));
+    porCodigo.set(clave, nombres);
+  }
+  if ([...porCodigo.values()].some((nombres) => nombres.size > 1)) {
+    throw new Error("La factura contiene un código de barras asociado a productos distintos. Revisá esas líneas manualmente antes de ingresar stock.");
+  }
+}
+
 function validarFactura(data: unknown): FacturaCompraIA {
   if (!data || typeof data !== "object") throw new Error("La IA no devolvió una factura válida.");
   const factura = data as Partial<FacturaCompraIA>;
@@ -85,7 +141,7 @@ function validarFactura(data: unknown): FacturaCompraIA {
     .map((item) => ({
       descripcion: String(item.descripcion).trim(),
       codigo: item.codigo ? String(item.codigo).trim() : null,
-      codigo_barras: item.codigo_barras ? String(item.codigo_barras).trim() : null,
+      codigo_barras: normalizarCodigoBarras(item.codigo_barras),
       cantidad: Number(item.cantidad ?? 0),
       costo_unitario: Number(item.costo_unitario ?? 0),
       total_linea: item.total_linea == null ? null : Number(item.total_linea),
@@ -94,6 +150,7 @@ function validarFactura(data: unknown): FacturaCompraIA {
     .filter((item) => Number.isFinite(item.cantidad) && item.cantidad > 0 && Number.isFinite(item.costo_unitario) && item.costo_unitario >= 0);
 
   if (validos.length === 0) throw new Error("No pude reconocer productos con cantidad y costo válidos. Probá con otra foto más nítida.");
+  validarCodigosNoAmbiguos(validos);
 
   const proveedor = (
     factura.proveedor && typeof factura.proveedor === "object"
@@ -108,11 +165,12 @@ function validarFactura(data: unknown): FacturaCompraIA {
 
   const totalLeido = factura.total == null ? null : Number(factura.total);
   const total = totalLeido != null && Number.isFinite(totalLeido) && totalLeido >= 0 ? totalLeido : null;
+  const cuitLeido = proveedor.cuit ? String(proveedor.cuit).replace(/\D/g, "") : "";
 
   return {
     proveedor: {
       razon_social: proveedor.razon_social ? String(proveedor.razon_social).trim() : null,
-      cuit: proveedor.cuit ? String(proveedor.cuit).replace(/\D/g, "") : null,
+      cuit: cuitArgentinoValido(cuitLeido) ? cuitLeido : null,
     },
     fecha: factura.fecha ? String(factura.fecha) : null,
     tipo_comprobante: factura.tipo_comprobante ? String(factura.tipo_comprobante).trim() : null,
@@ -121,6 +179,9 @@ function validarFactura(data: unknown): FacturaCompraIA {
     total,
     confianza_general: Math.max(0, Math.min(1, Number(factura.confianza_general ?? 0))),
     items: validos,
+    advertencias: Array.isArray(factura.advertencias)
+      ? factura.advertencias.map((item) => String(item).trim()).filter(Boolean).slice(0, 20)
+      : [],
   };
 }
 
@@ -161,6 +222,7 @@ export async function analizarFacturaCompraSigo(empresaId: string, file: File): 
     if (code === "INVALID_IMAGE") throw new Error("La foto no tiene un formato válido o es demasiado pesada.");
     if (code === "AI_TIMEOUT") throw new Error("La lectura de la factura tardó demasiado. Probá nuevamente con una foto más nítida.");
     if (code === "AI_UNAVAILABLE") throw new Error("El servicio de lectura de facturas no está disponible en este momento. La compra manual sigue funcionando.");
+    if (code === "AI_REVIEW_REQUIRED") throw new Error(String(payload?.message ?? "La factura necesita revisión manual antes de ingresar stock."));
     if (code === "AI_INVALID_OUTPUT") throw new Error("La IA no pudo interpretar la factura con seguridad. Probá con otra foto o cargá la compra manualmente.");
     throw new Error(String(payload?.message ?? payload?.error ?? "No se pudo analizar la factura con IA."));
   }
