@@ -127,7 +127,7 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
       setReadiness(resultado);
       setMensaje(
         resultado.ok
-          ? "SIGO Administración superó la verificación en vivo de tenant, carga inicial, catálogo y costos."
+          ? "SIGO Administración superó la verificación en vivo de tenant, carga inicial, catálogo, stock e identidad para caja."
           : "La verificación en vivo terminó con puntos para revisar; no se certifica la carga todavía.",
       );
     } catch (e) {
@@ -234,7 +234,7 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
           <div className="panel-header">
             <div>
               <h3>Preparación operativa · SIGO Administración</h3>
-              <p>Control en vivo y de solo lectura: una empresa/caja, 983 Librería + 417 Computación, catálogo y costos no nulos.</p>
+              <p>Control en vivo y de solo lectura: una empresa/caja, 983 Librería + 417 Computación, catálogo, costos, stock y códigos aptos para scanner.</p>
             </div>
             <button className="primary-button" type="button" onClick={() => void validarOperacionPropia()} disabled={loading || readinessLoading}>
               {readinessLoading ? "Validando…" : "Validar ahora"}
@@ -245,12 +245,27 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
             <div style={{ display: "grid", gap: 14 }}>
               <div className="stats sigo-matriz-stats">
                 <article className="stat-card"><span>Estado</span><strong>{readiness.ok ? "APROBADO" : "REVISAR"}</strong><small>{readiness.empresasSigoAdministracion} SIGO Administración activa</small></article>
-                <article className="stat-card"><span>Librería</span><strong>{readiness.libreriaVerified}/{readiness.libreriaSource}</strong><small>Objetivo 983/983</small></article>
-                <article className="stat-card"><span>Computación</span><strong>{readiness.computacionVerified}/{readiness.computacionSource}</strong><small>Objetivo 417/417</small></article>
-                <article className="stat-card"><span>Total verificado</span><strong>{readiness.totalVerified}/{readiness.totalSource}</strong><small>Objetivo 1400/1400</small></article>
-                <article className="stat-card"><span>Catálogo</span><strong>{readiness.catalogoProductos}</strong><small>Productos visibles en la caja</small></article>
+                <article className="stat-card"><span>Librería</span><strong>{readiness.libreriaVerified}/{readiness.libreriaSource}</strong><small>Objetivo 983/983 · {readiness.libreriaLotes}/10 lotes</small></article>
+                <article className="stat-card"><span>Computación</span><strong>{readiness.computacionVerified}/{readiness.computacionSource}</strong><small>Objetivo 417/417 · {readiness.computacionLotes}/5 lotes</small></article>
+                <article className="stat-card"><span>Total verificado</span><strong>{readiness.totalVerified}/{readiness.totalSource}</strong><small>{readiness.totalLotes}/15 lotes · duplicados {readiness.lotesDuplicados}</small></article>
+                <article className="stat-card"><span>Catálogo</span><strong>{readiness.catalogoProductos}</strong><small>Leídos {readiness.catalogoLeido} · vendibles {readiness.vendiblesConStock}</small></article>
                 <article className="stat-card"><span>Costos NULL</span><strong>{readiness.costosActualesNull}</strong><small>Debe ser 0</small></article>
+                <article className="stat-card"><span>Stock NULL / negativo</span><strong>{readiness.stockNull} / {readiness.stockNegativo}</strong><small>Ambos deben ser 0</small></article>
+                <article className="stat-card"><span>Códigos bloqueados</span><strong>{readiness.identidadesDuplicadas + readiness.legacyDupPendientes}</strong><small>{readiness.identidadesDuplicadas} duplicados · {readiness.legacyDupPendientes} LEGACY-DUP</small></article>
               </div>
+
+              {readiness.productoPrueba ? (
+                <div className="sigo-matriz-success">
+                  <strong>Producto sugerido para prueba real:</strong> {readiness.productoPrueba.nombre} · código {readiness.productoPrueba.codigo} · stock {readiness.productoPrueba.stock} · precio ${readiness.productoPrueba.precio.toLocaleString("es-AR")}. Usalo para validar scanner → venta → caja → descuento exacto de stock.
+                </div>
+              ) : null}
+
+              {readiness.bloqueosIdentidad.length > 0 ? (
+                <div className="form-error" role="alert">
+                  <strong>Identidades que requieren revisión física antes del scanner:</strong>
+                  {readiness.bloqueosIdentidad.map((bloqueo) => <div key={bloqueo}>• {bloqueo}</div>)}
+                </div>
+              ) : null}
 
               {readiness.issues.length > 0 ? (
                 <div className="form-error" role="alert">
