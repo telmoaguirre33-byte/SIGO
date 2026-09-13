@@ -2,6 +2,7 @@ const MAX_DATA_URL_LENGTH = 8_000_000;
 const MAX_INVOICE_ITEMS = 300;
 const OPENAI_TIMEOUT_MS = 45_000;
 const ALLOWED_IMAGE = /^data:image\/(jpeg|jpg|png|webp);base64,/i;
+const GTIN_LENGTHS = new Set([8, 12, 13, 14]);
 
 function json(res, status, body) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8").send(JSON.stringify(body));
@@ -51,13 +52,77 @@ function normalizarMoneda(value) {
   return limpia.slice(0, 12);
 }
 
+function cuitArgentinoValido(value) {
+  const cuit = String(value ?? "").replace(/\D/g, "");
+  if (!/^\d{11}$/.test(cuit)) return false;
+  const pesos = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+  const suma = pesos.reduce((total, peso, index) => total + Number(cuit[index]) * peso, 0);
+  const resto = 11 - (suma % 11);
+  const esperado = resto === 11 ? 0 : resto === 10 ? 9 : resto;
+  return esperado === Number(cuit[10]);
+}
+
+function gtinValido(value) {
+  const codigo = String(value ?? "").replace(/[\s-]+/g, "");
+  if (!/^\d+$/.test(codigo) || !GTIN_LENGTHS.has(codigo.length)) return null;
+  const cuerpo = codigo.slice(0, -1);
+  const digito = Number(codigo.at(-1));
+  let suma = 0;
+  let peso = 3;
+  for (let index = cuerpo.length - 1; index >= 0; index -= 1) {
+    suma += Number(cuerpo[index]) * peso;
+    peso = peso === 3 ? 1 : 3;
+  }
+  const esperado = (10 - (suma % 10)) % 10;
+  return esperado === digito;
+}
+
+function normalizarCodigoBarras(value, advertencias, descripcion) {
+  const codigo = textoSeguro(value, 80);
+  if (!codigo) return null;
+  const compacto = codigo.replace(/[\s-]+/g, "");
+  const validacion = gtinValido(compacto);
+  if (validacion === false) {
+    advertencias.push(`Código de barras descartado por dígito verificador inválido en ${descripcion}.`);
+    return null;
+  }
+  return compacto;
+}
+
+function normalizarDescripcion(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function detectarCodigosConflictivos(items) {
+  const porCodigo = new Map();
+  for (const item of items) {
+    if (!item.codigo_barras) continue;
+    const clave = item.codigo_barras.toUpperCase();
+    const nombres = porCodigo.get(clave) ?? new Set();
+    nombres.add(normalizarDescripcion(item.descripcion));
+    porCodigo.set(clave, nombres);
+  }
+  return [...porCodigo.entries()]
+    .filter(([, nombres]) => nombres.size > 1)
+    .map(([codigo]) => codigo);
+}
+
 function normalizarFacturaIA(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("INVALID_INVOICE_OBJECT");
 
+  const advertencias = [];
   const proveedorRaw = raw.proveedor && typeof raw.proveedor === "object" && !Array.isArray(raw.proveedor)
     ? raw.proveedor
     : {};
   const cuitLeido = String(proveedorRaw.cuit ?? "").replace(/\D/g, "");
+  const cuit = cuitArgentinoValido(cuitLeido) ? cuitLeido : null;
+  if (cuitLeido && !cuit) advertencias.push("El CUIT leído no supera la validación del dígito verificador; no se usará para crear o asociar proveedor.");
+
   const itemsRaw = Array.isArray(raw.items) ? raw.items.slice(0, MAX_INVOICE_ITEMS) : [];
   const items = [];
 
@@ -68,34 +133,53 @@ function normalizarFacturaIA(raw) {
     const costoUnitario = numeroSeguro(item.costo_unitario, { min: 0, max: 1_000_000_000_000 });
     if (!descripcion || !Number.isFinite(cantidad) || !Number.isFinite(costoUnitario)) continue;
 
+    const totalLinea = numeroSeguro(item.total_linea, { min: 0, max: 1_000_000_000_000, nullable: true });
+    if (totalLinea != null) {
+      const calculado = cantidad * costoUnitario;
+      const tolerancia = Math.max(2, calculado * 0.03);
+      if (Math.abs(totalLinea - calculado) > tolerancia) {
+        advertencias.push(`Revisar ${descripcion}: cantidad × costo unitario no coincide con el total de línea leído.`);
+      }
+    }
+
     items.push({
       descripcion,
       codigo: textoSeguro(item.codigo, 80),
-      codigo_barras: textoSeguro(item.codigo_barras, 80),
+      codigo_barras: normalizarCodigoBarras(item.codigo_barras, advertencias, descripcion),
       cantidad,
       costo_unitario: costoUnitario,
-      total_linea: numeroSeguro(item.total_linea, { min: 0, max: 1_000_000_000_000, nullable: true }),
+      total_linea: totalLinea,
       confianza: confianza(item.confianza),
     });
   }
 
   if (items.length === 0) throw new Error("NO_VALID_INVOICE_ITEMS");
 
+  const codigosConflictivos = detectarCodigosConflictivos(items);
+  if (codigosConflictivos.length > 0) {
+    const error = new Error("AMBIGUOUS_INVOICE_BARCODES");
+    error.codigos = codigosConflictivos;
+    throw error;
+  }
+
   const fechaTexto = textoSeguro(raw.fecha, 16);
   const fecha = fechaTexto && /^\d{4}-\d{2}-\d{2}$/.test(fechaTexto) ? fechaTexto : null;
+  const confianzaGeneral = confianza(raw.confianza_general);
+  if (confianzaGeneral < 0.55) advertencias.push("La confianza general de lectura es baja. Revisá cada línea antes de aplicar la factura.");
 
   return {
     proveedor: {
       razon_social: textoSeguro(proveedorRaw.razon_social, 180),
-      cuit: cuitLeido.length === 11 ? cuitLeido : null,
+      cuit,
     },
     fecha,
     tipo_comprobante: textoSeguro(raw.tipo_comprobante, 60),
     numero_comprobante: textoSeguro(raw.numero_comprobante, 80),
     moneda: normalizarMoneda(raw.moneda),
     total: numeroSeguro(raw.total, { min: 0, max: 1_000_000_000_000, nullable: true }),
-    confianza_general: confianza(raw.confianza_general),
+    confianza_general: confianzaGeneral,
     items,
+    advertencias: [...new Set(advertencias)].slice(0, 20),
   };
 }
 
@@ -199,6 +283,12 @@ confianza_general y confianza van de 0 a 1.`;
     const factura = normalizarFacturaIA(parseJsonText(text));
     return json(res, 200, { factura, model });
   } catch (error) {
+    if (error?.message === "AMBIGUOUS_INVOICE_BARCODES") {
+      return json(res, 422, {
+        error: "AI_REVIEW_REQUIRED",
+        message: "La factura contiene el mismo código de barras asociado a productos distintos. Revisá la foto o cargá esas líneas manualmente antes de ingresar stock.",
+      });
+    }
     console.error("SIGO invoice parse error", error);
     return json(res, 502, { error: "AI_INVALID_OUTPUT", message: "La IA respondió, pero no devolvió una factura segura y utilizable." });
   }
