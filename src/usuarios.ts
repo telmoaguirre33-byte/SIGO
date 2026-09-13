@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { SigoRole } from "./permissions";
+import type { SigoPermission, SigoRole } from "./permissions";
 
 export type UsuarioEmpresaSigo = {
   membresia_id: string;
@@ -7,8 +7,8 @@ export type UsuarioEmpresaSigo = {
   email: string;
   rol: SigoRole;
   activo: boolean;
-  permisos_extra: string[];
-  permisos_denegados: string[];
+  permisos_extra: SigoPermission[];
+  permisos_denegados: SigoPermission[];
   created_at: string;
 };
 
@@ -22,6 +22,35 @@ export type VinculoPortalClienteSigo = {
 
 const rolesGestionables: SigoRole[] = ["admin", "seller", "warehouse", "client"];
 
+const PERMISOS_VALIDOS = new Set<SigoPermission>([
+  "companies.manage",
+  "users.manage",
+  "products.read",
+  "products.write",
+  "stock.read",
+  "stock.write",
+  "sales.read",
+  "sales.write",
+  "purchases.read",
+  "purchases.write",
+  "clients.read",
+  "clients.write",
+  "suppliers.read",
+  "suppliers.write",
+  "reports.read",
+  "costs.read",
+  "margins.read",
+  "price_lists.read",
+  "arca.configure",
+  "invoices.issue",
+  "client_portal.read",
+]);
+
+function normalizarPermisos(valor: unknown): SigoPermission[] {
+  if (!Array.isArray(valor)) return [];
+  return [...new Set(valor.map(String).filter((item): item is SigoPermission => PERMISOS_VALIDOS.has(item as SigoPermission)))];
+}
+
 function mensajeUsuarios(errorMessage: string): string {
   const normalized = errorMessage.toUpperCase();
   if (normalized.includes("USER_NOT_REGISTERED")) return "Ese email todavía no tiene una cuenta SIGO. Pedile que cree una cuenta de usuario y volvé a agregarlo.";
@@ -29,7 +58,12 @@ function mensajeUsuarios(errorMessage: string): string {
   if (normalized.includes("ROLE_NOT_ALLOWED")) return "Tu perfil no puede asignar ese rol.";
   if (normalized.includes("OWNER_MEMBERSHIP_IMMUTABLE")) return "El propietario principal no puede modificarse desde esta pantalla.";
   if (normalized.includes("SELF_DEACTIVATION_FORBIDDEN")) return "No podés desactivar tu propio acceso.";
-  if (normalized.includes("USERS_MANAGE_FORBIDDEN") || normalized.includes("PERMISSION")) return "No tenés permiso para administrar usuarios de esta empresa.";
+  if (normalized.includes("OWNER_PERMISSION_REQUIRED")) return "Sólo el Propietario puede personalizar permisos individuales.";
+  if (normalized.includes("PERMISSION_CONFLICT")) return "Un permiso no puede estar otorgado y denegado al mismo tiempo.";
+  if (normalized.includes("PERMISSION_GRANT_FORBIDDEN")) return "Ese privilegio estructural no puede otorgarse como permiso adicional. Usá el rol correspondiente.";
+  if (normalized.includes("CLIENT_EXTRA_PERMISSIONS_FORBIDDEN")) return "El rol Cliente debe permanecer limitado al Portal Cliente.";
+  if (normalized.includes("USERS_MANAGE_FORBIDDEN")) return "No tenés permiso para administrar usuarios de esta empresa.";
+  if (normalized.includes("PERMISSION_INVALID")) return "La configuración contiene un permiso no válido.";
   if (normalized.includes("MEMBERSHIP_NOT_FOUND")) return "La membresía ya no existe o pertenece a otra empresa.";
   if (normalized.includes("CLIENT_MEMBERSHIP_REQUIRED")) return "El Portal Cliente sólo puede vincularse a un usuario activo con rol Cliente.";
   if (normalized.includes("CLIENT_NOT_FOUND")) return "El cliente comercial ya no está activo o pertenece a otra empresa.";
@@ -53,8 +87,8 @@ export async function listarUsuariosEmpresaSigo(empresaId: string): Promise<Usua
       email: String(row.email ?? ""),
       rol: String(row.rol) as SigoRole,
       activo: Boolean(row.activo),
-      permisos_extra: Array.isArray(row.permisos_extra) ? row.permisos_extra.map(String) : [],
-      permisos_denegados: Array.isArray(row.permisos_denegados) ? row.permisos_denegados.map(String) : [],
+      permisos_extra: normalizarPermisos(row.permisos_extra),
+      permisos_denegados: normalizarPermisos(row.permisos_denegados),
       created_at: String(row.created_at ?? ""),
     }));
 }
@@ -98,6 +132,31 @@ export async function actualizarUsuarioEmpresaSigo(
     p_membresia_id: membresiaId,
     p_rol: rol,
     p_activo: activo,
+  });
+  if (error) throw new Error(mensajeUsuarios(error.message));
+  return String(data);
+}
+
+export async function actualizarPermisosUsuarioEmpresaSigo(
+  empresaId: string,
+  membresiaId: string,
+  permisosExtra: readonly SigoPermission[],
+  permisosDenegados: readonly SigoPermission[],
+): Promise<string> {
+  const extra = [...new Set(permisosExtra)];
+  const denegados = [...new Set(permisosDenegados)];
+  if (extra.some((permiso) => !PERMISOS_VALIDOS.has(permiso)) || denegados.some((permiso) => !PERMISOS_VALIDOS.has(permiso))) {
+    throw new Error("La configuración contiene un permiso no válido.");
+  }
+  if (extra.some((permiso) => denegados.includes(permiso))) {
+    throw new Error("Un permiso no puede estar otorgado y denegado al mismo tiempo.");
+  }
+
+  const { data, error } = await supabase.rpc("actualizar_permisos_usuario_empresa_sigo", {
+    p_empresa_id: empresaId,
+    p_membresia_id: membresiaId,
+    p_permisos_extra: extra,
+    p_permisos_denegados: denegados,
   });
   if (error) throw new Error(mensajeUsuarios(error.message));
   return String(data);
