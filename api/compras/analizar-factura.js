@@ -98,14 +98,25 @@ function normalizarDescripcion(value) {
     .trim();
 }
 
+function fechaIsoCalendarioValida(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const fecha = new Date(Date.UTC(year, month - 1, day));
+  return fecha.getUTCFullYear() === year && fecha.getUTCMonth() === month - 1 && fecha.getUTCDate() === day;
+}
+
 function detectarCodigosConflictivos(items) {
   const porCodigo = new Map();
   for (const item of items) {
-    if (!item.codigo_barras) continue;
-    const clave = item.codigo_barras.toUpperCase();
-    const nombres = porCodigo.get(clave) ?? new Set();
-    nombres.add(normalizarDescripcion(item.descripcion));
-    porCodigo.set(clave, nombres);
+    const codigos = new Set([item.codigo_barras, item.codigo]
+      .filter(Boolean)
+      .map((codigo) => String(codigo).trim().toUpperCase())
+      .filter(Boolean));
+    for (const clave of codigos) {
+      const nombres = porCodigo.get(clave) ?? new Set();
+      nombres.add(normalizarDescripcion(item.descripcion));
+      porCodigo.set(clave, nombres);
+    }
   }
   return [...porCodigo.entries()]
     .filter(([, nombres]) => nombres.size > 1)
@@ -123,7 +134,8 @@ function normalizarFacturaIA(raw) {
   const cuit = cuitArgentinoValido(cuitLeido) ? cuitLeido : null;
   if (cuitLeido && !cuit) advertencias.push("El CUIT leído no supera la validación del dígito verificador; no se usará para crear o asociar proveedor.");
 
-  const itemsRaw = Array.isArray(raw.items) ? raw.items.slice(0, MAX_INVOICE_ITEMS) : [];
+  const itemsRaw = Array.isArray(raw.items) ? raw.items : [];
+  if (itemsRaw.length > MAX_INVOICE_ITEMS) throw new Error("TOO_MANY_INVOICE_ITEMS");
   const items = [];
 
   for (const item of itemsRaw) {
@@ -157,15 +169,38 @@ function normalizarFacturaIA(raw) {
 
   const codigosConflictivos = detectarCodigosConflictivos(items);
   if (codigosConflictivos.length > 0) {
-    const error = new Error("AMBIGUOUS_INVOICE_BARCODES");
+    const error = new Error("AMBIGUOUS_INVOICE_CODES");
     error.codigos = codigosConflictivos;
     throw error;
   }
 
   const fechaTexto = textoSeguro(raw.fecha, 16);
-  const fecha = fechaTexto && /^\d{4}-\d{2}-\d{2}$/.test(fechaTexto) ? fechaTexto : null;
+  const fecha = fechaTexto && fechaIsoCalendarioValida(fechaTexto) ? fechaTexto : null;
+  if (fechaTexto && !fecha) advertencias.push("La fecha leída no es una fecha calendario válida; revisala antes de confirmar la compra.");
+
   const confianzaGeneral = confianza(raw.confianza_general);
   if (confianzaGeneral < 0.55) advertencias.push("La confianza general de lectura es baja. Revisá cada línea antes de aplicar la factura.");
+
+  const bajaConfianza = items.filter((item) => item.confianza < 0.5).length;
+  if (bajaConfianza > 0) {
+    advertencias.push(`${bajaConfianza} línea${bajaConfianza === 1 ? "" : "s"} tiene${bajaConfianza === 1 ? "" : "n"} confianza menor al 50%; revisá cantidad, costo y producto antes de ingresar stock.`);
+  }
+
+  const total = numeroSeguro(raw.total, { min: 0, max: 1_000_000_000_000, nullable: true });
+  if (total != null) {
+    const sumaLineas = items.reduce((suma, item) => {
+      const totalLinea = item.total_linea;
+      const calculado = item.cantidad * item.costo_unitario;
+      return suma + (totalLinea != null && Number.isFinite(totalLinea) && totalLinea >= 0 ? totalLinea : calculado);
+    }, 0);
+    if (sumaLineas > 0) {
+      const diferencia = Math.abs(total - sumaLineas);
+      const tolerancia = Math.max(20, total * 0.05);
+      if (diferencia > tolerancia) {
+        advertencias.push("El total de la factura difiere de la suma de las líneas leídas. Revisá impuestos, descuentos y productos antes de confirmar.");
+      }
+    }
+  }
 
   return {
     proveedor: {
@@ -176,10 +211,10 @@ function normalizarFacturaIA(raw) {
     tipo_comprobante: textoSeguro(raw.tipo_comprobante, 60),
     numero_comprobante: textoSeguro(raw.numero_comprobante, 80),
     moneda: normalizarMoneda(raw.moneda),
-    total: numeroSeguro(raw.total, { min: 0, max: 1_000_000_000_000, nullable: true }),
+    total,
     confianza_general: confianzaGeneral,
     items,
-    advertencias: [...new Set(advertencias)].slice(0, 20),
+    advertencias: [...new Set(advertencias)].slice(0, 30),
   };
 }
 
@@ -283,10 +318,16 @@ confianza_general y confianza van de 0 a 1.`;
     const factura = normalizarFacturaIA(parseJsonText(text));
     return json(res, 200, { factura, model });
   } catch (error) {
-    if (error?.message === "AMBIGUOUS_INVOICE_BARCODES") {
+    if (error?.message === "AMBIGUOUS_INVOICE_CODES") {
       return json(res, 422, {
         error: "AI_REVIEW_REQUIRED",
-        message: "La factura contiene el mismo código de barras asociado a productos distintos. Revisá la foto o cargá esas líneas manualmente antes de ingresar stock.",
+        message: "La factura contiene el mismo código asociado a productos distintos. Revisá la foto o cargá esas líneas manualmente antes de ingresar stock.",
+      });
+    }
+    if (error?.message === "TOO_MANY_INVOICE_ITEMS") {
+      return json(res, 422, {
+        error: "AI_REVIEW_REQUIRED",
+        message: `La factura contiene más de ${MAX_INVOICE_ITEMS} líneas. Dividí la carga o ingresala manualmente para evitar una compra parcial.`,
       });
     }
     console.error("SIGO invoice parse error", error);
