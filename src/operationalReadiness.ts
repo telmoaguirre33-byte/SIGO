@@ -1,3 +1,4 @@
+import { buscarProductoPorCodigo } from "./barcode";
 import { supabase } from "./supabase";
 
 export type EmpresaReadinessRef = {
@@ -60,6 +61,9 @@ export type OperationalReadinessResult = {
   stockNegativo: number;
   stockNull: number;
   vendiblesConStock: number;
+  vendiblesScannerSeguros: number;
+  scannerLookupOk: boolean;
+  scannerLookupMatches: number;
   productoPrueba: ReadinessTestProduct | null;
   bloqueosIdentidad: string[];
   issues: string[];
@@ -169,6 +173,9 @@ function resultadoVacio(
     stockNegativo: 0,
     stockNull: 0,
     vendiblesConStock: 0,
+    vendiblesScannerSeguros: 0,
+    scannerLookupOk: false,
+    scannerLookupMatches: 0,
     productoPrueba: null,
     bloqueosIdentidad: [],
     issues,
@@ -243,6 +250,10 @@ export async function validarReadinessSigoAdministracion(
 
   const identidadesDuplicadasDetalle = detectarIdentidadesDuplicadas(catalogo);
   const identidadesDuplicadas = identidadesDuplicadasDetalle.length;
+  const productosConIdentidadDuplicada = new Set<string>();
+  for (const [, productos] of identidadesDuplicadasDetalle) {
+    for (const productoId of productos.keys()) productosConIdentidadDuplicada.add(productoId);
+  }
   const legacyPendientes = catalogo
     .filter((row) => normalizarCodigo(row.codigo_interno).startsWith(LEGACY_DUP_PREFIX))
     .sort((a, b) => describirProducto(a).localeCompare(describirProducto(b)));
@@ -260,7 +271,9 @@ export async function validarReadinessSigoAdministracion(
     && !normalizarCodigo(row.codigo_interno).startsWith(LEGACY_DUP_PREFIX),
   ).sort((a, b) => describirProducto(a).localeCompare(describirProducto(b)));
   const vendiblesConStock = vendibles.length;
-  const candidato = vendibles[0] ?? null;
+  const vendiblesScanner = vendibles.filter((row) => !productosConIdentidadDuplicada.has(row.id));
+  const vendiblesScannerSeguros = vendiblesScanner.length;
+  const candidato = vendiblesScanner[0] ?? null;
   const productoPrueba: ReadinessTestProduct | null = candidato ? {
     id: candidato.id,
     nombre: candidato.nombre.trim() || "Producto sin nombre",
@@ -268,6 +281,22 @@ export async function validarReadinessSigoAdministracion(
     stock: Number(candidato.stock_actual ?? 0),
     precio: Number(candidato.precio_venta ?? 0),
   } : null;
+
+  let scannerLookupOk = false;
+  let scannerLookupMatches = 0;
+  if (productoPrueba) {
+    try {
+      const matches = await buscarProductoPorCodigo(empresa.empresa_id, productoPrueba.codigo);
+      scannerLookupMatches = matches.length;
+      scannerLookupOk = matches.length === 1 && matches[0]?.id === productoPrueba.id;
+      if (!scannerLookupOk) {
+        issues.push(`El lookup real del scanner no resolvió unívocamente el producto de prueba ${productoPrueba.codigo}: ${scannerLookupMatches} coincidencia(s).`);
+      }
+    } catch (error) {
+      console.error("SIGO live scanner lookup readiness failed", error);
+      issues.push("No se pudo validar en vivo el lookup tenant-aware del scanner con el producto de prueba.");
+    }
+  }
 
   const bloqueosDuplicados = identidadesDuplicadasDetalle
     .slice(0, MAX_BLOQUEOS_EVIDENCIA)
@@ -330,6 +359,8 @@ export async function validarReadinessSigoAdministracion(
   }
   if (vendiblesConStock === 0) {
     issues.push("No hay productos activos con código final, precio mayor a cero y stock positivo para una venta de prueba.");
+  } else if (vendiblesScannerSeguros === 0) {
+    issues.push("Hay productos vendibles con stock, pero ninguno tiene identidad única y segura para la prueba real de scanner.");
   }
 
   const ok = issues.length === 0;
@@ -354,6 +385,10 @@ export async function validarReadinessSigoAdministracion(
     `negative_stock=${stockNegativo}`,
     `null_stock=${stockNull}`,
     `sellable_with_stock=${vendiblesConStock}`,
+    `scanner_safe_sellable=${vendiblesScannerSeguros}`,
+    `scanner_lookup=${scannerLookupOk ? "OK" : "REVIEW"}`,
+    `scanner_matches=${scannerLookupMatches}`,
+    `test_product_id=${productoPrueba?.id ?? "NONE"}`,
     `test_product_code=${productoPrueba?.codigo ?? "NONE"}`,
     `test_product_stock=${productoPrueba?.stock ?? 0}`,
     `test_product_price=${productoPrueba?.precio ?? 0}`,
@@ -389,6 +424,9 @@ export async function validarReadinessSigoAdministracion(
     stockNegativo,
     stockNull,
     vendiblesConStock,
+    vendiblesScannerSeguros,
+    scannerLookupOk,
+    scannerLookupMatches,
     productoPrueba,
     bloqueosIdentidad,
     issues,
