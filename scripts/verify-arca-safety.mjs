@@ -16,7 +16,10 @@ const checks = [
       'wswhomo.afip.gov.ar/wsfev1',
       'servicios1.afip.gov.ar/wsfev1',
       'autenticacionRealValidada',
-      'no habilita CAE',
+      'autenticacionRealEstado',
+      'emisionHabilitable',
+      'AUTH_REAL_MAX_AGE_MS',
+      'no habilita CAE por sí sola',
       'cuitArgentinoValido',
       'configuracionActiva',
       'ambienteValido',
@@ -27,7 +30,7 @@ const checks = [
       'process.env.ARCA_PRIVATE_KEY',
       'process.env.CLAVE_FISCAL',
     ],
-    label: 'ARCA backend preflight is tenant-scoped and secret-safe',
+    label: 'ARCA backend preflight is tenant-scoped, freshness-aware and secret-safe',
   },
   {
     file: 'src/ArcaPreflight.tsx',
@@ -35,10 +38,13 @@ const checks = [
       '/api/arca/preflight',
       'data.session?.access_token',
       'empresaId',
-      'Autenticación WSAA real validada',
+      'Autenticación WSAA real',
+      'autenticacionRealEstado',
+      'emisionHabilitable',
+      'Emisión todavía bloqueada hasta tener WSAA vigente',
       'Validar preparación ARCA',
     ],
-    label: 'ARCA preflight UI uses authenticated backend validation',
+    label: 'ARCA preflight UI distinguishes technical readiness from fresh WSAA validation',
   },
   {
     file: 'src/ArcaFacturacion.tsx',
@@ -98,6 +104,14 @@ if (!preflight.includes('Number.isInteger(numero) && numero >= 1 && numero <= 99
 }
 if (!preflight.includes('cuitArgentinoValido(config.cuit_emisor)')) {
   console.error('FAIL ARCA CUIT guard: issuer CUIT must validate its check digit');
+  failed = true;
+}
+if (!preflight.includes('12 * 60 * 60 * 1000')) {
+  console.error('FAIL ARCA WSAA freshness guard: a previous real authentication must expire after 12 hours');
+  failed = true;
+}
+if (!preflight.includes('Boolean(ok && autenticacionReal.ok)')) {
+  console.error('FAIL ARCA emission gate: technical preflight alone must not mark issuance as habilitable');
   failed = true;
 }
 
