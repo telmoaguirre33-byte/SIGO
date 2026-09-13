@@ -1,0 +1,132 @@
+name: SIGO Production Operational Smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/production-operational-smoke.sql'
+      - '.github/workflows/production-operational-smoke.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: sigo-production-operational-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Resolve production read-only smoke connection
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_PROJECT_REF:-}" ]; then
+            echo "::error title=Missing production secret::SUPABASE_PROJECT_REF is required."
+            exit 1
+          fi
+
+          test_url() {
+            local candidate="$1"
+            echo "::add-mask::$candidate"
+            if timeout 10s supabase migration list --db-url "$candidate" >/tmp/sigo-smoke-migrations.txt 2>/tmp/sigo-smoke-db-error.txt; then
+              cat /tmp/sigo-smoke-migrations.txt
+              echo "SIGO_SMOKE_DB_URL=$candidate" >> "$GITHUB_ENV"
+              return 0
+            fi
+            return 1
+          }
+
+          if [ -n "${SUPABASE_DB_URL:-}" ] && test_url "$SUPABASE_DB_URL"; then
+            echo "Production smoke connection resolved from SUPABASE_DB_URL."
+            exit 0
+          fi
+          if [ -n "${SUPABASE_POOLER_URL:-}" ] && test_url "$SUPABASE_POOLER_URL"; then
+            echo "Production smoke connection resolved from SUPABASE_POOLER_URL."
+            exit 0
+          fi
+          if [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then
+            echo "::error title=Missing production database credential::Configure SUPABASE_DB_URL/SUPABASE_POOLER_URL or SUPABASE_DB_PASSWORD."
+            exit 1
+          fi
+
+          encoded_password="$(python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+          print(quote(os.environ['SUPABASE_DB_PASSWORD'], safe=''))
+          PY
+          )"
+          echo "::add-mask::$encoded_password"
+
+          direct="postgresql://postgres:${encoded_password}@db.${SUPABASE_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require"
+          if test_url "$direct"; then
+            echo "Production smoke connection resolved through direct database endpoint."
+            exit 0
+          fi
+
+          regions=(
+            sa-east-1 us-east-1 us-east-2 us-west-1 us-west-2 ca-central-1
+            eu-west-1 eu-west-2 eu-west-3 eu-central-1 eu-central-2 eu-north-1
+            ap-southeast-1 ap-southeast-2 ap-northeast-1 ap-northeast-2 ap-south-1
+          )
+          for region in "${regions[@]}"; do
+            for generation in aws-0 aws-1; do
+              host="${generation}-${region}.pooler.supabase.com"
+              candidate="postgresql://postgres.${SUPABASE_PROJECT_REF}:${encoded_password}@${host}:5432/postgres?sslmode=require"
+              if test_url "$candidate"; then
+                echo "Production smoke connection resolved through Supabase session pooler ${generation}/${region}."
+                exit 0
+              fi
+            done
+          done
+
+          cat /tmp/sigo-smoke-db-error.txt >&2 || true
+          echo "::error title=Production smoke blocked::No safe Postgres connection could reach the SIGO production database."
+          exit 1
+
+      - name: Ensure psql client
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v psql >/dev/null 2>&1; then
+            psql --version
+            exit 0
+          fi
+          sudo apt-get update -y
+          sudo apt-get install -y postgresql-client
+          psql --version
+
+      - name: Verify migrations are current
+        shell: bash
+        run: |
+          set -euo pipefail
+          state="$(supabase migration list --db-url "$SIGO_SMOKE_DB_URL")"
+          echo "$state"
+          if echo "$state" | grep -E '\|[[:space:]]+[0-9]{14}[[:space:]]*\|' | grep -qE '\|[[:space:]]*\|'; then
+            echo "::error title=Production migrations pending::Operational smoke will not certify a database with unapplied migrations."
+            exit 1
+          fi
+
+      - name: Run production operational smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Running read-only SIGO production checks: initial stock, product invariants, scanner identities and monetary transaction integrity."
+          psql "$SIGO_SMOKE_DB_URL" -X -v ON_ERROR_STOP=1 -f scripts/production-operational-smoke.sql | tee /tmp/sigo-production-smoke.log
+          grep -q 'SIGO_SMOKE_TEST_PRODUCT' /tmp/sigo-production-smoke.log
+          echo "SIGO_PRODUCTION_OPERATIONAL_SMOKE_COMPLETED"
