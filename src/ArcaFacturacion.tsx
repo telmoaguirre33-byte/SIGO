@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import ArcaCertificateUpload from "./ArcaCertificateUpload";
 import ArcaPreflight from "./ArcaPreflight";
 import { supabase } from "./supabase";
 
@@ -149,7 +150,7 @@ export default function ArcaFacturacion({ empresaId }: { empresaId: string }) {
         <>
           <div className="arca-steps">
             <article className="arca-step active"><span>1</span><strong>Datos fiscales</strong><small>CUIT y razón social</small></article>
-            <article className={config ? "arca-step active" : "arca-step"}><span>2</span><strong>ARCA</strong><small>Certificado y relación WSFE</small></article>
+            <article className={config?.certificado_ref ? "arca-step active" : "arca-step"}><span>2</span><strong>ARCA</strong><small>Certificado y relación WSFE</small></article>
             <article className={puntos.length ? "arca-step active" : "arca-step"}><span>3</span><strong>Punto de venta</strong><small>Numeración fiscal</small></article>
             <article className={config?.activo && config?.ultima_prueba_ok ? "arca-step active" : "arca-step"}><span>4</span><strong>Emitir</strong><small>CAE desde SIGO</small></article>
           </div>
@@ -176,6 +177,8 @@ export default function ArcaFacturacion({ empresaId }: { empresaId: string }) {
               </div>
               <div className="arca-security-note"><strong>SIGO nunca debe pedir tu clave fiscal.</strong><span>La vinculación se hace en ARCA. SIGO trabaja con certificado digital y WSFEv1 para solicitar el CAE. En ARCA, el servicio de negocio correspondiente a WSFEv1 se identifica como WSFE.</span></div>
             </section>
+
+            <ArcaCertificateUpload empresaId={empresaId} onUploaded={() => { void cargar(); }} />
 
             <ArcaPreflight empresaId={empresaId} />
 
