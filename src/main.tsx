@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import ArcaLauncher from "./ArcaLauncher";
+import ConfiguracionLauncher from "./ConfiguracionLauncher";
 import SigoAyuda from "./SigoAyuda";
 import SigoAuthGate from "./SigoAuthGate";
 import SigoRoot from "./SigoRoot";
@@ -13,6 +14,7 @@ import "./arca-facturacion.css";
 import "./reports-catalog.css";
 import "./logout-visible.css";
 import "./sigo-ayuda.css";
+import "./configuracion.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -20,6 +22,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <>
         <SigoRoot />
         <ArcaLauncher />
+        <ConfiguracionLauncher />
         <SigoAyuda />
       </>
     </SigoAuthGate>
