@@ -28,18 +28,21 @@ export default function MobileOperationsMenu() {
   const [grupo, setGrupo] = useState<Grupo>("ingresos");
   const [top, setTop] = useState(176);
 
+  // El menú no debe desaparecer si una segunda lectura de tenant tarda o falla.
+  // SigoAuthGate ya garantiza que este componente sólo se monte con sesión válida.
   const puedeAdministrar = empresa?.rol === "owner" || empresa?.rol === "admin";
-  const puedeVender = Boolean(empresa && ["owner", "admin", "seller"].includes(empresa.rol));
+  const puedeVender = empresa ? ["owner", "admin", "seller"].includes(empresa.rol) : true;
 
   const cargarEmpresa = useCallback(async () => {
     try {
       const { data, error } = await supabase.auth.getUser();
-      if (error || !data.user) return setEmpresa(null);
+      if (error || !data.user) return;
       const empresas = await cargarMisEmpresas();
       const activa = resolverEmpresaActiva(empresas, leerEmpresaActivaGuardada(data.user.id), data.user.id);
-      setEmpresa(activa);
-    } catch {
-      setEmpresa(null);
+      if (activa) setEmpresa(activa);
+    } catch (error) {
+      // El menú permanece visible aunque falle esta lectura auxiliar.
+      console.warn("No se pudo refrescar la empresa del menú móvil", error);
     }
   }, []);
 
@@ -54,7 +57,10 @@ export default function MobileOperationsMenu() {
     let observer: ResizeObserver | null = null;
     const actualizar = () => {
       const barra = document.querySelector<HTMLElement>(".sigo-tenant-bar");
-      if (!barra) return;
+      if (!barra) {
+        setTop(12);
+        return;
+      }
       setTop(Math.max(8, Math.round(barra.getBoundingClientRect().bottom + 8)));
       if (!observer) {
         observer = new ResizeObserver(actualizar);
@@ -80,7 +86,7 @@ export default function MobileOperationsMenu() {
     return () => { document.body.style.overflow = anterior; };
   }, [abierto]);
 
-  const nombreEmpresa = useMemo(() => empresa?.empresa_nombre || empresa?.nombre || "SIGO", [empresa]);
+  const nombreEmpresa = useMemo(() => empresa?.empresa_nombre || empresa?.nombre || "Empresa activa", [empresa]);
 
   function cerrar() {
     setAbierto(false);
@@ -133,8 +139,6 @@ export default function MobileOperationsMenu() {
     cerrar();
     clickSelector(".sigo-help-launcher");
   }
-
-  if (!empresa) return null;
 
   return (
     <>
