@@ -17,6 +17,17 @@ function empresaValida(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || "").trim());
 }
 
+function normalizarCuit(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits.length === 11 ? digits : "";
+}
+
+function extraerCuitCertificado(subject) {
+  const texto = String(subject || "");
+  const serial = texto.match(/(?:^|[\n,\/])\s*(?:serialNumber|2\.5\.4\.5)\s*=\s*(?:CUIT\s*)?([0-9]{11})(?=$|[\n,\/])/i);
+  return serial?.[1] || "";
+}
+
 async function rpcPermitido(url, anonKey, auth, empresaId, permiso) {
   const response = await fetch(`${url}/rest/v1/rpc/tiene_permiso_empresa`, {
     method: "POST",
@@ -116,6 +127,11 @@ export default async function handler(req, res) {
     const config = await leerConfig(sesion, empresaId);
     if (!config) return json(res, 409, { error: "ARCA_CONFIG_REQUIRED", message: "Guardá CUIT y ambiente antes de cargar el certificado." });
 
+    const cuitConfigurado = normalizarCuit(config.cuit_emisor);
+    if (!cuitConfigurado) {
+      return json(res, 409, { error: "ARCA_CUIT_REQUIRED", message: "Configurá un CUIT emisor válido antes de vincular el certificado." });
+    }
+
     const certificadoPem = decodificarPem(req.body?.certificadoBase64, "CERTIFICADO");
     const clavePrivadaPem = decodificarPem(req.body?.clavePrivadaBase64, "CLAVE_PRIVADA");
     const passphrase = typeof req.body?.passphrase === "string" ? req.body.passphrase : undefined;
@@ -137,9 +153,32 @@ export default async function handler(req, res) {
       return json(res, 400, { error: "CERTIFICADO_O_CLAVE_NO_LEGIBLE" });
     }
 
+    const vigenteDesdeAt = Date.parse(certificado.validFrom);
     const venceAt = Date.parse(certificado.validTo);
-    if (!Number.isFinite(venceAt) || venceAt <= Date.now()) {
+    const ahora = Date.now();
+    if (!Number.isFinite(vigenteDesdeAt) || !Number.isFinite(venceAt)) {
+      return json(res, 400, { error: "CERTIFICADO_VIGENCIA_INVALIDA" });
+    }
+    if (vigenteDesdeAt > ahora) {
+      return json(res, 400, { error: "CERTIFICADO_AUN_NO_VIGENTE", vigenteDesde: certificado.validFrom || null });
+    }
+    if (venceAt <= ahora) {
       return json(res, 400, { error: "CERTIFICADO_VENCIDO", vence: certificado.validTo || null });
+    }
+
+    const cuitCertificado = extraerCuitCertificado(certificado.subject);
+    if (!cuitCertificado) {
+      return json(res, 400, {
+        error: "CERTIFICADO_SERIALNUMBER_INVALIDO",
+        message: "El certificado no informa serialNumber=CUIT seguido de 11 dígitos.",
+      });
+    }
+    if (cuitCertificado !== cuitConfigurado) {
+      return json(res, 409, {
+        error: "CERTIFICADO_CUIT_NO_COINCIDE",
+        cuitConfigurado,
+        cuitCertificado,
+      });
     }
 
     const challenge = randomBytes(48);
@@ -170,7 +209,9 @@ export default async function handler(req, res) {
     return json(res, 200, {
       ok: true,
       fingerprint,
+      vigenteDesde: new Date(vigenteDesdeAt).toISOString(),
       vence: new Date(venceAt).toISOString(),
+      cuit: cuitCertificado,
       subject: certificado.subject,
       issuer: certificado.issuer,
       nota: "Certificado y clave privada guardados en almacenamiento privado por empresa. La clave privada no se almacena en arca_config ni se devuelve al navegador.",
