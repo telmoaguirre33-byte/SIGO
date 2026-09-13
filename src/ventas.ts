@@ -21,6 +21,17 @@ type EstadoReintentoVenta = "nueva" | "reintento" | "desconocido";
 
 type SnapshotStockVenta = Map<string, number>;
 
+type VentaVerificableSigo = {
+  id: string;
+  medio_pago: string;
+  total?: number | string | null;
+};
+
+type CabeceraVentaVerificada = {
+  total: number | null;
+  integridad: IntegridadVentaSigo;
+};
+
 export type VentaRecienteSigo = {
   id: string;
   numero: number | null;
@@ -42,6 +53,7 @@ const MEDIOS_PAGO_VALIDOS: MedioPagoSigo[] = [
 ];
 
 const STOCK_TOLERANCIA = 0.0005;
+const DINERO_TOLERANCIA = 0.01;
 
 function crearIdempotencyKey() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -52,6 +64,10 @@ function crearIdempotencyKey() {
 
 function normalizarIdentificador(valor: string | null | undefined) {
   return String(valor ?? "").trim();
+}
+
+function casiIgualDinero(a: number, b: number) {
+  return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= DINERO_TOLERANCIA;
 }
 
 function consolidarItemsVenta(items: VentaItemSigoInput[]): VentaItemSigoInput[] {
@@ -105,7 +121,7 @@ function mensajeVenta(error: unknown): string {
 
 async function verificarIntegridadVentas(
   empresaId: string,
-  ventas: Array<{ id: string; medio_pago: string }>,
+  ventas: VentaVerificableSigo[],
 ): Promise<Map<string, IntegridadVentaSigo>> {
   const resultado = new Map<string, IntegridadVentaSigo>();
   ventas.forEach((venta) => resultado.set(venta.id, "no_verificada"));
@@ -117,27 +133,104 @@ async function verificarIntegridadVentas(
   try {
     const [caja, cuenta] = await Promise.all([
       idsCaja.length
-        ? supabase.from("caja_movimientos_sigo").select("venta_id").eq("empresa_id", empresaId).eq("tipo", "ingreso").in("venta_id", idsCaja)
+        ? supabase
+            .from("caja_movimientos_sigo")
+            .select("venta_id,medio_pago,importe")
+            .eq("empresa_id", empresaId)
+            .eq("tipo", "ingreso")
+            .in("venta_id", idsCaja)
         : Promise.resolve({ data: [], error: null }),
       idsCuenta.length
-        ? supabase.from("cliente_movimientos_sigo").select("venta_id").eq("empresa_id", empresaId).eq("tipo", "debe").in("venta_id", idsCuenta)
+        ? supabase
+            .from("cliente_movimientos_sigo")
+            .select("venta_id,importe")
+            .eq("empresa_id", empresaId)
+            .eq("tipo", "debe")
+            .in("venta_id", idsCuenta)
         : Promise.resolve({ data: [], error: null }),
     ]);
 
     if (caja.error || cuenta.error) return resultado;
 
-    const cajaOk = new Set((caja.data ?? []).map((mov) => String(mov.venta_id)));
-    const cuentaOk = new Set((cuenta.data ?? []).map((mov) => String(mov.venta_id)));
-
     ventas.forEach((venta) => {
-      const ok = venta.medio_pago === "cuenta_corriente" ? cuentaOk.has(venta.id) : cajaOk.has(venta.id);
-      resultado.set(venta.id, ok ? "ok" : "revisar");
+      const totalEsperado = venta.total == null ? null : Number(venta.total);
+      if (totalEsperado != null && (!Number.isFinite(totalEsperado) || totalEsperado < 0)) {
+        resultado.set(venta.id, "revisar");
+        return;
+      }
+
+      if (venta.medio_pago === "cuenta_corriente") {
+        const movimientos = (cuenta.data ?? []).filter((mov) => String(mov.venta_id) === venta.id);
+        if (movimientos.length !== 1) {
+          resultado.set(venta.id, "revisar");
+          return;
+        }
+        const importe = Number(movimientos[0].importe);
+        if (!Number.isFinite(importe) || importe < 0) {
+          resultado.set(venta.id, "revisar");
+          return;
+        }
+        resultado.set(
+          venta.id,
+          totalEsperado == null || casiIgualDinero(importe, totalEsperado) ? "ok" : "revisar",
+        );
+        return;
+      }
+
+      const movimientos = (caja.data ?? []).filter((mov) => String(mov.venta_id) === venta.id);
+      if (movimientos.length !== 1) {
+        resultado.set(venta.id, "revisar");
+        return;
+      }
+      const movimiento = movimientos[0];
+      const importe = Number(movimiento.importe);
+      const medioPago = normalizarIdentificador(movimiento.medio_pago);
+      if (!Number.isFinite(importe) || importe < 0 || medioPago !== venta.medio_pago) {
+        resultado.set(venta.id, "revisar");
+        return;
+      }
+      resultado.set(
+        venta.id,
+        totalEsperado == null || casiIgualDinero(importe, totalEsperado) ? "ok" : "revisar",
+      );
     });
   } catch {
     // La venta no debe reportarse como fallida sólo porque el chequeo posterior no pudo leerse.
   }
 
   return resultado;
+}
+
+async function leerCabeceraVentaConfirmada(
+  empresaId: string,
+  ventaId: string,
+  medioPagoEsperado: MedioPagoSigo,
+  clienteIdEsperado: string | null,
+): Promise<CabeceraVentaVerificada> {
+  try {
+    const { data, error } = await supabase
+      .from("ventas_sigo")
+      .select("id,total,medio_pago,cliente_id,estado")
+      .eq("empresa_id", empresaId)
+      .eq("id", ventaId)
+      .maybeSingle();
+
+    if (error) return { total: null, integridad: "no_verificada" };
+    if (!data) return { total: null, integridad: "revisar" };
+
+    const total = Number(data.total);
+    const medioPago = normalizarIdentificador(data.medio_pago);
+    const clienteId = normalizarIdentificador(data.cliente_id) || null;
+    const estado = normalizarIdentificador(data.estado);
+
+    if (!Number.isFinite(total) || total < 0) return { total: null, integridad: "revisar" };
+    if (estado !== "confirmada" || medioPago !== medioPagoEsperado || clienteId !== clienteIdEsperado) {
+      return { total, integridad: "revisar" };
+    }
+    return { total, integridad: "ok" };
+  } catch {
+    return { total: null, integridad: "no_verificada" };
+  }
 }
 
 async function detectarEstadoReintento(
@@ -185,11 +278,12 @@ async function verificarIntegridadStockVenta(
   items: VentaItemSigoInput[],
   stockAntes: SnapshotStockVenta | null,
   estadoReintento: EstadoReintentoVenta,
+  totalVenta: number | null,
 ): Promise<IntegridadVentaSigo> {
   try {
     const { data: detalle, error: detalleError } = await supabase
       .from("venta_items_sigo")
-      .select("producto_id,cantidad")
+      .select("producto_id,cantidad,precio_unitario,subtotal")
       .eq("empresa_id", empresaId)
       .eq("venta_id", ventaId);
 
@@ -197,10 +291,19 @@ async function verificarIntegridadStockVenta(
 
     const esperado = new Map(items.map((item) => [item.productoId, Number(item.cantidad)]));
     const registrado = new Map<string, number>();
+    let totalDetalle = 0;
+
     for (const fila of detalle ?? []) {
       const productoId = normalizarIdentificador(fila.producto_id);
       const cantidad = Number(fila.cantidad);
+      const precioUnitario = Number(fila.precio_unitario);
+      const subtotal = Number(fila.subtotal);
       if (!productoId || !Number.isFinite(cantidad) || cantidad <= 0) return "revisar";
+      if (!Number.isFinite(precioUnitario) || precioUnitario <= 0) return "revisar";
+      if (!Number.isFinite(subtotal) || subtotal < 0) return "revisar";
+      const subtotalCalculado = Math.round(precioUnitario * cantidad * 100) / 100;
+      if (!casiIgualDinero(subtotal, subtotalCalculado)) return "revisar";
+      totalDetalle += subtotal;
       registrado.set(productoId, (registrado.get(productoId) ?? 0) + cantidad);
     }
 
@@ -208,6 +311,8 @@ async function verificarIntegridadStockVenta(
     for (const [productoId, cantidad] of esperado) {
       if (Math.abs((registrado.get(productoId) ?? Number.NaN) - cantidad) > STOCK_TOLERANCIA) return "revisar";
     }
+    if (totalVenta == null || !Number.isFinite(totalVenta)) return "no_verificada";
+    if (!casiIgualDinero(totalDetalle, totalVenta)) return "revisar";
 
     // Un retry idempotente devuelve la venta existente sin volver a descontar stock.
     // Si no podemos demostrar que la llamada era nueva, validamos el detalle pero no
@@ -283,7 +388,15 @@ export async function confirmarVentaSigo(input: {
   medioPago: MedioPagoSigo;
   clienteId?: string | null;
   idempotencyKey?: string;
-}): Promise<{ ventaId: string; idempotencyKey: string; integridad: IntegridadVentaSigo }> {
+}): Promise<{
+  ventaId: string;
+  idempotencyKey: string;
+  integridad: IntegridadVentaSigo;
+  integridadCabecera: IntegridadVentaSigo;
+  integridadCaja: IntegridadVentaSigo;
+  integridadStock: IntegridadVentaSigo;
+  totalVerificado: number | null;
+}> {
   const empresaId = normalizarIdentificador(input.empresaId);
   const clienteId = normalizarIdentificador(input.clienteId) || null;
   if (!empresaId) throw new Error("Seleccioná una empresa activa antes de vender.");
@@ -317,16 +430,30 @@ export async function confirmarVentaSigo(input: {
 
   // Ningún fallo de conciliación posterior vuelve a ejecutar la venta: si la RPC confirmó,
   // reportamos integridad y dejamos al operador revisar, evitando dobles descuentos/cobros.
+  const cabecera = await leerCabeceraVentaConfirmada(empresaId, ventaId, input.medioPago, clienteId);
   const [integridadCaja, integridadStock] = await Promise.all([
-    verificarIntegridadVentas(empresaId, [{ id: ventaId, medio_pago: input.medioPago }])
-      .then((mapa) => mapa.get(ventaId) ?? "no_verificada")
-      .catch(() => "no_verificada" as const),
-    verificarIntegridadStockVenta(empresaId, ventaId, itemsConsolidados, stockAntes, estadoReintento),
+    cabecera.total == null
+      ? Promise.resolve(cabecera.integridad === "revisar" ? "revisar" as const : "no_verificada" as const)
+      : verificarIntegridadVentas(empresaId, [{ id: ventaId, medio_pago: input.medioPago, total: cabecera.total }])
+          .then((mapa) => mapa.get(ventaId) ?? "no_verificada")
+          .catch(() => "no_verificada" as const),
+    verificarIntegridadStockVenta(
+      empresaId,
+      ventaId,
+      itemsConsolidados,
+      stockAntes,
+      estadoReintento,
+      cabecera.total,
+    ),
   ]);
 
   return {
     ventaId,
     idempotencyKey,
-    integridad: combinarIntegridad(integridadCaja, integridadStock),
+    integridad: combinarIntegridad(cabecera.integridad, integridadCaja, integridadStock),
+    integridadCabecera: cabecera.integridad,
+    integridadCaja,
+    integridadStock,
+    totalVerificado: cabecera.total,
   };
 }
