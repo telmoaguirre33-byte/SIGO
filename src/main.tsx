@@ -5,6 +5,7 @@ import CarritoLauncher from "./CarritoLauncher";
 import ConfiguracionLauncher from "./ConfiguracionLauncher";
 import DevolucionesLauncher from "./DevolucionesLauncher";
 import IngresosLauncher from "./IngresosLauncher";
+import MobileOperationsMenu from "./MobileOperationsMenu";
 import SigoAyuda from "./SigoAyuda";
 import SigoAuthGate from "./SigoAuthGate";
 import SigoRoot from "./SigoRoot";
@@ -17,6 +18,7 @@ import "./arca-facturacion.css";
 import "./reports-catalog.css";
 import "./ingresos-diarios.css";
 import "./caja-ventas.css";
+import "./mobile-operations-menu.css";
 import "./logout-visible.css";
 import "./sigo-ayuda.css";
 import "./configuracion.css";
@@ -31,6 +33,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <CarritoLauncher />
         <DevolucionesLauncher />
         <IngresosLauncher />
+        <MobileOperationsMenu />
         <SigoAyuda />
       </>
     </SigoAuthGate>
