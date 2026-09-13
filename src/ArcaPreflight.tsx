@@ -7,6 +7,8 @@ type PreflightResult = {
   ambiente?: "homologacion" | "produccion";
   checks?: {
     configuracion?: boolean;
+    configuracionActiva?: boolean;
+    ambienteValido?: boolean;
     cuit?: boolean;
     servicio?: boolean;
     certificado?: boolean;
@@ -68,7 +70,7 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
       <div className="panel-header">
         <div>
           <h3>Prevalidación técnica</h3>
-          <p>Comprueba tenant, CUIT, certificado referenciado, punto de venta y acceso de red a WSAA/WSFEv1 sin pedir ni guardar tu clave fiscal.</p>
+          <p>Comprueba tenant, ambiente, CUIT, certificado referenciado, punto de venta y acceso de red a WSAA/WSFEv1 sin pedir ni guardar tu clave fiscal.</p>
         </div>
       </div>
 
@@ -79,11 +81,13 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
       {result ? (
         <div className="arca-security-note" role="status">
           <strong>{result.ok ? "Preparación técnica completa" : "Preparación incompleta"}</strong>
-          <span>{marca(checks?.configuracion)} Configuración fiscal</span>
-          <span>{marca(checks?.cuit)} CUIT válido</span>
+          <span>{marca(checks?.configuracion)} Configuración fiscal encontrada</span>
+          <span>{marca(checks?.configuracionActiva)} Configuración ARCA activa</span>
+          <span>{marca(checks?.ambienteValido)} Ambiente válido{result.ambiente ? ` · ${result.ambiente}` : ""}</span>
+          <span>{marca(checks?.cuit)} CUIT válido con dígito verificador</span>
           <span>{marca(checks?.servicio)} Servicio WSAA = wsfe / WSFEv1</span>
           <span>{marca(checks?.certificado)} Certificado referenciado y vigente{checks?.certificadoEstado ? ` · ${checks.certificadoEstado}` : ""}</span>
-          <span>{marca(checks?.puntoVenta)} Punto de venta activo{checks?.puntosVentaActivos?.length ? ` · ${checks.puntosVentaActivos.join(", ")}` : ""}</span>
+          <span>{marca(checks?.puntoVenta)} Punto de venta activo y válido{checks?.puntosVentaActivos?.length ? ` · ${checks.puntosVentaActivos.join(", ")}` : ""}</span>
           <span>{marca(checks?.wsaaReachable)} WSAA accesible desde el backend</span>
           <span>{marca(checks?.wsfeReachable)} WSFEv1 accesible desde el backend</span>
           <span>{result.autenticacionRealValidada ? "✓" : "—"} Autenticación WSAA real validada</span>
