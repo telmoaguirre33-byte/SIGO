@@ -12,6 +12,7 @@ function requireText(content, needle, label) {
 const products = read('src/productos.ts');
 const migration = read('supabase/migrations/20260913194000_producto_guardado_readback.sql');
 const smoke = read('scripts/production-operational-smoke.sql');
+const arcaSmoke = read('scripts/production-arca-readiness.sql');
 const workflow = read('.github/workflows/production-operational-smoke.yml');
 
 for (const [needle, label] of [
@@ -65,13 +66,25 @@ const forbiddenSmoke = [
 ];
 for (const pattern of forbiddenSmoke) {
   if (pattern.test(smoke)) throw new Error(`Production smoke must remain read-only: ${pattern}`);
+  if (pattern.test(arcaSmoke)) throw new Error(`ARCA readiness must remain read-only: ${pattern}`);
 }
+
+for (const [needle, label] of [
+  ['SIGO_ARCA_PRODUCTION_STATUS', 'ARCA production status evidence'],
+  ['SIGO_ARCA_READINESS_COMPLETED', 'ARCA production readiness marker'],
+  ['interval \'12 hours\'', 'fresh WSAA age check'],
+  ['count(*) filter (where nullif(btrim(coalesce(a.cae, \'\')), \'\') is not null)', 'real CAE count'],
+]) requireText(arcaSmoke, needle, label);
 
 for (const [needle, label] of [
   ['Run production operational smoke', 'production smoke workflow step'],
   ['psql "$SIGO_SMOKE_DB_URL" -X -v ON_ERROR_STOP=1 -f scripts/production-operational-smoke.sql', 'psql production execution'],
-  ['Verify migrations are current', 'migration state gate'],
+  ['Wait until production migrations are current', 'migration deployment wait gate'],
+  ['pending:', 'pending migration parser'],
+  ['remote-only:', 'remote-only migration divergence guard'],
   ['SIGO_PRODUCTION_OPERATIONAL_SMOKE_COMPLETED', 'workflow completion marker'],
+  ['Read ARCA production readiness', 'ARCA readiness workflow step'],
+  ['scripts/production-arca-readiness.sql', 'ARCA production readiness execution'],
 ]) requireText(workflow, needle, label);
 
 console.log('SIGO_PRODUCT_READBACK_AND_PRODUCTION_SMOKE_OK');
