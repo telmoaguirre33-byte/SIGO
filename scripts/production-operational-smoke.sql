@@ -25,6 +25,8 @@ declare
   v_stock_negative integer;
   v_identity_conflicts integer;
   v_legacy_pending integer;
+  v_nonvendible_count integer;
+  v_nonvendible_misclassified integer;
   v_sellable_scanner_safe integer;
   v_confirmed_purchases integer;
   v_purchase_mismatches integer;
@@ -101,7 +103,6 @@ begin
     from public.sigo_importaciones_stock i
    where (i.import_key like 'resguardo-stock-sigo-2026-09-09-libreria-%' or i.import_key like 'resguardo-stock-sigo-2026-09-09-sertec-%')
      and i.inserted_rows + i.skipped_existing <> i.source_rows;
-
   if v_lot_accounting_mismatches <> 0 then
     raise exception 'SIGO_PROD_SMOKE_LOT_ACCOUNTING_FAILED count=%', v_lot_accounting_mismatches;
   end if;
@@ -111,7 +112,6 @@ begin
     from public.sigo_importaciones_stock i
    where (i.import_key like 'resguardo-stock-sigo-2026-09-09-libreria-%' or i.import_key like 'resguardo-stock-sigo-2026-09-09-sertec-%')
      and i.verified_rows <> i.source_rows;
-
   if v_lot_verification_mismatches <> 0 then
     raise exception 'SIGO_PROD_SMOKE_LOT_VERIFICATION_FAILED count=%', v_lot_verification_mismatches;
   end if;
@@ -121,7 +121,6 @@ begin
     from public.sigo_importaciones_stock i
    where (i.import_key like 'resguardo-stock-sigo-2026-09-09-libreria-%' or i.import_key like 'resguardo-stock-sigo-2026-09-09-sertec-%')
      and btrim(coalesce(i.source_file, '')) <> 'Resguardo_stock_SIGO.xlsx';
-
   if v_source_file_mismatches <> 0 then
     raise exception 'SIGO_PROD_SMOKE_SOURCE_FILE_FAILED count=%', v_source_file_mismatches;
   end if;
@@ -131,8 +130,9 @@ begin
     count(*) filter (where p.costo_actual is null),
     count(*) filter (where p.stock_actual is null),
     count(*) filter (where p.stock_actual < 0),
-    count(*) filter (where upper(btrim(coalesce(p.codigo_interno, ''))) like 'LEGACY-DUP-%')
-  into v_catalogo, v_cost_null, v_stock_null, v_stock_negative, v_legacy_pending
+    count(*) filter (where upper(btrim(coalesce(p.codigo_interno, ''))) like 'LEGACY-DUP-%'),
+    count(*) filter (where upper(btrim(coalesce(p.categoria, ''))) = 'NO_VENDIBLE')
+  into v_catalogo, v_cost_null, v_stock_null, v_stock_negative, v_legacy_pending, v_nonvendible_count
   from public.productos p
   where p.empresa_id = v_empresa_id;
 
@@ -143,22 +143,37 @@ begin
     raise exception 'SIGO_PROD_SMOKE_PRODUCT_VALUES_FAILED cost_null=% stock_null=% stock_negative=%', v_cost_null, v_stock_null, v_stock_negative;
   end if;
 
+  select count(*)
+    into v_nonvendible_misclassified
+    from public.productos p
+   where p.empresa_id = v_empresa_id
+     and (
+       lower(btrim(p.nombre)) like 'fotocopia%'
+       or lower(btrim(p.nombre)) = 'film impresora'
+     )
+     and upper(btrim(coalesce(p.categoria, ''))) <> 'NO_VENDIBLE';
+
+  if v_nonvendible_misclassified <> 0 then
+    raise exception 'SIGO_PROD_SMOKE_NONSELLABLE_CLASSIFICATION_FAILED count=%', v_nonvendible_misclassified;
+  end if;
+
   with identities as (
     select p.id, btrim(p.codigo_barras) as code
       from public.productos p
-     where p.empresa_id = v_empresa_id and p.activo = true and nullif(btrim(p.codigo_barras), '') is not null
+     where p.empresa_id = v_empresa_id
+       and p.activo = true
+       and upper(btrim(coalesce(p.categoria, ''))) <> 'NO_VENDIBLE'
+       and nullif(btrim(p.codigo_barras), '') is not null
     union all
     select p.id, btrim(p.codigo_interno) as code
       from public.productos p
      where p.empresa_id = v_empresa_id
        and p.activo = true
+       and upper(btrim(coalesce(p.categoria, ''))) <> 'NO_VENDIBLE'
        and nullif(btrim(p.codigo_interno), '') is not null
        and upper(btrim(p.codigo_interno)) not like 'LEGACY-DUP-%'
   ), conflicts as (
-    select code
-      from identities
-     group by code
-    having count(distinct id) > 1
+    select code from identities group by code having count(distinct id) > 1
   )
   select count(*) into v_identity_conflicts from conflicts;
 
@@ -169,19 +184,20 @@ begin
   with identities as (
     select p.id, btrim(p.codigo_barras) as code
       from public.productos p
-     where p.empresa_id = v_empresa_id and p.activo = true and nullif(btrim(p.codigo_barras), '') is not null
+     where p.empresa_id = v_empresa_id
+       and p.activo = true
+       and upper(btrim(coalesce(p.categoria, ''))) <> 'NO_VENDIBLE'
+       and nullif(btrim(p.codigo_barras), '') is not null
     union all
     select p.id, btrim(p.codigo_interno) as code
       from public.productos p
      where p.empresa_id = v_empresa_id
        and p.activo = true
+       and upper(btrim(coalesce(p.categoria, ''))) <> 'NO_VENDIBLE'
        and nullif(btrim(p.codigo_interno), '') is not null
        and upper(btrim(p.codigo_interno)) not like 'LEGACY-DUP-%'
   ), unique_ids as (
-    select (array_agg(id))[1] as id, code
-      from identities
-     group by code
-    having count(distinct id) = 1
+    select (array_agg(id))[1] as id, code from identities group by code having count(distinct id) = 1
   )
   select count(distinct p.id)
     into v_sellable_scanner_safe
@@ -189,6 +205,7 @@ begin
     join unique_ids u on u.id = p.id
    where p.empresa_id = v_empresa_id
      and p.activo = true
+     and upper(btrim(coalesce(p.categoria, ''))) <> 'NO_VENDIBLE'
      and p.stock_actual > 0
      and p.precio_venta > 0
      and upper(btrim(coalesce(p.codigo_interno, ''))) not like 'LEGACY-DUP-%';
@@ -213,7 +230,6 @@ begin
    where c.empresa_id = v_empresa_id
      and c.estado = 'confirmada'
      and (d.compra_id is null or abs(c.total - d.total_detalle) > 0.01 or abs(c.subtotal - d.total_detalle) > 0.01);
-
   if v_purchase_mismatches <> 0 then
     raise exception 'SIGO_PROD_SMOKE_PURCHASE_TOTAL_MISMATCH count=%', v_purchase_mismatches;
   end if;
@@ -234,7 +250,6 @@ begin
    where v.empresa_id = v_empresa_id
      and v.estado = 'confirmada'
      and (d.venta_id is null or abs(v.total - d.total_detalle) > 0.01);
-
   if v_sale_mismatches <> 0 then
     raise exception 'SIGO_PROD_SMOKE_SALE_TOTAL_MISMATCH count=%', v_sale_mismatches;
   end if;
@@ -252,42 +267,41 @@ begin
      and v.estado = 'confirmada'
      and v.medio_pago <> 'cuenta_corriente'
      and (c.venta_id is null or c.movimientos <> 1 or abs(v.total - c.importe) > 0.01);
-
   if v_cash_mismatches <> 0 then
     raise exception 'SIGO_PROD_SMOKE_CASH_MISMATCH count=%', v_cash_mismatches;
   end if;
 
-  raise notice 'SIGO_PRODUCTION_OPERATIONAL_SMOKE_OK tenant=% catalog=% libreria=983 computacion=417 total=1400 lots=15 lot_accounting_mismatch=0 lot_verification_mismatch=0 source_file_mismatch=0 legacy_pending=% scanner_safe=% purchases=% sales=% purchase_mismatch=0 sale_mismatch=0 cash_mismatch=0',
-    v_empresa_id, v_catalogo, v_legacy_pending, v_sellable_scanner_safe, v_confirmed_purchases, v_confirmed_sales;
+  raise notice 'SIGO_PRODUCTION_OPERATIONAL_SMOKE_OK tenant=% catalog=% libreria=983 computacion=417 total=1400 lots=15 lot_accounting_mismatch=0 lot_verification_mismatch=0 source_file_mismatch=0 legacy_pending=% nonvendible=% scanner_safe=% purchases=% sales=% purchase_mismatch=0 sale_mismatch=0 cash_mismatch=0',
+    v_empresa_id, v_catalogo, v_legacy_pending, v_nonvendible_count, v_sellable_scanner_safe, v_confirmed_purchases, v_confirmed_sales;
 end
 $$;
 
--- Evidencia accionable: un producto real apto para la prueba física de scanner/caja.
+-- Evidencia accionable: un producto de mercadería real apto para prueba física scanner/caja.
 with empresa as (
-  select id
-    from public.empresas
+  select id from public.empresas
    where lower(btrim(nombre)) = lower('SIGO Administración') and activa = true
    limit 1
 ), identities as (
   select p.id, btrim(p.codigo_barras) as code
     from public.productos p join empresa e on e.id = p.empresa_id
-   where p.activo = true and nullif(btrim(p.codigo_barras), '') is not null
+   where p.activo = true
+     and upper(btrim(coalesce(p.categoria, ''))) <> 'NO_VENDIBLE'
+     and nullif(btrim(p.codigo_barras), '') is not null
   union all
   select p.id, btrim(p.codigo_interno) as code
     from public.productos p join empresa e on e.id = p.empresa_id
    where p.activo = true
+     and upper(btrim(coalesce(p.categoria, ''))) <> 'NO_VENDIBLE'
      and nullif(btrim(p.codigo_interno), '') is not null
      and upper(btrim(p.codigo_interno)) not like 'LEGACY-DUP-%'
 ), unique_ids as (
-  select (array_agg(id))[1] as id, code
-    from identities
-   group by code
-  having count(distinct id) = 1
+  select (array_agg(id))[1] as id, code from identities group by code having count(distinct id) = 1
 )
 select
   'SIGO_SMOKE_TEST_PRODUCT' as marker,
   p.id as product_id,
   p.nombre,
+  p.categoria,
   u.code as scanner_code,
   p.stock_actual,
   p.precio_venta,
@@ -296,6 +310,7 @@ from public.productos p
 join unique_ids u on u.id = p.id
 join empresa e on e.id = p.empresa_id
 where p.activo = true
+  and upper(btrim(coalesce(p.categoria, ''))) <> 'NO_VENDIBLE'
   and p.stock_actual > 0
   and p.precio_venta > 0
   and upper(btrim(coalesce(p.codigo_interno, ''))) not like 'LEGACY-DUP-%'
