@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import ConfiguracionOperativa from "./ConfiguracionOperativa";
 import { supabase } from "./supabase";
 import {
@@ -12,9 +13,15 @@ function puedeConfigurar(empresa: EmpresaOperativa | null) {
   return empresa?.rol === "owner" || empresa?.rol === "admin";
 }
 
+type NavHost = {
+  element: HTMLElement;
+  kind: "sidebar" | "context";
+};
+
 export default function ConfiguracionLauncher() {
   const [empresa, setEmpresa] = useState<EmpresaOperativa | null>(null);
   const [open, setOpen] = useState(false);
+  const [navHost, setNavHost] = useState<NavHost | null>(null);
 
   const cargar = useCallback(async () => {
     try {
@@ -41,6 +48,28 @@ export default function ConfiguracionLauncher() {
     return () => document.removeEventListener("visibilitychange", refrescar);
   }, [cargar]);
 
+  useEffect(() => {
+    function resolverHost() {
+      const sidebar = document.querySelector<HTMLElement>(".sigo-operation-only .sidebar .menu");
+      if (sidebar) {
+        setNavHost((actual) => actual?.element === sidebar && actual.kind === "sidebar" ? actual : { element: sidebar, kind: "sidebar" });
+        return;
+      }
+
+      const contexto = document.querySelector<HTMLElement>(".sigo-context-actions");
+      if (contexto) {
+        setNavHost((actual) => actual?.element === contexto && actual.kind === "context" ? actual : { element: contexto, kind: "context" });
+        return;
+      }
+      setNavHost(null);
+    }
+
+    resolverHost();
+    const observer = new MutationObserver(resolverHost);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+
   async function abrir() {
     const activa = await cargar();
     if (activa) setOpen(true);
@@ -48,12 +77,32 @@ export default function ConfiguracionLauncher() {
 
   if (!empresa) return null;
 
+  const boton = navHost?.kind === "sidebar" ? (
+    <button
+      className="menu-item sigo-settings-menu-item"
+      type="button"
+      onClick={() => void abrir()}
+      aria-label="Abrir Configuración"
+      aria-haspopup="dialog"
+    >
+      <span className="menu-icon" aria-hidden="true">CF</span>
+      <span>Configuración</span>
+    </button>
+  ) : (
+    <button
+      className="admin-button sigo-settings-context-button"
+      type="button"
+      onClick={() => void abrir()}
+      aria-label="Abrir Configuración"
+      aria-haspopup="dialog"
+    >
+      Configuración
+    </button>
+  );
+
   return (
     <>
-      <button className="sigo-settings-launcher" type="button" onClick={() => void abrir()} aria-label="Abrir Configuración">
-        <span className="sigo-settings-launcher-icon" aria-hidden="true">⚙</span>
-        <span><strong>Configuración</strong><small>Empresa y ARCA</small></span>
-      </button>
+      {navHost ? createPortal(boton, navHost.element) : null}
 
       {open && (
         <div className="sigo-settings-overlay" role="dialog" aria-modal="true" aria-label="Configuración de SIGO">
