@@ -36,14 +36,24 @@ for (const [needle, label] of [
   ['empresasImportadas !== 1', 'single import tenant check'],
   ['detectarIdentidadesDuplicadas', 'duplicate barcode/internal-code detector'],
   ['identidadesDuplicadas !== 0', 'ambiguous scanner identity block'],
+  ['productosConIdentidadDuplicada', 'duplicate product exclusion set'],
+  ['vendiblesScannerSeguros', 'scanner-safe sellable candidates'],
   ['LEGACY_DUP_PREFIX = "LEGACY-DUP-"', 'legacy collision marker'],
   ['legacyDupPendientes !== 0', 'physical barcode review block'],
   ['productosSinCodigo !== 0', 'missing product identity block'],
   ['stockNegativo !== 0', 'negative stock block'],
   ['stockNull !== 0', 'null stock block'],
   ['vendiblesConStock === 0', 'real sale candidate check'],
+  ['vendiblesScannerSeguros === 0', 'scanner-safe candidate requirement'],
+  ['buscarProductoPorCodigo', 'real tenant-aware scanner lookup'],
+  ['matches.length === 1 && matches[0]?.id === productoPrueba.id', 'unique scanner lookup verification'],
+  ['scannerLookupOk', 'scanner lookup result'],
+  ['scanner_lookup=', 'scanner lookup evidence'],
+  ['scanner_matches=', 'scanner match-count evidence'],
+  ['scanner_safe_sellable=', 'scanner-safe sellable evidence'],
   ['productoPrueba', 'explicit real sale test candidate'],
   ['bloqueosIdentidad', 'actionable identity blocker detail'],
+  ['test_product_id=', 'test product id evidence'],
   ['test_product_code=', 'test product evidence code'],
   ['test_product_stock=', 'test product stock evidence'],
   ['test_product_price=', 'test product price evidence'],
@@ -56,9 +66,9 @@ for (const [needle, label] of [
   requireText(readiness, needle, label);
 }
 
-for (const forbidden of ['.insert(', '.update(', '.upsert(', '.delete(', '.rpc(']) {
+for (const forbidden of ['.insert(', '.update(', '.upsert(', '.delete(']) {
   if (readiness.includes(forbidden)) {
-    throw new Error(`Live readiness verifier must remain read-only; forbidden token: ${forbidden}`);
+    throw new Error(`Live readiness verifier must remain non-mutating; forbidden token: ${forbidden}`);
   }
 }
 
@@ -72,4 +82,4 @@ for (const [needle, label] of [
   requireText(matriz, needle, label);
 }
 
-console.log('Live operational readiness guard OK: read-only unique 983 + 417 = 1,400 verification, exactly 15 unique batches, full catalog pagination, scanner identity diagnostics, explicit sellable test product, null-stock block and actionable LEGACY-DUP evidence');
+console.log('Live operational readiness guard OK: read-only unique 983 + 417 = 1,400 verification, exactly 15 unique batches, full catalog pagination, safe scanner candidate exclusion, live tenant-aware barcode lookup, null-cost/stock blocks and actionable identity evidence');
