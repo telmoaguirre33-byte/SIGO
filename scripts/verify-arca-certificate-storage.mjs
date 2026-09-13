@@ -48,7 +48,7 @@ for (const forbidden of [
 
 for (const token of [
   "/api/arca/certificate",
-  "data.session?.access_token",
+  "sessionData.session?.access_token",
   "Clave privada",
   "Contraseña de la clave privada",
   "no se almacena",
