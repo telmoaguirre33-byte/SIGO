@@ -1,0 +1,117 @@
+name: SIGO QA Transaction Probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/transaction-rollback-probe.sql'
+      - '.github/workflows/qa-transaction-probe.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: sigo-qa-transaction-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Resolve production database
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_url() {
+            local candidate="$1"
+            echo "::add-mask::$candidate"
+            if timeout 10s supabase migration list --db-url "$candidate" >/tmp/sigo-qa-migrations.txt 2>/tmp/sigo-qa-db-error.txt; then
+              echo "SIGO_QA_DB_URL=$candidate" >> "$GITHUB_ENV"
+              return 0
+            fi
+            return 1
+          }
+          if [ -n "${SUPABASE_DB_URL:-}" ] && test_url "$SUPABASE_DB_URL"; then exit 0; fi
+          if [ -n "${SUPABASE_POOLER_URL:-}" ] && test_url "$SUPABASE_POOLER_URL"; then exit 0; fi
+          if [ -z "${SUPABASE_PROJECT_REF:-}" ] || [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then
+            echo "::error title=QA database blocked::Production database credentials are incomplete."
+            exit 1
+          fi
+          encoded_password="$(python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+          print(quote(os.environ['SUPABASE_DB_PASSWORD'], safe=''))
+          PY
+          )"
+          echo "::add-mask::$encoded_password"
+          direct="postgresql://postgres:${encoded_password}@db.${SUPABASE_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require"
+          if test_url "$direct"; then exit 0; fi
+          regions=(sa-east-1 us-east-1 us-east-2 us-west-1 us-west-2 ca-central-1 eu-west-1 eu-west-2 eu-west-3 eu-central-1 eu-central-2 eu-north-1 ap-southeast-1 ap-southeast-2 ap-northeast-1 ap-northeast-2 ap-south-1)
+          for region in "${regions[@]}"; do
+            for generation in aws-0 aws-1; do
+              candidate="postgresql://postgres.${SUPABASE_PROJECT_REF}:${encoded_password}@${generation}-${region}.pooler.supabase.com:5432/postgres?sslmode=require"
+              if test_url "$candidate"; then exit 0; fi
+            done
+          done
+          cat /tmp/sigo-qa-db-error.txt >&2 || true
+          exit 1
+
+      - name: Wait until production migrations are current
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration_issues() {
+            local state="$1"
+            SIGO_MIGRATION_STATE="$state" python3 - <<'PY'
+          import os, re
+          issues=[]
+          for raw in os.environ.get('SIGO_MIGRATION_STATE','').splitlines():
+              parts=raw.split('|')
+              if len(parts)<2: continue
+              local=re.sub(r'\D','',parts[0]); remote=re.sub(r'\D','',parts[1])
+              if len(local)==14 and not remote: issues.append(f'pending:{local}')
+              elif len(remote)==14 and not local: issues.append(f'remote-only:{remote}')
+              elif len(local)==14 and len(remote)==14 and local!=remote: issues.append(f'mismatch:{local}:{remote}')
+          print('\n'.join(issues))
+          PY
+          }
+          for attempt in $(seq 1 24); do
+            state="$(supabase migration list --db-url "$SIGO_QA_DB_URL")"
+            issues="$(migration_issues "$state")"
+            if [ -z "$issues" ]; then
+              echo "Production migration state is current."
+              exit 0
+            fi
+            echo "Waiting for production migration deployment (${attempt}/24):"
+            echo "$issues"
+            if printf '%s\n' "$issues" | grep -qE '^(remote-only|mismatch):'; then
+              echo "::error title=QA migration history mismatch::Refusing transactional probe against divergent schema."
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "::error title=QA migration pending::Transactional probe waited for deployment but schema is still pending."
+          exit 1
+
+      - name: Run transactional purchase-sale-cash probe and rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$SIGO_QA_DB_URL" -X -v ON_ERROR_STOP=1 -f scripts/transaction-rollback-probe.sql 2>&1 | tee /tmp/sigo-qa-transaction.log
+          grep -q 'SIGO_QA_TRANSACTION_PROBE_OK' /tmp/sigo-qa-transaction.log
+          grep -q 'SIGO_QA_TRANSACTION_PROBE_ROLLED_BACK' /tmp/sigo-qa-transaction.log
+          echo 'SIGO_QA_TRANSACTION_PROBE_COMPLETED'
