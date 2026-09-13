@@ -253,8 +253,14 @@ jobs:
       - name: Lint production database
         shell: bash
         run: |
+          set -euo pipefail
           if [ "$SIGO_DB_MODE" = "linked" ]; then
-            supabase db lint --linked --level warning
+            supabase db lint --linked --level warning | tee /tmp/sigo-db-lint.json
           else
-            supabase db lint --db-url "$SIGO_DB_URL" --level warning
+            supabase db lint --db-url "$SIGO_DB_URL" --level warning | tee /tmp/sigo-db-lint.json
           fi
+          if grep -Eq '"level"[[:space:]]*:[[:space:]]*"error"' /tmp/sigo-db-lint.json; then
+            echo "::error title=Production database lint error::Supabase lint found at least one database error. Fix it before considering the production schema verified."
+            exit 1
+          fi
+          echo "Production database lint completed without error-level findings."
