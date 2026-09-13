@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { verificarSaludOperativaSigo, type SaludOperativaSigo } from "./health";
 import { cargarResumenOperativoSigo, type ResumenOperativoSigo } from "./informes";
+import { cargarRiesgoStockSigo, type ResumenRiesgoStockSigo, type EstadoRiesgoStockSigo } from "./stockRiesgo";
 
 const vacio: ResumenOperativoSigo = {
   productos: 0,
@@ -27,6 +28,13 @@ function dinero(valor: number) {
   return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(valor);
 }
 
+function numero(valor: number, decimales = 0) {
+  return new Intl.NumberFormat("es-AR", {
+    minimumFractionDigits: decimales,
+    maximumFractionDigits: decimales,
+  }).format(valor);
+}
+
 function nombreMedio(medio: string) {
   const nombres: Record<string, string> = {
     efectivo: "Efectivo",
@@ -46,6 +54,18 @@ function etiquetaSalud(salud: SaludOperativaSigo) {
   return "Bloqueo de base detectado";
 }
 
+function etiquetaRiesgo(estado: EstadoRiesgoStockSigo) {
+  const etiquetas: Record<EstadoRiesgoStockSigo, string> = {
+    sin_stock: "SIN STOCK",
+    urgente: "QUIEBRE URGENTE",
+    proximo: "PRÓXIMO QUIEBRE",
+    revisar: "REVISAR REPOSICIÓN",
+    ok: "OK",
+    sin_historial: "SIN HISTÓRICO",
+  };
+  return etiquetas[estado];
+}
+
 function irA(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -53,6 +73,8 @@ function irA(id: string) {
 export default function InformesOperativos({ empresaId }: { empresaId: string }) {
   const [resumen, setResumen] = useState<ResumenOperativoSigo>(vacio);
   const [salud, setSalud] = useState<SaludOperativaSigo | null>(null);
+  const [riesgoStock, setRiesgoStock] = useState<ResumenRiesgoStockSigo | null>(null);
+  const [riesgoError, setRiesgoError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const empresaActivaRef = useRef(empresaId);
@@ -62,18 +84,29 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
     const cargaId = ++cargaRef.current;
     setLoading(true);
     setError("");
+    setRiesgoError("");
     try {
-      const [nuevoResumen, nuevaSalud] = await Promise.all([
+      const [nuevoResumen, nuevaSalud, nuevoRiesgo] = await Promise.all([
         cargarResumenOperativoSigo(targetEmpresaId),
         verificarSaludOperativaSigo(targetEmpresaId),
+        cargarRiesgoStockSigo(targetEmpresaId, 30)
+          .then((value) => ({ value, error: "" }))
+          .catch((err: unknown) => ({
+            value: null,
+            error: err instanceof Error ? err.message : "No se pudo calcular el riesgo de quiebre.",
+          })),
       ]);
       if (empresaActivaRef.current !== targetEmpresaId || cargaRef.current !== cargaId) return;
       setResumen(nuevoResumen);
       setSalud(nuevaSalud);
+      setRiesgoStock(nuevoRiesgo.value);
+      setRiesgoError(nuevoRiesgo.error);
     } catch (err) {
       if (empresaActivaRef.current !== targetEmpresaId || cargaRef.current !== cargaId) return;
       setResumen(vacio);
       setSalud(null);
+      setRiesgoStock(null);
+      setRiesgoError("");
       setError(err instanceof Error ? err.message : "No se pudieron cargar los informes.");
     } finally {
       if (empresaActivaRef.current === targetEmpresaId && cargaRef.current === cargaId) setLoading(false);
@@ -85,6 +118,8 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
     cargaRef.current += 1;
     setResumen(vacio);
     setSalud(null);
+    setRiesgoStock(null);
+    setRiesgoError("");
     setError("");
     setLoading(true);
     void cargar(empresaId);
@@ -98,7 +133,7 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
 
   const catalogo = [
     { icono: "↗", titulo: "Informe de ventas", texto: "Ventas confirmadas, monto total y actividad del día.", destino: "informe-ventas" },
-    { icono: "◫", titulo: "Informe de stock", texto: "Productos, unidades, faltantes y stock crítico.", destino: "informe-stock" },
+    { icono: "◫", titulo: "Informe de stock", texto: "Stock, días de cobertura y riesgo de quiebre según ventas reales.", destino: "informe-stock" },
     { icono: "👥", titulo: "Cuenta corriente", texto: "Clientes con deuda y saldo total pendiente de cobro.", destino: "informe-clientes", destacado: true },
     { icono: "↓", titulo: "Informe de compras", texto: "Compras confirmadas y monto comprado a proveedores.", destino: "informe-compras" },
     { icono: "$", titulo: "Caja e ingresos", texto: "Ingresos, egresos, neto diario y medios de pago.", destino: "informe-caja" },
@@ -148,11 +183,57 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
           </section>
 
           <section id="informe-stock" className="panel sigo-report-detail">
-            <div className="sigo-detail-title"><span>◫</span><h3>Stock</h3></div>
+            <div className="sigo-detail-title"><span>◫</span><h3>Stock y riesgo de quiebre</h3></div>
             <div className="stats-grid">
               <div className="stat-card"><span>Unidades en stock</span><strong>{resumen.unidadesStock}</strong><small>{resumen.productos} productos</small></div>
               <div className="stat-card"><span>Stock crítico</span><strong>{resumen.productosCriticos}</strong><small>{resumen.productosSinStock} sin stock</small></div>
+              {riesgoStock && <div className="stat-card"><span>Quiebre urgente</span><strong>{riesgoStock.urgentes}</strong><small>≤ 7 días de cobertura</small></div>}
+              {riesgoStock && <div className="stat-card"><span>Próximo quiebre</span><strong>{riesgoStock.proximos}</strong><small>8 a 15 días de cobertura</small></div>}
+              {riesgoStock && <div className="stat-card"><span>Reposición a revisar</span><strong>{riesgoStock.revisar}</strong><small>16 a {riesgoStock.coberturaObjetivoDias} días</small></div>}
+              {riesgoStock && <div className="stat-card"><span>Compra sugerida</span><strong>{dinero(riesgoStock.inversionSugerida)}</strong><small>Para recuperar {riesgoStock.coberturaObjetivoDias} días de cobertura</small></div>}
             </div>
+
+            {riesgoStock && (
+              <>
+                <p className="sigo-stock-risk-note">
+                  Cálculo basado en las ventas confirmadas de los últimos {riesgoStock.diasAnalizados} días. SIGO divide el stock actual por la venta promedio diaria para estimar los días de cobertura.
+                </p>
+                {riesgoStock.productosPrioritarios.length > 0 ? (
+                  <div className="sigo-stock-risk-grid" aria-label="Productos con riesgo de quiebre">
+                    {riesgoStock.productosPrioritarios.slice(0, 10).map((item) => (
+                      <article className={`sigo-stock-risk-item risk-${item.estado}`} key={item.productoId}>
+                        <div>
+                          <strong>{item.nombre}</strong>
+                          <span>{etiquetaRiesgo(item.estado)}</span>
+                        </div>
+                        <p>
+                          Stock {numero(item.stockActual)} · Vendido {numero(item.ventasPeriodo)} en {riesgoStock.diasAnalizados} días · Promedio {numero(item.ventaPromedioDia, 2)}/día
+                        </p>
+                        <small>
+                          {item.diasCobertura == null ? "Sin histórico de ventas" : `${numero(item.diasCobertura, 1)} días de cobertura`}
+                          {item.compraSugerida > 0 ? ` · Reponer ${numero(item.compraSugerida)} u.` : ""}
+                        </small>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="sigo-health-inline"><strong>Sin riesgos calculados</strong><span>No hay productos vendidos con cobertura inferior a {riesgoStock.coberturaObjetivoDias} días.</span></div>
+                )}
+                {riesgoStock.sinHistorial > 0 && (
+                  <div className="sigo-health-inline">
+                    <strong>{riesgoStock.sinHistorial} productos sin histórico de venta</strong>
+                    <span>No se proyecta quiebre hasta que registren ventas reales.</span>
+                  </div>
+                )}
+              </>
+            )}
+
+            {riesgoError && (
+              <div className="sigo-health-inline" role="alert">
+                <strong>Riesgo de quiebre no disponible</strong>
+                <span>{riesgoError}</span>
+              </div>
+            )}
           </section>
 
           <section id="informe-clientes" className="panel sigo-report-detail">
