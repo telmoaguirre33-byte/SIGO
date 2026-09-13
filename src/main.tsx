@@ -13,6 +13,7 @@ import "./native-app.css";
 import "./don-benchmark.css";
 import "./arca-facturacion.css";
 import "./reports-catalog.css";
+import "./ingresos-diarios.css";
 import "./logout-visible.css";
 import "./sigo-ayuda.css";
 import "./configuracion.css";
