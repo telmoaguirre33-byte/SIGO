@@ -17,11 +17,20 @@ type ImportRow = {
 
 type CatalogRow = {
   id: string;
+  nombre: string;
   codigo_interno: string | null;
   codigo_barras: string | null;
   activo: boolean | null;
   precio_venta: number | null;
   stock_actual: number | null;
+};
+
+export type ReadinessTestProduct = {
+  id: string;
+  nombre: string;
+  codigo: string;
+  stock: number;
+  precio: number;
 };
 
 export type OperationalReadinessResult = {
@@ -49,7 +58,10 @@ export type OperationalReadinessResult = {
   legacyDupPendientes: number;
   productosSinCodigo: number;
   stockNegativo: number;
+  stockNull: number;
   vendiblesConStock: number;
+  productoPrueba: ReadinessTestProduct | null;
+  bloqueosIdentidad: string[];
   issues: string[];
   evidence: string;
 };
@@ -62,6 +74,7 @@ const COMPUTACION_LOTES_ESPERADOS = 5;
 const TOTAL_LOTES_ESPERADOS = LIBRERIA_LOTES_ESPERADOS + COMPUTACION_LOTES_ESPERADOS;
 const PAGE_SIZE = 1000;
 const LEGACY_DUP_PREFIX = "LEGACY-DUP-";
+const MAX_BLOQUEOS_EVIDENCIA = 5;
 
 function sumar(rows: ImportRow[], key: "source_rows" | "verified_rows") {
   return rows.reduce((total, row) => total + Number(row[key] ?? 0), 0);
@@ -75,12 +88,22 @@ function normalizarCodigo(valor: string | null) {
   return (valor ?? "").trim().toUpperCase();
 }
 
+function codigoPreferido(row: CatalogRow) {
+  return normalizarCodigo(row.codigo_barras) || normalizarCodigo(row.codigo_interno);
+}
+
+function describirProducto(row: CatalogRow) {
+  const codigo = codigoPreferido(row) || "SIN-CODIGO";
+  const nombre = row.nombre.trim() || "Producto sin nombre";
+  return `${codigo}:${nombre}`;
+}
+
 async function leerCatalogoCompleto(empresaId: string): Promise<CatalogRow[]> {
   const rows: CatalogRow[] = [];
   for (let desde = 0; ; desde += PAGE_SIZE) {
     const { data, error } = await supabase
       .from("productos")
-      .select("id,codigo_interno,codigo_barras,activo,precio_venta,stock_actual")
+      .select("id,nombre,codigo_interno,codigo_barras,activo,precio_venta,stock_actual")
       .eq("empresa_id", empresaId)
       .order("id", { ascending: true })
       .range(desde, desde + PAGE_SIZE - 1);
@@ -92,20 +115,26 @@ async function leerCatalogoCompleto(empresaId: string): Promise<CatalogRow[]> {
   return rows;
 }
 
-function contarIdentidadesDuplicadas(rows: CatalogRow[]) {
-  const porCodigo = new Map<string, Set<string>>();
+function mapaIdentidades(rows: CatalogRow[]) {
+  const porCodigo = new Map<string, Map<string, CatalogRow>>();
   for (const row of rows) {
     const codigos = new Set([
       normalizarCodigo(row.codigo_barras),
       normalizarCodigo(row.codigo_interno),
     ].filter(Boolean));
     for (const codigo of codigos) {
-      const ids = porCodigo.get(codigo) ?? new Set<string>();
-      ids.add(row.id);
-      porCodigo.set(codigo, ids);
+      const productos = porCodigo.get(codigo) ?? new Map<string, CatalogRow>();
+      productos.set(row.id, row);
+      porCodigo.set(codigo, productos);
     }
   }
-  return [...porCodigo.values()].filter((ids) => ids.size > 1).length;
+  return porCodigo;
+}
+
+function detectarIdentidadesDuplicadas(rows: CatalogRow[]) {
+  return [...mapaIdentidades(rows).entries()]
+    .filter(([, productos]) => productos.size > 1)
+    .sort(([a], [b]) => a.localeCompare(b));
 }
 
 function resultadoVacio(
@@ -138,7 +167,10 @@ function resultadoVacio(
     legacyDupPendientes: 0,
     productosSinCodigo: 0,
     stockNegativo: 0,
+    stockNull: 0,
     vendiblesConStock: 0,
+    productoPrueba: null,
+    bloqueosIdentidad: [],
     issues,
     evidence: `SIGO_LIVE_READINESS_REVIEW tenant_count=${empresasSigoAdministracion} checked_at=${checkedAt}`,
   };
@@ -208,21 +240,42 @@ export async function validarReadinessSigoAdministracion(
     const verified = Number(row.verified_rows ?? 0);
     return inserted + skipped !== source || verified !== source;
   }).length;
-  const identidadesDuplicadas = contarIdentidadesDuplicadas(catalogo);
-  const legacyDupPendientes = catalogo.filter(
-    (row) => normalizarCodigo(row.codigo_interno).startsWith(LEGACY_DUP_PREFIX),
-  ).length;
+
+  const identidadesDuplicadasDetalle = detectarIdentidadesDuplicadas(catalogo);
+  const identidadesDuplicadas = identidadesDuplicadasDetalle.length;
+  const legacyPendientes = catalogo
+    .filter((row) => normalizarCodigo(row.codigo_interno).startsWith(LEGACY_DUP_PREFIX))
+    .sort((a, b) => describirProducto(a).localeCompare(describirProducto(b)));
+  const legacyDupPendientes = legacyPendientes.length;
   const productosSinCodigo = catalogo.filter(
     (row) => !normalizarCodigo(row.codigo_barras) && !normalizarCodigo(row.codigo_interno),
   ).length;
-  const stockNegativo = catalogo.filter((row) => Number(row.stock_actual ?? 0) < 0).length;
-  const vendiblesConStock = catalogo.filter((row) =>
+  const stockNegativo = catalogo.filter((row) => row.stock_actual != null && Number(row.stock_actual) < 0).length;
+  const stockNull = catalogo.filter((row) => row.stock_actual == null).length;
+  const vendibles = catalogo.filter((row) =>
     row.activo !== false
     && Number(row.precio_venta ?? 0) > 0
     && Number(row.stock_actual ?? 0) > 0
-    && Boolean(normalizarCodigo(row.codigo_barras) || normalizarCodigo(row.codigo_interno))
+    && Boolean(codigoPreferido(row))
     && !normalizarCodigo(row.codigo_interno).startsWith(LEGACY_DUP_PREFIX),
-  ).length;
+  ).sort((a, b) => describirProducto(a).localeCompare(describirProducto(b)));
+  const vendiblesConStock = vendibles.length;
+  const candidato = vendibles[0] ?? null;
+  const productoPrueba: ReadinessTestProduct | null = candidato ? {
+    id: candidato.id,
+    nombre: candidato.nombre.trim() || "Producto sin nombre",
+    codigo: codigoPreferido(candidato),
+    stock: Number(candidato.stock_actual ?? 0),
+    precio: Number(candidato.precio_venta ?? 0),
+  } : null;
+
+  const bloqueosDuplicados = identidadesDuplicadasDetalle
+    .slice(0, MAX_BLOQUEOS_EVIDENCIA)
+    .map(([codigo, productos]) => `${codigo}=>${[...productos.values()].map(describirProducto).join("|")}`);
+  const bloqueosLegacy = legacyPendientes
+    .slice(0, MAX_BLOQUEOS_EVIDENCIA)
+    .map((row) => `LEGACY=>${describirProducto(row)}`);
+  const bloqueosIdentidad = [...bloqueosDuplicados, ...bloqueosLegacy].slice(0, MAX_BLOQUEOS_EVIDENCIA);
 
   if (libreria.length !== LIBRERIA_LOTES_ESPERADOS) {
     issues.push(`Librería tiene ${libreria.length} lotes; se esperaban ${LIBRERIA_LOTES_ESPERADOS}.`);
@@ -261,16 +314,19 @@ export async function validarReadinessSigoAdministracion(
     issues.push(`Hay ${costosActualesNull} productos con costo_actual NULL.`);
   }
   if (identidadesDuplicadas !== 0) {
-    issues.push(`Hay ${identidadesDuplicadas} códigos repetidos entre productos; el scanner sería ambiguo.`);
+    issues.push(`Hay ${identidadesDuplicadas} códigos repetidos entre productos; el scanner sería ambiguo. Ejemplos: ${bloqueosDuplicados.join(" · ") || "sin detalle"}.`);
   }
   if (legacyDupPendientes !== 0) {
-    issues.push(`Hay ${legacyDupPendientes} producto(s) LEGACY-DUP pendiente(s) de revisar contra el código físico antes del go-live.`);
+    issues.push(`Hay ${legacyDupPendientes} producto(s) LEGACY-DUP pendiente(s) de revisar contra el código físico antes del go-live. Ejemplos: ${bloqueosLegacy.join(" · ") || "sin detalle"}.`);
   }
   if (productosSinCodigo !== 0) {
     issues.push(`Hay ${productosSinCodigo} productos sin código interno ni código de barras.`);
   }
   if (stockNegativo !== 0) {
     issues.push(`Hay ${stockNegativo} productos con stock negativo.`);
+  }
+  if (stockNull !== 0) {
+    issues.push(`Hay ${stockNull} productos con stock_actual NULL; la caja necesita stock explícito antes del go-live.`);
   }
   if (vendiblesConStock === 0) {
     issues.push("No hay productos activos con código final, precio mayor a cero y stock positivo para una venta de prueba.");
@@ -296,7 +352,12 @@ export async function validarReadinessSigoAdministracion(
     `legacy_dup_pending=${legacyDupPendientes}`,
     `products_without_code=${productosSinCodigo}`,
     `negative_stock=${stockNegativo}`,
+    `null_stock=${stockNull}`,
     `sellable_with_stock=${vendiblesConStock}`,
+    `test_product_code=${productoPrueba?.codigo ?? "NONE"}`,
+    `test_product_stock=${productoPrueba?.stock ?? 0}`,
+    `test_product_price=${productoPrueba?.precio ?? 0}`,
+    `identity_blockers=${bloqueosIdentidad.length}`,
     `import_tenants=${empresasImportadas}`,
     `checked_at=${checkedAt}`,
   ].join(" ");
@@ -326,7 +387,10 @@ export async function validarReadinessSigoAdministracion(
     legacyDupPendientes,
     productosSinCodigo,
     stockNegativo,
+    stockNull,
     vendiblesConStock,
+    productoPrueba,
+    bloqueosIdentidad,
     issues,
     evidence,
   };
