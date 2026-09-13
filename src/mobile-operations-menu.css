@@ -2,15 +2,21 @@
 .sigo-mobile-drawer-layer { display:none; }
 
 @media (max-width:760px) {
+  /* La barra Menú/Carrito se ubica debajo del encabezado y se reserva espacio real
+     dentro de Operación. Ya no queda fija sobre el título o las tarjetas. */
   .sigo-mobile-operations-actions {
-    position:fixed;
+    position:absolute;
     left:12px;
     right:12px;
-    z-index:68;
+    z-index:28;
     display:flex;
     justify-content:space-between;
     align-items:center;
     pointer-events:none;
+  }
+
+  .sigo-operation-only .content {
+    padding-top:82px !important;
   }
 
   .sigo-mobile-operations-actions > button {
@@ -22,16 +28,16 @@
     padding:8px 13px;
     border:1px solid #dce5f0;
     border-radius:15px;
-    background:rgba(255,255,255,.97);
+    background:rgba(255,255,255,.98);
     color:#172033;
-    box-shadow:0 10px 26px rgba(15,23,42,.13);
+    box-shadow:0 8px 20px rgba(15,23,42,.10);
     backdrop-filter:blur(18px);
     font:inherit;
   }
 
   .sigo-mobile-menu-trigger {
     border-color:#dce5f0;
-    background:rgba(255,255,255,.98);
+    background:rgba(255,255,255,.99);
     color:#172033;
   }
 
@@ -41,7 +47,7 @@
     border-color:#c7dafd !important;
     background:linear-gradient(145deg,#2563eb,#3b82f6) !important;
     color:#fff !important;
-    box-shadow:0 10px 26px rgba(37,99,235,.28) !important;
+    box-shadow:0 8px 20px rgba(37,99,235,.24) !important;
   }
 
   .sigo-mobile-drawer-layer {
