@@ -1,0 +1,217 @@
+.sigo-mobile-operations-actions,
+.sigo-mobile-drawer-layer { display:none; }
+
+@media (max-width:760px) {
+  .sigo-mobile-operations-actions {
+    position:fixed;
+    left:12px;
+    right:12px;
+    z-index:68;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    pointer-events:none;
+  }
+
+  .sigo-mobile-operations-actions > button {
+    pointer-events:auto;
+    min-height:46px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:8px 13px;
+    border:1px solid #dce5f0;
+    border-radius:15px;
+    background:rgba(255,255,255,.97);
+    color:#172033;
+    box-shadow:0 10px 26px rgba(15,23,42,.13);
+    backdrop-filter:blur(18px);
+    font:inherit;
+  }
+
+  .sigo-mobile-operations-actions span { font-size:19px; line-height:1; }
+  .sigo-mobile-operations-actions strong { font-size:12px; }
+  .sigo-mobile-cart-trigger {
+    border-color:#c7dafd !important;
+    background:linear-gradient(145deg,#2563eb,#3b82f6) !important;
+    color:#fff !important;
+    box-shadow:0 10px 26px rgba(37,99,235,.28) !important;
+  }
+
+  .sigo-mobile-drawer-layer {
+    position:fixed;
+    inset:0;
+    z-index:150;
+    display:block;
+  }
+
+  .sigo-mobile-drawer-backdrop {
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    padding:0;
+    border:0;
+    background:rgba(15,23,42,.48);
+  }
+
+  .sigo-mobile-drawer {
+    position:absolute;
+    left:0;
+    top:0;
+    bottom:0;
+    width:min(86vw,390px);
+    overflow:auto;
+    background:#fff;
+    box-shadow:22px 0 58px rgba(15,23,42,.22);
+    animation:sigoDrawerIn .18s ease-out;
+  }
+
+  @keyframes sigoDrawerIn {
+    from { transform:translateX(-18px); opacity:.72; }
+    to { transform:translateX(0); opacity:1; }
+  }
+
+  .sigo-mobile-drawer-head {
+    position:sticky;
+    top:0;
+    z-index:2;
+    display:grid;
+    grid-template-columns:auto minmax(0,1fr) auto;
+    align-items:center;
+    gap:11px;
+    min-height:76px;
+    padding:12px 14px;
+    border-bottom:1px solid #e8edf4;
+    background:rgba(255,255,255,.98);
+    backdrop-filter:blur(18px);
+  }
+
+  .sigo-mobile-drawer-logo {
+    width:44px;
+    height:44px;
+    display:grid;
+    place-items:center;
+    border-radius:14px;
+    background:linear-gradient(145deg,#2563eb,#60a5fa);
+    color:#fff;
+    font-weight:950;
+    font-size:22px;
+    box-shadow:0 8px 20px rgba(37,99,235,.22);
+  }
+
+  .sigo-mobile-drawer-head > div:nth-child(2) { display:grid; gap:2px; min-width:0; }
+  .sigo-mobile-drawer-head strong { color:#101827; font-size:18px; }
+  .sigo-mobile-drawer-head span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#64748b; font-size:12px; font-weight:750; }
+  .sigo-mobile-drawer-head > button {
+    width:42px;
+    height:42px;
+    border:0;
+    border-radius:13px;
+    background:#f3f6fa;
+    color:#334155;
+    font-size:28px;
+    line-height:1;
+  }
+
+  .sigo-mobile-drawer-nav {
+    display:grid;
+    gap:3px;
+    padding:12px 12px calc(28px + env(safe-area-inset-bottom));
+  }
+
+  .sigo-mobile-drawer-nav button { font:inherit; }
+
+  .sigo-mobile-drawer-primary {
+    display:grid;
+    grid-template-columns:42px minmax(0,1fr);
+    align-items:center;
+    gap:11px;
+    width:100%;
+    margin-bottom:7px;
+    padding:13px 14px;
+    border:0;
+    border-radius:17px;
+    background:linear-gradient(145deg,#2563eb,#3b82f6);
+    color:#fff;
+    text-align:left;
+    box-shadow:0 10px 24px rgba(37,99,235,.22);
+  }
+
+  .sigo-mobile-drawer-primary > span {
+    width:42px;
+    height:42px;
+    display:grid;
+    place-items:center;
+    border-radius:12px;
+    background:rgba(255,255,255,.16);
+    font-size:22px;
+  }
+  .sigo-mobile-drawer-primary > div { display:grid; gap:3px; }
+  .sigo-mobile-drawer-primary strong { font-size:14px; }
+  .sigo-mobile-drawer-primary small { color:#dbeafe; font-size:10.5px; line-height:1.35; }
+
+  .sigo-mobile-drawer-nav section {
+    border-bottom:1px solid #edf1f6;
+  }
+
+  .sigo-mobile-drawer-section,
+  .sigo-mobile-drawer-item {
+    width:100%;
+    min-height:55px;
+    display:grid;
+    grid-template-columns:38px minmax(0,1fr) 24px;
+    align-items:center;
+    gap:10px;
+    padding:9px 10px;
+    border:0;
+    border-bottom:1px solid #edf1f6;
+    background:#fff;
+    color:#526174;
+    text-align:left;
+  }
+
+  .sigo-mobile-drawer-section { border-bottom:0; }
+  .sigo-mobile-drawer-section > span,
+  .sigo-mobile-drawer-item > span {
+    width:38px;
+    height:38px;
+    display:grid;
+    place-items:center;
+    border-radius:11px;
+    background:#eef4ff;
+    color:#315ac7;
+    font-size:18px;
+    font-weight:900;
+  }
+  .sigo-mobile-drawer-section strong,
+  .sigo-mobile-drawer-item strong { color:#46546a; font-size:14.5px; font-weight:780; }
+  .sigo-mobile-drawer-section b,
+  .sigo-mobile-drawer-item b { justify-self:end; color:#8a98aa; font-size:20px; font-weight:500; }
+
+  .sigo-mobile-drawer-submenu {
+    display:grid;
+    gap:2px;
+    padding:0 8px 8px 49px;
+  }
+  .sigo-mobile-drawer-submenu button {
+    min-height:42px;
+    padding:8px 10px;
+    border:0;
+    border-radius:10px;
+    background:#f8fafc;
+    color:#64748b;
+    text-align:left;
+    font-size:12.5px;
+    font-weight:700;
+  }
+
+  /* Los launchers siguen montados para reutilizar su lógica, pero el usuario navega por el drawer. */
+  .sigo-operation-only .sidebar .sigo-cart-menu-item,
+  .sigo-operation-only .sidebar .sigo-returns-menu-item,
+  .sigo-operation-only .sidebar .sigo-settings-menu-item { display:none !important; }
+
+  .sigo-cart-context-button,
+  .sigo-returns-context-button,
+  .sigo-settings-context-button { display:none !important; }
+}
