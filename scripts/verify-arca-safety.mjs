@@ -17,6 +17,10 @@ const checks = [
       'servicios1.afip.gov.ar/wsfev1',
       'autenticacionRealValidada',
       'no habilita CAE',
+      'cuitArgentinoValido',
+      'configuracionActiva',
+      'ambienteValido',
+      'puntosVentaValidos',
     ],
     forbidden: [
       'SUPABASE_SERVICE_ROLE_KEY',
@@ -81,6 +85,20 @@ for (const check of checks) {
     failed = true;
   }
   if (!missing.length && !forbidden.length) console.log(`PASS ${check.label}`);
+}
+
+const preflight = fs.readFileSync('api/arca/preflight.js', 'utf8');
+if (!preflight.includes('config.activo === true')) {
+  console.error('FAIL ARCA active config guard: inactive configuration must never pass preflight');
+  failed = true;
+}
+if (!preflight.includes('Number.isInteger(numero) && numero >= 1 && numero <= 99999')) {
+  console.error('FAIL ARCA point-of-sale guard: PV must be a valid unique operational number');
+  failed = true;
+}
+if (!preflight.includes('cuitArgentinoValido(config.cuit_emisor)')) {
+  console.error('FAIL ARCA CUIT guard: issuer CUIT must validate its check digit');
+  failed = true;
 }
 
 if (failed) process.exit(1);
