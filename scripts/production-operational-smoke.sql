@@ -32,14 +32,25 @@ declare
   v_sale_mismatches integer;
   v_cash_mismatches integer;
 begin
-  select count(*), min(e.id)
-    into v_tenant_count, v_empresa_id
+  select count(*)
+    into v_tenant_count
     from public.empresas e
    where lower(btrim(e.nombre)) = lower('SIGO Administración')
      and e.activa = true;
 
-  if v_tenant_count <> 1 or v_empresa_id is null then
+  if v_tenant_count <> 1 then
     raise exception 'SIGO_PROD_SMOKE_TENANT_FAILED count=%', v_tenant_count;
+  end if;
+
+  select e.id
+    into v_empresa_id
+    from public.empresas e
+   where lower(btrim(e.nombre)) = lower('SIGO Administración')
+     and e.activa = true
+   limit 1;
+
+  if v_empresa_id is null then
+    raise exception 'SIGO_PROD_SMOKE_TENANT_ID_FAILED';
   end if;
 
   select
@@ -167,7 +178,7 @@ begin
        and nullif(btrim(p.codigo_interno), '') is not null
        and upper(btrim(p.codigo_interno)) not like 'LEGACY-DUP-%'
   ), unique_ids as (
-    select min(id) as id, code
+    select (array_agg(id))[1] as id, code
       from identities
      group by code
     having count(distinct id) = 1
@@ -268,7 +279,7 @@ with empresa as (
      and nullif(btrim(p.codigo_interno), '') is not null
      and upper(btrim(p.codigo_interno)) not like 'LEGACY-DUP-%'
 ), unique_ids as (
-  select min(id) as id, code
+  select (array_agg(id))[1] as id, code
     from identities
    group by code
   having count(distinct id) = 1
