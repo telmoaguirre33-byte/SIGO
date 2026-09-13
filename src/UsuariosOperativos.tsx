@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { RolEmpresaSigo } from "./tenant";
 import { listarClientesSigo, type ClienteSigo } from "./clientes";
+import PermisosUsuarioModal from "./PermisosUsuarioModal";
 import {
   actualizarUsuarioEmpresaSigo,
   agregarUsuarioEmpresaSigo,
@@ -33,6 +34,7 @@ export default function UsuariosOperativos({ empresaId, actorRol }: { empresaId:
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [permissionUser, setPermissionUser] = useState<UsuarioEmpresaSigo | null>(null);
   const requestRef = useRef(0);
 
   const rolesPermitidos = useMemo<SigoRole[]>(
@@ -60,11 +62,13 @@ export default function UsuariosOperativos({ empresaId, actorRol }: { empresaId:
       setUsuarios(usuariosData);
       setClientes(clientesData);
       setVinculos(vinculosData);
+      setPermissionUser((actual) => actual ? usuariosData.find((item) => item.membresia_id === actual.membresia_id) ?? null : null);
     } catch (err) {
       if (requestId !== requestRef.current) return;
       setUsuarios([]);
       setClientes([]);
       setVinculos([]);
+      setPermissionUser(null);
       setError(err instanceof Error ? err.message : "No se pudieron cargar los usuarios.");
     } finally {
       if (requestId === requestRef.current) setLoading(false);
@@ -112,6 +116,10 @@ export default function UsuariosOperativos({ empresaId, actorRol }: { empresaId:
     return true;
   }
 
+  function puedePersonalizarPermisos(usuario: UsuarioEmpresaSigo) {
+    return actorRol === "owner" && usuario.rol !== "owner";
+  }
+
   async function guardarUsuario(usuario: UsuarioEmpresaSigo, nextRol: SigoRole, nextActivo: boolean) {
     if (!puedeEditar(usuario)) return;
     setEditingId(usuario.membresia_id);
@@ -145,7 +153,7 @@ export default function UsuariosOperativos({ empresaId, actorRol }: { empresaId:
       <div className="page-header">
         <div>
           <h2>Usuarios y permisos</h2>
-          <p>Administrá el equipo de esta empresa sin mezclar accesos entre tenants. Los administradores sólo pueden gestionar usuarios operativos.</p>
+          <p>Administrá el equipo de esta empresa sin mezclar accesos entre tenants. El Propietario puede personalizar permisos por empleado; las restricciones se aplican también en backend.</p>
         </div>
         <button className="admin-button" onClick={() => void cargar()} disabled={loading}>Actualizar</button>
       </div>
@@ -189,13 +197,21 @@ export default function UsuariosOperativos({ empresaId, actorRol }: { empresaId:
         {error ? <p className="sigo-onboarding-error" role="alert">{error}</p> : null}
       </div>
 
+      {actorRol === "owner" ? (
+        <div className="panel">
+          <h3>Control del Propietario</h3>
+          <p>Usá “Permisos” para decidir exactamente qué puede consultar o modificar cada empleado. Para ocultar costos por completo, SIGO también puede bloquear Compras, ya que una factura de compra contiene costos de adquisición.</p>
+        </div>
+      ) : null}
+
       <div className="panel">
         <div className="table-wrapper">
           <table className="products-table">
-            <thead><tr><th>Usuario</th><th>Rol</th><th>Cliente portal</th><th>Estado</th><th>Acción</th></tr></thead>
+            <thead><tr><th>Usuario</th><th>Rol</th><th>Permisos</th><th>Cliente portal</th><th>Estado</th><th>Acción</th></tr></thead>
             <tbody>
               {usuarios.map((usuario) => {
                 const editable = puedeEditar(usuario);
+                const personalizable = puedePersonalizarPermisos(usuario);
                 const busy = editingId === usuario.membresia_id || linkingId === usuario.membresia_id;
                 const vinculo = vinculoPorUsuario.get(usuario.user_id);
                 const vinculoValido = vinculo?.vinculos_activos === 1 && Boolean(vinculo.cliente_id);
@@ -212,6 +228,20 @@ export default function UsuariosOperativos({ empresaId, actorRol }: { empresaId:
                           {rolesPermitidos.map((item) => <option key={item} value={item}>{ROLE_LABELS[item]}</option>)}
                         </select>
                       ) : ROLE_LABELS[usuario.rol]}
+                    </td>
+                    <td>
+                      {usuario.rol === "owner" ? "Acceso total protegido" : (
+                        <div>
+                          <strong>{usuario.permisos_extra.length + usuario.permisos_denegados.length === 0 ? "Según rol" : "Personalizados"}</strong>
+                          {(usuario.permisos_extra.length > 0 || usuario.permisos_denegados.length > 0) ? (
+                            <div className="sigo-user-permission-summary">
+                              {usuario.permisos_extra.length > 0 ? <span>+{usuario.permisos_extra.length} otorgados</span> : null}
+                              {usuario.permisos_denegados.length > 0 ? <span>−{usuario.permisos_denegados.length} revocados</span> : null}
+                            </div>
+                          ) : <small>Permisos predeterminados del rol</small>}
+                          {personalizable ? <button className="admin-button" type="button" style={{ marginTop: 7 }} onClick={() => setPermissionUser(usuario)}>Permisos</button> : null}
+                        </div>
+                      )}
                     </td>
                     <td>
                       {usuario.rol === "client" ? (
@@ -248,6 +278,15 @@ export default function UsuariosOperativos({ empresaId, actorRol }: { empresaId:
           {loading ? <div className="table-empty">Cargando usuarios…</div> : null}
         </div>
       </div>
+
+      {permissionUser && actorRol === "owner" ? (
+        <PermisosUsuarioModal
+          empresaId={empresaId}
+          usuario={permissionUser}
+          onClose={() => setPermissionUser(null)}
+          onSaved={cargar}
+        />
+      ) : null}
     </div>
   );
 }
