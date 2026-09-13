@@ -21,6 +21,24 @@ function supabaseEnv() {
   return { url, anonKey };
 }
 
+function cuitArgentinoValido(value) {
+  const cuit = String(value ?? "").replace(/\D/g, "");
+  if (!/^\d{11}$/.test(cuit)) return false;
+  const pesos = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+  const suma = pesos.reduce((total, peso, index) => total + Number(cuit[index]) * peso, 0);
+  const resto = 11 - (suma % 11);
+  const esperado = resto === 11 ? 0 : resto === 10 ? 9 : resto;
+  return esperado === Number(cuit[10]);
+}
+
+function puntosVentaValidos(puntos) {
+  if (!Array.isArray(puntos) || puntos.length === 0) return { ok: false, numeros: [] };
+  const numeros = puntos.map((item) => Number(item?.numero));
+  const validos = numeros.every((numero) => Number.isInteger(numero) && numero >= 1 && numero <= 99999);
+  const unicos = new Set(numeros).size === numeros.length;
+  return { ok: validos && unicos, numeros: validos && unicos ? numeros : [] };
+}
+
 async function rpcPermitido(url, anonKey, auth, empresaId, permiso) {
   const response = await fetch(`${url}/rest/v1/rpc/tiene_permiso_empresa`, {
     method: "POST",
@@ -116,7 +134,8 @@ export default async function handler(req, res) {
     const config = Array.isArray(configs) ? configs[0] ?? null : null;
     if (!config) return json(res, 200, { ok: false, etapa: "CONFIGURACION", checks: { configuracion: false } });
 
-    const ambiente = config.ambiente === "produccion" ? "produccion" : "homologacion";
+    const ambienteValido = config.ambiente === "homologacion" || config.ambiente === "produccion";
+    const ambiente = ambienteValido ? config.ambiente : "homologacion";
     const puntos = await leerFilas(
       sesion.url,
       sesion.anonKey,
@@ -124,14 +143,16 @@ export default async function handler(req, res) {
       `arca_puntos_venta?empresa_id=eq.${encodeURIComponent(empresaId)}&ambiente=eq.${ambiente}&activo=is.true&select=numero,nombre,ambiente,activo&order=numero.asc`,
     );
 
+    const configuracionActiva = config.activo === true;
     const certificado = certificadoEstado(config);
-    const cuitOk = /^\d{11}$/.test(String(config.cuit_emisor || ""));
+    const cuitOk = cuitArgentinoValido(config.cuit_emisor);
     const servicioOk = config.wsaa_service === "wsfe" && config.wsfe_version === "WSFEv1";
-    const puntoVentaOk = Array.isArray(puntos) && puntos.length > 0;
+    const pv = puntosVentaValidos(puntos);
+    const puntoVentaOk = pv.ok;
     const endpoints = ARCA_ENDPOINTS[ambiente];
     const [wsaa, wsfe] = await Promise.all([probarEndpoint(endpoints.wsaa), probarEndpoint(endpoints.wsfe)]);
     const redOk = wsaa.reachable && wsfe.reachable;
-    const ok = Boolean(cuitOk && servicioOk && puntoVentaOk && certificado.ok && redOk);
+    const ok = Boolean(configuracionActiva && ambienteValido && cuitOk && servicioOk && puntoVentaOk && certificado.ok && redOk);
 
     return json(res, 200, {
       ok,
@@ -139,6 +160,8 @@ export default async function handler(req, res) {
       ambiente,
       checks: {
         configuracion: true,
+        configuracionActiva,
+        ambienteValido,
         cuit: cuitOk,
         servicio: servicioOk,
         certificado: certificado.ok,
@@ -146,7 +169,7 @@ export default async function handler(req, res) {
         certificadoVence: certificado.vence ?? null,
         certificadoDiasRestantes: certificado.diasRestantes ?? null,
         puntoVenta: puntoVentaOk,
-        puntosVentaActivos: puntoVentaOk ? puntos.map((item) => item.numero) : [],
+        puntosVentaActivos: pv.numeros,
         wsaaReachable: wsaa.reachable,
         wsfeReachable: wsfe.reachable,
       },
