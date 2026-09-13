@@ -19,6 +19,7 @@ import "./reports-catalog.css";
 import "./ingresos-diarios.css";
 import "./caja-ventas.css";
 import "./mobile-operations-menu.css";
+import "./usuarios-permisos.css";
 import "./logout-visible.css";
 import "./sigo-ayuda.css";
 import "./configuracion.css";
