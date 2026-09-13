@@ -6,6 +6,7 @@ on:
     paths:
       - 'supabase/migrations/**'
       - 'scripts/production-operational-smoke.sql'
+      - 'scripts/production-arca-readiness.sql'
       - '.github/workflows/production-operational-smoke.yml'
   workflow_dispatch:
 
@@ -173,3 +174,12 @@ jobs:
           psql "$SIGO_SMOKE_DB_URL" -X -v ON_ERROR_STOP=1 -f scripts/production-operational-smoke.sql | tee /tmp/sigo-production-smoke.log
           grep -q 'SIGO_SMOKE_TEST_PRODUCT' /tmp/sigo-production-smoke.log
           echo "SIGO_PRODUCTION_OPERATIONAL_SMOKE_COMPLETED"
+
+      - name: Read ARCA production readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Reading ARCA readiness without authenticating WSAA or issuing a fiscal document."
+          psql "$SIGO_SMOKE_DB_URL" -X -v ON_ERROR_STOP=1 -f scripts/production-arca-readiness.sql 2>&1 | tee /tmp/sigo-arca-readiness.log
+          grep -q 'SIGO_ARCA_PRODUCTION_STATUS' /tmp/sigo-arca-readiness.log
+          grep -q 'SIGO_ARCA_READINESS_COMPLETED' /tmp/sigo-arca-readiness.log
