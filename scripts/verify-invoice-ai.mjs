@@ -2,8 +2,8 @@ import fs from 'node:fs';
 
 const checks = [
   ['src/ComprasOperativas.tsx', ['Escanear factura con IA', 'Tomar foto de factura', 'capture="environment"', 'Usar datos de esta factura', 'guardarProductoSigo', 'analizarFacturaCompraSigo', 'Confirmar compra e ingresar stock', 'preciosVentaFactura', 'preciosFacturaPendientes', 'NUEVO · requiere precio', 'SIGO no los creará sin precio']],
-  ['src/facturaIA.ts', ['analizarFacturaCompraSigo', '/api/compras/analizar-factura', 'TIPOS_IMAGEN_PERMITIDOS', 'CLIENT_TIMEOUT_MS', 'AbortController', 'AI_TIMEOUT', 'moneda !== "ARS"', 'validarFactura']],
-  ['api/compras/analizar-factura.js', ['OPENAI_API_KEY', 'purchases.write', '/v1/responses', 'input_image', 'No inventes datos', 'normalizarFacturaIA', 'MAX_INVOICE_ITEMS', 'NO_VALID_INVOICE_ITEMS', 'OPENAI_TIMEOUT_MS', 'AbortController', 'AI_TIMEOUT', 'normalizarMoneda']],
+  ['src/facturaIA.ts', ['analizarFacturaCompraSigo', '/api/compras/analizar-factura', 'TIPOS_IMAGEN_PERMITIDOS', 'CLIENT_TIMEOUT_MS', 'AbortController', 'AI_TIMEOUT', 'moneda !== "ARS"', 'validarFactura', 'cuitArgentinoValido', 'gtinValido', 'validarCodigosNoAmbiguos', 'AI_REVIEW_REQUIRED']],
+  ['api/compras/analizar-factura.js', ['OPENAI_API_KEY', 'purchases.write', '/v1/responses', 'input_image', 'No inventes datos', 'normalizarFacturaIA', 'MAX_INVOICE_ITEMS', 'NO_VALID_INVOICE_ITEMS', 'OPENAI_TIMEOUT_MS', 'AbortController', 'AI_TIMEOUT', 'normalizarMoneda', 'cuitArgentinoValido', 'gtinValido', 'detectarCodigosConflictivos', 'AI_REVIEW_REQUIRED', 'advertencias']],
   ['supabase/migrations/20260913023000_compras_identidad_documental_guard.sql', ['normalizar_identificador_comercial_sigo', 'trg_guard_compra_documento_normalizado_sigo', 'PURCHASE_DOCUMENT_DUPLICATE', 'trg_guard_proveedor_cuit_sigo', 'SUPPLIER_CUIT_DUPLICATE']],
 ];
 
@@ -23,9 +23,15 @@ const api = fs.readFileSync('api/compras/analizar-factura.js', 'utf8');
 if (!api.includes('itemsRaw.slice(0, MAX_INVOICE_ITEMS)') && !api.includes('raw.items.slice(0, MAX_INVOICE_ITEMS)')) {
   throw new Error('Invoice AI regression: server must cap invoice line count');
 }
-if (!api.includes('cuitLeido.length === 11')) throw new Error('Invoice AI regression: server must validate CUIT length');
+if (!api.includes('cuitArgentinoValido(cuitLeido)')) throw new Error('Invoice AI regression: server must validate Argentine CUIT check digit');
 if (!api.includes('Number.isFinite')) throw new Error('Invoice AI regression: server must reject non-finite numeric values');
 if (!api.includes('signal: controller.signal')) throw new Error('Invoice AI regression: OpenAI request must have a timeout signal');
+if (!api.includes('Código de barras descartado por dígito verificador inválido')) {
+  throw new Error('Invoice AI regression: invalid GTINs must not be auto-applied');
+}
+if (!api.includes('AMBIGUOUS_INVOICE_BARCODES')) {
+  throw new Error('Invoice AI regression: conflicting invoice barcodes must block automatic stock preparation');
+}
 
 const client = fs.readFileSync('src/facturaIA.ts', 'utf8');
 if (!client.includes('new Set(["image/jpeg", "image/png", "image/webp"])')) {
@@ -33,6 +39,9 @@ if (!client.includes('new Set(["image/jpeg", "image/png", "image/webp"])')) {
 }
 if (!client.includes('moneda && moneda !== "ARS"')) {
   throw new Error('Invoice AI regression: non-ARS invoices must not be silently applied as pesos');
+}
+if (!client.includes('cuitArgentinoValido(cuitLeido)')) {
+  throw new Error('Invoice AI regression: client must revalidate CUIT before supplier matching');
 }
 
 console.log('AI purchase invoice flow: OK');
