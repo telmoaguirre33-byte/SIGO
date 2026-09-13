@@ -4,13 +4,15 @@ import path from "node:path";
 const root = process.cwd();
 const workflowPath = path.join(root, ".github", "workflows", "supabase-production.yml");
 const readinessPath = path.join(root, "supabase", "migrations", "20260913012500_operational_readiness_stock_cost_guard.sql");
+const tenantLintFixPath = path.join(root, "supabase", "migrations", "20260913183000_tenant_diagnostico_lint_fix.sql");
 
-for (const file of [workflowPath, readinessPath]) {
+for (const file of [workflowPath, readinessPath, tenantLintFixPath]) {
   if (!fs.existsSync(file)) throw new Error(`Missing production readiness file: ${path.relative(root, file)}`);
 }
 
 const workflow = fs.readFileSync(workflowPath, "utf8");
 const readiness = fs.readFileSync(readinessPath, "utf8");
+const tenantLintFix = fs.readFileSync(tenantLintFixPath, "utf8");
 
 for (const required of [
   "SUPABASE_DB_PASSWORD",
@@ -29,6 +31,9 @@ for (const required of [
   "supabase db push --db-url",
   "supabase migration repair --db-url",
   "Database migrations can continue independently",
+  "sigo-db-lint.json",
+  '"level"[[:space:]]*:[[:space:]]*"error"',
+  "Production database lint completed without error-level findings",
 ]) {
   if (!workflow.includes(required)) throw new Error(`Production database fallback safeguard missing: ${required}`);
 }
@@ -80,6 +85,15 @@ for (const required of [
   if (!readiness.includes(required)) throw new Error(`Operational readiness certification safeguard missing: ${required}`);
 }
 
+for (const required of [
+  "create or replace function public.sigo_tenant_diagnostico()",
+  "select unnest(array[",
+  "to_regclass(format('public.%I', v_table))",
+  "select count(*) from public.%I where empresa_id is null",
+]) {
+  if (!tenantLintFix.includes(required)) throw new Error(`Tenant diagnostic lint fix missing: ${required}`);
+}
+
 for (const destructive of [
   /delete\s+from\s+public\.productos/i,
   /truncate\s+(table\s+)?public\.productos/i,
@@ -88,4 +102,8 @@ for (const destructive of [
   if (destructive.test(readiness)) throw new Error(`Destructive readiness migration pattern detected: ${destructive}`);
 }
 
-console.log("Production readiness verified: 1400-row single-tenant certification, null-cost guard and configured/automatic Supabase pooler fallbacks are protected by CI.");
+if (/\b(delete|truncate|drop\s+table|update\s+public\.)\b/i.test(tenantLintFix)) {
+  throw new Error("Tenant diagnostic lint fix must remain non-destructive and read-only");
+}
+
+console.log("Production readiness verified: 1400-row single-tenant certification, null-cost guard, pooler fallbacks and error-level DB lint gating are protected by CI.");
