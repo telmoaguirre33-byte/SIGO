@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import ArcaEmisionVendedor from "./ArcaEmisionVendedor";
 import ArcaFacturacion from "./ArcaFacturacion";
 import { cargarMisEmpresas, leerEmpresaActivaGuardada, type EmpresaOperativa } from "./tenant";
 import { supabase } from "./supabase";
@@ -18,7 +19,7 @@ export default function ArcaLauncher() {
         setEmpresa(null);
         return null;
       }
-      const disponibles = (await cargarMisEmpresas()).filter((item) => ["owner", "admin"].includes(item.rol));
+      const disponibles = (await cargarMisEmpresas()).filter((item) => ["owner", "admin", "seller"].includes(item.rol));
       const preferida = leerEmpresaActivaGuardada(user.id);
       const activaAnterior = empresa?.empresa_id;
       const activa = disponibles.find((item) => item.empresa_id === activaAnterior)
@@ -65,19 +66,23 @@ export default function ArcaLauncher() {
   }
 
   if (!empresa) return null;
+  const esVendedor = empresa.rol === "seller";
 
   return (
     <>
       <button className="arca-launcher" type="button" onClick={() => void abrir()} disabled={loading} aria-label="Abrir Facturación ARCA">
         <span className="arca-launcher-icon" aria-hidden="true">A</span>
-        <span><strong>ARCA</strong><small>Facturar</small></span>
+        <span><strong>ARCA</strong><small>{esVendedor ? "Emitir" : "Facturar"}</small></span>
       </button>
 
       {open && empresa ? (
         <div className="arca-overlay" role="dialog" aria-modal="true" aria-label="Facturación ARCA">
           <div className="arca-overlay-topbar">
             <button type="button" className="admin-button" onClick={() => setOpen(false)}>← Volver</button>
-            <div><strong>Facturación ARCA</strong><small>Elegí la misma empresa donde están los productos y las ventas.</small></div>
+            <div>
+              <strong>Facturación ARCA</strong>
+              <small>{esVendedor ? "Perfil Vendedor: sólo emisión de comprobantes." : "Elegí la misma empresa donde están los productos y las ventas."}</small>
+            </div>
             <label className="form-group arca-company-picker">
               <span>Empresa que va a facturar</span>
               <select
@@ -96,13 +101,21 @@ export default function ArcaLauncher() {
             </label>
           </div>
           <main className="arca-overlay-content">
-            <ArcaFacturacion
-              key={empresa.empresa_id}
-              empresaId={empresa.empresa_id}
-              empresaNombre={empresa.empresa_nombre}
-              empresas={empresas}
-              productosCount={productosPorEmpresa[empresa.empresa_id] ?? null}
-            />
+            {esVendedor ? (
+              <ArcaEmisionVendedor
+                key={empresa.empresa_id}
+                empresaId={empresa.empresa_id}
+                empresaNombre={empresa.empresa_nombre}
+              />
+            ) : (
+              <ArcaFacturacion
+                key={empresa.empresa_id}
+                empresaId={empresa.empresa_id}
+                empresaNombre={empresa.empresa_nombre}
+                empresas={empresas.filter((item) => ["owner", "admin"].includes(item.rol))}
+                productosCount={productosPorEmpresa[empresa.empresa_id] ?? null}
+              />
+            )}
           </main>
         </div>
       ) : null}
