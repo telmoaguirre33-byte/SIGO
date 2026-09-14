@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import ArcaCertificateUpload from "./ArcaCertificateUpload";
 import ArcaPreflight from "./ArcaPreflight";
+import ArcaCaeEmission from "./ArcaCaeEmission";
 import { supabase } from "./supabase";
 import type { EmpresaOperativa } from "./tenant";
 
@@ -272,11 +273,12 @@ export default function ArcaFacturacion({
               {puntos.length > 0 && <div className="arca-pv-list">{puntos.map((pv) => <span key={pv.id}>PV {String(pv.numero).padStart(4, "0")} · {pv.ambiente === "produccion" ? "Producción" : "Pruebas"}{pv.nombre ? ` · ${pv.nombre}` : ""}</span>)}</div>}
             </section>
 
-            <section className="panel arca-card arca-emit-card">
-              <div className="panel-header"><div><h3>4. Emisión desde SIGO</h3><p>Cuando certificado + relación WSFEv1 + punto de venta estén validados, SIGO podrá solicitar CAE automáticamente.</p></div></div>
-              <button className="primary-button" disabled={!config?.activo || !config?.ultima_prueba_ok}>Emitir factura electrónica</button>
-              {!config?.activo || !config?.ultima_prueba_ok ? <small>La emisión queda bloqueada hasta validar una autenticación WSAA real con el certificado de esta empresa.</small> : null}
-            </section>
+            <ArcaCaeEmission
+              empresaId={empresaId}
+              ambiente={config?.ambiente ?? ambiente}
+              habilitado={config?.activo === true && config?.ultima_prueba_ok === true}
+              puntos={puntos}
+            />
           </div>
           {ok ? <p className="sigo-matriz-success" role="status">{ok}</p> : null}
           {error ? <p className="form-error" role="alert">{error}</p> : null}

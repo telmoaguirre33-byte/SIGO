@@ -58,10 +58,10 @@ const checks = [
     file: 'src/ArcaFacturacion.tsx',
     required: [
       'ArcaPreflight',
+      'ArcaCaeEmission',
       'wsaa_service: "wsfe"',
       'wsfe_version: "WSFEv1"',
-      'disabled={!config?.activo || !config?.ultima_prueba_ok}',
-      'autenticación WSAA real',
+      'habilitado={config?.activo === true && config?.ultima_prueba_ok === true}',
       'ws-factura-electronica.asp',
     ],
     label: 'ARCA UI keeps CAE issuance blocked until real WSAA validation',

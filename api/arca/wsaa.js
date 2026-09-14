@@ -290,6 +290,10 @@ function errorSeguro(error) {
   return { code: "ARCA_AUTH_FAILED", message: "No se pudo completar la autenticación fiscal. SIGO mantuvo bloqueada la emisión y registró el intento sin exponer credenciales." };
 }
 
+// El emisor CAE reutiliza exactamente el mismo protocolo WSAA/WSFE validado
+// aquí. Ningún helper exportado devuelve Token/Sign al navegador.
+export { WSAA, WSFE, escapeXml, decodeXml, extraer, descargarSecreto, autenticarWsaa, extraerErroresWsfe };
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { error: "METHOD_NOT_ALLOWED" });
   const empresaId = String(req.body?.empresaId || "").trim();
