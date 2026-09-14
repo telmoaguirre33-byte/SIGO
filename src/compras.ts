@@ -51,6 +51,8 @@ const MAX_CANTIDAD_ITEM = 1_000_000;
 const MAX_COSTO_UNITARIO = 1_000_000_000_000;
 const PAGINA_PRODUCTOS_PREFLIGHT = 1000;
 const MAX_PRODUCTOS_PREFLIGHT = 10000;
+const PAGINA_PROVEEDORES = 1000;
+const MAX_PROVEEDORES = 10000;
 
 function validarEmailOpcional(email?: string): string | null {
   const limpio = email?.trim() ?? "";
@@ -61,11 +63,30 @@ function validarEmailOpcional(email?: string): string | null {
   return limpio;
 }
 
+function cuitArgentinoValido(cuit: string): boolean {
+  if (!/^\d{11}$/.test(cuit)) return false;
+  const pesos = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+  const suma = pesos.reduce((total, peso, index) => total + Number(cuit[index]) * peso, 0);
+  const resto = 11 - (suma % 11);
+  const esperado = resto === 11 ? 0 : resto === 10 ? 9 : resto;
+  return esperado === Number(cuit[10]);
+}
+
 function validarCuitOpcional(cuit?: string): string | null {
   const limpio = cuit?.replace(/\D/g, "") ?? "";
   if (!limpio) return null;
   if (limpio.length !== 11) throw new Error("El CUIT del proveedor debe tener 11 dígitos.");
+  if (!cuitArgentinoValido(limpio)) throw new Error("El CUIT del proveedor no supera la validación del dígito verificador.");
   return limpio;
+}
+
+function normalizarRazonSocial(value?: string | null): string {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .trim();
 }
 
 function normalizarDocumento(value?: string | null): string {
@@ -213,14 +234,25 @@ export function consolidarItemsCompra(items: CompraItemInput[]): CompraItemInput
 }
 
 export async function listarProveedoresSigo(empresaId: string): Promise<ProveedorSigo[]> {
-  const { data, error } = await supabase
-    .from("proveedores_sigo")
-    .select("id,empresa_id,razon_social,nombre_fantasia,cuit,telefono,email,direccion,activo")
-    .eq("empresa_id", empresaId)
-    .eq("activo", true)
-    .order("razon_social", { ascending: true });
-  if (error) throw error;
-  return (data ?? []) as ProveedorSigo[];
+  const empresaNormalizada = empresaId.trim();
+  if (!empresaNormalizada) return [];
+  const proveedores: ProveedorSigo[] = [];
+
+  for (let desde = 0; desde < MAX_PROVEEDORES; desde += PAGINA_PROVEEDORES) {
+    const { data, error } = await supabase
+      .from("proveedores_sigo")
+      .select("id,empresa_id,razon_social,nombre_fantasia,cuit,telefono,email,direccion,activo")
+      .eq("empresa_id", empresaNormalizada)
+      .eq("activo", true)
+      .order("razon_social", { ascending: true })
+      .range(desde, desde + PAGINA_PROVEEDORES - 1);
+    if (error) throw error;
+    const pagina = (data ?? []) as ProveedorSigo[];
+    proveedores.push(...pagina);
+    if (pagina.length < PAGINA_PROVEEDORES) return proveedores;
+  }
+
+  throw new Error("El maestro de proveedores supera el límite seguro de 10.000 registros activos.");
 }
 
 export async function guardarProveedorSigo(input: {
@@ -235,18 +267,46 @@ export async function guardarProveedorSigo(input: {
   const empresaId = input.empresaId?.trim() ?? "";
   if (!empresaId) throw new Error("No hay una empresa activa válida.");
   const cuit = validarCuitOpcional(input.cuit);
+  const identidadNombre = normalizarRazonSocial(razonSocial);
+  const existentes = await listarProveedoresSigo(empresaId);
 
-  if (cuit) {
-    const { data: existentes, error: existenteError } = await supabase
-      .from("proveedores_sigo")
-      .select("id,empresa_id,razon_social,nombre_fantasia,cuit,telefono,email,direccion,activo")
-      .eq("empresa_id", empresaId)
-      .eq("cuit", cuit)
-      .eq("activo", true)
-      .limit(1);
-    if (existenteError) throw existenteError;
-    const existente = (existentes ?? [])[0] as ProveedorSigo | undefined;
-    if (existente) return existente;
+  const porCuit = cuit
+    ? existentes.filter((proveedor) => String(proveedor.cuit ?? "").replace(/\D/g, "") === cuit)
+    : [];
+  if (porCuit.length > 1) {
+    throw new Error("El CUIT ya está asociado a más de un proveedor activo. Resolvé el duplicado antes de continuar.");
+  }
+  if (porCuit.length === 1) {
+    const existente = porCuit[0];
+    if (normalizarRazonSocial(existente.razon_social) !== identidadNombre) {
+      throw new Error(`El CUIT ingresado ya pertenece a "${existente.razon_social}". Revisá la identidad del proveedor antes de guardar.`);
+    }
+    return existente;
+  }
+
+  const porNombre = existentes.filter((proveedor) => normalizarRazonSocial(proveedor.razon_social) === identidadNombre);
+  if (porNombre.length > 1) {
+    throw new Error("La razón social ya coincide con más de un proveedor activo. Resolvé el duplicado antes de continuar.");
+  }
+  if (porNombre.length === 1) {
+    const existente = porNombre[0];
+    const cuitExistente = String(existente.cuit ?? "").replace(/\D/g, "");
+    if (cuit && cuitExistente && cuitExistente !== cuit) {
+      throw new Error(`La razón social "${razonSocial}" ya existe con otro CUIT. Revisá el proveedor antes de guardar.`);
+    }
+    if (cuit && !cuitExistente) {
+      const { data: actualizado, error: updateError } = await supabase
+        .from("proveedores_sigo")
+        .update({ cuit })
+        .eq("id", existente.id)
+        .eq("empresa_id", empresaId)
+        .eq("activo", true)
+        .select("id,empresa_id,razon_social,nombre_fantasia,cuit,telefono,email,direccion,activo")
+        .single();
+      if (updateError) throw updateError;
+      return actualizado as ProveedorSigo;
+    }
+    return existente;
   }
 
   const { data, error } = await supabase
