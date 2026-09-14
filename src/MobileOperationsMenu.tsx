@@ -10,7 +10,7 @@ function normalizar(texto: string) {
 
 function clickPorTexto(selector: string, texto: string) {
   const esperado = normalizar(texto);
-  const botones = Array.from(document.querySelectorAll<HTMLElement>>(selector));
+  const botones = Array.from(document.querySelectorAll<HTMLElement>(selector));
   const boton = botones.find((item) => normalizar(item.textContent ?? "").includes(esperado));
   boton?.click();
   return Boolean(boton);
