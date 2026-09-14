@@ -10,7 +10,7 @@ function normalizar(texto: string) {
 
 function clickPorTexto(selector: string, texto: string) {
   const esperado = normalizar(texto);
-  const botones = Array.from(document.querySelectorAll<HTMLElement>(selector));
+  const botones = Array.from(document.querySelectorAll<HTMLElement>>(selector));
   const boton = botones.find((item) => normalizar(item.textContent ?? "").includes(esperado));
   boton?.click();
   return Boolean(boton);
@@ -22,16 +22,19 @@ function clickSelector(selector: string) {
   return Boolean(elemento);
 }
 
+function etiquetaRol(rol?: string) {
+  return ({ owner: "Propietario", admin: "Administrador", seller: "Vendedor", warehouse: "Depósito", client: "Cliente" } as Record<string, string>)[rol || ""] || "";
+}
+
 export default function MobileOperationsMenu() {
   const [empresa, setEmpresa] = useState<EmpresaOperativa | null>(null);
   const [abierto, setAbierto] = useState(false);
   const [grupo, setGrupo] = useState<Grupo>("ingresos");
   const [top, setTop] = useState(176);
 
-  // El menú no debe desaparecer si una segunda lectura de tenant tarda o falla.
-  // SigoAuthGate ya garantiza que este componente sólo se monte con sesión válida.
   const puedeAdministrar = empresa?.rol === "owner" || empresa?.rol === "admin";
   const puedeVender = empresa ? ["owner", "admin", "seller"].includes(empresa.rol) : true;
+  const puedeFacturar = empresa ? ["owner", "admin", "seller"].includes(empresa.rol) : false;
 
   const cargarEmpresa = useCallback(async () => {
     try {
@@ -41,7 +44,6 @@ export default function MobileOperationsMenu() {
       const activa = resolverEmpresaActiva(empresas, leerEmpresaActivaGuardada(data.user.id), data.user.id);
       if (activa) setEmpresa(activa);
     } catch (error) {
-      // El menú permanece visible aunque falle esta lectura auxiliar.
       console.warn("No se pudo refrescar la empresa del menú móvil", error);
     }
   }, []);
@@ -161,9 +163,15 @@ export default function MobileOperationsMenu() {
           <aside className="sigo-mobile-drawer" role="dialog" aria-modal="true" aria-label="Menú principal SIGO">
             <div className="sigo-mobile-drawer-head">
               <div className="sigo-mobile-drawer-logo">S</div>
-              <div><strong>SIGO</strong><span>{nombreEmpresa}</span></div>
+              <div><strong>SIGO</strong><span>{nombreEmpresa}{empresa?.rol ? ` · ${etiquetaRol(empresa.rol)}` : ""}</span></div>
               <button type="button" onClick={cerrar} aria-label="Cerrar menú">×</button>
             </div>
+
+            {empresa?.rol === "seller" ? (
+              <div style={{ padding: "10px 16px", fontSize: 13, opacity: 0.8 }}>
+                Vendedor: ventas, productos/stock de consulta, clientes para vender y emisión ARCA. Sin usuarios, compras, costos, informes administrativos ni configuración.
+              </div>
+            ) : null}
 
             <nav className="sigo-mobile-drawer-nav" aria-label="Temas de SIGO">
               {puedeVender && (
@@ -178,26 +186,28 @@ export default function MobileOperationsMenu() {
                 </button>
                 {grupo === "ingresos" && <div className="sigo-mobile-drawer-submenu">
                   {puedeVender && <button type="button" onClick={abrirCarrito}>Ventas a clientes</button>}
-                  <button type="button" onClick={abrirIngresos}>Ventas por día / Ingresos</button>
+                  {puedeAdministrar && <button type="button" onClick={abrirIngresos}>Ventas por día / Ingresos</button>}
                 </div>}
               </section>
 
-              <section>
-                <button className="sigo-mobile-drawer-section" type="button" onClick={() => setGrupo(grupo === "egresos" ? null : "egresos")}>
-                  <span>↘</span><strong>Egresos</strong><b>{grupo === "egresos" ? "⌄" : "›"}</b>
-                </button>
-                {grupo === "egresos" && <div className="sigo-mobile-drawer-submenu">
-                  {puedeAdministrar && <button type="button" onClick={() => irWorkspace("Compras / Proveedores")}>Compras a proveedores</button>}
-                </div>}
-              </section>
+              {puedeAdministrar ? (
+                <section>
+                  <button className="sigo-mobile-drawer-section" type="button" onClick={() => setGrupo(grupo === "egresos" ? null : "egresos")}>
+                    <span>↘</span><strong>Egresos</strong><b>{grupo === "egresos" ? "⌄" : "›"}</b>
+                  </button>
+                  {grupo === "egresos" && <div className="sigo-mobile-drawer-submenu">
+                    <button type="button" onClick={() => irWorkspace("Compras / Proveedores")}>Compras a proveedores</button>
+                  </div>}
+                </section>
+              ) : null}
 
               {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={() => irWorkspace("Clientes / Ctas. corrientes")}><span>👥</span><strong>Contactos / Clientes</strong><b>›</b></button>}
               <button className="sigo-mobile-drawer-item" type="button" onClick={() => irOperacion("Productos")}><span>◇</span><strong>Productos</strong><b>›</b></button>
               {puedeVender && <button className="sigo-mobile-drawer-item" type="button" onClick={abrirDevoluciones}><span>↩</span><strong>Devoluciones / Anulaciones</strong><b>›</b></button>}
-              {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={abrirArca}><span>A</span><strong>ARCA / Facturación</strong><b>›</b></button>}
+              {puedeFacturar && <button className="sigo-mobile-drawer-item" type="button" onClick={abrirArca}><span>A</span><strong>ARCA / Facturación</strong><b>›</b></button>}
               {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={() => irWorkspace("Clientes / Ctas. corrientes")}><span>▣</span><strong>Cuentas corrientes</strong><b>›</b></button>}
               {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={() => irWorkspace("Informes")}><span>◔</span><strong>Informes</strong><b>›</b></button>}
-              {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={() => irWorkspace("Usuarios")}><span>♙</span><strong>Usuarios</strong><b>›</b></button>}
+              {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={() => irWorkspace("Usuarios")}><span>♙</span><strong>Usuarios / permisos</strong><b>›</b></button>}
               {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={abrirConfiguracion}><span>⚙</span><strong>Configuración</strong><b>›</b></button>}
               <button className="sigo-mobile-drawer-item" type="button" onClick={abrirAyuda}><span>?</span><strong>Ayuda</strong><b>›</b></button>
             </nav>
