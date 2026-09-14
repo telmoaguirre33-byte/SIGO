@@ -33,6 +33,21 @@ function json(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
+function tag(xml, name) {
+  const match = String(xml || "").match(new RegExp(`<(?:[A-Za-z0-9_]+:)?${name}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/(?:[A-Za-z0-9_]+:)?${name}>`, "i"));
+  return match?.[1]?.trim() || "";
+}
+
+function puntosVentaSeguros(xml) {
+  const blocks = String(xml || "").match(/<(?:[A-Za-z0-9_]+:)?PtoVenta(?:\s[^>]*)?>[\s\S]*?<\/(?:[A-Za-z0-9_]+:)?PtoVenta>/gi) || [];
+  return blocks.slice(0, 50).map((block) => ({
+    numero: Number(tag(block, "Nro")) || null,
+    emisionTipo: tag(block, "EmisionTipo").toUpperCase() || null,
+    bloqueado: tag(block, "Bloqueado").toUpperCase() || null,
+    fechaBaja: tag(block, "FchBaja") || null,
+  }));
+}
+
 async function validarUsuario(authorization) {
   if (!SUPABASE_URL || !authorization?.startsWith("Bearer ")) return false;
   const token = authorization.slice(7).trim();
@@ -103,7 +118,7 @@ function postWsfe(endpoint, action, soap, timeoutMs = 20000) {
         "Content-Length": Buffer.byteLength(soap),
         SOAPAction: soapActionUrl(action),
         Connection: "close",
-        "User-Agent": "SIGO-ARCA-Bridge/1.2",
+        "User-Agent": "SIGO-ARCA-Bridge/1.3",
       },
     }, (response) => {
       let body = "";
@@ -174,6 +189,9 @@ const server = http.createServer(async (req, res) => {
 
   try {
     const result = await postWsfe(ENDPOINTS[ambiente], action, soap);
+    if (action === "FEParamGetPtosVenta") {
+      console.log("ARCA_WSFE_PUNTOS_SAFE", JSON.stringify({ ambiente, puntos: puntosVentaSeguros(result.body) }));
+    }
     return json(res, 200, {
       ok: result.status >= 200 && result.status < 300,
       status: result.status,
