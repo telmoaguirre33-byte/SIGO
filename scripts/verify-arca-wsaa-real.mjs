@@ -10,7 +10,7 @@ for (const token of [
   'wswhomo.afip.gov.ar/wsfev1/service.asmx',
   'servicios1.afip.gov.ar/wsfev1/service.asmx',
   'forge.pkcs7.createSignedData()',
-  'digestAlgorithm: forge.pki.oids.sha1',
+  'digestAlgorithm: forge.pki.oids.sha256',
   'p7.sign({ detached: false })',
   'SOAPAction: "urn:LoginCms"',
   'loginCmsReturn',
@@ -18,7 +18,12 @@ for (const token of [
   'WSAA_TICKET_EXPIRATION_INVALID',
   'FEParamGetPtosVenta',
   'SOAPAction: "http://ar.gov.afip.dif.FEV1/FEParamGetPtosVenta"',
-  'PUNTO_VENTA_NO_HABILITADO',
+  'extraerErroresWsfe',
+  'item.emisionTipo === "CAE"',
+  'PUNTO_VENTA_NO_HABILITADO_CAE',
+  'WSAA_TICKET_ALREADY_VALID',
+  'WSAA_SIGNATURE_REJECTED',
+  'stage === "WSFE_REJECTED"',
   'wsfeValidado: true',
   'Cache-Control',
   'storage/v1/object/authenticated',
@@ -32,13 +37,15 @@ for (const token of [
 }
 
 for (const forbidden of [
+  'digestAlgorithm: forge.pki.oids.sha1',
   'token: ticket.token',
   'sign: ticket.sign',
   'SUPABASE_SERVICE_ROLE_KEY',
   'process.env.CLAVE_FISCAL',
   'message: raw.slice',
+  'const errorCode = extraer(body, "Code")',
 ]) {
-  if (api.includes(forbidden)) throw new Error(`ARCA auth must not expose forbidden secret/detail: ${forbidden}`);
+  if (api.includes(forbidden)) throw new Error(`ARCA auth must not expose or preserve unsafe/obsolete behavior: ${forbidden}`);
 }
 
 for (const token of [
@@ -56,6 +63,13 @@ for (const token of [
 
 if (/\{result\s*\?\s*\(\s*<button[\s\S]{0,500}Autenticar WSAA real/.test(ui)) {
   throw new Error("ARCA WSAA UI regression: authentication button must not depend on a fresh preflight result");
+}
+
+if (!api.includes('const errorsXml = extraer(body, "Errors")')) {
+  throw new Error("ARCA WSFE regression: informational Events must not be interpreted as fiscal Errors");
+}
+if (!api.includes('err.code = "WSFE_REJECTED"')) {
+  throw new Error("ARCA WSFE regression: authenticated WSFE failures must remain stage-identifiable");
 }
 
 console.log("SIGO_ARCA_WSAA_WSFE_REAL_OK");
