@@ -55,12 +55,28 @@ function textoAntiguedad(minutos?: number | null) {
   return ` · hace ${horas} h${resto ? ` ${resto} min` : ""}`;
 }
 
+function mensajeWsaa(payload: WsaaResult | null, status: number) {
+  if (payload?.message) return payload.message;
+  switch (payload?.error) {
+    case "FORBIDDEN": return "Tu sesión no tiene permiso para configurar ARCA en esta empresa.";
+    case "ARCA_CONFIG_REQUIRED": return "Falta la configuración fiscal de ARCA para esta empresa.";
+    case "ARCA_AMBIENTE_INVALIDO": return "El ambiente ARCA configurado no es válido.";
+    case "ARCA_CUIT_INVALIDO": return "El CUIT emisor configurado no es válido.";
+    case "ARCA_SERVICIO_INVALIDO": return "El servicio fiscal configurado no corresponde a WSFEv1.";
+    case "ARCA_CERTIFICADO_REQUIRED": return "Falta vincular el certificado digital de ARCA.";
+    case "ARCA_CERTIFICADO_VENCIDO": return "El certificado digital de ARCA está vencido.";
+    case "ARCA_PUNTO_VENTA_REQUIRED": return "Falta un punto de venta activo para el ambiente seleccionado.";
+    default: return payload?.error || `La autenticación WSAA falló (HTTP ${status}).`;
+  }
+}
+
 export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
   const [loading, setLoading] = useState(false);
   const [wsaaLoading, setWsaaLoading] = useState(false);
   const [result, setResult] = useState<PreflightResult | null>(null);
   const [error, setError] = useState("");
   const [wsaaOk, setWsaaOk] = useState("");
+  const [wsaaIntento, setWsaaIntento] = useState("");
 
   async function tokenSesion() {
     const { data, error: sessionError } = await supabase.auth.getSession();
@@ -70,9 +86,9 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
     return token;
   }
 
-  async function validar() {
+  async function validar({ conservarError = false }: { conservarError?: boolean } = {}) {
     setLoading(true);
-    setError("");
+    if (!conservarError) setError("");
     try {
       const token = await tokenSesion();
       const response = await fetch("/api/arca/preflight", {
@@ -88,7 +104,7 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
       setResult(payload);
     } catch (err) {
       console.error("ARCA preflight", err);
-      setError("No se pudo completar la prevalidación técnica. Revisá la sesión, permisos y conexión.");
+      if (!conservarError) setError("No se pudo completar la prevalidación técnica. Revisá la sesión, permisos y conexión.");
     } finally {
       setLoading(false);
     }
@@ -98,6 +114,8 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
     setWsaaLoading(true);
     setError("");
     setWsaaOk("");
+    setWsaaIntento("Enviando autenticación real a ARCA…");
+    let errorDelIntento = "";
     try {
       const token = await tokenSesion();
       const response = await fetch("/api/arca/wsaa", {
@@ -110,18 +128,21 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
       });
       const payload = await response.json().catch(() => null) as WsaaResult | null;
       if (!response.ok || !payload?.ok) {
-        throw new Error(payload?.message || payload?.error || `HTTP_${response.status}`);
+        throw new Error(mensajeWsaa(payload, response.status));
       }
       const vence = payload.expirationTime ? new Date(payload.expirationTime).toLocaleString("es-AR") : "";
       const puntos = payload.puntosVentaArca?.length ? ` · PV ARCA: ${payload.puntosVentaArca.join(", ")}` : "";
       const wsfe = payload.wsfeValidado ? "WSAA + WSFEv1 validados correctamente" : "WSAA validado correctamente";
-      setWsaaOk(`${wsfe}${puntos}${vence ? ` · ticket vigente hasta ${vence}` : ""}.`);
-      await validar();
+      const exito = `${wsfe}${puntos}${vence ? ` · ticket vigente hasta ${vence}` : ""}.`;
+      setWsaaOk(exito);
+      setWsaaIntento("Último intento WSAA: aprobado.");
     } catch (err) {
       console.error("ARCA WSAA/WSFEv1 real", err);
-      setError(err instanceof Error ? err.message : "No se pudo autenticar contra ARCA.");
-      await validar();
+      errorDelIntento = err instanceof Error ? err.message : "No se pudo autenticar contra ARCA.";
+      setWsaaIntento("Último intento WSAA: rechazado o interrumpido.");
     } finally {
+      await validar({ conservarError: true });
+      if (errorDelIntento) setError(errorDelIntento);
       setWsaaLoading(false);
     }
   }
@@ -154,6 +175,8 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
       {!result ? (
         <p className="form-help">Si ya cargaste CUIT, certificado y punto de venta, podés autenticar WSAA directamente. SIGO valida además el acceso autenticado a WSFEv1 y contrasta los puntos de venta antes de activar ARCA.</p>
       ) : null}
+
+      {wsaaIntento ? <p className="form-help" role="status">{wsaaIntento}</p> : null}
 
       {result ? (
         <div className="arca-security-note" role="status">
