@@ -122,15 +122,6 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
   }
 
   const checks = result?.checks;
-  const puedeAutenticarWsaa = Boolean(
-    checks?.configuracion &&
-    checks?.ambienteValido &&
-    checks?.cuit &&
-    checks?.servicio &&
-    checks?.certificado &&
-    checks?.puntoVenta &&
-    checks?.wsaaReachable,
-  );
 
   return (
     <section className="panel arca-card">
@@ -145,17 +136,19 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
         <button className="admin-button" type="button" onClick={() => void validar()} disabled={loading || wsaaLoading}>
           {loading ? "Validando…" : "Validar preparación ARCA"}
         </button>
-        {result ? (
-          <button
-            className="primary-button"
-            type="button"
-            onClick={() => void autenticarWsaa()}
-            disabled={!puedeAutenticarWsaa || wsaaLoading || loading}
-          >
-            {wsaaLoading ? "Autenticando con ARCA…" : result.autenticacionRealValidada ? "Renovar autenticación WSAA" : "Autenticar WSAA real"}
-          </button>
-        ) : null}
+        <button
+          className="primary-button"
+          type="button"
+          onClick={() => void autenticarWsaa()}
+          disabled={wsaaLoading || loading}
+        >
+          {wsaaLoading ? "Autenticando con ARCA…" : result?.autenticacionRealValidada ? "Renovar autenticación WSAA" : "Autenticar WSAA real"}
+        </button>
       </div>
+
+      {!result ? (
+        <p className="form-help">Si ya cargaste CUIT, certificado y punto de venta, podés autenticar WSAA directamente. El backend vuelve a validar los requisitos antes de activar ARCA.</p>
+      ) : null}
 
       {result ? (
         <div className="arca-security-note" role="status">

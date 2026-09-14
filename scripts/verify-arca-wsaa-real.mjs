@@ -36,9 +36,14 @@ for (const token of [
   'Autenticar WSAA real',
   'Renovar autenticación WSAA',
   'WSAA validado correctamente',
-  'puedeAutenticarWsaa',
+  'disabled={wsaaLoading || loading}',
+  'podés autenticar WSAA directamente',
 ]) {
   if (!ui.includes(token)) throw new Error(`ARCA WSAA UI safeguard missing: ${token}`);
+}
+
+if (/\{result\s*\?\s*\(\s*<button[\s\S]{0,500}Autenticar WSAA real/.test(ui)) {
+  throw new Error("ARCA WSAA UI regression: authentication button must not depend on a fresh preflight result");
 }
 
 console.log("SIGO_ARCA_WSAA_REAL_OK");
