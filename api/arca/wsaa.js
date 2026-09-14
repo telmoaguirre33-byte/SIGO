@@ -1,4 +1,5 @@
 import { X509Certificate, createPrivateKey } from "node:crypto";
+import https from "node:https";
 import forge from "node-forge";
 
 const BUCKET = "arca-secrets";
@@ -337,48 +338,95 @@ function extraerErroresWsfe(body) {
   })).filter((item) => item.code && item.code !== "0");
 }
 
+function postSoapWsfeIpv4(endpoint, soapAction, soap, timeoutMs = 15_000) {
+  return new Promise((resolve, reject) => {
+    let target;
+    try {
+      target = new URL(endpoint);
+    } catch (cause) {
+      const err = new Error("WSFE_ENDPOINT_INVALID");
+      err.code = "WSFE_NETWORK_FAILED";
+      err.cause = cause;
+      reject(err);
+      return;
+    }
+
+    let settled = false;
+    const req = https.request({
+      protocol: target.protocol,
+      hostname: target.hostname,
+      port: target.port || 443,
+      path: `${target.pathname}${target.search}`,
+      method: "POST",
+      family: 4,
+      agent: false,
+      timeout: timeoutMs,
+      headers: {
+        "Content-Type": "text/xml;charset=UTF-8",
+        "Content-Length": Buffer.byteLength(soap),
+        SOAPAction: soapAction,
+        Connection: "close",
+        "User-Agent": "SIGO-WSFEv1-Probe/1.3",
+      },
+    }, (response) => {
+      let body = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        if (body.length <= 2_000_000) body += chunk;
+      });
+      response.on("end", () => {
+        if (settled) return;
+        settled = true;
+        const status = Number(response.statusCode || 0);
+        resolve({ ok: status >= 200 && status < 300, status, body });
+      });
+    });
+
+    req.on("timeout", () => {
+      const err = new Error("WSFE_NETWORK_TIMEOUT");
+      err.code = "WSFE_NETWORK_TIMEOUT";
+      req.destroy(err);
+    });
+    req.on("error", (cause) => {
+      if (settled) return;
+      settled = true;
+      if (cause?.code === "WSFE_NETWORK_TIMEOUT") {
+        reject(cause);
+        return;
+      }
+      const err = new Error("WSFE_NETWORK_FAILED");
+      err.code = "WSFE_NETWORK_FAILED";
+      err.cause = cause;
+      reject(err);
+    });
+    req.end(soap);
+  });
+}
+
 async function validarWsfe(endpoint, ticket, cuit, puntosConfigurados) {
   const soap = `<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ar="http://ar.gov.afip.dif.FEV1/"><soapenv:Header/><soapenv:Body><ar:FEParamGetPtosVenta><ar:Auth><ar:Token>${escapeXml(ticket.token)}</ar:Token><ar:Sign>${escapeXml(ticket.sign)}</ar:Sign><ar:Cuit>${escapeXml(cuit)}</ar:Cuit></ar:Auth></ar:FEParamGetPtosVenta></soapenv:Body></soapenv:Envelope>`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000);
-  try {
-    let response;
-    try {
-      response = await fetch(endpoint, {
-        method: "POST",
-        signal: controller.signal,
-        headers: {
-          "Content-Type": "text/xml;charset=UTF-8",
-          SOAPAction: "http://ar.gov.afip.dif.FEV1/FEParamGetPtosVenta",
-          "User-Agent": "SIGO-WSFEv1-Probe/1.2",
-        },
-        body: soap,
-      });
-    } catch (cause) {
-      const err = new Error(cause?.name === "AbortError" ? "WSFE_NETWORK_TIMEOUT" : "WSFE_NETWORK_FAILED");
-      err.code = cause?.name === "AbortError" ? "WSFE_NETWORK_TIMEOUT" : "WSFE_NETWORK_FAILED";
-      throw err;
-    }
-    const body = await response.text();
-    const fault = decodeXml(extraer(body, "faultstring"));
-    const errors = extraerErroresWsfe(body);
-    if (!response.ok || fault || errors.length > 0) {
-      const firstError = errors[0];
-      const err = new Error(fault || firstError?.message || `HTTP_${response.status}`);
-      err.code = "WSFE_REJECTED";
-      err.wsfeCode = firstError?.code || null;
-      throw err;
-    }
-    const puntosArca = parsePuntosVentaWsfe(body);
-    const habilitados = puntosArca
-      .filter((item) => item.bloqueado !== "S" && !item.fechaBaja && item.emisionTipo === "CAE")
-      .map((item) => item.numero);
-    const faltantes = puntosConfigurados.filter((numero) => !habilitados.includes(numero));
-    if (faltantes.length > 0) throw new Error(`PUNTO_VENTA_NO_HABILITADO_CAE:${faltantes.join(",")}`);
-    return { puntosArca: habilitados };
-  } finally {
-    clearTimeout(timeout);
+  const response = await postSoapWsfeIpv4(
+    endpoint,
+    "http://ar.gov.afip.dif.FEV1/FEParamGetPtosVenta",
+    soap,
+  );
+  const body = response.body;
+  const fault = decodeXml(extraer(body, "faultstring"));
+  const errors = extraerErroresWsfe(body);
+  if (!response.ok || fault || errors.length > 0) {
+    const firstError = errors[0];
+    const err = new Error(fault || firstError?.message || `HTTP_${response.status}`);
+    err.code = "WSFE_REJECTED";
+    err.wsfeCode = firstError?.code || null;
+    throw err;
   }
+  const puntosArca = parsePuntosVentaWsfe(body);
+  const habilitados = puntosArca
+    .filter((item) => item.bloqueado !== "S" && !item.fechaBaja && item.emisionTipo === "CAE")
+    .map((item) => item.numero);
+  const faltantes = puntosConfigurados.filter((numero) => !habilitados.includes(numero));
+  if (faltantes.length > 0) throw new Error(`PUNTO_VENTA_NO_HABILITADO_CAE:${faltantes.join(",")}`);
+  return { puntosArca: habilitados };
 }
 
 function errorSeguro(error) {
@@ -396,7 +444,7 @@ function errorSeguro(error) {
   if (stage === "WSAA_NETWORK_TIMEOUT") return { code: "WSAA_NETWORK_TIMEOUT", message: "WSAA no respondió dentro del tiempo seguro. El certificado no fue rechazado; la conexión quedó pendiente." };
   if (stage === "WSAA_NETWORK_FAILED") return { code: "WSAA_NETWORK_FAILED", message: "SIGO no pudo establecer la conexión de red con WSAA. El certificado no fue rechazado." };
   if (stage === "WSFE_NETWORK_TIMEOUT") return { code: "WSFE_NETWORK_TIMEOUT", message: "WSAA pudo avanzar, pero WSFEv1 no respondió dentro del tiempo seguro." };
-  if (stage === "WSFE_NETWORK_FAILED") return { code: "WSFE_NETWORK_FAILED", message: "WSAA pudo avanzar, pero SIGO no logró conectar con WSFEv1." };
+  if (stage === "WSFE_NETWORK_FAILED") return { code: "WSFE_NETWORK_FAILED", message: "WSAA pudo avanzar, pero SIGO no logró conectar con WSFEv1 por el transporte estándar ni por IPv4 nativo." };
   if (stage === "WSFE_REJECTED") return { code: "WSFE_AUTH_FAILED", message: "WSAA entregó credenciales, pero WSFEv1 rechazó la autenticación o el punto de venta." };
   if (/service|servicio|authorized|autoriz/i.test(raw)) return { code: "WSAA_SERVICE_NOT_AUTHORIZED", message: "ARCA no autorizó este certificado para WSFE. Verificá que la relación existente use el mismo certificado vigente cargado en SIGO." };
   if (/fetch failed|ECONNRESET|EAI_AGAIN|ENOTFOUND|socket|network/i.test(raw)) return { code: "WSAA_POST_NETWORK_FAILED", message: "SIGO llega a WSAA, pero la llamada POST LoginCms se interrumpió antes de recibir una respuesta SOAP. Reintentá; no regeneres certificados." };
@@ -485,7 +533,7 @@ export default async function handler(req, res) {
     return json(res, 502, {
       error: safe.code,
       message: safe.message,
-      etapa: error?.code === "WSFE_REJECTED" ? "WSFE" : "WSAA",
+      etapa: String(error?.code || "").startsWith("WSFE") ? "WSFE" : "WSAA",
     });
   }
 }
