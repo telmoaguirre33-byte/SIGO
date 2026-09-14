@@ -4,6 +4,7 @@ const MAX_BASE64_CHARS = 350_000;
 const BUCKET = "arca-secrets";
 
 function json(res, status, body) {
+  res.setHeader("Cache-Control", "no-store, max-age=0");
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8").send(JSON.stringify(body));
 }
 
@@ -191,8 +192,16 @@ export default async function handler(req, res) {
     }
     if (!coincide) return json(res, 400, { error: "CERTIFICADO_CLAVE_NO_COINCIDEN" });
 
+    // Si el archivo .key llegó cifrado, la passphrase se usa únicamente en memoria.
+    // Guardamos una copia PKCS#8 normalizada dentro del bucket privado para que WSAA
+    // pueda firmar futuros TRA sin persistir la contraseña del archivo original.
+    const clavePrivadaNormalizada = clavePrivada.export({ format: "pem", type: "pkcs8" }).toString();
+    if (!clavePrivadaNormalizada.includes("-----BEGIN PRIVATE KEY-----")) {
+      return json(res, 500, { error: "CLAVE_PRIVADA_NORMALIZACION_FALLIDA" });
+    }
+
     const certificadoRef = await subirObjetoPrivado(sesion, empresaId, "certificate.pem", certificadoPem);
-    await subirObjetoPrivado(sesion, empresaId, "private-key.pem", clavePrivadaPem);
+    await subirObjetoPrivado(sesion, empresaId, "private-key.pem", clavePrivadaNormalizada);
 
     const fingerprint = certificado.fingerprint256.replace(/:/g, "").toLowerCase();
     await guardarMetadata(sesion, empresaId, {
@@ -214,7 +223,7 @@ export default async function handler(req, res) {
       cuit: cuitCertificado,
       subject: certificado.subject,
       issuer: certificado.issuer,
-      nota: "Certificado y clave privada guardados en almacenamiento privado por empresa. La clave privada no se almacena en arca_config ni se devuelve al navegador.",
+      nota: "Certificado y clave privada normalizada guardados en almacenamiento privado por empresa. La passphrase y la clave privada no se almacenan en arca_config ni se devuelven al navegador.",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error || "");
