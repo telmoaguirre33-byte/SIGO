@@ -5,6 +5,8 @@ import { supabase } from "./supabase";
 
 export default function ArcaLauncher() {
   const [empresa, setEmpresa] = useState<EmpresaOperativa | null>(null);
+  const [empresas, setEmpresas] = useState<EmpresaOperativa[]>([]);
+  const [productosPorEmpresa, setProductosPorEmpresa] = useState<Record<string, number | null>>({});
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -16,21 +18,35 @@ export default function ArcaLauncher() {
         setEmpresa(null);
         return null;
       }
-      const empresas = await cargarMisEmpresas();
+      const disponibles = (await cargarMisEmpresas()).filter((item) => ["owner", "admin"].includes(item.rol));
       const preferida = leerEmpresaActivaGuardada(user.id);
-      const activa = empresas.find((item) => item.empresa_id === preferida) ?? empresas[0] ?? null;
-      if (!activa || !["owner", "admin"].includes(activa.rol)) {
+      const activaAnterior = empresa?.empresa_id;
+      const activa = disponibles.find((item) => item.empresa_id === activaAnterior)
+        ?? disponibles.find((item) => item.empresa_id === preferida)
+        ?? disponibles[0]
+        ?? null;
+      if (!activa) {
+        setEmpresas([]);
         setEmpresa(null);
         return null;
       }
+      setEmpresas(disponibles);
       setEmpresa(activa);
+      void Promise.all(disponibles.map(async (item) => {
+        const { count, error } = await supabase
+          .from("productos")
+          .select("id", { count: "exact", head: true })
+          .eq("empresa_id", item.empresa_id)
+          .eq("activo", true);
+        return [item.empresa_id, error ? null : count ?? 0] as const;
+      })).then((pares) => setProductosPorEmpresa(Object.fromEntries(pares)));
       return activa;
     } catch (error) {
       console.warn("No se pudo resolver empresa para Facturación ARCA", error);
       setEmpresa(null);
       return null;
     }
-  }, []);
+  }, [empresa?.empresa_id]);
 
   useEffect(() => {
     void resolverEmpresa();
@@ -61,10 +77,32 @@ export default function ArcaLauncher() {
         <div className="arca-overlay" role="dialog" aria-modal="true" aria-label="Facturación ARCA">
           <div className="arca-overlay-topbar">
             <button type="button" className="admin-button" onClick={() => setOpen(false)}>← Volver</button>
-            <div><strong>Facturación ARCA</strong><small>{empresa.empresa_nombre}</small></div>
+            <div><strong>Facturación ARCA</strong><small>Elegí la misma empresa donde están los productos y las ventas.</small></div>
+            <label className="form-group arca-company-picker">
+              <span>Empresa que va a facturar</span>
+              <select
+                value={empresa.empresa_id}
+                onChange={(event) => {
+                  const siguiente = empresas.find((item) => item.empresa_id === event.target.value) ?? null;
+                  if (siguiente) setEmpresa(siguiente);
+                }}
+              >
+                {empresas.map((item) => (
+                  <option key={item.empresa_id} value={item.empresa_id}>
+                    {item.empresa_nombre}{productosPorEmpresa[item.empresa_id] != null ? ` · ${productosPorEmpresa[item.empresa_id]} productos` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
           <main className="arca-overlay-content">
-            <ArcaFacturacion empresaId={empresa.empresa_id} />
+            <ArcaFacturacion
+              key={empresa.empresa_id}
+              empresaId={empresa.empresa_id}
+              empresaNombre={empresa.empresa_nombre}
+              empresas={empresas}
+              productosCount={productosPorEmpresa[empresa.empresa_id] ?? null}
+            />
           </main>
         </div>
       ) : null}

@@ -13,6 +13,7 @@ type Props = {
   action: BarcodeAction;
   onActionChange?: (action: BarcodeAction) => void;
   onProduct: (product: BarcodeProduct, action: BarcodeAction) => void;
+  onBlockedProduct?: (product: BarcodeProduct, reason: "precio" | "stock") => void;
 };
 
 type BarcodeDetectorLike = {
@@ -55,6 +56,7 @@ export default function BarcodeScanner({
   action,
   onActionChange,
   onProduct,
+  onBlockedProduct,
 }: Props) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -156,12 +158,14 @@ export default function BarcodeScanner({
       if (actionOperacion === "vender") {
         const precio = Number(producto.precio_venta ?? 0);
         if (!Number.isFinite(precio) || precio <= 0) {
+          onBlockedProduct?.(producto, "precio");
           setError(`${producto.nombre}: definí un precio de venta mayor a cero antes de vender.`);
           if (source === "camera") setCameraStatus("Producto leído, pero todavía no tiene precio de venta válido.");
           return;
         }
         const stock = Number(producto.stock_actual ?? 0);
         if (!Number.isFinite(stock) || stock <= 0) {
+          onBlockedProduct?.(producto, "stock");
           setError(`${producto.nombre}: sin stock disponible para vender.`);
           if (source === "camera") setCameraStatus("Producto leído, pero no tiene stock disponible.");
           return;

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import BarcodeScanner from "./BarcodeScanner";
-import type { BarcodeProduct } from "./barcode";
+import { isLegacyDuplicateProduct, type BarcodeProduct } from "./barcode";
 import { listarClientesSigo, type ClienteSigo } from "./clientes";
+import { guardarProductoSigo, listarProductosSigo, type ProductoSigo } from "./productos";
 import {
   confirmarVentaSigo,
   listarVentasRecientesSigo,
@@ -31,8 +32,14 @@ function etiquetaMedio(medio: MedioPagoSigo) {
   return etiquetas[medio];
 }
 
-export default function VentaRapidaOperativa({ empresaId }: { empresaId: string }) {
+export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos = false }: { empresaId: string; puedeEditarProductos?: boolean }) {
   const [items, setItems] = useState<ItemVenta[]>([]);
+  const [catalogo, setCatalogo] = useState<ProductoSigo[]>([]);
+  const [busquedaProducto, setBusquedaProducto] = useState("");
+  const [catalogoError, setCatalogoError] = useState("");
+  const [productoBloqueado, setProductoBloqueado] = useState<{ producto: BarcodeProduct; razon: "precio" | "stock" } | null>(null);
+  const [precioRapido, setPrecioRapido] = useState("");
+  const [guardandoPrecio, setGuardandoPrecio] = useState(false);
   const [medioPago, setMedioPago] = useState<MedioPagoSigo>("efectivo");
   const [clientes, setClientes] = useState<ClienteSigo[]>([]);
   const [clienteId, setClienteId] = useState("");
@@ -62,6 +69,11 @@ export default function VentaRapidaOperativa({ empresaId }: { empresaId: string 
     let cancelled = false;
     empresaActivaRef.current = empresaId;
     setItems([]);
+    setCatalogo([]);
+    setBusquedaProducto("");
+    setCatalogoError("");
+    setProductoBloqueado(null);
+    setPrecioRapido("");
     setMedioPago("efectivo");
     setClientes([]);
     setClienteId("");
@@ -74,13 +86,20 @@ export default function VentaRapidaOperativa({ empresaId }: { empresaId: string 
     setIdempotencyKey(nuevaClaveVenta());
 
     async function cargar() {
-      try {
-        const data = await listarClientesSigo(empresaId);
-        if (!cancelled && empresaActivaRef.current === empresaId) setClientes(data);
-      } catch (err) {
-        if (!cancelled && empresaActivaRef.current === empresaId) {
+      const [clientesResultado, catalogoResultado] = await Promise.allSettled([
+        listarClientesSigo(empresaId),
+        listarProductosSigo(empresaId),
+      ]);
+      if (!cancelled && empresaActivaRef.current === empresaId) {
+        if (clientesResultado.status === "fulfilled") setClientes(clientesResultado.value);
+        else {
           setClientes([]);
-          setClientesError(err instanceof Error ? err.message : "No se pudieron cargar los clientes.");
+          setClientesError(clientesResultado.reason instanceof Error ? clientesResultado.reason.message : "No se pudieron cargar los clientes.");
+        }
+        if (catalogoResultado.status === "fulfilled") setCatalogo(catalogoResultado.value);
+        else {
+          setCatalogo([]);
+          setCatalogoError(catalogoResultado.reason instanceof Error ? catalogoResultado.reason.message : "No se pudo cargar el catálogo para búsqueda manual.");
         }
       }
       if (!cancelled && empresaActivaRef.current === empresaId) await cargarVentasRecientes(empresaId);
@@ -96,11 +115,104 @@ export default function VentaRapidaOperativa({ empresaId }: { empresaId: string 
     [clientes, clienteId],
   );
 
+  const productosEncontrados = useMemo(() => {
+    const q = busquedaProducto.trim().toLocaleLowerCase("es-AR");
+    if (q.length < 2) return [];
+    return catalogo
+      .filter((producto) => [producto.nombre, producto.codigo_interno, producto.codigo_barras, producto.marca]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase("es-AR")
+        .includes(q))
+      .slice(0, 12);
+  }, [busquedaProducto, catalogo]);
+
+  function marcarProductoBloqueado(producto: BarcodeProduct, razon: "precio" | "stock") {
+    setProductoBloqueado({ producto, razon });
+    setPrecioRapido(producto.precio_venta && Number(producto.precio_venta) > 0 ? String(producto.precio_venta) : "");
+    setExito("");
+  }
+
+  function seleccionarProductoManual(producto: ProductoSigo) {
+    setError("");
+    setExito("");
+    setAdvertencia("");
+    if (isLegacyDuplicateProduct(producto)) {
+      setError(`${producto.nombre}: identidad de código pendiente de revisión física. SIGO bloqueó la venta para evitar operar sobre el producto equivocado.`);
+      return;
+    }
+    const precio = Number(producto.precio_venta ?? 0);
+    if (!Number.isFinite(precio) || precio <= 0) {
+      marcarProductoBloqueado(producto, "precio");
+      setError(`${producto.nombre}: ingresá su precio de venta para poder cobrarlo.`);
+      return;
+    }
+    const stock = Number(producto.stock_actual ?? 0);
+    if (!Number.isFinite(stock) || stock <= 0) {
+      marcarProductoBloqueado(producto, "stock");
+      setError(`${producto.nombre}: no tiene stock disponible. Ingresalo desde Compras para conservar trazabilidad.`);
+      return;
+    }
+    setProductoBloqueado(null);
+    setBusquedaProducto("");
+    agregar(producto);
+  }
+
+  async function guardarPrecioRapido() {
+    if (!productoBloqueado || productoBloqueado.razon !== "precio" || !puedeEditarProductos || guardandoPrecio) return;
+    const precio = Number(precioRapido.replace(",", "."));
+    if (!Number.isFinite(precio) || precio <= 0) {
+      setError("Ingresá un precio de venta mayor a cero.");
+      return;
+    }
+
+    const empresaOperacion = empresaId;
+    const original = productoBloqueado.producto;
+    setGuardandoPrecio(true);
+    setError("");
+    try {
+      await guardarProductoSigo({
+        empresaId: empresaOperacion,
+        productoId: original.id,
+        nombre: original.nombre,
+        codigoInterno: original.codigo_interno,
+        codigoBarras: original.codigo_barras,
+        descripcion: original.descripcion,
+        categoria: original.categoria,
+        marca: original.marca,
+        proveedor: original.proveedor,
+        costoActual: null,
+        costoUltimaCompra: null,
+        precioVenta: precio,
+        margenGanancia: null,
+        margenPorcentaje: null,
+        stockActual: null,
+        stockMinimo: original.stock_minimo,
+        stockMaximo: original.stock_maximo,
+      });
+      if (empresaActivaRef.current !== empresaOperacion) return;
+      const actualizado: BarcodeProduct = { ...original, precio_venta: precio };
+      setCatalogo((actual) => actual.map((item) => item.id === original.id ? { ...item, precio_venta: precio } : item));
+      setProductoBloqueado(null);
+      setPrecioRapido("");
+      setBusquedaProducto("");
+      agregar(actualizado);
+      setExito(`Precio guardado y ${original.nombre} agregado al carrito.`);
+    } catch (err) {
+      if (empresaActivaRef.current === empresaOperacion) {
+        setError(err instanceof Error ? err.message : "No se pudo guardar el precio del producto.");
+      }
+    } finally {
+      if (empresaActivaRef.current === empresaOperacion) setGuardandoPrecio(false);
+    }
+  }
+
   function agregar(producto: BarcodeProduct) {
     if (confirmando) return;
     setError("");
     setExito("");
     setAdvertencia("");
+    setProductoBloqueado(null);
     const precio = Number(producto.precio_venta);
     if (!Number.isFinite(precio) || precio <= 0) {
       setError(`${producto.nombre}: definí un precio de venta mayor a cero antes de vender.`);
@@ -148,6 +260,9 @@ export default function VentaRapidaOperativa({ empresaId }: { empresaId: string 
     setAdvertencia("");
     setClienteId("");
     setMedioPago("efectivo");
+    setProductoBloqueado(null);
+    setPrecioRapido("");
+    setBusquedaProducto("");
     setIdempotencyKey(nuevaClaveVenta());
   }
 
@@ -238,7 +353,76 @@ export default function VentaRapidaOperativa({ empresaId }: { empresaId: string 
 
       <div className="panel">
         <h3>Escanear producto</h3>
-        <BarcodeScanner empresaId={empresaId} action="vender" onProduct={agregar} />
+        <BarcodeScanner
+          empresaId={empresaId}
+          action="vender"
+          onProduct={agregar}
+          onBlockedProduct={marcarProductoBloqueado}
+        />
+
+        <div className="form-group" style={{ marginTop: 16 }}>
+          <label htmlFor="venta-buscar-producto">O buscar por nombre, código o marca</label>
+          <input
+            id="venta-buscar-producto"
+            type="search"
+            placeholder="Ej.: resma A4, tinta Epson o código interno"
+            value={busquedaProducto}
+            onChange={(event) => setBusquedaProducto(event.target.value)}
+            disabled={confirmando}
+          />
+        </div>
+        {catalogoError ? <p className="form-error" role="alert">Catálogo: {catalogoError}</p> : null}
+        {productosEncontrados.length > 0 ? (
+          <div className="table-wrapper" style={{ marginTop: 10 }}>
+            <table className="products-table">
+              <thead><tr><th>Producto</th><th>Precio</th><th>Stock</th><th></th></tr></thead>
+              <tbody>
+                {productosEncontrados.map((producto) => (
+                  <tr key={producto.id}>
+                    <td><strong>{producto.nombre}</strong><small>{producto.codigo_interno || producto.codigo_barras || "Sin código"}</small></td>
+                    <td>{Number(producto.precio_venta || 0) > 0 ? `$ ${Number(producto.precio_venta).toLocaleString("es-AR")}` : "Sin precio"}</td>
+                    <td>{producto.stock_actual ?? "No disponible"}</td>
+                    <td><button type="button" className="admin-button" onClick={() => seleccionarProductoManual(producto)}>Elegir</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+        {busquedaProducto.trim().length >= 2 && productosEncontrados.length === 0 && !catalogoError ? (
+          <p className="barcode-help">No se encontraron productos con esa búsqueda en la empresa activa.</p>
+        ) : null}
+
+        {productoBloqueado ? (
+          <div className="arca-security-note" style={{ marginTop: 14 }}>
+            <strong>{productoBloqueado.producto.nombre}</strong>
+            {productoBloqueado.razon === "precio" ? (
+              puedeEditarProductos ? (
+                <>
+                  <span>El producto tiene stock, pero no tiene precio válido. Podés prepararlo acá y SIGO lo agregará al carrito después de verificar el guardado.</span>
+                  <div className="form-actions">
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      inputMode="decimal"
+                      placeholder="Precio de venta"
+                      value={precioRapido}
+                      onChange={(event) => setPrecioRapido(event.target.value)}
+                      disabled={guardandoPrecio}
+                      aria-label="Precio de venta del producto bloqueado"
+                    />
+                    <button type="button" className="primary-button" onClick={() => void guardarPrecioRapido()} disabled={guardandoPrecio}>
+                      {guardandoPrecio ? "Guardando y verificando…" : "Guardar precio y agregar"}
+                    </button>
+                  </div>
+                </>
+              ) : <span>Pedile a un propietario o administrador que configure el precio de venta.</span>
+            ) : (
+              <span>El producto no tiene stock disponible. Ingresalo desde Compras; SIGO no inventará stock desde Caja.</span>
+            )}
+          </div>
+        ) : null}
       </div>
 
       <div className="panel">

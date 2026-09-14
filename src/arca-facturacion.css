@@ -52,6 +52,7 @@
 .arca-overlay-topbar > div { display: grid; }
 .arca-overlay-topbar strong { font-size: 14px; }
 .arca-overlay-topbar small { color: #64748b; font-size: 11px; }
+.arca-company-picker { margin-left: auto; min-width: 240px; }
 .arca-overlay-content { max-width: 1280px; margin: 0 auto; padding: 24px; }
 .arca-head { align-items: flex-start; }
 .arca-kicker { display: inline-block; margin-bottom: 7px; color: #2563eb; font-size: 10px; font-weight: 950; letter-spacing: .13em; }
@@ -90,7 +91,9 @@
   .arca-launcher-icon { width: 35px; height: 35px; border-radius: 11px; }
   .arca-launcher strong { font-size: 12px; }
   .arca-overlay-topbar { min-height: 58px; padding: 8px 10px; }
+  .arca-overlay-topbar { flex-wrap: wrap; }
   .arca-overlay-topbar .admin-button { min-height: 40px; }
+  .arca-company-picker { order: 3; width: 100%; min-width: 0; margin-left: 0; }
   .arca-overlay-content { padding: 14px 10px 28px; }
   .arca-head { gap: 9px; }
   .arca-head h2 { font-size: 25px; }
