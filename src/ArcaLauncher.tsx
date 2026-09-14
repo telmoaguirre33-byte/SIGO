@@ -22,8 +22,8 @@ export default function ArcaLauncher() {
       const disponibles = (await cargarMisEmpresas()).filter((item) => ["owner", "admin", "seller"].includes(item.rol));
       const preferida = leerEmpresaActivaGuardada(user.id);
       const activaAnterior = empresa?.empresa_id;
-      const activa = disponibles.find((item) => item.empresa_id === activaAnterior)
-        ?? disponibles.find((item) => item.empresa_id === preferida)
+      const activa = disponibles.find((item) => item.empresa_id === preferida)
+        ?? disponibles.find((item) => item.empresa_id === activaAnterior)
         ?? disponibles[0]
         ?? null;
       if (!activa) {
