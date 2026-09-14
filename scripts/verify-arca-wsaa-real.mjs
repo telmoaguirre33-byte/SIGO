@@ -2,6 +2,8 @@ import fs from "node:fs";
 
 const api = fs.readFileSync("api/arca/wsaa.js", "utf8");
 const ui = fs.readFileSync("src/ArcaPreflight.tsx", "utf8");
+const preflight = fs.readFileSync("api/arca/preflight.js", "utf8");
+const vercel = JSON.parse(fs.readFileSync("vercel.json", "utf8"));
 
 for (const token of [
   'SERVICE = "wsfe"',
@@ -25,7 +27,10 @@ for (const token of [
   'validarTicket',
   'WSAA_TICKET_EXPIRATION_INVALID',
   'FEParamGetPtosVenta',
-  'SOAPAction: "http://ar.gov.afip.dif.FEV1/FEParamGetPtosVenta"',
+  'postSoapWsfeIpv4(',
+  '"http://ar.gov.afip.dif.FEV1/FEParamGetPtosVenta"',
+  'family: 4',
+  'agent: false',
   'extraerErroresWsfe',
   'item.emisionTipo === "CAE"',
   'PUNTO_VENTA_NO_HABILITADO_CAE',
@@ -89,4 +94,15 @@ if (!api.includes('err.code = "WSFE_REJECTED"')) {
   throw new Error("ARCA WSFE regression: authenticated WSFE failures must remain stage-identifiable");
 }
 
+for (const token of ['family: 4', 'agent: false', 'SOAPAction: "http://ar.gov.afip.dif.FEV1/FEDummy"']) {
+  if (!preflight.includes(token)) throw new Error(`ARCA WSFE IPv4 preflight guard missing: ${token}`);
+}
+
+const arcaFunctions = vercel?.functions?.["api/arca/*.js"];
+if (!Array.isArray(arcaFunctions?.regions) || arcaFunctions.regions.length !== 1 || arcaFunctions.regions[0] !== "gru1") {
+  throw new Error("ARCA functions must remain pinned to Vercel Sao Paulo (gru1)");
+}
+if (arcaFunctions.maxDuration !== 30) throw new Error("ARCA functions require a 30-second execution window");
+
 console.log("SIGO_ARCA_WSAA_WSFE_REAL_OK");
+
