@@ -31,7 +31,7 @@ function escapeXml(value) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
+    .replace(/\"/g, "&quot;")
     .replace(/'/g, "&apos;");
 }
 
@@ -39,7 +39,7 @@ function decodeXml(value) {
   return String(value || "")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
+    .replace(/&quot;/g, '\"')
     .replace(/&apos;/g, "'")
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
     .replace(/&amp;/g, "&");
@@ -132,19 +132,20 @@ function crearTra() {
   };
 }
 
-function firmarTra(traXml, certificatePem, privateKeyPem) {
+function firmarTra(traXml, certificatePem, privateKeyPem, algoritmo = "sha1") {
   const cert = forge.pki.certificateFromPem(certificatePem);
   const key = forge.pki.privateKeyFromPem(privateKeyPem);
   if (cert.publicKey?.n && key?.n && cert.publicKey.n.compareTo(key.n) !== 0) {
     throw new Error("CERT_KEY_MISMATCH");
   }
+  const digestAlgorithm = algoritmo === "sha256" ? forge.pki.oids.sha256 : forge.pki.oids.sha1;
   const p7 = forge.pkcs7.createSignedData();
   p7.content = forge.util.createBuffer(traXml, "utf8");
   p7.addCertificate(cert);
   p7.addSigner({
     key,
     certificate: cert,
-    digestAlgorithm: forge.pki.oids.sha256,
+    digestAlgorithm,
     authenticatedAttributes: [
       { type: forge.pki.oids.contentType, value: forge.pki.oids.data },
       { type: forge.pki.oids.messageDigest },
@@ -153,7 +154,7 @@ function firmarTra(traXml, certificatePem, privateKeyPem) {
   });
   p7.sign({ detached: false });
   const der = forge.asn1.toDer(p7.toAsn1()).getBytes();
-  return forge.util.encode64(der, 64);
+  return forge.util.encode64(der);
 }
 
 function validarTicket(ticket) {
@@ -176,8 +177,8 @@ async function loginCms(endpoint, cms) {
       signal: controller.signal,
       headers: {
         "Content-Type": "text/xml;charset=UTF-8",
-        SOAPAction: "urn:LoginCms",
-        "User-Agent": "SIGO-WSAA/1.2",
+        SOAPAction: "",
+        "User-Agent": "SIGO-WSAA/1.3",
       },
       body: soap,
     });
@@ -198,6 +199,17 @@ async function loginCms(endpoint, cms) {
     return validarTicket({ token, sign, expirationTime, generationTime });
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function autenticarWsaa(endpoint, traXml, certificatePem, privateKeyPem) {
+  const intentar = async (algoritmo) => loginCms(endpoint, firmarTra(traXml, certificatePem, privateKeyPem, algoritmo));
+  try {
+    return await intentar("sha1");
+  } catch (error) {
+    const raw = error instanceof Error ? error.message : String(error || "");
+    if (!/cms\.sign\.invalid|algoritmo no soportado/i.test(raw)) throw error;
+    return intentar("sha256");
   }
 }
 
@@ -263,16 +275,18 @@ async function validarWsfe(endpoint, ticket, cuit, puntosConfigurados) {
 function errorSeguro(error) {
   const raw = error instanceof Error ? error.message : String(error || "UNKNOWN");
   const stage = error?.code;
+  if (/SECRET_READ_FAILED|SECRET_INVALID/i.test(raw)) return { code: "ARCA_SECRET_READ_FAILED", message: "SIGO no pudo leer el certificado o la clave privada guardados para esta empresa. Volvé a vincularlos en esta misma empresa antes de autenticar." };
   if (/CERT_KEY_MISMATCH/i.test(raw)) return { code: "ARCA_CERT_KEY_MISMATCH", message: "El certificado y la clave privada no forman el mismo par criptográfico. Volvé a cargar los archivos correctos." };
-  if (/cms\.cert\.untrusted|certificate|certificado/i.test(raw)) return { code: "WSAA_CERTIFICATE_REJECTED", message: "ARCA rechazó el certificado para este ambiente. Verificá si corresponde a homologación o producción y que el certificado vigente esté asociado al alias SIGO y al servicio WSFE." };
-  if (/cms\.sign\.invalid|cms\.bad|firma inv[aá]lida|algoritmo no soportado/i.test(raw)) return { code: "WSAA_SIGNATURE_REJECTED", message: "ARCA rechazó la firma CMS del TRA. SIGO usa CMS adjunto y SHA-256; verificá que certificado y clave privada correspondan al certificado vigente de producción." };
-  if (/CEE.*TA.*valid|TA v[aá]lido|ya posee.*TA|already.*(?:ticket|TA)/i.test(raw)) return { code: "WSAA_TICKET_ALREADY_VALID", message: "ARCA informa que ya existe un Ticket de Acceso vigente para WSFE. En producción puede aplicar una retención breve antes de admitir otro LoginCms; esperá unos minutos y reintentá sin regenerar certificado ni relación." };
-  if (/PUNTO_VENTA_NO_HABILITADO_CAE/i.test(raw)) return { code: "WSFE_PUNTO_VENTA_INVALIDO", message: "WSFEv1 respondió correctamente, pero al menos un punto de venta configurado en SIGO no está habilitado para emisión CAE en ARCA." };
-  if (stage === "WSFE_REJECTED") return { code: "WSFE_AUTH_FAILED", message: "WSAA entregó credenciales, pero WSFEv1 rechazó la autenticación o la consulta de puntos de venta. Revisá el último intento sin volver a generar certificado ni relación." };
-  if (/service|servicio|authorized|autoriz/i.test(raw)) return { code: "WSAA_SERVICE_NOT_AUTHORIZED", message: "ARCA no autorizó este certificado para WSFE. Verificá que la relación existente use el mismo alias/certificado vigente cargado en SIGO." };
+  if (/cms\.cert\.untrusted|certificate|certificado/i.test(raw)) return { code: "WSAA_CERTIFICATE_REJECTED", message: "ARCA rechazó el certificado para este ambiente. Verificá que sea el certificado vigente de producción asociado al alias SIGO y al servicio WSFE." };
+  if (/cms\.sign\.invalid|cms\.bad|firma inv[aá]lida|algoritmo no soportado/i.test(raw)) return { code: "WSAA_SIGNATURE_REJECTED", message: "ARCA rechazó la firma CMS del TRA. SIGO reintentó con los algoritmos admitidos por el protocolo; revisá certificado y clave privada vigentes." };
+  if (/coe\.notAuthorized|computador no autorizado/i.test(raw)) return { code: "WSAA_NOT_AUTHORIZED", message: "ARCA reconoce la solicitud pero este certificado todavía no está autorizado para WSFE. La relación debe apuntar exactamente al certificado vigente cargado en SIGO." };
+  if (/coe\.alreadyAuthenticated|CEE.*TA.*valid|TA v[aá]lido|ya posee.*TA|already.*(?:ticket|TA)/i.test(raw)) return { code: "WSAA_TICKET_ALREADY_VALID", message: "ARCA informa que ya existe un Ticket de Acceso vigente para WSFE. Esperá unos minutos y reintentá sin regenerar certificado ni relación." };
+  if (/PUNTO_VENTA_NO_HABILITADO_CAE/i.test(raw)) return { code: "WSFE_PUNTO_VENTA_INVALIDO", message: "WSFEv1 respondió correctamente, pero el punto de venta configurado no está habilitado para emisión CAE en ARCA." };
+  if (stage === "WSFE_REJECTED") return { code: "WSFE_AUTH_FAILED", message: "WSAA entregó credenciales, pero WSFEv1 rechazó la autenticación o el punto de venta." };
+  if (/service|servicio|authorized|autoriz/i.test(raw)) return { code: "WSAA_SERVICE_NOT_AUTHORIZED", message: "ARCA no autorizó este certificado para WSFE. Verificá que la relación existente use el mismo certificado vigente cargado en SIGO." };
   if (/timeout|abort/i.test(raw)) return { code: "ARCA_TIMEOUT", message: "ARCA no respondió a tiempo. Reintentá en unos minutos." };
   if (/WSAA_TICKET|WSAA_RESPONSE_INVALID/i.test(raw)) return { code: "WSAA_TICKET_INVALID", message: "WSAA respondió con un Ticket de Acceso incompleto o con vigencia inválida; SIGO no habilitó la emisión." };
-  if (stage === "WSAA_REJECTED") return { code: "WSAA_REJECTED", message: "WSAA rechazó el LoginCms. SIGO conservó el estado seguro y no habilitó emisión; revisá certificado vigente, relación WSFE y sincronización horaria." };
+  if (stage === "WSAA_REJECTED") return { code: "WSAA_REJECTED", message: "WSAA rechazó LoginCms. SIGO mantuvo bloqueada la emisión y registró el intento; no regeneres certificado hasta ver el diagnóstico." };
   return { code: "ARCA_AUTH_FAILED", message: "No se pudo completar la autenticación fiscal. SIGO mantuvo bloqueada la emisión y registró el intento sin exponer credenciales." };
 }
 
@@ -307,8 +321,7 @@ export default async function handler(req, res) {
     ]);
 
     const tra = crearTra();
-    const cms = firmarTra(tra.xml, certificatePem, privateKeyPem);
-    const ticket = await loginCms(WSAA[config.ambiente], cms);
+    const ticket = await autenticarWsaa(WSAA[config.ambiente], tra.xml, certificatePem, privateKeyPem);
     const wsfe = await validarWsfe(WSFE[config.ambiente], ticket, config.cuit_emisor, puntosConfigurados);
 
     await guardarEstado(sesion, empresaId, {
