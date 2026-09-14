@@ -20,6 +20,7 @@ on:
       - 'scripts/verify-critical.mjs'
       - 'scripts/verify-arca-*.mjs'
       - '.github/workflows/qa-transaction-probe.yml'
+      - '.github/workflows/production-operational-smoke.yml'
   workflow_dispatch:
 
 concurrency:
