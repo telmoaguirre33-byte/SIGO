@@ -24,13 +24,17 @@ const checks = [
       'configuracionActiva',
       'ambienteValido',
       'puntosVentaValidos',
+      'FEDummy',
+      'ultimo_error',
+      'ultimoErrorSeguro',
+      'preparacionOk',
     ],
     forbidden: [
       'SUPABASE_SERVICE_ROLE_KEY',
       'process.env.ARCA_PRIVATE_KEY',
       'process.env.CLAVE_FISCAL',
     ],
-    label: 'ARCA backend preflight is tenant-scoped, freshness-aware and secret-safe',
+    label: 'ARCA backend preflight is tenant-scoped, freshness-aware, diagnostic and secret-safe',
   },
   {
     file: 'src/ArcaPreflight.tsx',
@@ -43,8 +47,12 @@ const checks = [
       'emisionHabilitable',
       'Emisión todavía bloqueada hasta tener WSAA vigente',
       'Validar preparación ARCA',
+      'ultimoErrorSeguro',
+      'Último diagnóstico seguro',
+      'prueba FEDummy',
+      'Emisión ARCA activada por última autenticación',
     ],
-    label: 'ARCA preflight UI distinguishes technical readiness from fresh WSAA validation',
+    label: 'ARCA preflight UI distinguishes technical readiness, emission gate and last safe diagnostic',
   },
   {
     file: 'src/ArcaFacturacion.tsx',
@@ -95,7 +103,15 @@ for (const check of checks) {
 
 const preflight = fs.readFileSync('api/arca/preflight.js', 'utf8');
 if (!preflight.includes('config.activo === true')) {
-  console.error('FAIL ARCA active config guard: inactive configuration must never pass preflight');
+  console.error('FAIL ARCA emission state guard: active flag must still be read explicitly');
+  failed = true;
+}
+if (!preflight.includes('Boolean(preparacionOk && configuracionActiva && autenticacionReal.ok)')) {
+  console.error('FAIL ARCA emission gate: issuance must require technical readiness + active auth + fresh WSAA');
+  failed = true;
+}
+if (!preflight.includes('const preparacionOk = Boolean(ambienteValido && cuitOk && servicioOk && puntoVentaOk && certificado.ok && redOk)')) {
+  console.error('FAIL ARCA readiness semantics: a previous failed auth must not masquerade as incomplete setup');
   failed = true;
 }
 if (!preflight.includes('Number.isInteger(numero) && numero >= 1 && numero <= 99999')) {
@@ -110,8 +126,8 @@ if (!preflight.includes('12 * 60 * 60 * 1000')) {
   console.error('FAIL ARCA WSAA freshness guard: a previous real authentication must expire after 12 hours');
   failed = true;
 }
-if (!preflight.includes('Boolean(ok && autenticacionReal.ok)')) {
-  console.error('FAIL ARCA emission gate: technical preflight alone must not mark issuance as habilitable');
+if (!preflight.includes('SOAPAction: "http://ar.gov.afip.dif.FEV1/FEDummy"')) {
+  console.error('FAIL ARCA WSFE reachability: preflight must use the official FEDummy SOAP operation instead of trusting WSDL GET');
   failed = true;
 }
 
