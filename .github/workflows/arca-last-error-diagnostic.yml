@@ -1,0 +1,78 @@
+name: ARCA Last Error Diagnostic
+
+on:
+  push:
+    branches: [fix/wsaa-button-always-visible-20260913]
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Resolve production database
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_url() {
+            local candidate="$1"
+            echo "::add-mask::$candidate"
+            if timeout 10s supabase migration list --db-url "$candidate" >/dev/null 2>/tmp/arca-db-error.txt; then
+              echo "ARCA_DIAG_DB_URL=$candidate" >> "$GITHUB_ENV"
+              return 0
+            fi
+            return 1
+          }
+          if [ -n "${SUPABASE_DB_URL:-}" ] && test_url "$SUPABASE_DB_URL"; then exit 0; fi
+          if [ -n "${SUPABASE_POOLER_URL:-}" ] && test_url "$SUPABASE_POOLER_URL"; then exit 0; fi
+          encoded_password="$(python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+          print(quote(os.environ['SUPABASE_DB_PASSWORD'], safe=''))
+          PY
+          )"
+          echo "::add-mask::$encoded_password"
+          direct="postgresql://postgres:${encoded_password}@db.${SUPABASE_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require"
+          if test_url "$direct"; then exit 0; fi
+          regions=(sa-east-1 us-east-1 us-east-2 us-west-1 us-west-2 ca-central-1 eu-west-1 eu-west-2 eu-west-3 eu-central-1 eu-central-2 eu-north-1 ap-southeast-1 ap-southeast-2 ap-northeast-1 ap-northeast-2 ap-south-1)
+          for region in "${regions[@]}"; do
+            for generation in aws-0 aws-1; do
+              candidate="postgresql://postgres.${SUPABASE_PROJECT_REF}:${encoded_password}@${generation}-${region}.pooler.supabase.com:5432/postgres?sslmode=require"
+              if test_url "$candidate"; then exit 0; fi
+            done
+          done
+          cat /tmp/arca-db-error.txt >&2 || true
+          exit 1
+      - name: Ensure psql
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then sudo apt-get update -y && sudo apt-get install -y postgresql-client; fi
+      - name: Read ARCA last error
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$ARCA_DIAG_DB_URL" -X -v ON_ERROR_STOP=1 <<'SQL'
+          \pset pager off
+          select 'ARCA_LAST_ERROR_DIAGNOSTIC' as marker,
+                 e.nombre as empresa,
+                 c.ambiente,
+                 c.activo,
+                 c.ultima_prueba_ok,
+                 c.ultima_prueba_at,
+                 c.ultimo_error,
+                 c.certificado_vence,
+                 c.certificado_ref,
+                 array_agg(p.numero order by p.numero) filter (where p.activo) as puntos_venta_activos
+          from public.arca_config c
+          join public.empresas e on e.id = c.empresa_id
+          left join public.arca_puntos_venta p on p.empresa_id = c.empresa_id and p.ambiente = c.ambiente
+          group by e.nombre,c.ambiente,c.activo,c.ultima_prueba_ok,c.ultima_prueba_at,c.ultimo_error,c.certificado_vence,c.certificado_ref
+          order by e.nombre;
+          SQL
