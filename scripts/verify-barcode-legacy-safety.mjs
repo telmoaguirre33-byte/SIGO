@@ -26,11 +26,12 @@ for (const [needle, label] of [
   ['resolveCode(code, "manual")', 'manual lookup path'],
   ['resolveCode(buffered, "wedge")', 'USB/Bluetooth keyboard-wedge lookup path'],
   ['resolveCode(found, "camera")', 'mobile camera lookup path'],
-  ['(action === "vender" || action === "ingresar") && isLegacyDuplicateProduct(producto)', 'operational LEGACY-DUP block'],
+  ['(actionOperacion === "vender" || actionOperacion === "ingresar") && isLegacyDuplicateProduct(producto)', 'operational LEGACY-DUP block'],
   ['identidad de código pendiente de revisión física', 'operator-visible physical-review warning'],
   ['SIGO bloqueó ${operacion}', 'explicit blocked-operation message'],
+  ['actionActivaRef.current === actionOperacion', 'captured action context guard'],
 ]) {
   requireText(scanner, needle, label);
 }
 
-console.log('Barcode legacy safety guard OK: manual, USB/Bluetooth wedge and camera share a single lookup path, while unresolved LEGACY-DUP identities are blocked from sales and stock entry');
+console.log('Barcode legacy safety guard OK: manual, USB/Bluetooth wedge and camera share a single tenant/action-safe lookup path, while unresolved LEGACY-DUP identities are blocked from sales and stock entry');
