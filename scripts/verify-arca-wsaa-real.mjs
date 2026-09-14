@@ -116,7 +116,7 @@ for (const [content, tokens, label] of [
   [bridgeServer, ['server.listen(PORT, "0.0.0.0"', 'req.url === "/health"', 'req.url === "/health/wsfe"', 'ARCA_WSFE_PUNTOS_SAFE'], "Railway bridge server"],
   [packageJson.scripts.build, ['apply-arca-bridge.mjs', 'apply-arca-pv-normalize.mjs', 'apply-arca-pv-sync-v2.mjs'], "ARCA build patch order"],
   [pvNormalize, ['dadoDeBaja', 'emisionTipo !== "CAEA"', 'new Set'], "ARCA PV normalization"],
-  [pvSync, ['sincronizarPuntosVentaAutoritativos', 'PUNTO_VENTA_NO_HABILITADO_CAE:SIN_PUNTOS_ARCA', 'return habilitados'], "ARCA authoritative PV sync"],
+  [pvSync, ['sincronizarPuntoVentaAutoritativo', 'ARCA_SIN_PUNTOS_CAE', 'return arcaOrdenados'], "ARCA authoritative PV sync"],
 ]) {
   for (const token of tokens) {
     if (!content.includes(token)) throw new Error(`${label} guard missing: ${token}`);
