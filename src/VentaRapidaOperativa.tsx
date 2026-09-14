@@ -11,6 +11,8 @@ import {
 
 type ItemVenta = { producto: BarcodeProduct; cantidad: number };
 
+const DINERO_TOLERANCIA = 0.01;
+
 function nuevaClaveVenta() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -99,11 +101,13 @@ export default function VentaRapidaOperativa({ empresaId }: { empresaId: string 
     setError("");
     setExito("");
     setAdvertencia("");
-    if (producto.precio_venta == null) {
-      setError(`${producto.nombre}: no tiene precio de venta habilitado.`);
+    const precio = Number(producto.precio_venta);
+    if (!Number.isFinite(precio) || precio <= 0) {
+      setError(`${producto.nombre}: definí un precio de venta mayor a cero antes de vender.`);
       return;
     }
-    if (producto.stock_actual == null || Number(producto.stock_actual) <= 0) {
+    const stock = Number(producto.stock_actual);
+    if (!Number.isFinite(stock) || stock <= 0) {
       setError(`${producto.nombre}: sin stock disponible.`);
       return;
     }
@@ -111,7 +115,7 @@ export default function VentaRapidaOperativa({ empresaId }: { empresaId: string 
     setItems((actual) => {
       const existente = actual.find((item) => item.producto.id === producto.id);
       const cantidadActual = existente?.cantidad ?? 0;
-      if (cantidadActual + 1 > Number(producto.stock_actual)) {
+      if (cantidadActual + 1 > stock) {
         setError(`${producto.nombre}: no hay stock para agregar otra unidad.`);
         return actual;
       }
@@ -159,7 +163,16 @@ export default function VentaRapidaOperativa({ empresaId }: { empresaId: string 
   const puedeConfirmar = items.length > 0
     && (medioPago !== "cuenta_corriente" || Boolean(clienteId))
     && !superaLimite
-    && items.every((item) => item.producto.precio_venta != null && item.producto.stock_actual != null && item.cantidad <= Number(item.producto.stock_actual));
+    && items.every((item) => {
+      const precio = Number(item.producto.precio_venta);
+      const stock = Number(item.producto.stock_actual);
+      return Number.isFinite(precio)
+        && precio > 0
+        && Number.isFinite(stock)
+        && stock >= 0
+        && item.cantidad > 0
+        && item.cantidad <= stock;
+    });
 
   async function confirmar() {
     if (!puedeConfirmar || confirmando) return;
@@ -177,14 +190,27 @@ export default function VentaRapidaOperativa({ empresaId }: { empresaId: string 
         items: items.map((item) => ({ productoId: item.producto.id, cantidad: item.cantidad })),
       });
       if (empresaActivaRef.current !== empresaConfirmacion) return;
-      setExito(`Venta confirmada · ${resultado.ventaId.slice(0, 8).toUpperCase()} · Total $ ${total.toLocaleString("es-AR")}`);
+
+      const totalConfirmado = resultado.totalVerificado ?? total;
+      const advertencias: string[] = [];
+      if (
+        resultado.totalVerificado != null
+        && Math.abs(resultado.totalVerificado - total) > DINERO_TOLERANCIA
+      ) {
+        advertencias.push(
+          `El precio cambió mientras confirmabas. SIGO registró el total vigente del backend: $ ${resultado.totalVerificado.toLocaleString("es-AR")}.`,
+        );
+      }
       if (resultado.integridad !== "ok") {
-        setAdvertencia(
+        advertencias.push(
           resultado.integridad === "revisar"
-            ? "La venta quedó registrada, pero no se pudo conciliar su movimiento de Caja/Cuenta Corriente. NO repitas la venta: revisá el estado operativo o Informes."
+            ? "La venta quedó registrada, pero no se pudo conciliar su movimiento de Caja/Cuenta Corriente o stock. NO repitas la venta: revisá el estado operativo o Informes."
             : "La venta quedó registrada, pero la conciliación automática no pudo verificarse. NO repitas la venta hasta revisar Ventas/Informes.",
         );
       }
+
+      setExito(`Venta confirmada · ${resultado.ventaId.slice(0, 8).toUpperCase()} · Total verificado $ ${totalConfirmado.toLocaleString("es-AR")}`);
+      setAdvertencia(advertencias.join(" "));
       setItems([]);
       setClienteId("");
       setMedioPago("efectivo");
