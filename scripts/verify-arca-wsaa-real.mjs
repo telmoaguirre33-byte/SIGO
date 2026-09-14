@@ -117,9 +117,9 @@ for (const [content, tokens, label] of [
   [railwayBridge, ['builder = "RAILPACK"', 'startCommand = "npm start"', 'healthcheckPath = "/health/wsfe"'], "bridge Railway config"],
   [bridgeServer, ['server.listen(PORT, "0.0.0.0"', 'req.url === "/health"', 'req.url === "/health/wsfe"', 'ARCA_WSFE_PUNTOS_SAFE'], "Railway bridge server"],
   [packageJson.scripts.build, ['apply-arca-bridge.mjs', 'apply-arca-pv-normalize.mjs', 'apply-arca-pv-sync-v2.mjs', 'apply-arca-wsaa-v2-ui.mjs'], "ARCA build patch order"],
-  [pvNormalize, ['dadoDeBaja', 'emisionTipo !== "CAEA"', 'new Set'], "ARCA PV normalization"],
+  [pvNormalize, ['dadoDeBaja', 'emisionTipo.startsWith("CAE -")', 'new Set'], "ARCA PV normalization"],
   [pvSync, ['sincronizarPuntoVentaAutoritativo', 'ARCA_SIN_PUNTOS_CAE', 'return arcaOrdenados'], "ARCA authoritative PV sync"],
-  [wsaaV2, ['const elegibles = cae.map', 'ARCA_SIN_PUNTOS_CAE', 'WSFE_SIN_PUNTOS_CAE', 'wsfeValidado: true'], "ARCA WSAA v2 CAE validation"],
+  [wsaaV2, ['emisionTipo.startsWith("CAE -")', 'const elegibles = cae.map', 'ARCA_SIN_PUNTOS_CAE', 'WSFE_SIN_PUNTOS_CAE', 'wsfeValidado: true'], "ARCA WSAA v2 CAE validation"],
   [wsaaV2Ui, ['fetch("/api/arca/wsaa-v2"', 'SIGO_ARCA_WSAA_V2_UI_OK'], "ARCA WSAA v2 UI activation"],
 ]) {
   for (const token of tokens) {
