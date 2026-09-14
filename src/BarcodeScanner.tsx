@@ -21,7 +21,14 @@ type BarcodeDetectorLike = {
 
 type BarcodeDetectorCtor = new (options?: { formats?: string[] }) => BarcodeDetectorLike;
 type ScanSource = "manual" | "wedge" | "camera";
+type QueueableScanSource = Exclude<ScanSource, "camera">;
 type ScannerControlsLike = { stop(): void };
+type QueuedScan = {
+  code: string;
+  source: QueueableScanSource;
+  empresaId: string;
+  action: BarcodeAction;
+};
 
 // Cuando el scanner muestra selector de acción (maestro de Productos), sólo exponemos
 // acciones que ese contexto ejecuta realmente. Venta y recepción tienen scanners propios
@@ -33,6 +40,7 @@ const ACTIONS: Array<{ value: BarcodeAction; label: string }> = [
 
 const SCANNER_GAP_MS = 90;
 const CAMERA_DUPLICATE_GUARD_MS = 1200;
+const MAX_PENDING_SCANS = 50;
 const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
   video: {
     facingMode: { ideal: "environment" },
@@ -53,16 +61,19 @@ export default function BarcodeScanner({
   const [error, setError] = useState("");
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraStatus, setCameraStatus] = useState("");
+  const [queuedCount, setQueuedCount] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const zxingControlsRef = useRef<ScannerControlsLike | null>(null);
   const scanningRef = useRef(false);
   const inFlightRef = useRef(false);
+  const queuedScansRef = useRef<QueuedScan[]>([]);
   const wedgeBufferRef = useRef("");
   const wedgeLastKeyAtRef = useRef(0);
   const lastCameraResolvedRef = useRef<{ code: string; at: number } | null>(null);
   const empresaActivaRef = useRef(empresaId);
+  const actionActivaRef = useRef(action);
   const requestRef = useRef(0);
 
   const detectorCtor = useMemo(() => {
@@ -74,31 +85,55 @@ export default function BarcodeScanner({
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }
 
-  async function resolveCode(raw: string, source: ScanSource = "manual") {
-    const normalized = normalizeBarcode(raw);
-    if (!normalized || inFlightRef.current) return;
-    const empresaOperacion = empresaId;
-    if (!empresaOperacion) {
-      setError("Seleccioná una empresa antes de escanear.");
+  function syncQueuedCount() {
+    setQueuedCount(queuedScansRef.current.length);
+  }
+
+  function clearQueuedScans() {
+    queuedScansRef.current = [];
+    syncQueuedCount();
+  }
+
+  function takeNextQueuedScan(): QueuedScan | null {
+    while (queuedScansRef.current.length > 0) {
+      const next = queuedScansRef.current.shift() ?? null;
+      if (!next) break;
+      if (next.empresaId === empresaActivaRef.current && next.action === actionActivaRef.current) {
+        syncQueuedCount();
+        return next;
+      }
+    }
+    syncQueuedCount();
+    return null;
+  }
+
+  async function drainQueuedScans() {
+    if (inFlightRef.current) return;
+    const next = takeNextQueuedScan();
+    if (!next) {
+      setBusy(false);
       focusScanner();
       return;
     }
+    await processCode(next.code, next.source, next.empresaId, next.action);
+  }
 
-    if (source === "camera") {
-      const now = Date.now();
-      const previous = lastCameraResolvedRef.current;
-      if (previous && previous.code === normalized && now - previous.at < CAMERA_DUPLICATE_GUARD_MS) return;
-      lastCameraResolvedRef.current = { code: normalized, at: now };
-      setCameraStatus(`Código leído: ${normalized}`);
-    }
-
+  async function processCode(
+    normalized: string,
+    source: ScanSource,
+    empresaOperacion: string,
+    actionOperacion: BarcodeAction,
+  ) {
     const requestId = ++requestRef.current;
     inFlightRef.current = true;
     setBusy(true);
     setError("");
     try {
       const matches = await buscarProductoPorCodigo(empresaOperacion, normalized);
-      if (empresaActivaRef.current !== empresaOperacion || requestRef.current !== requestId) return;
+      const contextoVigente = empresaActivaRef.current === empresaOperacion
+        && actionActivaRef.current === actionOperacion
+        && requestRef.current === requestId;
+      if (!contextoVigente) return;
       if (matches.length === 0) {
         setError(`No se encontró un producto con el código ${normalized}.`);
         if (source === "camera") setCameraStatus("Código leído, pero no existe en esta empresa.");
@@ -111,14 +146,14 @@ export default function BarcodeScanner({
       }
 
       const producto = matches[0];
-      if ((action === "vender" || action === "ingresar") && isLegacyDuplicateProduct(producto)) {
-        const operacion = action === "vender" ? "vender" : "ingresar stock";
+      if ((actionOperacion === "vender" || actionOperacion === "ingresar") && isLegacyDuplicateProduct(producto)) {
+        const operacion = actionOperacion === "vender" ? "vender" : "ingresar stock";
         setError(`${producto.nombre}: identidad de código pendiente de revisión física. SIGO bloqueó ${operacion} para evitar operar sobre el producto equivocado.`);
         if (source === "camera") setCameraStatus("Código pendiente de revisión física. Operación bloqueada.");
         return;
       }
 
-      if (action === "vender") {
+      if (actionOperacion === "vender") {
         const precio = Number(producto.precio_venta ?? 0);
         if (!Number.isFinite(precio) || precio <= 0) {
           setError(`${producto.nombre}: definí un precio de venta mayor a cero antes de vender.`);
@@ -133,22 +168,68 @@ export default function BarcodeScanner({
         }
       }
 
-      setCode("");
-      onProduct(producto, action);
+      onProduct(producto, actionOperacion);
       if (source === "camera") setCameraStatus(`Listo: ${producto.nombre}`);
       if ("vibrate" in navigator) navigator.vibrate?.(40);
     } catch (e) {
       console.error(e);
-      if (empresaActivaRef.current === empresaOperacion && requestRef.current === requestId) {
+      if (
+        empresaActivaRef.current === empresaOperacion
+        && actionActivaRef.current === actionOperacion
+        && requestRef.current === requestId
+      ) {
         setError("No se pudo consultar el código. Verificá conexión, permisos y empresa activa.");
       }
     } finally {
-      if (empresaActivaRef.current === empresaOperacion && requestRef.current === requestId) {
-        inFlightRef.current = false;
-        setBusy(false);
-        if (source !== "camera") focusScanner();
-      }
+      inFlightRef.current = false;
+      void drainQueuedScans();
     }
+  }
+
+  async function resolveCode(raw: string, source: ScanSource = "manual") {
+    const normalized = normalizeBarcode(raw);
+    if (!normalized) return;
+    const empresaOperacion = empresaId;
+    const actionOperacion = action;
+    if (!empresaOperacion) {
+      setError("Seleccioná una empresa antes de escanear.");
+      focusScanner();
+      return;
+    }
+
+    if (source === "camera") {
+      if (inFlightRef.current) return;
+      const now = Date.now();
+      const previous = lastCameraResolvedRef.current;
+      if (previous && previous.code === normalized && now - previous.at < CAMERA_DUPLICATE_GUARD_MS) return;
+      lastCameraResolvedRef.current = { code: normalized, at: now };
+      setCameraStatus(`Código leído: ${normalized}`);
+      await processCode(normalized, source, empresaOperacion, actionOperacion);
+      return;
+    }
+
+    // Liberamos el campo en el mismo instante en que la pistola/manual envía Enter/Tab.
+    // Así una segunda lectura rápida no se concatena con el código anterior mientras
+    // la primera consulta todavía está viajando a Supabase.
+    setCode("");
+
+    if (inFlightRef.current) {
+      if (queuedScansRef.current.length >= MAX_PENDING_SCANS) {
+        setError("El scanner recibió demasiadas lecturas pendientes. Esperá a que procese la cola antes de continuar.");
+        return;
+      }
+      queuedScansRef.current.push({
+        code: normalized,
+        source,
+        empresaId: empresaOperacion,
+        action: actionOperacion,
+      });
+      syncQueuedCount();
+      setBusy(true);
+      return;
+    }
+
+    await processCode(normalized, source, empresaOperacion, actionOperacion);
   }
 
   function stopCamera() {
@@ -271,21 +352,32 @@ export default function BarcodeScanner({
   useEffect(() => {
     empresaActivaRef.current = empresaId;
     requestRef.current += 1;
-    inFlightRef.current = false;
+    clearQueuedScans();
     wedgeBufferRef.current = "";
     wedgeLastKeyAtRef.current = 0;
     lastCameraResolvedRef.current = null;
     setCode("");
     setError("");
-    setBusy(false);
+    if (!inFlightRef.current) setBusy(false);
     if (cameraOpen || streamRef.current || zxingControlsRef.current) stopCamera();
-    else focusScanner();
+    else if (!inFlightRef.current) focusScanner();
     // El cambio de tenant invalida lecturas y cámara del tenant anterior.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId]);
 
   useEffect(() => {
-    focusScanner();
+    actionActivaRef.current = action;
+    requestRef.current += 1;
+    clearQueuedScans();
+    wedgeBufferRef.current = "";
+    setCode("");
+    setError("");
+    if (!inFlightRef.current) {
+      setBusy(false);
+      focusScanner();
+    }
+    // Un cambio de acción nunca debe ejecutar lecturas que quedaron en cola para la acción anterior.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [action]);
 
   useEffect(() => {
@@ -321,6 +413,7 @@ export default function BarcodeScanner({
 
   useEffect(() => () => {
     scanningRef.current = false;
+    clearQueuedScans();
     zxingControlsRef.current?.stop();
     streamRef.current?.getTracks().forEach((track) => track.stop());
   }, []);
@@ -364,7 +457,7 @@ export default function BarcodeScanner({
           aria-label="Código de barras o código interno"
         />
         <button className="admin-button" type="button" disabled={busy || !code.trim()} onClick={() => void resolveCode(code, "manual")}>
-          {busy ? "Buscando…" : "Buscar"}
+          {busy ? "Procesando…" : "Buscar"}
         </button>
         {cameraOpen ? (
           <button className="admin-button danger-button" type="button" onClick={stopCamera}>Cerrar cámara</button>
@@ -378,6 +471,11 @@ export default function BarcodeScanner({
       <p className="barcode-help">
         Pistola USB/Bluetooth: cada lectura suma una unidad, incluso si escaneás el mismo producto varias veces. También acepta código interno alfanumérico.
       </p>
+      {queuedCount > 0 && (
+        <p className="barcode-help" role="status" aria-live="polite">
+          Lecturas en cola: <strong>{queuedCount}</strong>. SIGO las procesa en orden sin perder unidades.
+        </p>
+      )}
 
       {cameraOpen && (
         <div className="camera-scanner-shell">
