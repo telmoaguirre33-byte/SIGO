@@ -4,6 +4,7 @@ const api = fs.readFileSync("api/arca/transfer.js", "utf8");
 const launcher = fs.readFileSync("src/ArcaLauncher.tsx", "utf8");
 const ui = fs.readFileSync("src/ArcaFacturacion.tsx", "utf8");
 const preflight = fs.readFileSync("src/ArcaPreflight.tsx", "utf8");
+const sellerUi = fs.readFileSync("src/ArcaEmisionVendedor.tsx", "utf8");
 
 for (const token of [
   'p_permiso: "arca.configure"',
@@ -37,9 +38,20 @@ for (const token of [
   "Empresa que va a facturar",
   "productosPorEmpresa",
   "productosCount",
-  "empresas={empresas}",
+  'empresas={empresas.filter((item) => ["owner", "admin"].includes(item.rol))}',
+  '["owner", "admin", "seller"].includes(item.rol)',
+  "ArcaEmisionVendedor",
 ]) {
   if (!launcher.includes(token)) throw new Error(`ARCA tenant selector missing: ${token}`);
+}
+
+for (const token of [
+  "Perfil Vendedor: sólo emisión de comprobantes",
+  "no puede cambiar CUIT, certificados, puntos de venta, usuarios ni configuración fiscal",
+  "<ArcaCaeEmission",
+  "config?.activo && config?.ultima_prueba_ok === true",
+]) {
+  if (!sellerUi.includes(token)) throw new Error(`ARCA seller restriction missing: ${token}`);
 }
 
 for (const token of [
