@@ -25,12 +25,27 @@ export type FacturaCompraIA = {
   advertencias: string[];
 };
 
+type ProductoMaestroFactura = {
+  id: string;
+  nombre: string | null;
+  codigo_interno: string | null;
+  codigo_barras: string | null;
+};
+
+type ProveedorMaestroFactura = {
+  id: string;
+  razon_social: string;
+  cuit: string | null;
+};
+
 const TIPOS_IMAGEN_PERMITIDOS = new Set(["image/jpeg", "image/png", "image/webp"]);
 const GTIN_LENGTHS = new Set([8, 12, 13, 14]);
 const MAX_INVOICE_ITEMS = 300;
 const CLIENT_TIMEOUT_MS = 55_000;
 const MIN_GENERAL_CONFIDENCE_AUTO = 0.35;
 const MIN_LINE_CONFIDENCE_AUTO = 0.30;
+const PAGINA_MAESTROS_FACTURA = 1000;
+const MAX_MAESTROS_FACTURA = 10000;
 
 function leerComoDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -129,6 +144,14 @@ function normalizarDescripcion(value: string) {
     .trim();
 }
 
+function normalizarIdentidadMaestro(value?: string | null): string {
+  return normalizarDescripcion(String(value ?? ""));
+}
+
+function normalizarCodigoMaestro(value?: string | null): string {
+  return String(value ?? "").trim().toUpperCase().replace(/[\s-]+/g, "");
+}
+
 function fechaIsoCalendarioValida(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const [year, month, day] = value.split("-").map(Number);
@@ -152,6 +175,131 @@ function validarCodigosNoAmbiguos(items: FacturaItemIA[]) {
   if ([...porCodigo.values()].some((nombres) => nombres.size > 1)) {
     throw new Error("La factura contiene un mismo código asociado a productos distintos. Revisá esas líneas manualmente antes de ingresar stock.");
   }
+}
+
+async function listarProductosMaestroFactura(empresaId: string): Promise<ProductoMaestroFactura[]> {
+  const productos: ProductoMaestroFactura[] = [];
+  for (let desde = 0; desde < MAX_MAESTROS_FACTURA; desde += PAGINA_MAESTROS_FACTURA) {
+    const { data, error } = await supabase
+      .from("productos")
+      .select("id,nombre,codigo_interno,codigo_barras")
+      .eq("empresa_id", empresaId)
+      .eq("activo", true)
+      .order("id", { ascending: true })
+      .range(desde, desde + PAGINA_MAESTROS_FACTURA - 1);
+    if (error) throw new Error(`No se pudo validar el catálogo contra la factura: ${error.message}`);
+    const pagina = (data ?? []) as ProductoMaestroFactura[];
+    productos.push(...pagina);
+    if (pagina.length < PAGINA_MAESTROS_FACTURA) return productos;
+  }
+  throw new Error("El catálogo activo supera el límite seguro de conciliación con Factura IA.");
+}
+
+async function listarProveedoresMaestroFactura(empresaId: string): Promise<ProveedorMaestroFactura[]> {
+  const proveedores: ProveedorMaestroFactura[] = [];
+  for (let desde = 0; desde < MAX_MAESTROS_FACTURA; desde += PAGINA_MAESTROS_FACTURA) {
+    const { data, error } = await supabase
+      .from("proveedores_sigo")
+      .select("id,razon_social,cuit")
+      .eq("empresa_id", empresaId)
+      .eq("activo", true)
+      .order("id", { ascending: true })
+      .range(desde, desde + PAGINA_MAESTROS_FACTURA - 1);
+    if (error) throw new Error(`No se pudo validar el proveedor contra la factura: ${error.message}`);
+    const pagina = (data ?? []) as ProveedorMaestroFactura[];
+    proveedores.push(...pagina);
+    if (pagina.length < PAGINA_MAESTROS_FACTURA) return proveedores;
+  }
+  throw new Error("El maestro de proveedores supera el límite seguro de conciliación con Factura IA.");
+}
+
+function validarProductoFacturaContraMaestro(item: FacturaItemIA, productos: ProductoMaestroFactura[]): void {
+  const codigosFactura = [...new Set([item.codigo_barras, item.codigo]
+    .map((codigo) => normalizarCodigoMaestro(codigo))
+    .filter(Boolean))];
+
+  const idsPorCodigo = new Set<string>();
+  for (const codigo of codigosFactura) {
+    for (const producto of productos) {
+      const coincide = normalizarCodigoMaestro(producto.codigo_barras) === codigo
+        || normalizarCodigoMaestro(producto.codigo_interno) === codigo;
+      if (coincide) idsPorCodigo.add(producto.id);
+    }
+  }
+
+  if (idsPorCodigo.size > 1) {
+    throw new Error(`La línea “${item.descripcion}” coincide por código con más de un producto activo. Resolvé el código duplicado antes de usar Factura IA.`);
+  }
+
+  const nombre = normalizarIdentidadMaestro(item.descripcion);
+  const porNombre = nombre
+    ? productos.filter((producto) => normalizarIdentidadMaestro(producto.nombre) === nombre)
+    : [];
+
+  if (idsPorCodigo.size === 1) {
+    const productoId = [...idsPorCodigo][0];
+    if (porNombre.length > 0 && porNombre.every((producto) => producto.id !== productoId)) {
+      throw new Error(`La línea “${item.descripcion}” tiene código y nombre que apuntan a productos distintos. Revisala manualmente antes de ingresar stock.`);
+    }
+    return;
+  }
+
+  if (porNombre.length > 1) {
+    throw new Error(`La línea “${item.descripcion}” coincide por nombre con más de un producto activo. Seleccioná el producto manualmente antes de ingresar stock.`);
+  }
+
+  if (codigosFactura.length > 0 && porNombre.length === 1) {
+    const existente = porNombre[0];
+    const codigosExistentes = new Set([
+      normalizarCodigoMaestro(existente.codigo_barras),
+      normalizarCodigoMaestro(existente.codigo_interno),
+    ].filter(Boolean));
+    if (codigosExistentes.size > 0 && !codigosFactura.some((codigo) => codigosExistentes.has(codigo))) {
+      throw new Error(`La línea “${item.descripcion}” tiene el mismo nombre que un producto existente pero un código diferente. Confirmá la identidad manualmente antes de ingresar stock.`);
+    }
+  }
+}
+
+function validarProveedorFacturaContraMaestro(factura: FacturaCompraIA, proveedores: ProveedorMaestroFactura[]): void {
+  const cuitFactura = String(factura.proveedor.cuit ?? "").replace(/\D/g, "");
+  const nombreFactura = normalizarIdentidadMaestro(factura.proveedor.razon_social);
+  const porCuit = cuitFactura
+    ? proveedores.filter((proveedor) => String(proveedor.cuit ?? "").replace(/\D/g, "") === cuitFactura)
+    : [];
+  if (porCuit.length > 1) {
+    throw new Error("El CUIT leído coincide con más de un proveedor activo. Resolvé el duplicado antes de usar Factura IA.");
+  }
+
+  const porNombre = nombreFactura
+    ? proveedores.filter((proveedor) => normalizarIdentidadMaestro(proveedor.razon_social) === nombreFactura)
+    : [];
+
+  if (cuitFactura && porCuit.length === 1) {
+    if (porNombre.length > 0 && porNombre.every((proveedor) => proveedor.id !== porCuit[0].id)) {
+      throw new Error("El CUIT y la razón social leídos apuntan a proveedores distintos. Revisá el proveedor manualmente antes de ingresar stock.");
+    }
+    return;
+  }
+
+  if (porNombre.length > 1) {
+    throw new Error("La razón social leída coincide con más de un proveedor activo. Seleccioná el proveedor manualmente antes de ingresar stock.");
+  }
+
+  if (cuitFactura && porCuit.length === 0 && porNombre.length === 1) {
+    const cuitExistente = String(porNombre[0].cuit ?? "").replace(/\D/g, "");
+    if (cuitExistente && cuitExistente !== cuitFactura) {
+      throw new Error("La razón social leída ya existe con otro CUIT. Revisá el proveedor manualmente antes de crear o ingresar stock.");
+    }
+  }
+}
+
+async function validarFacturaContraMaestrosSigo(empresaId: string, factura: FacturaCompraIA): Promise<void> {
+  const [productos, proveedores] = await Promise.all([
+    listarProductosMaestroFactura(empresaId),
+    listarProveedoresMaestroFactura(empresaId),
+  ]);
+  for (const item of factura.items) validarProductoFacturaContraMaestro(item, productos);
+  validarProveedorFacturaContraMaestro(factura, proveedores);
 }
 
 function validarFactura(data: unknown): FacturaCompraIA {
@@ -318,5 +466,7 @@ export async function analizarFacturaCompraSigo(empresaId: string, file: File): 
     throw new Error(String(payload?.message ?? payload?.error ?? "No se pudo analizar la factura con IA."));
   }
 
-  return validarFactura(payload?.factura);
+  const factura = validarFactura(payload?.factura);
+  await validarFacturaContraMaestrosSigo(empresaId, factura);
+  return factura;
 }
