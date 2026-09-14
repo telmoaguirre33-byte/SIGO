@@ -227,10 +227,11 @@ export default async function handler(req, res) {
     const cuitOk = cuitArgentinoValido(config.cuit_emisor);
     const servicioOk = config.wsaa_service === "wsfe" && config.wsfe_version === "WSFEv1";
     const pv = puntosVentaValidos(puntos);
+    const puntoVentaOk = pv.ok;
     const endpoints = ARCA_ENDPOINTS[ambiente];
     const [wsaa, wsfe] = await Promise.all([probarEndpoint(endpoints.wsaa), probarWsfe(endpoints.wsfe)]);
     const redOk = wsaa.reachable && wsfe.reachable;
-    const preparacionOk = Boolean(ambienteValido && cuitOk && servicioOk && pv.ok && certificado.ok && redOk);
+    const preparacionOk = Boolean(ambienteValido && cuitOk && servicioOk && puntoVentaOk && certificado.ok && redOk);
     const configuracionActiva = config.activo === true;
     const emisionHabilitable = Boolean(preparacionOk && configuracionActiva && autenticacionReal.ok);
 
@@ -249,7 +250,7 @@ export default async function handler(req, res) {
         certificadoVence: metadata.vence ?? null,
         certificadoDiasRestantes: metadata.diasRestantes ?? null,
         materialCriptografico: material.ok,
-        puntoVenta: pv.ok,
+        puntoVenta: puntoVentaOk,
         puntosVentaActivos: pv.numeros,
         wsaaReachable: wsaa.reachable,
         wsfeReachable: wsfe.reachable,
@@ -261,7 +262,7 @@ export default async function handler(req, res) {
       emisionHabilitable,
       ultimaPruebaAt: config.ultima_prueba_at ?? null,
       ultimoErrorSeguro: config.ultimo_error ? String(config.ultimo_error).slice(0, 500) : null,
-      nota: "SIGO verificó también los archivos privados reales del certificado y la clave sin exponerlos. La prevalidación no emite comprobantes ni usa clave fiscal.",
+      nota: "SIGO verificó también los archivos privados reales del certificado y la clave sin exponerlos. Esta prevalidación no firma TRA, no usa la clave fiscal y no habilita CAE por sí sola.",
     });
   } catch (error) {
     console.error("SIGO ARCA preflight error", error instanceof Error ? error.message : "UNKNOWN");
