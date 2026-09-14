@@ -29,9 +29,10 @@ if (/if\s*\(\s*!normalized\s*\|\|\s*inFlightRef\.current\s*\)\s*return\s*;/m.tes
   throw new Error("Scanner must not drop manual/wedge reads while a lookup is in flight");
 }
 
-const clearBeforeQueue = scanner.indexOf('setCode("");');
-const queueCheck = scanner.indexOf("if (inFlightRef.current)", scanner.indexOf("async function resolveCode"));
-if (clearBeforeQueue < 0 || queueCheck < 0 || clearBeforeQueue > queueCheck) {
+const resolveStart = scanner.indexOf("async function resolveCode");
+const clearBeforeQueue = scanner.indexOf('setCode("");', resolveStart);
+const queueCheck = scanner.indexOf("if (inFlightRef.current)", clearBeforeQueue);
+if (resolveStart < 0 || clearBeforeQueue < 0 || queueCheck < 0 || clearBeforeQueue > queueCheck) {
   throw new Error("Scanner input must clear before queuing a rapid second read");
 }
 
