@@ -107,11 +107,13 @@ jobs:
           echo "::error title=QA migration pending::Transactional probe waited for deployment but schema is still pending."
           exit 1
 
-      - name: Run transactional purchase-sale-cash probe and rollback
+      - name: Run transactional product-scanner-purchase-sale-cash probe and rollback
         shell: bash
         run: |
           set -euo pipefail
           psql "$SIGO_QA_DB_URL" -X -v ON_ERROR_STOP=1 -f scripts/transaction-rollback-probe.sql 2>&1 | tee /tmp/sigo-qa-transaction.log
+          grep -q 'SIGO_QA_PRODUCT_CREATE_OK' /tmp/sigo-qa-transaction.log
+          grep -q 'SIGO_QA_SCANNER_LOOKUP_OK' /tmp/sigo-qa-transaction.log
           grep -q 'SIGO_QA_TRANSACTION_PROBE_OK' /tmp/sigo-qa-transaction.log
           grep -q 'SIGO_QA_TRANSACTION_PROBE_ROLLED_BACK' /tmp/sigo-qa-transaction.log
           echo 'SIGO_QA_TRANSACTION_PROBE_COMPLETED'

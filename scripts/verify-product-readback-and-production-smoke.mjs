@@ -14,6 +14,8 @@ const migration = read('supabase/migrations/20260913194000_producto_guardado_rea
 const smoke = read('scripts/production-operational-smoke.sql');
 const arcaSmoke = read('scripts/production-arca-readiness.sql');
 const workflow = read('.github/workflows/production-operational-smoke.yml');
+const transactionProbe = read('scripts/transaction-rollback-probe.sql');
+const transactionWorkflow = read('.github/workflows/qa-transaction-probe.yml');
 
 for (const [needle, label] of [
   ['verificar_producto_guardado_sigo', 'post-save product readback RPC'],
@@ -86,5 +88,32 @@ for (const [needle, label] of [
   ['Read ARCA production readiness', 'ARCA readiness workflow step'],
   ['scripts/production-arca-readiness.sql', 'ARCA production readiness execution'],
 ]) requireText(workflow, needle, label);
+
+// El probe transaccional debe probar en la base productiva, con rollback, los dos
+// bloqueos que aún no se pueden certificar sólo por inspección estática:
+// alta sin costo y lookup real compartido por manual/pistola/cámara.
+for (const [needle, label] of [
+  ['public.guardar_producto_sigo(', 'real product creation RPC in production transaction'],
+  ['p_costo_actual => null', 'product creation without initial cost'],
+  ['QA_PRODUCT_CREATE_COST_FAILED', 'product current-cost readback assertion'],
+  ['QA_PRODUCT_CREATE_STOCK_FAILED', 'product stock readback assertion'],
+  ['SIGO_QA_PRODUCT_CREATE_OK', 'product creation production evidence marker'],
+  ['public.buscar_producto_codigo_sigo(', 'real scanner backend lookup'],
+  ['QA_SCANNER_LOOKUP_FAILED', 'scanner unique identity assertion'],
+  ['SIGO_QA_SCANNER_LOOKUP_OK', 'scanner production evidence marker'],
+  ['public.confirmar_compra_sigo(', 'real purchase transaction'],
+  ['public.confirmar_venta_sigo_v2(', 'real sale transaction'],
+  ['rollback;', 'transaction rollback safety'],
+  ['SIGO_QA_TRANSACTION_PROBE_ROLLED_BACK', 'rollback evidence marker'],
+]) requireText(transactionProbe, needle, label);
+
+for (const [needle, label] of [
+  ['Run transactional product-scanner-purchase-sale-cash probe and rollback', 'expanded transactional workflow step'],
+  ["grep -q 'SIGO_QA_PRODUCT_CREATE_OK'", 'workflow requires product evidence'],
+  ["grep -q 'SIGO_QA_SCANNER_LOOKUP_OK'", 'workflow requires scanner evidence'],
+  ["grep -q 'SIGO_QA_TRANSACTION_PROBE_OK'", 'workflow requires purchase-sale-cash evidence'],
+  ["grep -q 'SIGO_QA_TRANSACTION_PROBE_ROLLED_BACK'", 'workflow requires rollback evidence'],
+  ['Wait until production migrations are current', 'transaction probe migration gate'],
+]) requireText(transactionWorkflow, needle, label);
 
 console.log('SIGO_PRODUCT_READBACK_AND_PRODUCTION_SMOKE_OK');
