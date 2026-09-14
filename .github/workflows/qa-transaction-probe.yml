@@ -5,7 +5,20 @@ on:
     branches: [main]
     paths:
       - 'supabase/migrations/**'
+      - 'api/arca/**'
+      - 'api/compras/**'
+      - 'src/Arca*.tsx'
+      - 'src/BarcodeScanner.tsx'
+      - 'src/VentaRapidaOperativa.tsx'
+      - 'src/ComprasOperativas.tsx'
+      - 'src/productos.ts'
+      - 'src/barcode.ts'
+      - 'src/ventas.ts'
+      - 'src/compras.ts'
+      - 'src/facturaIA.ts'
       - 'scripts/transaction-rollback-probe.sql'
+      - 'scripts/verify-critical.mjs'
+      - 'scripts/verify-arca-*.mjs'
       - '.github/workflows/qa-transaction-probe.yml'
   workflow_dispatch:
 
