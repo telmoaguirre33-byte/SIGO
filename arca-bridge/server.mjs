@@ -23,6 +23,8 @@ const ACTIONS = new Set([
   "FECAESolicitar",
 ]);
 
+const FEDUMMY_SOAP = `<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ar="http://ar.gov.afip.dif.FEV1/"><soapenv:Header/><soapenv:Body><ar:FEDummy/></soapenv:Body></soapenv:Envelope>`;
+
 function json(res, status, payload) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
@@ -101,7 +103,7 @@ function postWsfe(endpoint, action, soap, timeoutMs = 20000) {
         "Content-Length": Buffer.byteLength(soap),
         SOAPAction: soapActionUrl(action),
         Connection: "close",
-        "User-Agent": "SIGO-ARCA-Bridge/1.1",
+        "User-Agent": "SIGO-ARCA-Bridge/1.2",
       },
     }, (response) => {
       let body = "";
@@ -125,6 +127,16 @@ function postWsfe(endpoint, action, soap, timeoutMs = 20000) {
   });
 }
 
+async function healthWsfe() {
+  try {
+    const result = await postWsfe(ENDPOINTS.produccion, "FEDummy", FEDUMMY_SOAP, 10000);
+    const ok = result.status >= 200 && result.status < 300 && /FEDummyResult|AppServer|DbServer|AuthServer/i.test(result.body);
+    return { ok, status: result.status };
+  } catch (error) {
+    return { ok: false, status: 0, error: String(error?.code || error?.message || "NETWORK_ERROR").slice(0, 120) };
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && req.url === "/health") {
     return json(res, 200, {
@@ -132,6 +144,11 @@ const server = http.createServer(async (req, res) => {
       service: "sigo-arca-bridge",
       auth: SUPABASE_URL ? "configured" : "missing",
     });
+  }
+
+  if (req.method === "GET" && req.url === "/health/wsfe") {
+    const status = await healthWsfe();
+    return json(res, status.ok ? 200 : 502, { ...status, service: "wsfev1", transport: "railway-ipv4" });
   }
 
   if (req.method !== "POST" || req.url !== "/wsfe") {
