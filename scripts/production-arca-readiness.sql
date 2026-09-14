@@ -20,6 +20,8 @@ declare
   v_wsaa_service_ok boolean := false;
   v_wsfe_version_ok boolean := false;
   v_wsaa_fresh boolean := false;
+  v_wsaa_last_attempt_at timestamptz := null;
+  v_wsaa_last_error_code text := 'NINGUNO';
   v_pv_active integer := 0;
   v_cae_count integer := 0;
   v_last_cae_at timestamptz := null;
@@ -64,7 +66,12 @@ begin
       coalesce(c.ultima_prueba_ok, false)
         and c.ultima_prueba_at is not null
         and c.ultima_prueba_at <= now() + interval '5 minutes'
-        and c.ultima_prueba_at >= now() - interval '12 hours'
+        and c.ultima_prueba_at >= now() - interval '12 hours',
+      c.ultima_prueba_at,
+      case
+        when nullif(btrim(coalesce(c.ultimo_error, '')), '') is null then 'NINGUNO'
+        else upper(regexp_replace(split_part(c.ultimo_error, ':', 1), '[^A-Z0-9_]', '', 'g'))
+      end
     into
       v_active,
       v_ambiente,
@@ -73,7 +80,9 @@ begin
       v_cert_unexpired,
       v_wsaa_service_ok,
       v_wsfe_version_ok,
-      v_wsaa_fresh
+      v_wsaa_fresh,
+      v_wsaa_last_attempt_at,
+      v_wsaa_last_error_code
     from public.arca_config c
    where c.empresa_id = v_empresa_id;
 
@@ -113,6 +122,10 @@ begin
     v_pv_active,
     v_pv_total,
     v_pv_other_tenant;
+
+  raise notice 'SIGO_ARCA_LAST_AUTH_DIAGNOSTIC attempted_at=% error_code=%',
+    coalesce(v_wsaa_last_attempt_at::text, 'NINGUNO'),
+    coalesce(nullif(v_wsaa_last_error_code, ''), 'DESCONOCIDO');
 end
 $$;
 

@@ -73,6 +73,7 @@ for (const pattern of forbiddenSmoke) {
 
 for (const [needle, label] of [
   ['SIGO_ARCA_PRODUCTION_STATUS', 'ARCA production status evidence'],
+  ['SIGO_ARCA_LAST_AUTH_DIAGNOSTIC', 'safe ARCA authentication failure evidence'],
   ['SIGO_ARCA_READINESS_COMPLETED', 'ARCA production readiness marker'],
   ['interval \'12 hours\'', 'fresh WSAA age check'],
   ['count(*) filter (where nullif(btrim(coalesce(a.cae, \'\')), \'\') is not null)', 'real CAE count'],
