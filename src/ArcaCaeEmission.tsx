@@ -31,7 +31,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   ARCA_PRODUCT_FISCAL_DATA_REQUIRED: "La venta contiene productos sin clasificación fiscal de IVA.",
   ARCA_PRODUCT_PRICE_TAX_MODE_UNSUPPORTED: "La venta contiene productos cuyo precio no está marcado como IVA incluido.",
   ARCA_CLIENT_FISCAL_DATA_REQUIRED: "El cliente no tiene documento y condición frente al IVA completos.",
-  ARCA_INVOICE_A_CLIENT_REQUIRED: "Factura A requiere un cliente con CUIT y condición IVA Responsable Inscripto.",
+  ARCA_RECEPTOR_CUIT_REQUIRED: "Ingresá un CUIT válido de 11 dígitos para el receptor.",
+  ARCA_RECEPTOR_RAZON_SOCIAL_REQUIRED: "Ingresá la razón social del receptor.",
+  ARCA_INVOICE_A_CLIENT_REQUIRED: "Factura A requiere CUIT y condición IVA Responsable Inscripto.",
   ARCA_SALE_RESERVED_WITH_OTHER_FISCAL_IDENTITY: "La venta ya reservó otro punto de venta o tipo de comprobante. SIGO no duplicó la emisión.",
   ARCA_CONSUMER_IVA_CONDITION_REQUIRED: "Seleccioná la condición frente al IVA del consumidor final.",
   ARCA_PRODUCTION_CONFIRMATION_REQUIRED: "La emisión productiva requiere confirmación explícita.",
@@ -39,6 +41,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   ARCA_NUMBER_RESERVATION_CONFLICT: "Otra emisión tomó ese número. Reintentá para obtener el siguiente.",
   ARCA_TIMEOUT: "ARCA no respondió a tiempo. Reintentá: SIGO conciliará antes de volver a solicitar.",
 };
+
+function soloDigitos(value: string) {
+  return value.replace(/\D/g, "");
+}
 
 export default function ArcaCaeEmission({
   empresaId,
@@ -56,6 +62,8 @@ export default function ArcaCaeEmission({
   const [puntoVenta, setPuntoVenta] = useState("");
   const [tipoCbte, setTipoCbte] = useState("11");
   const [condicionIva, setCondicionIva] = useState("5");
+  const [receptorCuit, setReceptorCuit] = useState("");
+  const [receptorRazonSocial, setReceptorRazonSocial] = useState("");
   const [loading, setLoading] = useState(false);
   const [emitiendo, setEmitiendo] = useState(false);
   const [error, setError] = useState("");
@@ -67,6 +75,7 @@ export default function ArcaCaeEmission({
     [ambiente, puntos],
   );
   const venta = ventas.find((item) => item.id === ventaId) ?? null;
+  const requiereDatosFiscales = Boolean(!venta?.cliente_id && ["1", "6"].includes(condicionIva));
 
   async function cargarVentas() {
     setLoading(true);
@@ -110,10 +119,22 @@ export default function ArcaCaeEmission({
 
   async function emitir() {
     if (!venta || !puntoVenta || emitiendo) return;
+
+    const cuit = soloDigitos(receptorCuit);
+    if (requiereDatosFiscales && cuit.length !== 11) {
+      setError("Ingresá un CUIT válido de 11 dígitos para el receptor.");
+      return;
+    }
+    if (requiereDatosFiscales && receptorRazonSocial.trim().length < 2) {
+      setError("Ingresá la razón social del receptor.");
+      return;
+    }
+
     const esProduccion = ambiente === "produccion";
+    const receptorTexto = requiereDatosFiscales ? ` · ${receptorRazonSocial.trim()} · CUIT ${cuit}` : "";
     const mensaje = esProduccion
-      ? `Vas a solicitar un CAE REAL para la venta ${venta.numero} por $${Number(venta.total).toLocaleString("es-AR")}. Esta acción tiene efecto fiscal. ¿Confirmás?`
-      : `Vas a solicitar un CAE de HOMOLOGACIÓN para la venta ${venta.numero}. No tiene efecto fiscal real. ¿Continuar?`;
+      ? `Vas a solicitar un CAE REAL para la venta ${venta.numero} por $${Number(venta.total).toLocaleString("es-AR")}${receptorTexto}. Esta acción tiene efecto fiscal. ¿Confirmás?`
+      : `Vas a solicitar un CAE de HOMOLOGACIÓN para la venta ${venta.numero}${receptorTexto}. No tiene efecto fiscal real. ¿Continuar?`;
     if (!window.confirm(mensaje)) return;
 
     setEmitiendo(true);
@@ -133,6 +154,8 @@ export default function ArcaCaeEmission({
           puntoVenta: Number(puntoVenta),
           tipoCbte: Number(tipoCbte),
           condicionIvaReceptorId: Number(condicionIva),
+          receptorCuit: requiereDatosFiscales ? cuit : null,
+          receptorRazonSocial: requiereDatosFiscales ? receptorRazonSocial.trim() : null,
           confirmacion: esProduccion ? "EMITIR_CAE_PRODUCCION" : "SOLICITAR_CAE_HOMOLOGACION",
         }),
       });
@@ -169,11 +192,36 @@ export default function ArcaCaeEmission({
         <div className="form-group"><label>Punto de venta</label><select value={puntoVenta} onChange={(event) => setPuntoVenta(event.target.value)}>{puntosActivos.map((pv) => <option key={pv.numero} value={pv.numero}>PV {String(pv.numero).padStart(4, "0")}</option>)}</select></div>
         <div className="form-group"><label>Comprobante</label><select value={tipoCbte} onChange={(event) => setTipoCbte(event.target.value)}><option value="11">Factura C</option><option value="6">Factura B</option><option value="1">Factura A</option></select></div>
         {!venta?.cliente_id ? <div className="form-group form-span-2"><label>Condición IVA receptor</label><select value={condicionIva} onChange={(event) => setCondicionIva(event.target.value)}><option value="5">Consumidor Final</option><option value="6">Responsable Monotributo</option><option value="1">IVA Responsable Inscripto</option><option value="4">IVA Exento</option></select></div> : null}
+        {requiereDatosFiscales ? (
+          <>
+            <div className="form-group">
+              <label>CUIT del cliente *</label>
+              <input
+                value={receptorCuit}
+                onChange={(event) => setReceptorCuit(soloDigitos(event.target.value).slice(0, 11))}
+                inputMode="numeric"
+                placeholder="11 dígitos"
+                maxLength={11}
+                disabled={emitiendo}
+              />
+            </div>
+            <div className="form-group">
+              <label>Razón social *</label>
+              <input
+                value={receptorRazonSocial}
+                onChange={(event) => setReceptorRazonSocial(event.target.value.slice(0, 160))}
+                placeholder="Nombre o razón social"
+                disabled={emitiendo}
+              />
+            </div>
+          </>
+        ) : null}
       </div>
       <button className="primary-button" type="button" onClick={() => void emitir()} disabled={!habilitado || !ventaId || !puntoVenta || emitiendo}>
         {emitiendo ? "Solicitando y conciliando…" : ambiente === "produccion" ? "Emitir CAE real" : "Probar CAE en homologación"}
       </button>
       {!habilitado ? <small>Bloqueado hasta validar WSAA + WSFEv1 en esta empresa.</small> : null}
+      {requiereDatosFiscales ? <small>Para Responsable Inscripto o Monotributista, SIGO enviará el CUIT a ARCA como documento fiscal del receptor.</small> : null}
       {ambiente === "produccion" ? <small>Producción: SIGO pedirá una confirmación explícita antes de cada emisión real.</small> : <small>Homologación: el comprobante no tiene efecto fiscal real.</small>}
       {comprobante ? <p className="sigo-matriz-success" role="status">CAE {comprobante.cae} · Comprobante {String(comprobante.punto_venta).padStart(4, "0")}-{String(comprobante.numero_cbte).padStart(8, "0")}{comprobante.cae_vencimiento ? ` · vence ${comprobante.cae_vencimiento}` : ""}</p> : null}
       {error ? <p className="form-error" role="alert">{error}</p> : null}
