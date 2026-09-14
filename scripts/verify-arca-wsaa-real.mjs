@@ -10,9 +10,11 @@ for (const token of [
   'wswhomo.afip.gov.ar/wsfev1/service.asmx',
   'servicios1.afip.gov.ar/wsfev1/service.asmx',
   'forge.pkcs7.createSignedData()',
-  'digestAlgorithm: forge.pki.oids.sha256',
+  'forge.pki.oids.sha1',
+  'forge.pki.oids.sha256',
   'p7.sign({ detached: false })',
-  'SOAPAction: "urn:LoginCms"',
+  'SOAPAction: ""',
+  'autenticarWsaa',
   'loginCmsReturn',
   'validarTicket',
   'WSAA_TICKET_EXPIRATION_INVALID',
@@ -23,6 +25,7 @@ for (const token of [
   'PUNTO_VENTA_NO_HABILITADO_CAE',
   'WSAA_TICKET_ALREADY_VALID',
   'WSAA_SIGNATURE_REJECTED',
+  'ARCA_SECRET_READ_FAILED',
   'stage === "WSFE_REJECTED"',
   'wsfeValidado: true',
   'Cache-Control',
@@ -37,13 +40,14 @@ for (const token of [
 }
 
 for (const forbidden of [
-  'digestAlgorithm: forge.pki.oids.sha1',
+  'SOAPAction: "urn:LoginCms"',
   'token: ticket.token',
   'sign: ticket.sign',
   'SUPABASE_SERVICE_ROLE_KEY',
   'process.env.CLAVE_FISCAL',
   'message: raw.slice',
   'const errorCode = extraer(body, "Code")',
+  'forge.util.encode64(der, 64)',
 ]) {
   if (api.includes(forbidden)) throw new Error(`ARCA auth must not expose or preserve unsafe/obsolete behavior: ${forbidden}`);
 }
