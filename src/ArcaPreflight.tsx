@@ -29,6 +29,17 @@ type PreflightResult = {
   error?: string;
 };
 
+type WsaaResult = {
+  ok?: boolean;
+  ambiente?: string;
+  servicio?: string;
+  generationTime?: string;
+  expirationTime?: string;
+  nota?: string;
+  error?: string;
+  message?: string;
+};
+
 function marca(ok?: boolean) {
   return ok ? "✓" : "—";
 }
@@ -43,19 +54,24 @@ function textoAntiguedad(minutos?: number | null) {
 
 export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
   const [loading, setLoading] = useState(false);
+  const [wsaaLoading, setWsaaLoading] = useState(false);
   const [result, setResult] = useState<PreflightResult | null>(null);
   const [error, setError] = useState("");
+  const [wsaaOk, setWsaaOk] = useState("");
+
+  async function tokenSesion() {
+    const { data, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
+    const token = data.session?.access_token;
+    if (!token) throw new Error("AUTH_REQUIRED");
+    return token;
+  }
 
   async function validar() {
     setLoading(true);
     setError("");
-    setResult(null);
     try {
-      const { data, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError) throw sessionError;
-      const token = data.session?.access_token;
-      if (!token) throw new Error("AUTH_REQUIRED");
-
+      const token = await tokenSesion();
       const response = await fetch("/api/arca/preflight", {
         method: "POST",
         headers: {
@@ -75,7 +91,47 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
     }
   }
 
+  async function autenticarWsaa() {
+    setWsaaLoading(true);
+    setError("");
+    setWsaaOk("");
+    try {
+      const token = await tokenSesion();
+      const response = await fetch("/api/arca/wsaa", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ empresaId }),
+      });
+      const payload = await response.json().catch(() => null) as WsaaResult | null;
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.message || payload?.error || `HTTP_${response.status}`);
+      }
+      const vence = payload.expirationTime ? new Date(payload.expirationTime).toLocaleString("es-AR") : "";
+      setWsaaOk(`WSAA validado correctamente${vence ? ` · ticket vigente hasta ${vence}` : ""}.`);
+      await validar();
+    } catch (err) {
+      console.error("ARCA WSAA real", err);
+      setError(err instanceof Error ? err.message : "No se pudo autenticar contra WSAA.");
+      await validar();
+    } finally {
+      setWsaaLoading(false);
+    }
+  }
+
   const checks = result?.checks;
+  const puedeAutenticarWsaa = Boolean(
+    checks?.configuracion &&
+    checks?.ambienteValido &&
+    checks?.cuit &&
+    checks?.servicio &&
+    checks?.certificado &&
+    checks?.puntoVenta &&
+    checks?.wsaaReachable,
+  );
+
   return (
     <section className="panel arca-card">
       <div className="panel-header">
@@ -85,9 +141,21 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
         </div>
       </div>
 
-      <button className="admin-button" type="button" onClick={() => void validar()} disabled={loading}>
-        {loading ? "Validando…" : "Validar preparación ARCA"}
-      </button>
+      <div className="form-actions" style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+        <button className="admin-button" type="button" onClick={() => void validar()} disabled={loading || wsaaLoading}>
+          {loading ? "Validando…" : "Validar preparación ARCA"}
+        </button>
+        {result ? (
+          <button
+            className="primary-button"
+            type="button"
+            onClick={() => void autenticarWsaa()}
+            disabled={!puedeAutenticarWsaa || wsaaLoading || loading}
+          >
+            {wsaaLoading ? "Autenticando con ARCA…" : result.autenticacionRealValidada ? "Renovar autenticación WSAA" : "Autenticar WSAA real"}
+          </button>
+        ) : null}
+      </div>
 
       {result ? (
         <div className="arca-security-note" role="status">
@@ -106,6 +174,7 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
           <span>{result.nota || "La emisión permanece bloqueada hasta validar WSAA con el certificado de la empresa."}</span>
         </div>
       ) : null}
+      {wsaaOk ? <p className="sigo-matriz-success" role="status">{wsaaOk}</p> : null}
       {error ? <p className="form-error" role="alert">{error}</p> : null}
     </section>
   );
