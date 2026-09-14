@@ -4,6 +4,9 @@ const api = fs.readFileSync("api/arca/wsaa.js", "utf8");
 const ui = fs.readFileSync("src/ArcaPreflight.tsx", "utf8");
 const preflight = fs.readFileSync("api/arca/preflight.js", "utf8");
 const vercel = JSON.parse(fs.readFileSync("vercel.json", "utf8"));
+const railwayRoot = fs.readFileSync("railway.toml", "utf8");
+const railwayBridge = fs.readFileSync("arca-bridge/railway.toml", "utf8");
+const bridgeServer = fs.readFileSync("arca-bridge/server.mjs", "utf8");
 
 for (const token of [
   'SERVICE = "wsfe"',
@@ -104,5 +107,14 @@ if (!Array.isArray(arcaFunctions?.regions) || arcaFunctions.regions.length !== 1
 }
 if (arcaFunctions.maxDuration !== 30) throw new Error("ARCA functions require a 30-second execution window");
 
-console.log("SIGO_ARCA_WSAA_WSFE_REAL_OK");
+for (const [content, tokens, label] of [
+  [railwayRoot, ['cd arca-bridge && npm ci --omit=dev', 'cd arca-bridge && npm start', 'healthcheckPath = "/health/wsfe"'], "root Railway config"],
+  [railwayBridge, ['npm ci --omit=dev', 'startCommand = "npm start"', 'healthcheckPath = "/health/wsfe"'], "bridge Railway config"],
+  [bridgeServer, ['server.listen(PORT, "0.0.0.0"', 'req.url === "/health"', 'req.url === "/health/wsfe"'], "Railway bridge server"],
+]) {
+  for (const token of tokens) {
+    if (!content.includes(token)) throw new Error(`${label} guard missing: ${token}`);
+  }
+}
 
+console.log("SIGO_ARCA_WSAA_WSFE_REAL_OK");
