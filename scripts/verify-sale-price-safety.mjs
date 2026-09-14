@@ -10,10 +10,16 @@ function requireText(file, needles) {
 }
 
 requireText('src/BarcodeScanner.tsx', [
-  'action === "vender"',
+  'actionOperacion === "vender"',
   'precio <= 0',
   'definí un precio de venta mayor a cero antes de vender',
   'stock <= 0',
+]);
+
+requireText('src/VentaRapidaOperativa.tsx', [
+  '!Number.isFinite(precio) || precio <= 0',
+  'precio > 0',
+  'Total verificado $',
 ]);
 
 requireText('src/productos.ts', [
@@ -28,4 +34,4 @@ requireText('supabase/migrations/20260913003000_ventas_precio_positivo_guard.sql
   'new.subtotal <= 0',
 ]);
 
-console.log('OK sale-price-safety: scanner, maestro y base bloquean ventas a precio cero.');
+console.log('OK sale-price-safety: scanner, carrito, maestro y base bloquean ventas a precio cero y muestran el total verificado.');
