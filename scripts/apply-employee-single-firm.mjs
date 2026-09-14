@@ -9,19 +9,25 @@ if (!source.includes("function filtrarEmpresasVistaEmpleado")) {
   source = source.replace(marker, `function filtrarEmpresasVistaEmpleado(empresas: EmpresaOperativa[]): EmpresaOperativa[] {
   if (empresas.length <= 1) return empresas;
 
-  // Owner/admin mantienen la vista multiempresa para soporte y administración.
-  const usuarioAdministrativo = empresas.some((empresa) => empresa.rol === "owner" || empresa.rol === "admin");
-  if (usuarioAdministrativo) return empresas;
-
-  // Para vendedor/depósito/cliente, las empresas técnicas usadas para importar stock
-  // no deben aparecer como negocios distintos. Si existe la firma operativa principal,
-  // el empleado trabaja siempre allí y accede a su catálogo consolidado.
+  const normalizarNombre = (valor: string) => valor.trim().toLocaleLowerCase("es-AR");
   const principal = empresas.find((empresa) =>
-    empresa.nombre.trim().toLocaleLowerCase("es-AR") === "sigo administración"
-    || empresa.empresa_nombre.trim().toLocaleLowerCase("es-AR") === "sigo administración"
+    normalizarNombre(empresa.nombre) === "sigo administración"
+    || normalizarNombre(empresa.empresa_nombre) === "sigo administración"
   );
 
-  return principal ? [principal] : empresas;
+  if (!principal) return empresas;
+
+  // Lápiz y Papel y Sertec se crearon como tenants técnicos para la carga histórica.
+  // No son firmas separadas para la operación diaria y no deben aparecer en el selector.
+  const tenantsTecnicos = new Set(["lápiz y papel", "lapiz y papel", "sertec"]);
+  const visibles = empresas.filter((empresa) => {
+    const nombre = normalizarNombre(empresa.nombre);
+    const nombreVisible = normalizarNombre(empresa.empresa_nombre);
+    return !tenantsTecnicos.has(nombre) && !tenantsTecnicos.has(nombreVisible);
+  });
+
+  // Mantener visibles otras empresas reales (por ejemplo una cuenta cliente abierta desde Matriz en modo soporte).
+  return visibles.length > 0 ? visibles : [principal];
 }
 
 ${marker}`);
