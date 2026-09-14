@@ -114,6 +114,9 @@ jobs:
           psql "$SIGO_QA_DB_URL" -X -v ON_ERROR_STOP=1 -f scripts/transaction-rollback-probe.sql 2>&1 | tee /tmp/sigo-qa-transaction.log
           grep -q 'SIGO_QA_PRODUCT_CREATE_OK' /tmp/sigo-qa-transaction.log
           grep -q 'SIGO_QA_SCANNER_LOOKUP_OK' /tmp/sigo-qa-transaction.log
+          grep -q 'SIGO_QA_PURCHASE_COST_OK' /tmp/sigo-qa-transaction.log
+          grep -q 'SIGO_QA_PURCHASE_DUPLICATE_BLOCK_OK' /tmp/sigo-qa-transaction.log
+          grep -q 'SIGO_QA_OVERSALE_BLOCK_OK' /tmp/sigo-qa-transaction.log
           grep -q 'SIGO_QA_TRANSACTION_PROBE_OK' /tmp/sigo-qa-transaction.log
           grep -q 'SIGO_QA_TRANSACTION_PROBE_ROLLED_BACK' /tmp/sigo-qa-transaction.log
           echo 'SIGO_QA_TRANSACTION_PROBE_COMPLETED'
