@@ -81,6 +81,12 @@ const checks = [
     label: 'isolated customer portal',
   },
   {
+    file: 'scripts/transaction-rollback-probe.sql',
+    required: ['SIGO_QA_PRODUCT_CREATE_OK', 'SIGO_QA_SCANNER_LOOKUP_OK', 'SIGO_QA_PURCHASE_COST_OK', 'SIGO_QA_PURCHASE_DUPLICATE_BLOCK_OK', 'SIGO_QA_OVERSALE_BLOCK_OK', 'SIGO_QA_TRANSACTION_PROBE_ROLLED_BACK', 'rollback;'],
+    forbidden: ['commit;'],
+    label: 'production transactional QA covers cost update, duplicate document, oversell and rollback',
+  },
+  {
     file: 'supabase/migrations/20260909191300_multiempresa_base.sql',
     required: ['create table if not exists public.empresas', 'create table if not exists public.empresa_usuarios', 'crear_empresa'],
     label: 'multiempresa base',
@@ -139,8 +145,8 @@ for (const check of checks) {
   }
 }
 
-const projectRoots = ['src', 'supabase', 'docs'];
-const textExtensions = new Set(['.ts', '.tsx', '.css', '.sql', '.md']);
+const projectRoots = ['src', 'supabase', 'docs', 'scripts', '.github'];
+const textExtensions = new Set(['.ts', '.tsx', '.css', '.sql', '.md', '.mjs', '.yml', '.yaml']);
 for (const root of projectRoots) {
   const pending = [root];
   while (pending.length) {
@@ -161,7 +167,7 @@ for (const root of projectRoots) {
     }
   }
 }
-if (!failed) console.log('PASS project boundary: no foreign-project contamination in SIGO code/docs/migrations');
+if (!failed) console.log('PASS project boundary: no foreign-project contamination in SIGO code/docs/migrations/scripts/workflows');
 
 if (failed) process.exit(1);
 console.log('SIGO_CRITICAL_FLOW_STATIC_CHECKS_OK');
