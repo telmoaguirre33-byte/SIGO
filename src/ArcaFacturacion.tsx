@@ -137,6 +137,14 @@ export default function ArcaFacturacion({
     return { texto: "Listo para validar conexión", clase: "pending" };
   }, [config, puntos]);
 
+  const autoTransferOrigenId = useMemo(() => {
+    if (!config || config.certificado_ref) return null;
+    const coincidentes = otrasConfig.filter((item) =>
+      item.cuit_emisor === config.cuit_emisor && item.ambiente === config.ambiente,
+    );
+    return coincidentes.length === 1 ? coincidentes[0].empresa_id : null;
+  }, [config, otrasConfig]);
+
   async function guardarDatos(event: FormEvent) {
     event.preventDefault();
     const cuitLimpio = cuit.replace(/\D/g, "");
@@ -261,7 +269,11 @@ export default function ArcaFacturacion({
 
             <ArcaCertificateUpload empresaId={empresaId} onUploaded={() => { void cargar(); }} />
 
-            <ArcaPreflight empresaId={empresaId} />
+            <ArcaPreflight
+              empresaId={empresaId}
+              autoTransferOrigenId={autoTransferOrigenId}
+              onConfigLinked={cargar}
+            />
 
             <section className="panel arca-card">
               <div className="panel-header"><div><h3>3. Punto de venta</h3><p>Debe ser el punto de venta habilitado en ARCA para el sistema de facturación elegido.</p></div></div>

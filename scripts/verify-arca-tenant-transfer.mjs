@@ -3,6 +3,7 @@ import fs from "node:fs";
 const api = fs.readFileSync("api/arca/transfer.js", "utf8");
 const launcher = fs.readFileSync("src/ArcaLauncher.tsx", "utf8");
 const ui = fs.readFileSync("src/ArcaFacturacion.tsx", "utf8");
+const preflight = fs.readFileSync("src/ArcaPreflight.tsx", "utf8");
 
 for (const token of [
   'p_permiso: "arca.configure"',
@@ -48,6 +49,25 @@ for (const token of [
   "configuración de origen se conservará",
 ]) {
   if (!ui.includes(token)) throw new Error(`ARCA reuse UI missing: ${token}`);
+}
+
+for (const token of [
+  "autoTransferOrigenId",
+  "item.cuit_emisor === config.cuit_emisor",
+  "item.ambiente === config.ambiente",
+  "coincidentes.length === 1",
+]) {
+  if (!ui.includes(token)) throw new Error(`ARCA automatic safe match missing: ${token}`);
+}
+
+for (const token of [
+  'fetch("/api/arca/transfer"',
+  "origenEmpresaId: autoTransferOrigenId",
+  "destinoEmpresaId: empresaId",
+  "Certificado vinculado. Enviando autenticación real a ARCA",
+  "await onConfigLinked?.()",
+]) {
+  if (!preflight.includes(token)) throw new Error(`ARCA automatic reuse before WSAA missing: ${token}`);
 }
 
 console.log("SIGO_ARCA_TENANT_TRANSFER_GUARDS_OK");

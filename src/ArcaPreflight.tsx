@@ -71,7 +71,15 @@ function mensajeWsaa(payload: WsaaResult | null, status: number) {
   }
 }
 
-export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
+export default function ArcaPreflight({
+  empresaId,
+  autoTransferOrigenId = null,
+  onConfigLinked,
+}: {
+  empresaId: string;
+  autoTransferOrigenId?: string | null;
+  onConfigLinked?: () => void | Promise<void>;
+}) {
   const [loading, setLoading] = useState(false);
   const [wsaaLoading, setWsaaLoading] = useState(false);
   const [result, setResult] = useState<PreflightResult | null>(null);
@@ -121,6 +129,23 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
     let errorDelIntento = "";
     try {
       const token = await tokenSesion();
+      if (autoTransferOrigenId) {
+        setWsaaIntento("Vinculando el certificado ya cargado con esta empresa…");
+        const transferResponse = await fetch("/api/arca/transfer", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ origenEmpresaId: autoTransferOrigenId, destinoEmpresaId: empresaId }),
+        });
+        const transferPayload = await transferResponse.json().catch(() => null) as { error?: string; message?: string } | null;
+        if (!transferResponse.ok && transferPayload?.error !== "ARCA_TARGET_ALREADY_CONFIGURED") {
+          throw new Error(transferPayload?.message || "SIGO no pudo vincular de forma segura el certificado ya cargado con esta empresa.");
+        }
+        await onConfigLinked?.();
+        setWsaaIntento("Certificado vinculado. Enviando autenticación real a ARCA…");
+      }
       const response = await fetch("/api/arca/wsaa", {
         method: "POST",
         headers: {
