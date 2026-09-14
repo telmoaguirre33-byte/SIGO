@@ -144,7 +144,7 @@ function firmarTra(traXml, certificatePem, privateKeyPem) {
   p7.addSigner({
     key,
     certificate: cert,
-    digestAlgorithm: forge.pki.oids.sha1,
+    digestAlgorithm: forge.pki.oids.sha256,
     authenticatedAttributes: [
       { type: forge.pki.oids.contentType, value: forge.pki.oids.data },
       { type: forge.pki.oids.messageDigest },
@@ -177,7 +177,7 @@ async function loginCms(endpoint, cms) {
       headers: {
         "Content-Type": "text/xml;charset=UTF-8",
         SOAPAction: "urn:LoginCms",
-        "User-Agent": "SIGO-WSAA/1.1",
+        "User-Agent": "SIGO-WSAA/1.2",
       },
       body: soap,
     });
@@ -206,10 +206,21 @@ function parsePuntosVentaWsfe(body) {
   return bloques
     .map((bloque) => ({
       numero: Number(extraer(bloque, "Nro")),
+      emisionTipo: extraer(bloque, "EmisionTipo").toUpperCase(),
       bloqueado: extraer(bloque, "Bloqueado").toUpperCase(),
       fechaBaja: extraer(bloque, "FchBaja"),
     }))
     .filter((item) => Number.isInteger(item.numero) && item.numero > 0);
+}
+
+function extraerErroresWsfe(body) {
+  const errorsXml = extraer(body, "Errors");
+  if (!errorsXml) return [];
+  const bloques = errorsXml.match(/<(?:[A-Za-z0-9_]+:)?Err(?:\s[^>]*)?>[\s\S]*?<\/(?:[A-Za-z0-9_]+:)?Err>/gi) || [];
+  return bloques.map((bloque) => ({
+    code: extraer(bloque, "Code"),
+    message: decodeXml(extraer(bloque, "Msg")),
+  })).filter((item) => item.code && item.code !== "0");
 }
 
 async function validarWsfe(endpoint, ticket, cuit, puntosConfigurados) {
@@ -223,25 +234,26 @@ async function validarWsfe(endpoint, ticket, cuit, puntosConfigurados) {
       headers: {
         "Content-Type": "text/xml;charset=UTF-8",
         SOAPAction: "http://ar.gov.afip.dif.FEV1/FEParamGetPtosVenta",
-        "User-Agent": "SIGO-WSFEv1-Probe/1.0",
+        "User-Agent": "SIGO-WSFEv1-Probe/1.1",
       },
       body: soap,
     });
     const body = await response.text();
     const fault = decodeXml(extraer(body, "faultstring"));
-    const errorCode = extraer(body, "Code");
-    const errorMessage = decodeXml(extraer(body, "Msg"));
-    if (!response.ok || fault || (errorCode && errorCode !== "0")) {
-      const err = new Error(fault || errorMessage || `HTTP_${response.status}`);
+    const errors = extraerErroresWsfe(body);
+    if (!response.ok || fault || errors.length > 0) {
+      const firstError = errors[0];
+      const err = new Error(fault || firstError?.message || `HTTP_${response.status}`);
       err.code = "WSFE_REJECTED";
+      err.wsfeCode = firstError?.code || null;
       throw err;
     }
     const puntosArca = parsePuntosVentaWsfe(body);
     const habilitados = puntosArca
-      .filter((item) => item.bloqueado !== "S" && !item.fechaBaja)
+      .filter((item) => item.bloqueado !== "S" && !item.fechaBaja && item.emisionTipo === "CAE")
       .map((item) => item.numero);
     const faltantes = puntosConfigurados.filter((numero) => !habilitados.includes(numero));
-    if (faltantes.length > 0) throw new Error(`PUNTO_VENTA_NO_HABILITADO:${faltantes.join(",")}`);
+    if (faltantes.length > 0) throw new Error(`PUNTO_VENTA_NO_HABILITADO_CAE:${faltantes.join(",")}`);
     return { puntosArca: habilitados };
   } finally {
     clearTimeout(timeout);
@@ -250,14 +262,18 @@ async function validarWsfe(endpoint, ticket, cuit, puntosConfigurados) {
 
 function errorSeguro(error) {
   const raw = error instanceof Error ? error.message : String(error || "UNKNOWN");
+  const stage = error?.code;
   if (/CERT_KEY_MISMATCH/i.test(raw)) return { code: "ARCA_CERT_KEY_MISMATCH", message: "El certificado y la clave privada no forman el mismo par criptográfico. Volvé a cargar los archivos correctos." };
-  if (/cms\.cert\.untrusted|certificate|certificado/i.test(raw)) return { code: "WSAA_CERTIFICATE_REJECTED", message: "ARCA rechazó el certificado para este ambiente. Verificá si corresponde a homologación o producción y que esté asociado al servicio WSFE." };
-  if (/PUNTO_VENTA_NO_HABILITADO/i.test(raw)) return { code: "WSFE_PUNTO_VENTA_INVALIDO", message: "WSFEv1 respondió correctamente, pero al menos un punto de venta configurado en SIGO no está habilitado en ARCA para facturación electrónica." };
-  if (/WSFE|FEParamGetPtosVenta/i.test(raw)) return { code: "WSFE_AUTH_FAILED", message: "WSAA respondió, pero WSFEv1 no aceptó la autenticación o no pudo validar los puntos de venta." };
-  if (/service|servicio|auth|authorized|autoriz/i.test(raw)) return { code: "WSAA_SERVICE_NOT_AUTHORIZED", message: "ARCA no autorizó el certificado para WSFE. Asociá el alias del certificado al servicio de Facturación Electrónica/WSFE en ARCA." };
+  if (/cms\.cert\.untrusted|certificate|certificado/i.test(raw)) return { code: "WSAA_CERTIFICATE_REJECTED", message: "ARCA rechazó el certificado para este ambiente. Verificá si corresponde a homologación o producción y que el certificado vigente esté asociado al alias SIGO y al servicio WSFE." };
+  if (/cms\.sign\.invalid|cms\.bad|firma inv[aá]lida|algoritmo no soportado/i.test(raw)) return { code: "WSAA_SIGNATURE_REJECTED", message: "ARCA rechazó la firma CMS del TRA. SIGO usa CMS adjunto y SHA-256; verificá que certificado y clave privada correspondan al certificado vigente de producción." };
+  if (/CEE.*TA.*valid|TA v[aá]lido|ya posee.*TA|already.*(?:ticket|TA)/i.test(raw)) return { code: "WSAA_TICKET_ALREADY_VALID", message: "ARCA informa que ya existe un Ticket de Acceso vigente para WSFE. En producción puede aplicar una retención breve antes de admitir otro LoginCms; esperá unos minutos y reintentá sin regenerar certificado ni relación." };
+  if (/PUNTO_VENTA_NO_HABILITADO_CAE/i.test(raw)) return { code: "WSFE_PUNTO_VENTA_INVALIDO", message: "WSFEv1 respondió correctamente, pero al menos un punto de venta configurado en SIGO no está habilitado para emisión CAE en ARCA." };
+  if (stage === "WSFE_REJECTED") return { code: "WSFE_AUTH_FAILED", message: "WSAA entregó credenciales, pero WSFEv1 rechazó la autenticación o la consulta de puntos de venta. Revisá el último intento sin volver a generar certificado ni relación." };
+  if (/service|servicio|authorized|autoriz/i.test(raw)) return { code: "WSAA_SERVICE_NOT_AUTHORIZED", message: "ARCA no autorizó este certificado para WSFE. Verificá que la relación existente use el mismo alias/certificado vigente cargado en SIGO." };
   if (/timeout|abort/i.test(raw)) return { code: "ARCA_TIMEOUT", message: "ARCA no respondió a tiempo. Reintentá en unos minutos." };
   if (/WSAA_TICKET|WSAA_RESPONSE_INVALID/i.test(raw)) return { code: "WSAA_TICKET_INVALID", message: "WSAA respondió con un Ticket de Acceso incompleto o con vigencia inválida; SIGO no habilitó la emisión." };
-  return { code: "ARCA_AUTH_FAILED", message: "No se pudo completar la autenticación fiscal. Revisá la configuración ARCA y volvé a intentar." };
+  if (stage === "WSAA_REJECTED") return { code: "WSAA_REJECTED", message: "WSAA rechazó el LoginCms. SIGO conservó el estado seguro y no habilitó emisión; revisá certificado vigente, relación WSFE y sincronización horaria." };
+  return { code: "ARCA_AUTH_FAILED", message: "No se pudo completar la autenticación fiscal. SIGO mantuvo bloqueada la emisión y registró el intento sin exponer credenciales." };
 }
 
 export default async function handler(req, res) {
@@ -326,6 +342,10 @@ export default async function handler(req, res) {
       // No ocultar el error original de ARCA si falla el registro de estado.
     }
     console.error("SIGO ARCA auth", safe.code);
-    return json(res, 502, { error: safe.code, message: safe.message });
+    return json(res, 502, {
+      error: safe.code,
+      message: safe.message,
+      etapa: error?.code === "WSFE_REJECTED" ? "WSFE" : "WSAA",
+    });
   }
 }
