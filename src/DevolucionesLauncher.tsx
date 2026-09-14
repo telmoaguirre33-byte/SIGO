@@ -41,7 +41,10 @@ export default function DevolucionesLauncher() {
 
   useEffect(() => {
     function resolverHost() {
-      const sidebar = document.querySelector<HTMLElement>(".sigo-operation-only .sidebar .menu");
+      // En vendedores la shell reducida no siempre conserva la clase
+      // sigo-operation-only. Buscamos primero el menú lateral real y, si no
+      // existe, usamos las acciones contextuales de escritorio/móvil.
+      const sidebar = document.querySelector<HTMLElement>(".sidebar .menu");
       if (sidebar) {
         setHost((actual) => actual?.element === sidebar ? actual : { element: sidebar, kind: "sidebar" });
         return;
