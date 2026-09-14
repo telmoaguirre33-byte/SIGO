@@ -152,7 +152,7 @@ async function validarWsfe(sesion, ambiente, endpoint, ticket, cuit) {
   }
   const puntos = parsePuntosVenta(response.body);
   const activos = puntos.filter((item) => item.bloqueado !== "S" && !item.fechaBaja);
-  const cae = activos.filter((item) => item.emisionTipo === "CAE");
+  const cae = activos.filter((item) => item.emisionTipo === "CAE" || item.emisionTipo.startsWith("CAE -"));
   const elegibles = cae.map((item) => item.numero);
   if (!elegibles.length) throw new Error("ARCA_SIN_PUNTOS_CAE");
   return [...new Set(elegibles)].sort((a, b) => a - b);
