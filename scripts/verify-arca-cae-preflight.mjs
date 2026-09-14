@@ -59,7 +59,7 @@ for (const token of [
   'add column if not exists iva_tasa numeric(6,3)',
   'add column if not exists precio_incluye_iva boolean',
   'FEParamGetTiposIva',
-  'no se completa automáticamente',
+  'No se completa automáticamente',
 ]) {
   if (!productFiscal.includes(token)) throw new Error(`ARCA product fiscal classification guard missing: ${token}`);
 }
