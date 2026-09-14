@@ -1,3 +1,4 @@
+import { createPrivateKey } from "node:crypto";
 import forge from "node-forge";
 
 const BUCKET = "arca-secrets";
@@ -186,9 +187,21 @@ function crearTra() {
   };
 }
 
+function normalizarClaveParaForge(privateKeyPem) {
+  try {
+    return createPrivateKey({ key: privateKeyPem, format: "pem" })
+      .export({ format: "pem", type: "pkcs1" })
+      .toString();
+  } catch (error) {
+    const err = new Error("PRIVATE_KEY_NORMALIZATION_FAILED");
+    err.cause = error;
+    throw err;
+  }
+}
+
 function firmarTra(traXml, certificatePem, privateKeyPem, algoritmo = "sha1") {
   const cert = forge.pki.certificateFromPem(certificatePem);
-  const key = forge.pki.privateKeyFromPem(privateKeyPem);
+  const key = forge.pki.privateKeyFromPem(normalizarClaveParaForge(privateKeyPem));
   if (cert.publicKey?.n && key?.n && cert.publicKey.n.compareTo(key.n) !== 0) {
     throw new Error("CERT_KEY_MISMATCH");
   }
@@ -221,7 +234,7 @@ function validarTicket(ticket) {
   return ticket;
 }
 
-async function loginCms(endpoint, cms) {
+async function loginCms(endpoint, cms, soapAction) {
   const soap = `<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:wsaa="http://wsaa.view.sua.dvadac.desein.afip.gov"><soapenv:Header/><soapenv:Body><wsaa:loginCms><wsaa:in0>${escapeXml(cms)}</wsaa:in0></wsaa:loginCms></soapenv:Body></soapenv:Envelope>`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
@@ -231,8 +244,8 @@ async function loginCms(endpoint, cms) {
       signal: controller.signal,
       headers: {
         "Content-Type": "text/xml;charset=UTF-8",
-        SOAPAction: "",
-        "User-Agent": "SIGO-WSAA/1.3",
+        SOAPAction: soapAction,
+        "User-Agent": "SIGO-WSAA/1.4",
       },
       body: soap,
     });
@@ -256,14 +269,32 @@ async function loginCms(endpoint, cms) {
   }
 }
 
+function puedeReintentarTransporte(error) {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  return error?.code === "WSAA_REJECTED" || /fetch failed|ECONNRESET|EAI_AGAIN|ENOTFOUND|socket|network/i.test(raw);
+}
+
 async function autenticarWsaa(endpoint, traXml, certificatePem, privateKeyPem) {
-  const intentar = async (algoritmo) => loginCms(endpoint, firmarTra(traXml, certificatePem, privateKeyPem, algoritmo));
+  const intentarCms = async (algoritmo) => {
+    const cms = firmarTra(traXml, certificatePem, privateKeyPem, algoritmo);
+    let ultimoError = null;
+    for (const soapAction of ["urn:LoginCms", ""]) {
+      try {
+        return await loginCms(endpoint, cms, soapAction);
+      } catch (error) {
+        ultimoError = error;
+        if (!puedeReintentarTransporte(error)) throw error;
+      }
+    }
+    throw ultimoError || new Error("WSAA_LOGIN_FAILED");
+  };
+
   try {
-    return await intentar("sha1");
+    return await intentarCms("sha1");
   } catch (error) {
     const raw = error instanceof Error ? error.message : String(error || "");
     if (!/cms\.sign\.invalid|algoritmo no soportado/i.test(raw)) throw error;
-    return intentar("sha256");
+    return intentarCms("sha256");
   }
 }
 
@@ -330,6 +361,7 @@ function errorSeguro(error) {
   const raw = error instanceof Error ? error.message : String(error || "UNKNOWN");
   const stage = error?.code;
   if (/SECRET_READ_FAILED|SECRET_INVALID/i.test(raw)) return { code: "ARCA_SECRET_READ_FAILED", message: "SIGO no pudo leer el certificado o la clave privada guardados para esta empresa. Volvé a vincularlos en esta misma empresa antes de autenticar." };
+  if (/PRIVATE_KEY_NORMALIZATION_FAILED|Invalid PEM|private key/i.test(raw)) return { code: "ARCA_CMS_KEY_FORMAT_FAILED", message: "El certificado y la clave forman un par válido, pero SIGO no pudo normalizar la clave al formato requerido para firmar el CMS de WSAA." };
   if (/CERT_KEY_MISMATCH/i.test(raw)) return { code: "ARCA_CERT_KEY_MISMATCH", message: "El certificado y la clave privada no forman el mismo par criptográfico. Volvé a cargar los archivos correctos." };
   if (/cms\.cert\.untrusted|certificate|certificado/i.test(raw)) return { code: "WSAA_CERTIFICATE_REJECTED", message: "ARCA rechazó el certificado para este ambiente. Verificá que sea el certificado vigente de producción asociado al alias SIGO y al servicio WSFE." };
   if (/cms\.sign\.invalid|cms\.bad|firma inv[aá]lida|algoritmo no soportado/i.test(raw)) return { code: "WSAA_SIGNATURE_REJECTED", message: "ARCA rechazó la firma CMS del TRA. SIGO reintentó con los algoritmos admitidos por el protocolo; revisá certificado y clave privada vigentes." };
@@ -338,10 +370,11 @@ function errorSeguro(error) {
   if (/PUNTO_VENTA_NO_HABILITADO_CAE/i.test(raw)) return { code: "WSFE_PUNTO_VENTA_INVALIDO", message: "WSFEv1 respondió correctamente, pero el punto de venta configurado no está habilitado para emisión CAE en ARCA." };
   if (stage === "WSFE_REJECTED") return { code: "WSFE_AUTH_FAILED", message: "WSAA entregó credenciales, pero WSFEv1 rechazó la autenticación o el punto de venta." };
   if (/service|servicio|authorized|autoriz/i.test(raw)) return { code: "WSAA_SERVICE_NOT_AUTHORIZED", message: "ARCA no autorizó este certificado para WSFE. Verificá que la relación existente use el mismo certificado vigente cargado en SIGO." };
+  if (/fetch failed|ECONNRESET|EAI_AGAIN|ENOTFOUND|socket|network/i.test(raw)) return { code: "WSAA_POST_NETWORK_FAILED", message: "SIGO llega a WSAA, pero la llamada POST LoginCms se interrumpió antes de recibir una respuesta SOAP. Reintentá; no regeneres certificados." };
   if (/timeout|abort/i.test(raw)) return { code: "ARCA_TIMEOUT", message: "ARCA no respondió a tiempo. Reintentá en unos minutos." };
   if (/WSAA_TICKET_SAVE_FAILED/i.test(raw)) return { code: "WSAA_TICKET_PRIVATE_SAVE_FAILED", message: "WSAA respondió, pero SIGO no pudo proteger el Ticket de Acceso para reutilizarlo. La emisión quedó bloqueada para evitar duplicar autenticaciones." };
   if (/WSAA_TICKET|WSAA_RESPONSE_INVALID/i.test(raw)) return { code: "WSAA_TICKET_INVALID", message: "WSAA respondió con un Ticket de Acceso incompleto o con vigencia inválida; SIGO no habilitó la emisión." };
-  if (stage === "WSAA_REJECTED") return { code: "WSAA_REJECTED", message: "WSAA rechazó LoginCms. SIGO mantuvo bloqueada la emisión y registró el intento; no regeneres certificado hasta ver el diagnóstico." };
+  if (stage === "WSAA_REJECTED") return { code: "WSAA_REJECTED", message: "WSAA rechazó LoginCms. SIGO probó las variantes de SOAPAction documentadas por ARCA y mantuvo bloqueada la emisión sin regenerar certificados." };
   return { code: "ARCA_AUTH_FAILED", message: "No se pudo completar la autenticación fiscal. SIGO mantuvo bloqueada la emisión y registró el intento sin exponer credenciales." };
 }
 
