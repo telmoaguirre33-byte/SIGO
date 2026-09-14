@@ -5,11 +5,11 @@ const AUTH_REAL_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
 const ARCA_ENDPOINTS = {
   homologacion: {
     wsaa: "https://wsaahomo.afip.gov.ar/ws/services/LoginCms",
-    wsfe: "https://wswhomo.afip.gov.ar/wsfev1/service.asmx?WSDL",
+    wsfe: "https://wswhomo.afip.gov.ar/wsfev1/service.asmx",
   },
   produccion: {
     wsaa: "https://wsaa.afip.gov.ar/ws/services/LoginCms",
-    wsfe: "https://servicios1.afip.gov.ar/wsfev1/service.asmx?WSDL",
+    wsfe: "https://servicios1.afip.gov.ar/wsfev1/service.asmx",
   },
 };
 
@@ -105,11 +105,37 @@ async function probarEndpoint(url) {
       method: "GET",
       signal: controller.signal,
       redirect: "follow",
-      headers: { "User-Agent": "SIGO-ARCA-Preflight/1.0" },
+      headers: { "User-Agent": "SIGO-ARCA-Preflight/1.1" },
     });
     return { reachable: true, status: response.status };
   } catch (error) {
     return { reachable: false, status: null, reason: error?.name === "AbortError" ? "TIMEOUT" : "NETWORK" };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function probarWsfe(endpoint) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PREFLIGHT_TIMEOUT_MS);
+  const soap = `<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ar="http://ar.gov.afip.dif.FEV1/"><soapenv:Header/><soapenv:Body><ar:FEDummy/></soapenv:Body></soapenv:Envelope>`;
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      signal: controller.signal,
+      redirect: "follow",
+      headers: {
+        "Content-Type": "text/xml;charset=UTF-8",
+        SOAPAction: "http://ar.gov.afip.dif.FEV1/FEDummy",
+        "User-Agent": "SIGO-ARCA-Preflight/1.1",
+      },
+      body: soap,
+    });
+    const body = await response.text().catch(() => "");
+    const dummyRespondio = /<(?:[A-Za-z0-9_]+:)?FEDummyResult\b/i.test(body) || /<(?:[A-Za-z0-9_]+:)?AppServer\b/i.test(body);
+    return { reachable: response.ok && dummyRespondio, status: response.status, method: "FEDummy" };
+  } catch (error) {
+    return { reachable: false, status: null, reason: error?.name === "AbortError" ? "TIMEOUT" : "NETWORK", method: "FEDummy" };
   } finally {
     clearTimeout(timeout);
   }
@@ -147,7 +173,7 @@ export default async function handler(req, res) {
   if (!sesion) return json(res, 403, { error: "FORBIDDEN" });
 
   try {
-    const selectConfig = "empresa_id,ambiente,cuit_emisor,certificado_ref,certificado_vence,wsaa_service,wsfe_version,activo,ultima_prueba_ok,ultima_prueba_at";
+    const selectConfig = "empresa_id,ambiente,cuit_emisor,certificado_ref,certificado_vence,wsaa_service,wsfe_version,activo,ultima_prueba_ok,ultima_prueba_at,ultimo_error";
     const configs = await leerFilas(
       sesion.url,
       sesion.anonKey,
@@ -174,14 +200,14 @@ export default async function handler(req, res) {
     const pv = puntosVentaValidos(puntos);
     const puntoVentaOk = pv.ok;
     const endpoints = ARCA_ENDPOINTS[ambiente];
-    const [wsaa, wsfe] = await Promise.all([probarEndpoint(endpoints.wsaa), probarEndpoint(endpoints.wsfe)]);
+    const [wsaa, wsfe] = await Promise.all([probarEndpoint(endpoints.wsaa), probarWsfe(endpoints.wsfe)]);
     const redOk = wsaa.reachable && wsfe.reachable;
-    const ok = Boolean(configuracionActiva && ambienteValido && cuitOk && servicioOk && puntoVentaOk && certificado.ok && redOk);
-    const emisionHabilitable = Boolean(ok && autenticacionReal.ok);
+    const preparacionOk = Boolean(ambienteValido && cuitOk && servicioOk && puntoVentaOk && certificado.ok && redOk);
+    const emisionHabilitable = Boolean(preparacionOk && configuracionActiva && autenticacionReal.ok);
 
     return json(res, 200, {
-      ok,
-      etapa: emisionHabilitable ? "WSAA_VALIDADO" : ok ? "LISTO_PARA_WSAA" : "PREPARACION_INCOMPLETA",
+      ok: preparacionOk,
+      etapa: emisionHabilitable ? "WSAA_VALIDADO" : preparacionOk ? "LISTO_PARA_WSAA" : "PREPARACION_INCOMPLETA",
       ambiente,
       checks: {
         configuracion: true,
@@ -207,6 +233,7 @@ export default async function handler(req, res) {
       autenticacionRealAntiguedadMinutos: autenticacionReal.antiguedadMinutos,
       emisionHabilitable,
       ultimaPruebaAt: config.ultima_prueba_at ?? null,
+      ultimoErrorSeguro: config.ultimo_error ? String(config.ultimo_error).slice(0, 500) : null,
       nota: "Esta prevalidación no firma TRA, no usa la clave fiscal y no habilita CAE por sí sola. Una autenticación WSAA previa sólo se considera vigente durante 12 horas; después SIGO exige validarla otra vez antes de habilitar emisión.",
     });
   } catch (error) {
