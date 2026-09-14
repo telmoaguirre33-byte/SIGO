@@ -29,6 +29,8 @@ const TIPOS_IMAGEN_PERMITIDOS = new Set(["image/jpeg", "image/png", "image/webp"
 const GTIN_LENGTHS = new Set([8, 12, 13, 14]);
 const MAX_INVOICE_ITEMS = 300;
 const CLIENT_TIMEOUT_MS = 55_000;
+const MIN_GENERAL_CONFIDENCE_AUTO = 0.35;
+const MIN_LINE_CONFIDENCE_AUTO = 0.30;
 
 function leerComoDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -192,6 +194,41 @@ function validarFactura(data: unknown): FacturaCompraIA {
   const totalLeido = factura.total == null ? null : Number(factura.total);
   const total = totalLeido != null && Number.isFinite(totalLeido) && totalLeido >= 0 ? totalLeido : null;
   const cuitLeido = proveedor.cuit ? String(proveedor.cuit).replace(/\D/g, "") : "";
+  const razonSocial = proveedor.razon_social ? String(proveedor.razon_social).trim() : "";
+  const cuit = cuitArgentinoValido(cuitLeido) ? cuitLeido : null;
+  if (!razonSocial && !cuit) {
+    throw new Error("No pude identificar con seguridad al proveedor. Seleccionalo o crealo manualmente antes de ingresar stock.");
+  }
+
+  const numeroComprobante = factura.numero_comprobante ? String(factura.numero_comprobante).trim() : "";
+  if (!numeroComprobante) {
+    throw new Error("No pude leer el número de comprobante. Cargalo manualmente para conservar el control contra facturas duplicadas.");
+  }
+
+  const confianzaGeneral = Math.max(0, Math.min(1, Number(factura.confianza_general ?? 0)));
+  if (confianzaGeneral < MIN_GENERAL_CONFIDENCE_AUTO) {
+    throw new Error("La confianza general de lectura es demasiado baja para preparar stock automáticamente. Revisá la factura y cargala manualmente.");
+  }
+
+  const lineaMuyIncierta = validos.find((item) => item.confianza < MIN_LINE_CONFIDENCE_AUTO);
+  if (lineaMuyIncierta) {
+    throw new Error(`La línea “${lineaMuyIncierta.descripcion}” tiene confianza demasiado baja. Revisala manualmente antes de ingresar stock.`);
+  }
+
+  for (const item of validos) {
+    if (item.total_linea == null || !Number.isFinite(item.total_linea) || item.total_linea < 0) continue;
+    const calculado = item.cantidad * item.costo_unitario;
+    const diferencia = Math.abs(item.total_linea - calculado);
+    const tolerancia = Math.max(2, calculado * 0.03);
+    const toleranciaCritica = Math.max(10, calculado * 0.15);
+    if (diferencia > toleranciaCritica) {
+      throw new Error(`La línea “${item.descripcion}” tiene una diferencia crítica entre cantidad × costo y total leído. Revisala manualmente antes de ingresar stock.`);
+    }
+    if (diferencia > tolerancia) {
+      advertenciasCliente.push(`Revisar ${item.descripcion}: cantidad × costo unitario no coincide con el total de línea leído.`);
+    }
+  }
+
   const fechaLeida = factura.fecha ? String(factura.fecha).trim() : "";
   const fecha = fechaLeida && fechaIsoCalendarioValida(fechaLeida) ? fechaLeida : null;
   if (fechaLeida && !fecha) {
@@ -220,15 +257,15 @@ function validarFactura(data: unknown): FacturaCompraIA {
 
   return {
     proveedor: {
-      razon_social: proveedor.razon_social ? String(proveedor.razon_social).trim() : null,
-      cuit: cuitArgentinoValido(cuitLeido) ? cuitLeido : null,
+      razon_social: razonSocial || null,
+      cuit,
     },
     fecha,
     tipo_comprobante: factura.tipo_comprobante ? String(factura.tipo_comprobante).trim() : null,
-    numero_comprobante: factura.numero_comprobante ? String(factura.numero_comprobante).trim() : null,
+    numero_comprobante: numeroComprobante,
     moneda: moneda ?? "ARS",
     total,
-    confianza_general: Math.max(0, Math.min(1, Number(factura.confianza_general ?? 0))),
+    confianza_general: confianzaGeneral,
     items: validos,
     advertencias: [...new Set([
       ...(Array.isArray(factura.advertencias)
