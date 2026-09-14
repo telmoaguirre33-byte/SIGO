@@ -7,6 +7,9 @@ const vercel = JSON.parse(fs.readFileSync("vercel.json", "utf8"));
 const railwayRoot = fs.readFileSync("railway.toml", "utf8");
 const railwayBridge = fs.readFileSync("arca-bridge/railway.toml", "utf8");
 const bridgeServer = fs.readFileSync("arca-bridge/server.mjs", "utf8");
+const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
+const pvNormalize = fs.readFileSync("scripts/apply-arca-pv-normalize.mjs", "utf8");
+const pvSync = fs.readFileSync("scripts/apply-arca-pv-sync-v2.mjs", "utf8");
 
 for (const token of [
   'SERVICE = "wsfe"',
@@ -108,13 +111,23 @@ if (!Array.isArray(arcaFunctions?.regions) || arcaFunctions.regions.length !== 1
 if (arcaFunctions.maxDuration !== 30) throw new Error("ARCA functions require a 30-second execution window");
 
 for (const [content, tokens, label] of [
-  [railwayRoot, ['cd arca-bridge && npm ci --omit=dev', 'cd arca-bridge && npm start', 'healthcheckPath = "/health/wsfe"'], "root Railway config"],
-  [railwayBridge, ['npm ci --omit=dev', 'startCommand = "npm start"', 'healthcheckPath = "/health/wsfe"'], "bridge Railway config"],
-  [bridgeServer, ['server.listen(PORT, "0.0.0.0"', 'req.url === "/health"', 'req.url === "/health/wsfe"'], "Railway bridge server"],
+  [railwayRoot, ['builder = "RAILPACK"', 'cd arca-bridge && npm start', 'healthcheckPath = "/health/wsfe"'], "root Railway config"],
+  [railwayBridge, ['builder = "RAILPACK"', 'startCommand = "npm start"', 'healthcheckPath = "/health/wsfe"'], "bridge Railway config"],
+  [bridgeServer, ['server.listen(PORT, "0.0.0.0"', 'req.url === "/health"', 'req.url === "/health/wsfe"', 'ARCA_WSFE_PUNTOS_SAFE'], "Railway bridge server"],
+  [packageJson.scripts.build, ['apply-arca-bridge.mjs', 'apply-arca-pv-normalize.mjs', 'apply-arca-pv-sync-v2.mjs'], "ARCA build patch order"],
+  [pvNormalize, ['dadoDeBaja', 'emisionTipo !== "CAEA"', 'new Set'], "ARCA PV normalization"],
+  [pvSync, ['sincronizarPuntosVentaAutoritativos', 'PUNTO_VENTA_NO_HABILITADO_CAE:SIN_PUNTOS_ARCA', 'return habilitados'], "ARCA authoritative PV sync"],
 ]) {
   for (const token of tokens) {
     if (!content.includes(token)) throw new Error(`${label} guard missing: ${token}`);
   }
+}
+
+if (railwayRoot.includes("buildCommand") || railwayBridge.includes("buildCommand")) {
+  throw new Error("Railway bridge must not run npm install twice; Railpack owns dependency installation");
+}
+for (const forbidden of ["console.log(result.body)", "console.log(soap)"]) {
+  if (bridgeServer.includes(forbidden)) throw new Error(`Railway bridge must not log fiscal payloads: ${forbidden}`);
 }
 
 console.log("SIGO_ARCA_WSAA_WSFE_REAL_OK");

@@ -1,6 +1,5 @@
 [build]
-builder = "NIXPACKS"
-buildCommand = "cd arca-bridge && npm ci --omit=dev"
+builder = "RAILPACK"
 
 [deploy]
 startCommand = "cd arca-bridge && npm start"
