@@ -2,10 +2,16 @@
 
 -- SIGO ARCA production readiness: solo lectura.
 -- No autentica WSAA ni solicita CAE. Expone exactamente qué falta antes de una emisión real.
+-- Los conteos globales no muestran CUIT, certificados ni nombres de empresas: sirven solo para detectar
+-- si la configuración fiscal quedó asociada por error a otro tenant.
 do $$
 declare
   v_empresa_id uuid;
   v_config_count integer := 0;
+  v_config_total integer := 0;
+  v_config_other_tenant integer := 0;
+  v_pv_total integer := 0;
+  v_pv_other_tenant integer := 0;
   v_active boolean := false;
   v_ambiente text := null;
   v_cuit_valid boolean := false;
@@ -33,6 +39,18 @@ begin
     into v_config_count
     from public.arca_config c
    where c.empresa_id = v_empresa_id;
+
+  select
+    count(*),
+    count(*) filter (where c.empresa_id <> v_empresa_id)
+  into v_config_total, v_config_other_tenant
+  from public.arca_config c;
+
+  select
+    count(*) filter (where p.activo = true),
+    count(*) filter (where p.activo = true and p.empresa_id <> v_empresa_id)
+  into v_pv_total, v_pv_other_tenant
+  from public.arca_puntos_venta p;
 
   if v_config_count = 1 then
     select
@@ -87,6 +105,14 @@ begin
     v_wsaa_fresh,
     v_cae_count,
     coalesce(v_last_cae_at::text, 'NINGUNO');
+
+  raise notice 'SIGO_ARCA_TENANT_DIAGNOSTIC target_config=% total_config=% other_tenant_config=% target_pv=% total_active_pv=% other_tenant_active_pv=%',
+    v_config_count,
+    v_config_total,
+    v_config_other_tenant,
+    v_pv_active,
+    v_pv_total,
+    v_pv_other_tenant;
 end
 $$;
 
