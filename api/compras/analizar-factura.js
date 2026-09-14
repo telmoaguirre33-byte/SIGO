@@ -3,6 +3,8 @@ const MAX_INVOICE_ITEMS = 300;
 const OPENAI_TIMEOUT_MS = 45_000;
 const ALLOWED_IMAGE = /^data:image\/(jpeg|jpg|png|webp);base64,/i;
 const GTIN_LENGTHS = new Set([8, 12, 13, 14]);
+const MIN_GENERAL_CONFIDENCE_AUTO = 0.35;
+const MIN_LINE_CONFIDENCE_AUTO = 0.30;
 
 function json(res, status, body) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8").send(JSON.stringify(body));
@@ -123,6 +125,12 @@ function detectarCodigosConflictivos(items) {
     .map(([codigo]) => codigo);
 }
 
+function errorRevision(codigo, detalle = null) {
+  const error = new Error(codigo);
+  if (detalle) error.detalle = detalle;
+  return error;
+}
+
 function normalizarFacturaIA(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("INVALID_INVOICE_OBJECT");
 
@@ -130,9 +138,18 @@ function normalizarFacturaIA(raw) {
   const proveedorRaw = raw.proveedor && typeof raw.proveedor === "object" && !Array.isArray(raw.proveedor)
     ? raw.proveedor
     : {};
+  const razonSocial = textoSeguro(proveedorRaw.razon_social, 180);
   const cuitLeido = String(proveedorRaw.cuit ?? "").replace(/\D/g, "");
   const cuit = cuitArgentinoValido(cuitLeido) ? cuitLeido : null;
   if (cuitLeido && !cuit) advertencias.push("El CUIT leído no supera la validación del dígito verificador; no se usará para crear o asociar proveedor.");
+  if (!razonSocial && !cuit) {
+    throw errorRevision("SUPPLIER_IDENTITY_MISSING");
+  }
+
+  const numeroComprobante = textoSeguro(raw.numero_comprobante, 80);
+  if (!numeroComprobante) {
+    throw errorRevision("DOCUMENT_NUMBER_MISSING");
+  }
 
   const itemsRaw = Array.isArray(raw.items) ? raw.items : [];
   if (itemsRaw.length > MAX_INVOICE_ITEMS) throw new Error("TOO_MANY_INVOICE_ITEMS");
@@ -145,11 +162,21 @@ function normalizarFacturaIA(raw) {
     const costoUnitario = numeroSeguro(item.costo_unitario, { min: 0, max: 1_000_000_000_000 });
     if (!descripcion || !Number.isFinite(cantidad) || !Number.isFinite(costoUnitario)) continue;
 
+    const confianzaLinea = confianza(item.confianza);
+    if (confianzaLinea < MIN_LINE_CONFIDENCE_AUTO) {
+      throw errorRevision("LOW_LINE_CONFIDENCE", descripcion);
+    }
+
     const totalLinea = numeroSeguro(item.total_linea, { min: 0, max: 1_000_000_000_000, nullable: true });
     if (totalLinea != null) {
       const calculado = cantidad * costoUnitario;
+      const diferencia = Math.abs(totalLinea - calculado);
       const tolerancia = Math.max(2, calculado * 0.03);
-      if (Math.abs(totalLinea - calculado) > tolerancia) {
+      const toleranciaCritica = Math.max(10, calculado * 0.15);
+      if (diferencia > toleranciaCritica) {
+        throw errorRevision("INVOICE_LINE_TOTAL_MISMATCH", descripcion);
+      }
+      if (diferencia > tolerancia) {
         advertencias.push(`Revisar ${descripcion}: cantidad × costo unitario no coincide con el total de línea leído.`);
       }
     }
@@ -161,7 +188,7 @@ function normalizarFacturaIA(raw) {
       cantidad,
       costo_unitario: costoUnitario,
       total_linea: totalLinea,
-      confianza: confianza(item.confianza),
+      confianza: confianzaLinea,
     });
   }
 
@@ -179,6 +206,9 @@ function normalizarFacturaIA(raw) {
   if (fechaTexto && !fecha) advertencias.push("La fecha leída no es una fecha calendario válida; revisala antes de confirmar la compra.");
 
   const confianzaGeneral = confianza(raw.confianza_general);
+  if (confianzaGeneral < MIN_GENERAL_CONFIDENCE_AUTO) {
+    throw errorRevision("LOW_INVOICE_CONFIDENCE");
+  }
   if (confianzaGeneral < 0.55) advertencias.push("La confianza general de lectura es baja. Revisá cada línea antes de aplicar la factura.");
 
   const bajaConfianza = items.filter((item) => item.confianza < 0.5).length;
@@ -204,12 +234,12 @@ function normalizarFacturaIA(raw) {
 
   return {
     proveedor: {
-      razon_social: textoSeguro(proveedorRaw.razon_social, 180),
+      razon_social: razonSocial,
       cuit,
     },
     fecha,
     tipo_comprobante: textoSeguro(raw.tipo_comprobante, 60),
-    numero_comprobante: textoSeguro(raw.numero_comprobante, 80),
+    numero_comprobante: numeroComprobante,
     moneda: normalizarMoneda(raw.moneda),
     total,
     confianza_general: confianzaGeneral,
@@ -328,6 +358,36 @@ confianza_general y confianza van de 0 a 1.`;
       return json(res, 422, {
         error: "AI_REVIEW_REQUIRED",
         message: `La factura contiene más de ${MAX_INVOICE_ITEMS} líneas. Dividí la carga o ingresala manualmente para evitar una compra parcial.`,
+      });
+    }
+    if (error?.message === "SUPPLIER_IDENTITY_MISSING") {
+      return json(res, 422, {
+        error: "AI_REVIEW_REQUIRED",
+        message: "No pude identificar con seguridad al proveedor. Seleccionalo o crealo manualmente antes de ingresar stock.",
+      });
+    }
+    if (error?.message === "DOCUMENT_NUMBER_MISSING") {
+      return json(res, 422, {
+        error: "AI_REVIEW_REQUIRED",
+        message: "No pude leer el número de comprobante. Cargalo manualmente para conservar el control contra facturas duplicadas.",
+      });
+    }
+    if (error?.message === "LOW_INVOICE_CONFIDENCE") {
+      return json(res, 422, {
+        error: "AI_REVIEW_REQUIRED",
+        message: "La confianza general de lectura es demasiado baja para preparar stock automáticamente. Revisá la factura y cargala manualmente.",
+      });
+    }
+    if (error?.message === "LOW_LINE_CONFIDENCE") {
+      return json(res, 422, {
+        error: "AI_REVIEW_REQUIRED",
+        message: `La línea ${error?.detalle ? `“${String(error.detalle).slice(0, 120)}” ` : ""}tiene confianza demasiado baja. Revisala manualmente antes de ingresar stock.`,
+      });
+    }
+    if (error?.message === "INVOICE_LINE_TOTAL_MISMATCH") {
+      return json(res, 422, {
+        error: "AI_REVIEW_REQUIRED",
+        message: `La línea ${error?.detalle ? `“${String(error.detalle).slice(0, 120)}” ` : ""}tiene una diferencia crítica entre cantidad × costo y total leído. Revisala manualmente antes de ingresar stock.`,
       });
     }
     console.error("SIGO invoice parse error", error);
