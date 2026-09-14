@@ -1,10 +1,14 @@
 import http from "node:http";
 import https from "node:https";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 
 const PORT = Number(process.env.PORT || 3000);
 const SUPABASE_URL = String(process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_ANON_KEY = String(process.env.SUPABASE_ANON_KEY || "");
 const MAX_BODY = 2_500_000;
+const JWKS = SUPABASE_URL
+  ? createRemoteJWKSet(new URL(`${SUPABASE_URL}/auth/v1/.well-known/jwks.json`))
+  : null;
 
 const ENDPOINTS = {
   homologacion: "https://wswhomo.afip.gov.ar/wsfev1/service.asmx",
@@ -28,7 +32,23 @@ function json(res, status, payload) {
 }
 
 async function validarUsuario(authorization) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !authorization?.startsWith("Bearer ")) return false;
+  if (!SUPABASE_URL || !authorization?.startsWith("Bearer ")) return false;
+  const token = authorization.slice(7).trim();
+  if (!token) return false;
+
+  if (JWKS) {
+    try {
+      const { payload } = await jwtVerify(token, JWKS, {
+        issuer: `${SUPABASE_URL}/auth/v1`,
+        audience: "authenticated",
+      });
+      if (payload?.sub) return true;
+    } catch {
+      // Algunos proyectos Supabase heredados todavía usan validación vía Auth API.
+    }
+  }
+
+  if (!SUPABASE_ANON_KEY) return false;
   const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
     headers: { apikey: SUPABASE_ANON_KEY, Authorization: authorization },
   }).catch(() => null);
@@ -70,8 +90,8 @@ function postWsfe(endpoint, action, soap, timeoutMs = 20000) {
     const request = https.request({
       protocol: target.protocol,
       hostname: target.hostname,
-      port: 443,
-      path: target.pathname,
+      port: target.port || 443,
+      path: `${target.pathname}${target.search}`,
       method: "POST",
       family: 4,
       agent: false,
@@ -81,7 +101,7 @@ function postWsfe(endpoint, action, soap, timeoutMs = 20000) {
         "Content-Length": Buffer.byteLength(soap),
         SOAPAction: soapActionUrl(action),
         Connection: "close",
-        "User-Agent": "SIGO-ARCA-Bridge/1.0",
+        "User-Agent": "SIGO-ARCA-Bridge/1.1",
       },
     }, (response) => {
       let body = "";
@@ -107,7 +127,11 @@ function postWsfe(endpoint, action, soap, timeoutMs = 20000) {
 
 const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && req.url === "/health") {
-    return json(res, 200, { ok: true, service: "sigo-arca-bridge" });
+    return json(res, 200, {
+      ok: true,
+      service: "sigo-arca-bridge",
+      auth: SUPABASE_URL ? "configured" : "missing",
+    });
   }
 
   if (req.method !== "POST" || req.url !== "/wsfe") {
