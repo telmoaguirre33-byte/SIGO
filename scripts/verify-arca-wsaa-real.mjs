@@ -13,7 +13,11 @@ for (const token of [
   'forge.pki.oids.sha1',
   'forge.pki.oids.sha256',
   'p7.sign({ detached: false })',
-  'SOAPAction: ""',
+  'SOAPAction: soapAction',
+  '["urn:LoginCms", ""]',
+  'createPrivateKey',
+  'type: "pkcs1"',
+  'PRIVATE_KEY_NORMALIZATION_FAILED',
   'autenticarWsaa',
   'loginCmsReturn',
   'validarTicket',
@@ -26,6 +30,7 @@ for (const token of [
   'WSAA_TICKET_ALREADY_VALID',
   'WSAA_SIGNATURE_REJECTED',
   'ARCA_SECRET_READ_FAILED',
+  'WSAA_POST_NETWORK_FAILED',
   'stage === "WSFE_REJECTED"',
   'wsfeValidado: true',
   'Cache-Control',
@@ -45,7 +50,6 @@ for (const token of [
 }
 
 for (const forbidden of [
-  'SOAPAction: "urn:LoginCms"',
   'token: ticket.token',
   'sign: ticket.sign',
   'SUPABASE_SERVICE_ROLE_KEY',
