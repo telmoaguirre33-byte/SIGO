@@ -1,4 +1,4 @@
-import { createPrivateKey } from "node:crypto";
+import { X509Certificate, createPrivateKey } from "node:crypto";
 import forge from "node-forge";
 
 const BUCKET = "arca-secrets";
@@ -199,8 +199,18 @@ function normalizarClaveParaForge(privateKeyPem) {
   }
 }
 
+function normalizarCertificadoParaForge(certificatePem) {
+  try {
+    return new X509Certificate(certificatePem).toString();
+  } catch (error) {
+    const err = new Error("CERTIFICATE_NORMALIZATION_FAILED");
+    err.cause = error;
+    throw err;
+  }
+}
+
 function firmarTra(traXml, certificatePem, privateKeyPem, algoritmo = "sha1") {
-  const cert = forge.pki.certificateFromPem(certificatePem);
+  const cert = forge.pki.certificateFromPem(normalizarCertificadoParaForge(certificatePem));
   const key = forge.pki.privateKeyFromPem(normalizarClaveParaForge(privateKeyPem));
   if (cert.publicKey?.n && key?.n && cert.publicKey.n.compareTo(key.n) !== 0) {
     throw new Error("CERT_KEY_MISMATCH");
@@ -239,16 +249,23 @@ async function loginCms(endpoint, cms, soapAction) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        "Content-Type": "text/xml;charset=UTF-8",
-        SOAPAction: soapAction,
-        "User-Agent": "SIGO-WSAA/1.4",
-      },
-      body: soap,
-    });
+    let response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "text/xml;charset=UTF-8",
+          SOAPAction: soapAction,
+          "User-Agent": "SIGO-WSAA/1.5",
+        },
+        body: soap,
+      });
+    } catch (cause) {
+      const err = new Error(cause?.name === "AbortError" ? "WSAA_NETWORK_TIMEOUT" : "WSAA_NETWORK_FAILED");
+      err.code = cause?.name === "AbortError" ? "WSAA_NETWORK_TIMEOUT" : "WSAA_NETWORK_FAILED";
+      throw err;
+    }
     const body = await response.text();
     const fault = decodeXml(extraer(body, "faultstring"));
     if (!response.ok || fault) {
@@ -325,16 +342,23 @@ async function validarWsfe(endpoint, ticket, cuit, puntosConfigurados) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        "Content-Type": "text/xml;charset=UTF-8",
-        SOAPAction: "http://ar.gov.afip.dif.FEV1/FEParamGetPtosVenta",
-        "User-Agent": "SIGO-WSFEv1-Probe/1.1",
-      },
-      body: soap,
-    });
+    let response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "text/xml;charset=UTF-8",
+          SOAPAction: "http://ar.gov.afip.dif.FEV1/FEParamGetPtosVenta",
+          "User-Agent": "SIGO-WSFEv1-Probe/1.2",
+        },
+        body: soap,
+      });
+    } catch (cause) {
+      const err = new Error(cause?.name === "AbortError" ? "WSFE_NETWORK_TIMEOUT" : "WSFE_NETWORK_FAILED");
+      err.code = cause?.name === "AbortError" ? "WSFE_NETWORK_TIMEOUT" : "WSFE_NETWORK_FAILED";
+      throw err;
+    }
     const body = await response.text();
     const fault = decodeXml(extraer(body, "faultstring"));
     const errors = extraerErroresWsfe(body);
@@ -361,6 +385,7 @@ function errorSeguro(error) {
   const raw = error instanceof Error ? error.message : String(error || "UNKNOWN");
   const stage = error?.code;
   if (/SECRET_READ_FAILED|SECRET_INVALID/i.test(raw)) return { code: "ARCA_SECRET_READ_FAILED", message: "SIGO no pudo leer el certificado o la clave privada guardados para esta empresa. Volvé a vincularlos en esta misma empresa antes de autenticar." };
+  if (/CERTIFICATE_NORMALIZATION_FAILED/i.test(raw)) return { code: "ARCA_CMS_CERT_FORMAT_FAILED", message: "El certificado es válido, pero SIGO no pudo normalizarlo al formato CMS requerido por WSAA." };
   if (/PRIVATE_KEY_NORMALIZATION_FAILED|Invalid PEM|private key/i.test(raw)) return { code: "ARCA_CMS_KEY_FORMAT_FAILED", message: "El certificado y la clave forman un par válido, pero SIGO no pudo normalizar la clave al formato requerido para firmar el CMS de WSAA." };
   if (/CERT_KEY_MISMATCH/i.test(raw)) return { code: "ARCA_CERT_KEY_MISMATCH", message: "El certificado y la clave privada no forman el mismo par criptográfico. Volvé a cargar los archivos correctos." };
   if (/cms\.cert\.untrusted|certificate|certificado/i.test(raw)) return { code: "WSAA_CERTIFICATE_REJECTED", message: "ARCA rechazó el certificado para este ambiente. Verificá que sea el certificado vigente de producción asociado al alias SIGO y al servicio WSFE." };
@@ -368,6 +393,10 @@ function errorSeguro(error) {
   if (/coe\.notAuthorized|computador no autorizado/i.test(raw)) return { code: "WSAA_NOT_AUTHORIZED", message: "ARCA reconoce la solicitud pero este certificado todavía no está autorizado para WSFE. La relación debe apuntar exactamente al certificado vigente cargado en SIGO." };
   if (/coe\.alreadyAuthenticated|CEE.*TA.*valid|TA v[aá]lido|ya posee.*TA|already.*(?:ticket|TA)/i.test(raw)) return { code: "WSAA_TICKET_ALREADY_VALID", message: "ARCA informa que ya existe un Ticket de Acceso vigente para WSFE. Esperá unos minutos y reintentá sin regenerar certificado ni relación." };
   if (/PUNTO_VENTA_NO_HABILITADO_CAE/i.test(raw)) return { code: "WSFE_PUNTO_VENTA_INVALIDO", message: "WSFEv1 respondió correctamente, pero el punto de venta configurado no está habilitado para emisión CAE en ARCA." };
+  if (stage === "WSAA_NETWORK_TIMEOUT") return { code: "WSAA_NETWORK_TIMEOUT", message: "WSAA no respondió dentro del tiempo seguro. El certificado no fue rechazado; la conexión quedó pendiente." };
+  if (stage === "WSAA_NETWORK_FAILED") return { code: "WSAA_NETWORK_FAILED", message: "SIGO no pudo establecer la conexión de red con WSAA. El certificado no fue rechazado." };
+  if (stage === "WSFE_NETWORK_TIMEOUT") return { code: "WSFE_NETWORK_TIMEOUT", message: "WSAA pudo avanzar, pero WSFEv1 no respondió dentro del tiempo seguro." };
+  if (stage === "WSFE_NETWORK_FAILED") return { code: "WSFE_NETWORK_FAILED", message: "WSAA pudo avanzar, pero SIGO no logró conectar con WSFEv1." };
   if (stage === "WSFE_REJECTED") return { code: "WSFE_AUTH_FAILED", message: "WSAA entregó credenciales, pero WSFEv1 rechazó la autenticación o el punto de venta." };
   if (/service|servicio|authorized|autoriz/i.test(raw)) return { code: "WSAA_SERVICE_NOT_AUTHORIZED", message: "ARCA no autorizó este certificado para WSFE. Verificá que la relación existente use el mismo certificado vigente cargado en SIGO." };
   if (/fetch failed|ECONNRESET|EAI_AGAIN|ENOTFOUND|socket|network/i.test(raw)) return { code: "WSAA_POST_NETWORK_FAILED", message: "SIGO llega a WSAA, pero la llamada POST LoginCms se interrumpió antes de recibir una respuesta SOAP. Reintentá; no regeneres certificados." };
