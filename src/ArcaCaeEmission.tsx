@@ -25,6 +25,38 @@ type Comprobante = {
   cae_vencimiento: string | null;
 };
 
+type ItemVenta = {
+  producto_id: string;
+  cantidad: number;
+  precio_unitario: number;
+  subtotal: number;
+  nombre: string;
+};
+
+type ClienteFiscal = {
+  nombre: string;
+  documento: string | null;
+  condicion_iva_receptor_id: number | null;
+};
+
+type EmisorFiscal = {
+  cuit_emisor: string;
+  razon_social: string | null;
+};
+
+type ComprobanteImprimible = Comprobante & {
+  ventaNumero: number;
+  total: number;
+  fecha: string;
+  tipoCbteSeleccionado: number;
+  condicionIvaReceptorId: number;
+  receptorCuit: string;
+  receptorRazonSocial: string;
+  emisorCuit: string;
+  emisorRazonSocial: string;
+  items: ItemVenta[];
+};
+
 const ERROR_MESSAGES: Record<string, string> = {
   ARCA_AUTH_NOT_VALIDATED: "Primero debe aprobarse la autenticación WSAA y la validación WSFEv1.",
   ARCA_TICKET_REFRESH_REQUIRED: "El Ticket de Acceso venció o no está disponible. Volvé a autenticar WSAA; SIGO no solicitará un segundo ticket mientras exista uno vigente.",
@@ -46,6 +78,38 @@ function soloDigitos(value: string) {
   return value.replace(/\D/g, "");
 }
 
+function moneda(value: number) {
+  return `$${Number(value || 0).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function fechaVisible(value: string | null | undefined) {
+  if (!value) return "—";
+  const parsed = new Date(value.length === 10 ? `${value}T12:00:00` : value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString("es-AR");
+}
+
+function tipoComprobanteLabel(tipo: number) {
+  if (tipo === 1) return "Factura A";
+  if (tipo === 6) return "Factura B";
+  return "Factura C";
+}
+
+function condicionIvaLabel(condicion: number) {
+  if (condicion === 1) return "IVA Responsable Inscripto";
+  if (condicion === 6) return "Responsable Monotributo";
+  if (condicion === 4) return "IVA Exento";
+  return "Consumidor Final";
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 export default function ArcaCaeEmission({
   empresaId,
   ambiente,
@@ -64,11 +128,15 @@ export default function ArcaCaeEmission({
   const [condicionIva, setCondicionIva] = useState("5");
   const [receptorCuit, setReceptorCuit] = useState("");
   const [receptorRazonSocial, setReceptorRazonSocial] = useState("");
+  const [emisor, setEmisor] = useState<EmisorFiscal | null>(null);
+  const [clienteFiscal, setClienteFiscal] = useState<ClienteFiscal | null>(null);
+  const [itemsVenta, setItemsVenta] = useState<ItemVenta[]>([]);
   const [loading, setLoading] = useState(false);
   const [emitiendo, setEmitiendo] = useState(false);
   const [error, setError] = useState("");
   const [diagnostico, setDiagnostico] = useState("");
   const [comprobante, setComprobante] = useState<Comprobante | null>(null);
+  const [ultimoComprobante, setUltimoComprobante] = useState<ComprobanteImprimible | null>(null);
 
   const puntosActivos = useMemo(
     () => puntos.filter((pv) => pv.activo && pv.ambiente === ambiente),
@@ -81,7 +149,7 @@ export default function ArcaCaeEmission({
     setLoading(true);
     setError("");
     try {
-      const [{ data: rows, error: salesError }, { data: emitidas, error: issuedError }] = await Promise.all([
+      const [{ data: rows, error: salesError }, { data: emitidas, error: issuedError }, { data: fiscal, error: fiscalError }] = await Promise.all([
         supabase
           .from("ventas_sigo")
           .select("id,numero,total,created_at,cliente_id")
@@ -95,13 +163,20 @@ export default function ArcaCaeEmission({
           .select("venta_id")
           .eq("empresa_id", empresaId)
           .not("cae", "is", null),
+        supabase
+          .from("arca_config")
+          .select("cuit_emisor,razon_social")
+          .eq("empresa_id", empresaId)
+          .maybeSingle(),
       ]);
       if (salesError) throw salesError;
       if (issuedError) throw issuedError;
+      if (fiscalError) throw fiscalError;
       const facturadas = new Set((emitidas ?? []).map((item) => String(item.venta_id || "")));
       const disponibles = ((rows ?? []) as Venta[]).filter((item) => !facturadas.has(item.id));
       setVentas(disponibles);
       setVentaId((actual) => disponibles.some((item) => item.id === actual) ? actual : disponibles[0]?.id ?? "");
+      setEmisor((fiscal ?? null) as EmisorFiscal | null);
     } catch (cause) {
       console.error(cause);
       setError("No se pudieron cargar las ventas confirmadas para facturar.");
@@ -116,6 +191,126 @@ export default function ArcaCaeEmission({
       setPuntoVenta(puntosActivos[0] ? String(puntosActivos[0].numero) : "");
     }
   }, [puntosActivos, puntoVenta]);
+
+  useEffect(() => {
+    let cancelado = false;
+    async function cargarDetalleVenta() {
+      setItemsVenta([]);
+      setClienteFiscal(null);
+      if (!venta) return;
+      try {
+        const { data: items, error: itemsError } = await supabase
+          .from("venta_items_sigo")
+          .select("producto_id,cantidad,precio_unitario,subtotal")
+          .eq("empresa_id", empresaId)
+          .eq("venta_id", venta.id);
+        if (itemsError) throw itemsError;
+
+        const ids = [...new Set((items ?? []).map((item) => String(item.producto_id || "")).filter(Boolean))];
+        let nombres = new Map<string, string>();
+        if (ids.length > 0) {
+          const { data: productos, error: productosError } = await supabase
+            .from("productos")
+            .select("id,nombre")
+            .eq("empresa_id", empresaId)
+            .in("id", ids);
+          if (productosError) throw productosError;
+          nombres = new Map((productos ?? []).map((producto) => [String(producto.id), String(producto.nombre || "Producto")]));
+        }
+
+        if (!cancelado) {
+          setItemsVenta((items ?? []).map((item) => ({
+            producto_id: String(item.producto_id || ""),
+            cantidad: Number(item.cantidad || 0),
+            precio_unitario: Number(item.precio_unitario || 0),
+            subtotal: Number(item.subtotal || 0),
+            nombre: nombres.get(String(item.producto_id || "")) || "Producto",
+          })));
+        }
+
+        if (venta.cliente_id) {
+          const { data: cliente, error: clienteError } = await supabase
+            .from("clientes_sigo")
+            .select("nombre,documento,condicion_iva_receptor_id")
+            .eq("empresa_id", empresaId)
+            .eq("id", venta.cliente_id)
+            .maybeSingle();
+          if (clienteError) throw clienteError;
+          if (!cancelado) setClienteFiscal((cliente ?? null) as ClienteFiscal | null);
+        }
+      } catch (cause) {
+        console.warn("No se pudo cargar el detalle imprimible de la venta", cause);
+      }
+    }
+    void cargarDetalleVenta();
+    return () => { cancelado = true; };
+  }, [empresaId, ventaId, venta?.cliente_id]);
+
+  function construirHtmlImpresion(formato: "a4" | "80" | "58") {
+    if (!ultimoComprobante) return "";
+    const c = ultimoComprobante;
+    const termico = formato !== "a4";
+    const ancho = formato === "58" ? "50mm" : formato === "80" ? "72mm" : "190mm";
+    const pageSize = formato === "a4" ? "A4" : `${formato}mm auto`;
+    const fontSize = formato === "58" ? "10px" : formato === "80" ? "11px" : "12px";
+    const filas = c.items.length > 0
+      ? c.items.map((item) => `<tr><td>${escapeHtml(item.nombre)}</td><td class="num">${item.cantidad}</td><td class="num">${escapeHtml(moneda(item.precio_unitario))}</td><td class="num">${escapeHtml(moneda(item.subtotal))}</td></tr>`).join("")
+      : `<tr><td colspan="4">Venta SIGO #${c.ventaNumero}</td></tr>`;
+
+    return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(tipoComprobanteLabel(c.tipoCbteSeleccionado))} ${String(c.punto_venta).padStart(4, "0")}-${String(c.numero_cbte).padStart(8, "0")}</title><style>
+      @page{size:${pageSize};margin:${termico ? "3mm" : "10mm"}}
+      *{box-sizing:border-box} body{margin:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:${fontSize}}
+      .doc{width:${ancho};max-width:100%;margin:0 auto}.center{text-align:center}.muted{color:#555}.strong{font-weight:800}.line{border-top:1px dashed #777;margin:8px 0}
+      h1{font-size:${termico ? "16px" : "22px"};margin:0 0 4px} h2{font-size:${termico ? "14px" : "18px"};margin:6px 0}
+      .grid{display:grid;grid-template-columns:${termico ? "1fr" : "1fr 1fr"};gap:4px 18px}.box{border:1px solid #aaa;padding:8px;margin:8px 0}
+      table{width:100%;border-collapse:collapse;margin-top:8px} th,td{padding:${termico ? "3px 2px" : "5px"};border-bottom:1px solid #ddd;vertical-align:top} th{text-align:left}.num{text-align:right;white-space:nowrap}
+      .total{font-size:${termico ? "15px" : "18px"};font-weight:900;text-align:right;margin-top:10px}.footer{margin-top:12px;font-size:${termico ? "9px" : "11px"};line-height:1.4}
+      @media print{button{display:none!important}}
+    </style></head><body><main class="doc">
+      <div class="center"><h1>${escapeHtml(c.emisorRazonSocial || "SIGO")}</h1><div>CUIT ${escapeHtml(c.emisorCuit || "—")}</div></div>
+      <div class="line"></div><div class="center"><h2>${escapeHtml(tipoComprobanteLabel(c.tipoCbteSeleccionado))}</h2><div class="strong">${String(c.punto_venta).padStart(4, "0")}-${String(c.numero_cbte).padStart(8, "0")}</div></div><div class="line"></div>
+      <div class="grid"><div><span class="muted">Fecha:</span> ${escapeHtml(fechaVisible(c.fecha))}</div><div><span class="muted">Venta SIGO:</span> #${c.ventaNumero}</div></div>
+      <div class="box"><div class="strong">Receptor</div><div>${escapeHtml(c.receptorRazonSocial || "Consumidor Final")}</div>${c.receptorCuit ? `<div>CUIT ${escapeHtml(c.receptorCuit)}</div>` : ""}<div>${escapeHtml(condicionIvaLabel(c.condicionIvaReceptorId))}</div></div>
+      <table><thead><tr><th>Producto</th><th class="num">Cant.</th><th class="num">P.Unit.</th><th class="num">Subtotal</th></tr></thead><tbody>${filas}</tbody></table>
+      <div class="total">TOTAL ${escapeHtml(moneda(c.total))}</div>
+      <div class="line"></div><div><strong>CAE:</strong> ${escapeHtml(c.cae)}</div><div><strong>Vencimiento CAE:</strong> ${escapeHtml(fechaVisible(c.cae_vencimiento))}</div>
+      <div class="footer center">Comprobante electrónico autorizado por ARCA · Emitido desde SIGO</div>
+    </main></body></html>`;
+  }
+
+  function imprimir(formato: "a4" | "80" | "58") {
+    const html = construirHtmlImpresion(formato);
+    if (!html) return;
+    const popup = window.open("", "_blank", "width=900,height=900");
+    if (!popup) {
+      setError("El navegador bloqueó la ventana de impresión. Habilitá ventanas emergentes para SIGO e intentá nuevamente.");
+      return;
+    }
+    popup.document.open();
+    popup.document.write(html);
+    popup.document.close();
+    popup.focus();
+    window.setTimeout(() => popup.print(), 250);
+  }
+
+  function compartirWhatsApp() {
+    if (!ultimoComprobante) return;
+    const c = ultimoComprobante;
+    const detalle = c.items.slice(0, 12).map((item) => `• ${item.cantidad} x ${item.nombre} = ${moneda(item.subtotal)}`).join("\n");
+    const texto = [
+      `${tipoComprobanteLabel(c.tipoCbteSeleccionado)} ${String(c.punto_venta).padStart(4, "0")}-${String(c.numero_cbte).padStart(8, "0")}`,
+      c.emisorRazonSocial,
+      c.emisorCuit ? `CUIT ${c.emisorCuit}` : "",
+      c.receptorRazonSocial ? `Cliente: ${c.receptorRazonSocial}` : "",
+      c.receptorCuit ? `CUIT cliente: ${c.receptorCuit}` : "",
+      detalle,
+      `TOTAL ${moneda(c.total)}`,
+      `CAE ${c.cae}`,
+      c.cae_vencimiento ? `Vencimiento CAE ${fechaVisible(c.cae_vencimiento)}` : "",
+      "Emitido desde SIGO",
+    ].filter(Boolean).join("\n");
+    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank", "noopener,noreferrer");
+  }
 
   async function emitir() {
     if (!venta || !puntoVenta || emitiendo) return;
@@ -168,7 +363,28 @@ export default function ArcaCaeEmission({
         setDiagnostico(details);
         throw new Error(code);
       }
-      setComprobante(payload.comprobante as Comprobante);
+      const emitido = payload.comprobante as Comprobante;
+      setComprobante(emitido);
+      const condicionReceptor = venta.cliente_id
+        ? Number(clienteFiscal?.condicion_iva_receptor_id || condicionIva || 5)
+        : Number(condicionIva || 5);
+      const cuitReceptor = venta.cliente_id ? soloDigitos(clienteFiscal?.documento || "") : (requiereDatosFiscales ? cuit : "");
+      const nombreReceptor = venta.cliente_id
+        ? (clienteFiscal?.nombre || "Cliente registrado")
+        : (requiereDatosFiscales ? receptorRazonSocial.trim() : "Consumidor Final");
+      setUltimoComprobante({
+        ...emitido,
+        ventaNumero: venta.numero,
+        total: Number(venta.total),
+        fecha: new Date().toISOString(),
+        tipoCbteSeleccionado: Number(tipoCbte),
+        condicionIvaReceptorId: condicionReceptor,
+        receptorCuit: cuitReceptor,
+        receptorRazonSocial: nombreReceptor,
+        emisorCuit: emisor?.cuit_emisor || "",
+        emisorRazonSocial: emisor?.razon_social || "SIGO",
+        items: itemsVenta,
+      });
       await cargarVentas();
     } catch (cause) {
       const code = cause instanceof Error ? cause.message : "ARCA_CAE_FAILED";
@@ -224,6 +440,15 @@ export default function ArcaCaeEmission({
       {requiereDatosFiscales ? <small>Para Responsable Inscripto o Monotributista, SIGO enviará el CUIT a ARCA como documento fiscal del receptor.</small> : null}
       {ambiente === "produccion" ? <small>Producción: SIGO pedirá una confirmación explícita antes de cada emisión real.</small> : <small>Homologación: el comprobante no tiene efecto fiscal real.</small>}
       {comprobante ? <p className="sigo-matriz-success" role="status">CAE {comprobante.cae} · Comprobante {String(comprobante.punto_venta).padStart(4, "0")}-{String(comprobante.numero_cbte).padStart(8, "0")}{comprobante.cae_vencimiento ? ` · vence ${comprobante.cae_vencimiento}` : ""}</p> : null}
+      {ultimoComprobante ? (
+        <div className="form-actions" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+          <button className="admin-button" type="button" onClick={() => imprimir("a4")}>🖨 Imprimir A4</button>
+          <button className="admin-button" type="button" onClick={() => imprimir("80")}>🧾 Ticket 80 mm</button>
+          <button className="admin-button" type="button" onClick={() => imprimir("58")}>🧾 Ticket 58 mm</button>
+          <button className="primary-button" type="button" onClick={compartirWhatsApp}>WhatsApp</button>
+        </div>
+      ) : null}
+      {ultimoComprobante ? <small>Las opciones 80 mm y 58 mm están preparadas para impresoras térmicas instaladas o vinculadas al dispositivo.</small> : null}
       {error ? <p className="form-error" role="alert">{error}</p> : null}
       {diagnostico ? <small role="alert">{diagnostico}</small> : null}
     </section>
