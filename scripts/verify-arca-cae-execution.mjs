@@ -22,6 +22,8 @@ for (const token of [
   'ARCA_INVOICE_A_CLIENT_REQUIRED',
   'ARCA_SALE_RESERVED_WITH_OTHER_FISCAL_IDENTITY',
   'CondicionIVAReceptorId',
+  'leerTicketWsaa',
+  'ARCA_TICKET_REFRESH_REQUIRED',
 ]) {
   if (!api.includes(token)) throw new Error(`ARCA CAE execution safeguard missing: ${token}`);
 }
@@ -33,6 +35,8 @@ for (const forbidden of [
   'sign: ticket.sign',
   'console.log(body)',
   'console.log(ticket)',
+  'private-key.pem',
+  'certificate.pem',
 ]) {
   if (api.includes(forbidden)) throw new Error(`ARCA CAE unsafe behavior found: ${forbidden}`);
 }

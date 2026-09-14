@@ -67,7 +67,7 @@ async function descargarSecreto(sesion, empresaId, fileName) {
   return value;
 }
 
-async function subirSecreto(sesion, empresaId, fileName, value) {
+async function subirSecreto(sesion, empresaId, fileName, value, contentType = "application/x-pem-file") {
   const response = await fetch(
     `${sesion.url}/storage/v1/object/${BUCKET}/${encodeURIComponent(empresaId)}/${encodeURIComponent(fileName)}`,
     {
@@ -75,7 +75,7 @@ async function subirSecreto(sesion, empresaId, fileName, value) {
       headers: {
         apikey: sesion.anonKey,
         Authorization: sesion.auth,
-        "Content-Type": "application/x-pem-file",
+        "Content-Type": contentType,
         // Sólo llegamos acá si arca_config del destino no contiene certificado.
         // Upsert permite reparar un intento interrumpido entre los dos archivos sin
         // reemplazar una configuración fiscal ya activa.
@@ -86,6 +86,18 @@ async function subirSecreto(sesion, empresaId, fileName, value) {
   );
   if (!response.ok) throw new Error(`SECRET_COPY_FAILED:${fileName}:${response.status}`);
   return `storage://${BUCKET}/${empresaId}/${fileName}`;
+}
+
+async function invalidarTicketsWsaa(sesion, empresaId) {
+  await Promise.all(["homologacion", "produccion"].map((ambiente) =>
+    subirSecreto(
+      sesion,
+      empresaId,
+      `ticket-wsfe-${ambiente}.json`,
+      JSON.stringify({ version: 0, invalidatedAt: new Date().toISOString() }),
+      "application/json",
+    ),
+  ));
 }
 
 function validarPar(config, certificadoPem, clavePrivadaPem) {
@@ -153,6 +165,7 @@ export default async function handler(req, res) {
 
     const certificadoRef = await subirSecreto(sesion, destinoEmpresaId, "certificate.pem", certificadoPem);
     await subirSecreto(sesion, destinoEmpresaId, "private-key.pem", clavePrivadaPem);
+    await invalidarTicketsWsaa(sesion, destinoEmpresaId);
 
     const ahora = new Date().toISOString();
     await rest(sesion, "arca_config?on_conflict=empresa_id", {

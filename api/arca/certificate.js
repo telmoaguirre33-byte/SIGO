@@ -69,7 +69,7 @@ async function leerConfig(sesion, empresaId) {
   return Array.isArray(rows) ? rows[0] ?? null : null;
 }
 
-async function subirObjetoPrivado(sesion, empresaId, fileName, content) {
+async function subirObjetoPrivado(sesion, empresaId, fileName, content, contentType = "application/x-pem-file") {
   const path = `${empresaId}/${fileName}`;
   const response = await fetch(
     `${sesion.url}/storage/v1/object/${BUCKET}/${encodeURIComponent(empresaId)}/${encodeURIComponent(fileName)}`,
@@ -78,7 +78,7 @@ async function subirObjetoPrivado(sesion, empresaId, fileName, content) {
       headers: {
         apikey: sesion.anonKey,
         Authorization: sesion.auth,
-        "Content-Type": "application/x-pem-file",
+        "Content-Type": contentType,
         "x-upsert": "true",
       },
       body: content,
@@ -89,6 +89,18 @@ async function subirObjetoPrivado(sesion, empresaId, fileName, content) {
     throw new Error(`STORAGE_UPLOAD_FAILED:${fileName}:${response.status}:${detail.slice(0, 120)}`);
   }
   return `storage://${BUCKET}/${path}`;
+}
+
+async function invalidarTicketsWsaa(sesion, empresaId) {
+  await Promise.all(["homologacion", "produccion"].map((ambiente) =>
+    subirObjetoPrivado(
+      sesion,
+      empresaId,
+      `ticket-wsfe-${ambiente}.json`,
+      JSON.stringify({ version: 0, invalidatedAt: new Date().toISOString() }),
+      "application/json",
+    ),
+  ));
 }
 
 async function guardarMetadata(sesion, empresaId, metadata) {
@@ -202,6 +214,7 @@ export default async function handler(req, res) {
 
     const certificadoRef = await subirObjetoPrivado(sesion, empresaId, "certificate.pem", certificadoPem);
     await subirObjetoPrivado(sesion, empresaId, "private-key.pem", clavePrivadaNormalizada);
+    await invalidarTicketsWsaa(sesion, empresaId);
 
     const fingerprint = certificado.fingerprint256.replace(/:/g, "").toLowerCase();
     await guardarMetadata(sesion, empresaId, {

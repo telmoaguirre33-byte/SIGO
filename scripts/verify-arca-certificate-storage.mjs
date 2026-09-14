@@ -4,6 +4,7 @@ const migration = fs.readFileSync("supabase/migrations/20260914001000_arca_stora
 const api = fs.readFileSync("api/arca/certificate.js", "utf8");
 const ui = fs.readFileSync("src/ArcaCertificateUpload.tsx", "utf8");
 const facturacion = fs.readFileSync("src/ArcaFacturacion.tsx", "utf8");
+const ticketMigration = fs.readFileSync("supabase/migrations/20260914113000_arca_ticket_wsaa_privado.sql", "utf8");
 
 for (const token of [
   "arca-secrets",
@@ -71,6 +72,20 @@ for (const token of [
 
 if (!facturacion.includes("<ArcaCertificateUpload") || !facturacion.includes('import ArcaCertificateUpload from "./ArcaCertificateUpload"')) {
   throw new Error("ARCA certificate uploader must remain integrated in the production configuration page");
+}
+
+for (const token of [
+  "ticket-wsfe-homologacion.json",
+  "ticket-wsfe-produccion.json",
+  "application/json",
+  "sigo_arca_ticket_select",
+  "'invoices.issue'",
+]) {
+  if (!ticketMigration.includes(token)) throw new Error(`ARCA private WSAA ticket storage guard missing: ${token}`);
+}
+
+for (const token of ["invalidarTicketsWsaa", "version: 0", '"application/json"']) {
+  if (!api.includes(token)) throw new Error(`ARCA certificate ticket invalidation missing: ${token}`);
 }
 
 console.log("SIGO_ARCA_CERTIFICATE_PRIVATE_STORAGE_OK");

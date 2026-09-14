@@ -108,7 +108,8 @@ try {
   assert.deepEqual(payload.puntosVenta, [13]);
   assert.equal(success.res.body.includes("PRIVATE KEY"), false);
   assert.equal(success.res.body.includes(certificatePem.slice(0, 30)), false);
-  assert.equal(success.writes.filter((item) => item.kind === "secret").length, 2);
+  assert.equal(success.writes.filter((item) => item.kind === "secret").length, 4);
+  assert.equal(success.writes.filter((item) => item.kind === "secret" && item.url.includes("ticket-wsfe-")).length, 2);
   const configWrite = success.writes.find((item) => item.kind === "config")?.body;
   assert.equal(configWrite.empresa_id, targetId);
   assert.equal(configWrite.activo, false);

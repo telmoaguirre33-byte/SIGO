@@ -105,6 +105,60 @@ async function descargarSecreto(sesion, empresaId, fileName) {
   return value;
 }
 
+function ticketFileName(ambiente) {
+  if (ambiente !== "homologacion" && ambiente !== "produccion") throw new Error("ARCA_AMBIENTE_INVALIDO");
+  return `ticket-wsfe-${ambiente}.json`;
+}
+
+function normalizarTicketGuardado(payload, ambiente, cuit) {
+  const expirationMs = Date.parse(payload?.expirationTime || "");
+  const generationMs = Date.parse(payload?.generationTime || "");
+  const ahora = Date.now();
+  if (payload?.version !== 1 || payload?.service !== SERVICE || payload?.ambiente !== ambiente || payload?.cuit !== String(cuit)) return null;
+  if (typeof payload?.token !== "string" || !payload.token || payload.token.length > 20_000) return null;
+  if (typeof payload?.sign !== "string" || !payload.sign || payload.sign.length > 20_000) return null;
+  if (!Number.isFinite(generationMs) || generationMs > ahora + 5 * 60_000) return null;
+  if (!Number.isFinite(expirationMs) || expirationMs <= ahora + 60_000 || expirationMs > ahora + 24 * 60 * 60_000) return null;
+  return { token: payload.token, sign: payload.sign, generationTime: payload.generationTime, expirationTime: payload.expirationTime };
+}
+
+async function leerTicketWsaa(sesion, empresaId, ambiente, cuit) {
+  try {
+    const raw = await descargarSecreto(sesion, empresaId, ticketFileName(ambiente));
+    if (raw.length > 50_000) return null;
+    return normalizarTicketGuardado(JSON.parse(raw), ambiente, cuit);
+  } catch {
+    return null;
+  }
+}
+
+async function guardarTicketWsaa(sesion, empresaId, ambiente, cuit, ticket) {
+  const payload = JSON.stringify({
+    version: 1,
+    service: SERVICE,
+    ambiente,
+    cuit: String(cuit),
+    token: String(ticket.token),
+    sign: String(ticket.sign),
+    generationTime: ticket.generationTime,
+    expirationTime: ticket.expirationTime,
+  });
+  const response = await fetch(
+    `${sesion.url}/storage/v1/object/${BUCKET}/${encodeURIComponent(empresaId)}/${encodeURIComponent(ticketFileName(ambiente))}`,
+    {
+      method: "POST",
+      headers: {
+        apikey: sesion.anonKey,
+        Authorization: sesion.auth,
+        "Content-Type": "application/json",
+        "x-upsert": "true",
+      },
+      body: payload,
+    },
+  );
+  if (!response.ok) throw new Error(`WSAA_TICKET_SAVE_FAILED:${response.status}`);
+}
+
 async function guardarEstado(sesion, empresaId, values) {
   const response = await fetch(`${sesion.url}/rest/v1/arca_config?empresa_id=eq.${encodeURIComponent(empresaId)}`, {
     method: "PATCH",
@@ -285,6 +339,7 @@ function errorSeguro(error) {
   if (stage === "WSFE_REJECTED") return { code: "WSFE_AUTH_FAILED", message: "WSAA entregó credenciales, pero WSFEv1 rechazó la autenticación o el punto de venta." };
   if (/service|servicio|authorized|autoriz/i.test(raw)) return { code: "WSAA_SERVICE_NOT_AUTHORIZED", message: "ARCA no autorizó este certificado para WSFE. Verificá que la relación existente use el mismo certificado vigente cargado en SIGO." };
   if (/timeout|abort/i.test(raw)) return { code: "ARCA_TIMEOUT", message: "ARCA no respondió a tiempo. Reintentá en unos minutos." };
+  if (/WSAA_TICKET_SAVE_FAILED/i.test(raw)) return { code: "WSAA_TICKET_PRIVATE_SAVE_FAILED", message: "WSAA respondió, pero SIGO no pudo proteger el Ticket de Acceso para reutilizarlo. La emisión quedó bloqueada para evitar duplicar autenticaciones." };
   if (/WSAA_TICKET|WSAA_RESPONSE_INVALID/i.test(raw)) return { code: "WSAA_TICKET_INVALID", message: "WSAA respondió con un Ticket de Acceso incompleto o con vigencia inválida; SIGO no habilitó la emisión." };
   if (stage === "WSAA_REJECTED") return { code: "WSAA_REJECTED", message: "WSAA rechazó LoginCms. SIGO mantuvo bloqueada la emisión y registró el intento; no regeneres certificado hasta ver el diagnóstico." };
   return { code: "ARCA_AUTH_FAILED", message: "No se pudo completar la autenticación fiscal. SIGO mantuvo bloqueada la emisión y registró el intento sin exponer credenciales." };
@@ -292,7 +347,7 @@ function errorSeguro(error) {
 
 // El emisor CAE reutiliza exactamente el mismo protocolo WSAA/WSFE validado
 // aquí. Ningún helper exportado devuelve Token/Sign al navegador.
-export { WSAA, WSFE, escapeXml, decodeXml, extraer, descargarSecreto, autenticarWsaa, extraerErroresWsfe };
+export { WSAA, WSFE, escapeXml, decodeXml, extraer, descargarSecreto, autenticarWsaa, extraerErroresWsfe, normalizarTicketGuardado, leerTicketWsaa, guardarTicketWsaa };
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { error: "METHOD_NOT_ALLOWED" });
@@ -319,13 +374,18 @@ export default async function handler(req, res) {
     const puntosConfigurados = await leerPuntosVenta(sesion, empresaId, config.ambiente);
     if (puntosConfigurados.length === 0) return json(res, 409, { error: "ARCA_PUNTO_VENTA_REQUIRED" });
 
-    const [certificatePem, privateKeyPem] = await Promise.all([
-      descargarSecreto(sesion, empresaId, "certificate.pem"),
-      descargarSecreto(sesion, empresaId, "private-key.pem"),
-    ]);
-
+    let ticket = await leerTicketWsaa(sesion, empresaId, config.ambiente, config.cuit_emisor);
+    let ticketReutilizado = true;
     const tra = crearTra();
-    const ticket = await autenticarWsaa(WSAA[config.ambiente], tra.xml, certificatePem, privateKeyPem);
+    if (!ticket) {
+      const [certificatePem, privateKeyPem] = await Promise.all([
+        descargarSecreto(sesion, empresaId, "certificate.pem"),
+        descargarSecreto(sesion, empresaId, "private-key.pem"),
+      ]);
+      ticket = await autenticarWsaa(WSAA[config.ambiente], tra.xml, certificatePem, privateKeyPem);
+      await guardarTicketWsaa(sesion, empresaId, config.ambiente, config.cuit_emisor, ticket);
+      ticketReutilizado = false;
+    }
     const wsfe = await validarWsfe(WSFE[config.ambiente], ticket, config.cuit_emisor, puntosConfigurados);
 
     await guardarEstado(sesion, empresaId, {
@@ -341,6 +401,7 @@ export default async function handler(req, res) {
       servicio: SERVICE,
       generationTime: ticket.generationTime || tra.generationTime,
       expirationTime: ticket.expirationTime,
+      ticketReutilizado,
       wsfeValidado: true,
       puntosVentaConfigurados: puntosConfigurados,
       puntosVentaArca: wsfe.puntosArca,

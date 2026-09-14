@@ -1,12 +1,10 @@
 import {
-  WSAA,
   WSFE,
   escapeXml,
   decodeXml,
   extraer,
-  descargarSecreto,
-  autenticarWsaa,
   extraerErroresWsfe,
+  leerTicketWsaa,
 } from "./wsaa.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -327,13 +325,8 @@ export default async function handler(req, res) {
       return json(res, 409, { error: "ARCA_SALE_RESERVED_WITH_OTHER_FISCAL_IDENTITY" });
     }
 
-    const [certificatePem, privateKeyPem] = await Promise.all([
-      descargarSecreto(sesion, empresaId, "certificate.pem"),
-      descargarSecreto(sesion, empresaId, "private-key.pem"),
-    ]);
-    const now = Date.now();
-    const traXml = `<?xml version="1.0" encoding="UTF-8"?><loginTicketRequest version="1.0"><header><uniqueId>${Math.floor(now / 1000) >>> 0}</uniqueId><generationTime>${new Date(now - 5 * 60_000).toISOString()}</generationTime><expirationTime>${new Date(now + 10 * 60_000).toISOString()}</expirationTime></header><service>wsfe</service></loginTicketRequest>`;
-    const ticket = await autenticarWsaa(WSAA[config.ambiente], traXml, certificatePem, privateKeyPem);
+    const ticket = await leerTicketWsaa(sesion, empresaId, config.ambiente, config.cuit_emisor);
+    if (!ticket) return json(res, 409, { error: "ARCA_TICKET_REFRESH_REQUIRED" });
 
     if (reserva) {
       const recovered = await consultarComprobante(WSFE[config.ambiente], ticket, config.cuit_emisor, reserva.punto_venta, reserva.tipo_cbte, Number(reserva.numero_cbte));

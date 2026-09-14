@@ -27,6 +27,7 @@ type Comprobante = {
 
 const ERROR_MESSAGES: Record<string, string> = {
   ARCA_AUTH_NOT_VALIDATED: "Primero debe aprobarse la autenticación WSAA y la validación WSFEv1.",
+  ARCA_TICKET_REFRESH_REQUIRED: "El Ticket de Acceso venció o no está disponible. Volvé a autenticar WSAA; SIGO no solicitará un segundo ticket mientras exista uno vigente.",
   ARCA_PRODUCT_FISCAL_DATA_REQUIRED: "La venta contiene productos sin clasificación fiscal de IVA.",
   ARCA_PRODUCT_PRICE_TAX_MODE_UNSUPPORTED: "La venta contiene productos cuyo precio no está marcado como IVA incluido.",
   ARCA_CLIENT_FISCAL_DATA_REQUIRED: "El cliente no tiene documento y condición frente al IVA completos.",

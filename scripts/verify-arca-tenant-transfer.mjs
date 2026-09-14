@@ -18,6 +18,8 @@ for (const token of [
   'ARCA_TARGET_ALREADY_CONFIGURED',
   'x-upsert": "true"',
   'storage://${BUCKET}/${empresaId}/${fileName}',
+  'invalidarTicketsWsaa',
+  'ticket-wsfe-${ambiente}.json',
 ]) {
   if (!api.includes(token)) throw new Error(`ARCA tenant transfer safeguard missing: ${token}`);
 }
