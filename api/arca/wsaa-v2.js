@@ -153,7 +153,8 @@ async function validarWsfe(sesion, ambiente, endpoint, ticket, cuit) {
   const puntos = parsePuntosVenta(response.body);
   const activos = puntos.filter((item) => item.bloqueado !== "S" && !item.fechaBaja);
   const cae = activos.filter((item) => item.emisionTipo === "CAE");
-  const elegibles = (cae.length ? cae : activos).map((item) => item.numero);
+  const elegibles = cae.map((item) => item.numero);
+  if (!elegibles.length) throw new Error("ARCA_SIN_PUNTOS_CAE");
   return [...new Set(elegibles)].sort((a, b) => a - b);
 }
 
@@ -188,6 +189,7 @@ async function sincronizarPuntos(sesion, empresaId, ambiente, habilitados) {
 
 function mensajeSeguro(error) {
   const raw = String(error?.message || error || "");
+  if (/ARCA_SIN_PUNTOS_CAE/i.test(raw)) return { code: "WSFE_SIN_PUNTOS_CAE", message: "ARCA respondió correctamente, pero no informó un punto de venta habilitado para emisión CAE." };
   if (/ARCA_SIN_PUNTOS/i.test(raw)) return { code: "WSFE_SIN_PUNTOS_ACTIVOS", message: "ARCA respondió correctamente, pero no informó puntos de venta activos para este CUIT." };
   if (/PV_DISABLE|PV_UPSERT/i.test(raw)) return { code: "WSFE_PUNTO_VENTA_SYNC_FAILED", message: "ARCA respondió correctamente, pero SIGO no pudo sincronizar los puntos de venta de esta empresa." };
   if (/SECRET_/i.test(raw)) return { code: "ARCA_SECRET_READ_FAILED", message: "SIGO no pudo leer el certificado o la clave privada guardados para esta empresa." };
