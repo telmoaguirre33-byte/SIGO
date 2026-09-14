@@ -3,17 +3,17 @@ begin;
 
 do $$
 declare
-  v_empresa uuid; v_user uuid; v_product uuid; v_supplier uuid; v_created_product uuid;
+  v_empresa uuid; v_user uuid; v_product uuid; v_supplier uuid; v_created_product uuid; v_supplier_guard uuid;
   v_scanner_product uuid; v_scan_code text; v_created_code text;
   v_stock_before numeric; v_stock_after_purchase numeric; v_stock_after_purchase_retry numeric;
-  v_stock_after_duplicate_attempt numeric; v_stock_after_sale numeric; v_stock_after_sale_retry numeric;
+  v_stock_after_duplicate_attempt numeric; v_stock_after_limit_attempt numeric; v_stock_after_sale numeric; v_stock_after_sale_retry numeric;
   v_stock_after_oversell numeric;
   v_cost numeric; v_purchase_cost numeric; v_cost_after_purchase numeric; v_last_cost_after_purchase numeric;
   v_price numeric; v_purchase uuid; v_purchase_retry uuid; v_sale uuid; v_sale_retry uuid;
   v_created_cost numeric; v_created_last_cost numeric; v_created_stock numeric;
   v_created_stock_min numeric; v_created_stock_max numeric; v_created_price numeric;
   v_purchase_items integer; v_sale_items integer; v_cash_rows integer; v_scanner_matches integer;
-  v_oversell_sales integer;
+  v_oversell_sales integer; v_limit_purchases integer; v_supplier_dup_count integer;
   v_cash_total numeric; v_sale_total numeric; v_purchase_total numeric;
   v_tx text := txid_current()::text;
 begin
@@ -104,6 +104,39 @@ begin
     values(v_empresa,'QA Proveedor Transaccional','QA Proveedor',true) returning id into v_supplier;
   end if;
 
+  -- La base debe rechazar CUIT inválido incluso si un cliente defectuoso evita la validación web.
+  begin
+    insert into public.proveedores_sigo(empresa_id,razon_social,cuit,activo)
+    values(v_empresa,'QA CUIT Invalido '||v_tx,'20-12345678-0',true);
+    raise exception 'QA_SUPPLIER_INVALID_CUIT_NOT_BLOCKED';
+  exception when others then
+    if position('QA_SUPPLIER_INVALID_CUIT_NOT_BLOCKED' in sqlerrm)>0 then raise; end if;
+    if position('SUPPLIER_CUIT_INVALID' in sqlerrm)=0 then
+      raise exception 'QA_SUPPLIER_INVALID_CUIT_WRONG_ERROR: %',sqlerrm;
+    end if;
+  end;
+  raise notice 'SIGO_QA_SUPPLIER_CUIT_BLOCK_OK';
+
+  -- Razones sociales equivalentes por puntuación/espacios no pueden crear dos proveedores activos.
+  insert into public.proveedores_sigo(empresa_id,razon_social,activo)
+  values(v_empresa,'QA Proveedor Guard '||v_tx,true) returning id into v_supplier_guard;
+  begin
+    insert into public.proveedores_sigo(empresa_id,razon_social,activo)
+    values(v_empresa,'QA.Proveedor-Guard '||v_tx,true);
+    raise exception 'QA_SUPPLIER_NAME_DUPLICATE_NOT_BLOCKED';
+  exception when others then
+    if position('QA_SUPPLIER_NAME_DUPLICATE_NOT_BLOCKED' in sqlerrm)>0 then raise; end if;
+    if position('SUPPLIER_NAME_DUPLICATE' in sqlerrm)=0 then
+      raise exception 'QA_SUPPLIER_NAME_DUPLICATE_WRONG_ERROR: %',sqlerrm;
+    end if;
+  end;
+  select count(*) into v_supplier_dup_count
+  from public.proveedores_sigo p
+  where p.empresa_id=v_empresa and p.activo=true
+    and public.sigo_normalizar_identidad_proveedor(p.razon_social)=public.sigo_normalizar_identidad_proveedor('QA Proveedor Guard '||v_tx);
+  if v_supplier_dup_count<>1 then raise exception 'QA_SUPPLIER_NAME_DUPLICATE_COUNT_FAILED rows=%',v_supplier_dup_count; end if;
+  raise notice 'SIGO_QA_SUPPLIER_IDENTITY_BLOCK_OK supplier=%',v_supplier_guard;
+
   -- La compra usa un costo deliberadamente distinto para demostrar que no sólo suma stock:
   -- también actualiza costo_actual y costo_ultima_compra de manera exacta.
   v_purchase_cost := round(v_cost + 1.23, 2);
@@ -129,11 +162,11 @@ begin
   from public.compra_items_sigo where compra_id=v_purchase and empresa_id=v_empresa;
   if v_purchase_items<>1 or round(v_purchase_total,2)<>round(v_purchase_cost*2,2) then raise exception 'QA_PURCHASE_DETAIL_FAILED rows=% total=%',v_purchase_items,v_purchase_total; end if;
 
-  -- Una segunda carga del mismo comprobante, aunque use otra clave idempotente, debe ser bloqueada.
+  -- El mismo comprobante con guiones/espacios/puntos distintos también debe bloquearse.
   begin
     perform public.confirmar_compra_sigo(v_empresa,v_supplier,
       jsonb_build_array(jsonb_build_object('producto_id',v_product::text,'cantidad',2,'costo_unitario',v_purchase_cost)),
-      current_date,'QA','QA-'||v_tx,'qa-purchase-duplicate-'||v_tx);
+      current_date,'Q.A.','Q A - '||v_tx,'qa-purchase-duplicate-'||v_tx);
     raise exception 'QA_PURCHASE_DUPLICATE_NOT_BLOCKED';
   exception when others then
     if position('QA_PURCHASE_DUPLICATE_NOT_BLOCKED' in sqlerrm)>0 then raise; end if;
@@ -144,6 +177,27 @@ begin
   select stock_actual into v_stock_after_duplicate_attempt from public.productos where id=v_product and empresa_id=v_empresa;
   if v_stock_after_duplicate_attempt<>v_stock_after_purchase then raise exception 'QA_PURCHASE_DUPLICATE_CHANGED_STOCK'; end if;
   raise notice 'SIGO_QA_PURCHASE_DUPLICATE_BLOCK_OK document=% stock=%','QA-'||v_tx,v_stock_after_duplicate_attempt;
+  raise notice 'SIGO_QA_PURCHASE_CANONICAL_DUPLICATE_BLOCK_OK';
+
+  -- Una cantidad fuera del límite operativo debe fallar antes de dejar compra o stock parcial.
+  begin
+    perform public.confirmar_compra_sigo(v_empresa,v_supplier,
+      jsonb_build_array(jsonb_build_object('producto_id',v_product::text,'cantidad',1000001,'costo_unitario',v_purchase_cost)),
+      current_date,'QA-LIMIT','QA-LIMIT-'||v_tx,'qa-purchase-limit-'||v_tx);
+    raise exception 'QA_PURCHASE_LIMIT_NOT_BLOCKED';
+  exception when others then
+    if position('QA_PURCHASE_LIMIT_NOT_BLOCKED' in sqlerrm)>0 then raise; end if;
+    if position('PURCHASE_QUANTITY_LIMIT' in sqlerrm)=0 then
+      raise exception 'QA_PURCHASE_LIMIT_WRONG_ERROR: %',sqlerrm;
+    end if;
+  end;
+  select stock_actual into v_stock_after_limit_attempt from public.productos where id=v_product and empresa_id=v_empresa;
+  select count(*) into v_limit_purchases from public.compras_sigo
+  where empresa_id=v_empresa and idempotency_key='qa-purchase-limit-'||v_tx;
+  if v_stock_after_limit_attempt<>v_stock_after_purchase or v_limit_purchases<>0 then
+    raise exception 'QA_PURCHASE_LIMIT_SIDE_EFFECT stock_before=% stock_after=% rows=%',v_stock_after_purchase,v_stock_after_limit_attempt,v_limit_purchases;
+  end if;
+  raise notice 'SIGO_QA_PURCHASE_LIMIT_BLOCK_OK product=% stock=%',v_product,v_stock_after_limit_attempt;
 
   -- Caso que detectó el bug original: efectivo y sin cliente.
   v_sale := public.confirmar_venta_sigo_v2(v_empresa,
