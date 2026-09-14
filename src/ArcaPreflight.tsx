@@ -25,6 +25,7 @@ type PreflightResult = {
   autenticacionRealAntiguedadMinutos?: number | null;
   emisionHabilitable?: boolean;
   ultimaPruebaAt?: string | null;
+  ultimoErrorSeguro?: string | null;
   nota?: string;
   error?: string;
 };
@@ -86,7 +87,7 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
     return token;
   }
 
-  async function validar({ conservarError = false }: { conservarError?: boolean } = {}) {
+  async function validar({ conservarError = false }: { conservarError?: boolean } = {}): Promise<PreflightResult | null> {
     setLoading(true);
     if (!conservarError) setError("");
     try {
@@ -102,9 +103,11 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
       const payload = await response.json().catch(() => null) as PreflightResult | null;
       if (!response.ok || !payload) throw new Error(payload?.error || `HTTP_${response.status}`);
       setResult(payload);
+      return payload;
     } catch (err) {
       console.error("ARCA preflight", err);
       if (!conservarError) setError("No se pudo completar la prevalidación técnica. Revisá la sesión, permisos y conexión.");
+      return null;
     } finally {
       setLoading(false);
     }
@@ -141,8 +144,11 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
       errorDelIntento = err instanceof Error ? err.message : "No se pudo autenticar contra ARCA.";
       setWsaaIntento("Último intento WSAA: rechazado o interrumpido.");
     } finally {
-      await validar({ conservarError: true });
-      if (errorDelIntento) setError(errorDelIntento);
+      const preflight = await validar({ conservarError: true });
+      if (errorDelIntento) {
+        const diagnostico = preflight?.ultimoErrorSeguro?.trim();
+        setError(diagnostico || errorDelIntento);
+      }
       setWsaaLoading(false);
     }
   }
@@ -182,16 +188,17 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
         <div className="arca-security-note" role="status">
           <strong>{result.emisionHabilitable ? "ARCA listo para emisión" : result.ok ? "Preparación técnica completa" : "Preparación incompleta"}</strong>
           <span>{marca(checks?.configuracion)} Configuración fiscal encontrada</span>
-          <span>{marca(checks?.configuracionActiva)} Configuración ARCA activa</span>
+          <span>{marca(checks?.configuracionActiva)} Emisión ARCA activada por última autenticación</span>
           <span>{marca(checks?.ambienteValido)} Ambiente válido{result.ambiente ? ` · ${result.ambiente}` : ""}</span>
           <span>{marca(checks?.cuit)} CUIT válido con dígito verificador</span>
           <span>{marca(checks?.servicio)} Servicio WSAA = wsfe / WSFEv1</span>
           <span>{marca(checks?.certificado)} Certificado referenciado y vigente{checks?.certificadoEstado ? ` · ${checks.certificadoEstado}` : ""}</span>
           <span>{marca(checks?.puntoVenta)} Punto de venta activo y válido{checks?.puntosVentaActivos?.length ? ` · ${checks.puntosVentaActivos.join(", ")}` : ""}</span>
           <span>{marca(checks?.wsaaReachable)} WSAA accesible desde el backend</span>
-          <span>{marca(checks?.wsfeReachable)} WSFEv1 accesible desde el backend</span>
+          <span>{marca(checks?.wsfeReachable)} WSFEv1 accesible desde el backend · prueba FEDummy</span>
           <span>{result.autenticacionRealValidada ? "✓" : "—"} Autenticación WSAA real {result.autenticacionRealEstado ? `· ${result.autenticacionRealEstado}` : ""}{textoAntiguedad(result.autenticacionRealAntiguedadMinutos)}</span>
           <span>{result.emisionHabilitable ? "✓ Emisión habilitable: preflight + WSAA vigente" : "— Emisión todavía bloqueada hasta tener WSAA vigente"}</span>
+          {result.ultimoErrorSeguro && !result.autenticacionRealValidada ? <span>Último diagnóstico seguro · {result.ultimoErrorSeguro}</span> : null}
           <span>{result.nota || "La emisión permanece bloqueada hasta validar WSAA con el certificado de la empresa."}</span>
         </div>
       ) : null}
