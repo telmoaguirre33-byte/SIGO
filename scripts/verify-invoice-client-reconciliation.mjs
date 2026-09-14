@@ -16,6 +16,19 @@ const clientRequired = [
   ['No pude leer el número de comprobante', 'document number must be known before automatic stock preparation'],
   ['toleranciaCritica = Math.max(10, calculado * 0.15)', 'critical line arithmetic mismatch guard'],
   ['diferencia crítica entre cantidad × costo y total leído', 'critical line mismatch user-facing block'],
+  ['PAGINA_MAESTROS_FACTURA = 1000', 'paginated live-master reconciliation'],
+  ['MAX_MAESTROS_FACTURA = 10000', 'bounded live-master reconciliation'],
+  ['validarProductoFacturaContraMaestro', 'product master ambiguity reconciliation'],
+  ['coincide por código con más de un producto activo', 'duplicate product-code block'],
+  ['coincide por nombre con más de un producto activo', 'duplicate product-name block'],
+  ['código y nombre que apuntan a productos distintos', 'product code/name conflict block'],
+  ['mismo nombre que un producto existente pero un código diferente', 'existing product identity conflict block'],
+  ['validarProveedorFacturaContraMaestro', 'supplier master ambiguity reconciliation'],
+  ['El CUIT leído coincide con más de un proveedor activo', 'duplicate supplier-CUIT block'],
+  ['La razón social leída coincide con más de un proveedor activo', 'duplicate supplier-name block'],
+  ['El CUIT y la razón social leídos apuntan a proveedores distintos', 'supplier identity conflict block'],
+  ['La razón social leída ya existe con otro CUIT', 'supplier CUIT conflict block'],
+  ['await validarFacturaContraMaestrosSigo(empresaId, factura)', 'live master reconciliation before returning invoice data'],
 ];
 
 for (const [needle, label] of clientRequired) {
@@ -38,6 +51,10 @@ if (!client.includes('confianzaGeneral < MIN_GENERAL_CONFIDENCE_AUTO')) {
 
 if (!client.includes('item.confianza < MIN_LINE_CONFIDENCE_AUTO')) {
   throw new Error('Invoice AI client must block very-low-confidence lines before purchase preparation');
+}
+
+if (!client.includes('.eq("empresa_id", empresaId)') || !client.includes('.eq("activo", true)')) {
+  throw new Error('Invoice AI master reconciliation must remain tenant-scoped and active-only');
 }
 
 const serverRequired = [
