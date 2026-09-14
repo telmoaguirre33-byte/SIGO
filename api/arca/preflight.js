@@ -1,4 +1,5 @@
 import { X509Certificate, createPrivateKey, randomBytes, sign, verify } from "node:crypto";
+import https from "node:https";
 
 const PREFLIGHT_TIMEOUT_MS = 8_000;
 const AUTH_REAL_MAX_AGE_MS = 12 * 60 * 60 * 1000;
@@ -166,30 +167,55 @@ async function probarEndpoint(url) {
   }
 }
 
-async function probarWsfe(endpoint) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), PREFLIGHT_TIMEOUT_MS);
+function probarWsfe(endpoint) {
   const soap = `<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ar="http://ar.gov.afip.dif.FEV1/"><soapenv:Header/><soapenv:Body><ar:FEDummy/></soapenv:Body></soapenv:Envelope>`;
-  try {
-    const response = await fetch(endpoint, {
+  return new Promise((resolve) => {
+    let target;
+    try {
+      target = new URL(endpoint);
+    } catch {
+      resolve({ reachable: false, status: null, reason: "ENDPOINT_INVALID", method: "FEDummy" });
+      return;
+    }
+
+    let settled = false;
+    const req = https.request({
+      protocol: target.protocol,
+      hostname: target.hostname,
+      port: target.port || 443,
+      path: `${target.pathname}${target.search}`,
       method: "POST",
-      signal: controller.signal,
-      redirect: "follow",
+      family: 4,
+      agent: false,
+      timeout: PREFLIGHT_TIMEOUT_MS,
       headers: {
         "Content-Type": "text/xml;charset=UTF-8",
+        "Content-Length": Buffer.byteLength(soap),
         SOAPAction: "http://ar.gov.afip.dif.FEV1/FEDummy",
-        "User-Agent": "SIGO-ARCA-Preflight/1.2",
+        Connection: "close",
+        "User-Agent": "SIGO-ARCA-Preflight/1.3",
       },
-      body: soap,
+    }, (response) => {
+      let body = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => { if (body.length <= 200_000) body += chunk; });
+      response.on("end", () => {
+        if (settled) return;
+        settled = true;
+        const status = Number(response.statusCode || 0);
+        const dummyRespondio = /<(?:[A-Za-z0-9_]+:)?FEDummyResult\b/i.test(body) || /<(?:[A-Za-z0-9_]+:)?AppServer\b/i.test(body);
+        resolve({ reachable: status >= 200 && status < 300 && dummyRespondio, status, method: "FEDummy", transport: "https-ipv4" });
+      });
     });
-    const body = await response.text().catch(() => "");
-    const dummyRespondio = /<(?:[A-Za-z0-9_]+:)?FEDummyResult\b/i.test(body) || /<(?:[A-Za-z0-9_]+:)?AppServer\b/i.test(body);
-    return { reachable: response.ok && dummyRespondio, status: response.status, method: "FEDummy" };
-  } catch (error) {
-    return { reachable: false, status: null, reason: error?.name === "AbortError" ? "TIMEOUT" : "NETWORK", method: "FEDummy" };
-  } finally {
-    clearTimeout(timeout);
-  }
+
+    req.on("timeout", () => req.destroy(new Error("TIMEOUT")));
+    req.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      resolve({ reachable: false, status: null, reason: error?.message === "TIMEOUT" ? "TIMEOUT" : "NETWORK", method: "FEDummy", transport: "https-ipv4" });
+    });
+    req.end(soap);
+  });
 }
 
 function certificadoMetadataEstado(config) {
