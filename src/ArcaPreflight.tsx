@@ -35,6 +35,9 @@ type WsaaResult = {
   servicio?: string;
   generationTime?: string;
   expirationTime?: string;
+  wsfeValidado?: boolean;
+  puntosVentaConfigurados?: number[];
+  puntosVentaArca?: number[];
   nota?: string;
   error?: string;
   message?: string;
@@ -110,11 +113,13 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
         throw new Error(payload?.message || payload?.error || `HTTP_${response.status}`);
       }
       const vence = payload.expirationTime ? new Date(payload.expirationTime).toLocaleString("es-AR") : "";
-      setWsaaOk(`WSAA validado correctamente${vence ? ` · ticket vigente hasta ${vence}` : ""}.`);
+      const puntos = payload.puntosVentaArca?.length ? ` · PV ARCA: ${payload.puntosVentaArca.join(", ")}` : "";
+      const wsfe = payload.wsfeValidado ? "WSAA + WSFEv1 validados correctamente" : "WSAA validado correctamente";
+      setWsaaOk(`${wsfe}${puntos}${vence ? ` · ticket vigente hasta ${vence}` : ""}.`);
       await validar();
     } catch (err) {
-      console.error("ARCA WSAA real", err);
-      setError(err instanceof Error ? err.message : "No se pudo autenticar contra WSAA.");
+      console.error("ARCA WSAA/WSFEv1 real", err);
+      setError(err instanceof Error ? err.message : "No se pudo autenticar contra ARCA.");
       await validar();
     } finally {
       setWsaaLoading(false);
@@ -147,7 +152,7 @@ export default function ArcaPreflight({ empresaId }: { empresaId: string }) {
       </div>
 
       {!result ? (
-        <p className="form-help">Si ya cargaste CUIT, certificado y punto de venta, podés autenticar WSAA directamente. El backend vuelve a validar los requisitos antes de activar ARCA.</p>
+        <p className="form-help">Si ya cargaste CUIT, certificado y punto de venta, podés autenticar WSAA directamente. SIGO valida además el acceso autenticado a WSFEv1 y contrasta los puntos de venta antes de activar ARCA.</p>
       ) : null}
 
       {result ? (

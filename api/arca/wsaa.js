@@ -6,8 +6,13 @@ const WSAA = {
   homologacion: "https://wsaahomo.afip.gov.ar/ws/services/LoginCms",
   produccion: "https://wsaa.afip.gov.ar/ws/services/LoginCms",
 };
+const WSFE = {
+  homologacion: "https://wswhomo.afip.gov.ar/wsfev1/service.asmx",
+  produccion: "https://servicios1.afip.gov.ar/wsfev1/service.asmx",
+};
 
 function json(res, status, body) {
+  res.setHeader("Cache-Control", "no-store, max-age=0");
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8").send(JSON.stringify(body));
 }
 
@@ -76,6 +81,19 @@ async function leerConfig(sesion, empresaId) {
   return Array.isArray(rows) ? rows[0] ?? null : null;
 }
 
+async function leerPuntosVenta(sesion, empresaId, ambiente) {
+  const select = "numero,activo,ambiente";
+  const response = await fetch(
+    `${sesion.url}/rest/v1/arca_puntos_venta?empresa_id=eq.${encodeURIComponent(empresaId)}&ambiente=eq.${encodeURIComponent(ambiente)}&activo=is.true&select=${encodeURIComponent(select)}&order=numero.asc`,
+    { headers: { apikey: sesion.anonKey, Authorization: sesion.auth, Accept: "application/json" } },
+  );
+  if (!response.ok) throw new Error("PUNTOS_VENTA_READ_FAILED");
+  const rows = await response.json();
+  return Array.isArray(rows)
+    ? rows.map((row) => Number(row?.numero)).filter((numero) => Number.isInteger(numero) && numero > 0)
+    : [];
+}
+
 async function descargarSecreto(sesion, empresaId, fileName) {
   const response = await fetch(
     `${sesion.url}/storage/v1/object/authenticated/${BUCKET}/${encodeURIComponent(empresaId)}/${encodeURIComponent(fileName)}`,
@@ -117,6 +135,9 @@ function crearTra() {
 function firmarTra(traXml, certificatePem, privateKeyPem) {
   const cert = forge.pki.certificateFromPem(certificatePem);
   const key = forge.pki.privateKeyFromPem(privateKeyPem);
+  if (cert.publicKey?.n && key?.n && cert.publicKey.n.compareTo(key.n) !== 0) {
+    throw new Error("CERT_KEY_MISMATCH");
+  }
   const p7 = forge.pkcs7.createSignedData();
   p7.content = forge.util.createBuffer(traXml, "utf8");
   p7.addCertificate(cert);
@@ -135,6 +156,16 @@ function firmarTra(traXml, certificatePem, privateKeyPem) {
   return forge.util.encode64(der, 64);
 }
 
+function validarTicket(ticket) {
+  const now = Date.now();
+  const expirationMs = Date.parse(ticket?.expirationTime || "");
+  const generationMs = ticket?.generationTime ? Date.parse(ticket.generationTime) : now;
+  if (!ticket?.token || !ticket?.sign || !Number.isFinite(expirationMs)) throw new Error("WSAA_RESPONSE_INVALID");
+  if (!Number.isFinite(generationMs) || generationMs > now + 5 * 60_000) throw new Error("WSAA_TICKET_TIME_INVALID");
+  if (expirationMs <= now + 60_000 || expirationMs > now + 24 * 60 * 60_000) throw new Error("WSAA_TICKET_EXPIRATION_INVALID");
+  return ticket;
+}
+
 async function loginCms(endpoint, cms) {
   const soap = `<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:wsaa="http://wsaa.view.sua.dvadac.desein.afip.gov"><soapenv:Header/><soapenv:Body><wsaa:loginCms><wsaa:in0>${escapeXml(cms)}</wsaa:in0></wsaa:loginCms></soapenv:Body></soapenv:Envelope>`;
   const controller = new AbortController();
@@ -146,7 +177,7 @@ async function loginCms(endpoint, cms) {
       headers: {
         "Content-Type": "text/xml;charset=UTF-8",
         SOAPAction: "urn:LoginCms",
-        "User-Agent": "SIGO-WSAA/1.0",
+        "User-Agent": "SIGO-WSAA/1.1",
       },
       body: soap,
     });
@@ -164,8 +195,54 @@ async function loginCms(endpoint, cms) {
     const sign = extraer(ticketXml, "sign");
     const expirationTime = extraer(ticketXml, "expirationTime");
     const generationTime = extraer(ticketXml, "generationTime");
-    if (!token || !sign || !expirationTime) throw new Error("WSAA_RESPONSE_INVALID");
-    return { token, sign, expirationTime, generationTime };
+    return validarTicket({ token, sign, expirationTime, generationTime });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function parsePuntosVentaWsfe(body) {
+  const bloques = String(body || "").match(/<(?:[A-Za-z0-9_]+:)?PtoVenta(?:\s[^>]*)?>[\s\S]*?<\/(?:[A-Za-z0-9_]+:)?PtoVenta>/gi) || [];
+  return bloques
+    .map((bloque) => ({
+      numero: Number(extraer(bloque, "Nro")),
+      bloqueado: extraer(bloque, "Bloqueado").toUpperCase(),
+      fechaBaja: extraer(bloque, "FchBaja"),
+    }))
+    .filter((item) => Number.isInteger(item.numero) && item.numero > 0);
+}
+
+async function validarWsfe(endpoint, ticket, cuit, puntosConfigurados) {
+  const soap = `<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ar="http://ar.gov.afip.dif.FEV1/"><soapenv:Header/><soapenv:Body><ar:FEParamGetPtosVenta><ar:Auth><ar:Token>${escapeXml(ticket.token)}</ar:Token><ar:Sign>${escapeXml(ticket.sign)}</ar:Sign><ar:Cuit>${escapeXml(cuit)}</ar:Cuit></ar:Auth></ar:FEParamGetPtosVenta></soapenv:Body></soapenv:Envelope>`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "text/xml;charset=UTF-8",
+        SOAPAction: "http://ar.gov.afip.dif.FEV1/FEParamGetPtosVenta",
+        "User-Agent": "SIGO-WSFEv1-Probe/1.0",
+      },
+      body: soap,
+    });
+    const body = await response.text();
+    const fault = decodeXml(extraer(body, "faultstring"));
+    const errorCode = extraer(body, "Code");
+    const errorMessage = decodeXml(extraer(body, "Msg"));
+    if (!response.ok || fault || (errorCode && errorCode !== "0")) {
+      const err = new Error(fault || errorMessage || `HTTP_${response.status}`);
+      err.code = "WSFE_REJECTED";
+      throw err;
+    }
+    const puntosArca = parsePuntosVentaWsfe(body);
+    const habilitados = puntosArca
+      .filter((item) => item.bloqueado !== "S" && !item.fechaBaja)
+      .map((item) => item.numero);
+    const faltantes = puntosConfigurados.filter((numero) => !habilitados.includes(numero));
+    if (faltantes.length > 0) throw new Error(`PUNTO_VENTA_NO_HABILITADO:${faltantes.join(",")}`);
+    return { puntosArca: habilitados };
   } finally {
     clearTimeout(timeout);
   }
@@ -173,10 +250,14 @@ async function loginCms(endpoint, cms) {
 
 function errorSeguro(error) {
   const raw = error instanceof Error ? error.message : String(error || "UNKNOWN");
+  if (/CERT_KEY_MISMATCH/i.test(raw)) return { code: "ARCA_CERT_KEY_MISMATCH", message: "El certificado y la clave privada no forman el mismo par criptográfico. Volvé a cargar los archivos correctos." };
   if (/cms\.cert\.untrusted|certificate|certificado/i.test(raw)) return { code: "WSAA_CERTIFICATE_REJECTED", message: "ARCA rechazó el certificado para este ambiente. Verificá si corresponde a homologación o producción y que esté asociado al servicio WSFE." };
+  if (/PUNTO_VENTA_NO_HABILITADO/i.test(raw)) return { code: "WSFE_PUNTO_VENTA_INVALIDO", message: "WSFEv1 respondió correctamente, pero al menos un punto de venta configurado en SIGO no está habilitado en ARCA para facturación electrónica." };
+  if (/WSFE|FEParamGetPtosVenta/i.test(raw)) return { code: "WSFE_AUTH_FAILED", message: "WSAA respondió, pero WSFEv1 no aceptó la autenticación o no pudo validar los puntos de venta." };
   if (/service|servicio|auth|authorized|autoriz/i.test(raw)) return { code: "WSAA_SERVICE_NOT_AUTHORIZED", message: "ARCA no autorizó el certificado para WSFE. Asociá el alias del certificado al servicio de Facturación Electrónica/WSFE en ARCA." };
-  if (/timeout|abort/i.test(raw)) return { code: "WSAA_TIMEOUT", message: "WSAA no respondió a tiempo. Reintentá en unos minutos." };
-  return { code: "WSAA_LOGIN_FAILED", message: raw.slice(0, 240) };
+  if (/timeout|abort/i.test(raw)) return { code: "ARCA_TIMEOUT", message: "ARCA no respondió a tiempo. Reintentá en unos minutos." };
+  if (/WSAA_TICKET|WSAA_RESPONSE_INVALID/i.test(raw)) return { code: "WSAA_TICKET_INVALID", message: "WSAA respondió con un Ticket de Acceso incompleto o con vigencia inválida; SIGO no habilitó la emisión." };
+  return { code: "ARCA_AUTH_FAILED", message: "No se pudo completar la autenticación fiscal. Revisá la configuración ARCA y volvé a intentar." };
 }
 
 export default async function handler(req, res) {
@@ -195,10 +276,14 @@ export default async function handler(req, res) {
   try {
     const config = await leerConfig(sesion, empresaId);
     if (!config) return json(res, 409, { error: "ARCA_CONFIG_REQUIRED" });
-    if (!WSAA[config.ambiente]) return json(res, 409, { error: "ARCA_AMBIENTE_INVALIDO" });
+    if (!WSAA[config.ambiente] || !WSFE[config.ambiente]) return json(res, 409, { error: "ARCA_AMBIENTE_INVALIDO" });
+    if (!/^\d{11}$/.test(String(config.cuit_emisor || ""))) return json(res, 409, { error: "ARCA_CUIT_INVALIDO" });
     if (config.wsaa_service !== SERVICE || config.wsfe_version !== "WSFEv1") return json(res, 409, { error: "ARCA_SERVICIO_INVALIDO" });
     if (!config.certificado_ref) return json(res, 409, { error: "ARCA_CERTIFICADO_REQUIRED" });
     if (!config.certificado_vence || Date.parse(config.certificado_vence) <= Date.now()) return json(res, 409, { error: "ARCA_CERTIFICADO_VENCIDO" });
+
+    const puntosConfigurados = await leerPuntosVenta(sesion, empresaId, config.ambiente);
+    if (puntosConfigurados.length === 0) return json(res, 409, { error: "ARCA_PUNTO_VENTA_REQUIRED" });
 
     const [certificatePem, privateKeyPem] = await Promise.all([
       descargarSecreto(sesion, empresaId, "certificate.pem"),
@@ -208,6 +293,7 @@ export default async function handler(req, res) {
     const tra = crearTra();
     const cms = firmarTra(tra.xml, certificatePem, privateKeyPem);
     const ticket = await loginCms(WSAA[config.ambiente], cms);
+    const wsfe = await validarWsfe(WSFE[config.ambiente], ticket, config.cuit_emisor, puntosConfigurados);
 
     await guardarEstado(sesion, empresaId, {
       activo: true,
@@ -222,7 +308,10 @@ export default async function handler(req, res) {
       servicio: SERVICE,
       generationTime: ticket.generationTime || tra.generationTime,
       expirationTime: ticket.expirationTime,
-      nota: "Autenticación WSAA real aprobada. Token y Sign no se exponen al navegador ni se guardan en arca_config.",
+      wsfeValidado: true,
+      puntosVentaConfigurados: puntosConfigurados,
+      puntosVentaArca: wsfe.puntosArca,
+      nota: "Autenticación WSAA real y acceso autenticado a WSFEv1 aprobados. Token y Sign no se exponen al navegador ni se guardan en arca_config.",
     });
   } catch (error) {
     const safe = errorSeguro(error);
@@ -234,9 +323,9 @@ export default async function handler(req, res) {
         ultimo_error: `${safe.code}: ${safe.message}`.slice(0, 500),
       });
     } catch {
-      // No ocultar el error original de WSAA si falla el registro de estado.
+      // No ocultar el error original de ARCA si falla el registro de estado.
     }
-    console.error("SIGO WSAA login", safe.code);
+    console.error("SIGO ARCA auth", safe.code);
     return json(res, 502, { error: safe.code, message: safe.message });
   }
 }
