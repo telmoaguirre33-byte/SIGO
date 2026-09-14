@@ -21,6 +21,7 @@ on:
       - 'scripts/verify-critical.mjs'
       - 'scripts/verify-arca-*.mjs'
       - '.github/workflows/production-operational-smoke.yml'
+      - '.github/workflows/qa-transaction-probe.yml'
   workflow_dispatch:
 
 concurrency:
