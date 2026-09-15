@@ -4,7 +4,7 @@ const authPath = "src/SigoAuthGate.tsx";
 let auth = fs.readFileSync(authPath, "utf8");
 
 const legacy = 'const SIGO_PRODUCTION_URL = "https://comercial-lilac.vercel.app/";';
-const hardened = 'const SIGO_PRODUCTION_URL = String(import.meta.env.VITE_PUBLIC_APP_URL ?? window.location.origin).replace(/\\/?$/, "/");';
+const hardened = 'const SIGO_PRODUCTION_URL = String(import.meta.env.VITE_PUBLIC_APP_URL ?? "https://www.sigo-gestion.com/").replace(/\\/?$/, "/");';
 
 if (auth.includes(legacy)) {
   auth = auth.replace(legacy, hardened);
