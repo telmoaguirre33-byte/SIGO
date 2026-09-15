@@ -1,4 +1,5 @@
 import ArcaPreflight from "./ArcaPreflight";
+import ModulosControlPanel from "./ModulosControlPanel";
 import type { EmpresaOperativa } from "./tenant";
 import { etiquetaRol } from "./workspacePermissions";
 
@@ -8,7 +9,7 @@ export default function ConfiguracionOperativa({ empresa }: { empresa: EmpresaOp
       <div className="page-header">
         <div>
           <h2>Configuración</h2>
-          <p>Parámetros generales, control fiscal y estado operativo de la empresa activa.</p>
+          <p>Parámetros generales, módulos, control fiscal y estado operativo de la empresa activa.</p>
         </div>
       </div>
 
@@ -27,6 +28,8 @@ export default function ConfiguracionOperativa({ empresa }: { empresa: EmpresaOp
           </div>
         </div>
       </section>
+
+      <ModulosControlPanel empresa={empresa} />
 
       <section className="panel">
         <div className="sigo-detail-title"><span>◫</span><h3>Control de stock</h3></div>
