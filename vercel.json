@@ -3,7 +3,7 @@
   "functions": {
     "api/arca/*.js": {
       "regions": ["gru1"],
-      "maxDuration": 30
+      "maxDuration": 60
     }
   },
   "headers": [
