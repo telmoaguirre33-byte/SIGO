@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   cargarMisEmpresas,
+  crearEmpresaSigo,
   guardarEmpresaActiva,
   leerEmpresaActivaGuardada,
   resolverEmpresaActiva,
@@ -33,18 +34,44 @@ export default function TenantSwitcher({ value, onChange, onStateChange, disable
     try {
       const { data: authData, error: authError } = await supabase.auth.getUser();
       if (authError) throw authError;
-      const currentUserId = authData.user?.id ?? null;
+      const currentUser = authData.user ?? null;
+      const currentUserId = currentUser?.id ?? null;
       if (!currentUserId) throw new Error("Sesión no disponible para cargar empresas.");
 
-      const disponibles = await cargarMisEmpresas();
+      let disponibles = await cargarMisEmpresas();
       if (requestRef.current !== requestId) return;
+
+      // La empresa sigue siendo el contenedor técnico que separa datos, pero ya no bloquea el acceso.
+      // Si el usuario autenticado todavía no tiene ninguna, SIGO crea un espacio operativo mínimo
+      // automáticamente y continúa. Luego el nombre/datos de empresa se pueden editar normalmente.
+      if (disponibles.length === 0) {
+        const metadataNombre = String(currentUser?.user_metadata?.sigo_empresa_nombre ?? "").trim();
+        const emailNombre = String(currentUser?.email ?? "").split("@")[0]?.trim() ?? "";
+        const nombreInicial = metadataNombre || emailNombre || "Mi negocio";
+
+        const empresaCreadaId = await crearEmpresaSigo(nombreInicial);
+        if (requestRef.current !== requestId) return;
+        disponibles = await cargarMisEmpresas();
+        if (requestRef.current !== requestId) return;
+
+        if (disponibles.length === 0) throw new Error("EMPRESA_CREATED_NOT_VISIBLE");
+
+        const creada = resolverEmpresaActiva(disponibles, empresaCreadaId, currentUserId);
+        if (!creada) throw new Error("EMPRESA_CREATED_NOT_VISIBLE");
+
+        // Limpiamos el dato pendiente si existía. No condiciona el ingreso.
+        const { error: metadataError } = await supabase.auth.updateUser({
+          data: { sigo_empresa_nombre: null },
+        });
+        if (metadataError) console.warn("No se pudo limpiar el nombre pendiente de empresa", metadataError);
+      }
 
       setUserId(currentUserId);
       setEmpresas(disponibles);
       const preferida = value ?? leerEmpresaActivaGuardada(currentUserId);
       const activa = resolverEmpresaActiva(disponibles, preferida, currentUserId);
       onChange(activa);
-      onStateChange?.(disponibles.length ? "ready" : "empty");
+      onStateChange?.(activa ? "ready" : "empty");
     } catch (e) {
       if (requestRef.current !== requestId) return;
       console.error(e);
