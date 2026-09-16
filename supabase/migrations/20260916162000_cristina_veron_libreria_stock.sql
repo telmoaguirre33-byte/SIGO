@@ -113,6 +113,11 @@ begin
     raise exception 'CRISTINA_VERON_TARGET_EQUALS_SOURCE';
   end if;
 
+  -- Mantener las guardas tenant del backend: durante esta transacción únicamente,
+  -- las escrituras se ejecutan con la identidad ya validada de Cristina.
+  -- No se desactiva RLS ni ningún trigger y el contexto desaparece al finalizar.
+  perform set_config('request.jwt.claim.sub', v_user_id::text, true);
+
   -- Si un código ya existe en Cristina con otra identidad, se cancela todo.
   if exists (
     select 1
