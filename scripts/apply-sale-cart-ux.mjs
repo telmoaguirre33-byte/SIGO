@@ -138,7 +138,7 @@ replaceOnce(
           )}
           <strong style={{ fontSize: "1.15rem" }}>Total: $ {total.toLocaleString("es-AR")}</strong>
           <button className="primary-button" disabled={!puedeConfirmar || confirmando} onClick={() => void confirmar()}>
-            {confirmando ? "Confirmando…" : `Confirmar venta${items.length > 0 ? ` · ${items.length} producto${items.length === 1 ? "" : "s"}` : ""}`}
+            {confirmando ? "Confirmando…" : items.length > 0 ? "Confirmar venta · " + items.length + " producto" + (items.length === 1 ? "" : "s") : "Confirmar venta"}
           </button>
         </div>`,
 "cart-actions",
