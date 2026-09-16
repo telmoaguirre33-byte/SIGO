@@ -3,6 +3,41 @@
 -- 7 registros del mismo Excel reclasificados luego como NO_VENDIBLE
 -- (6 Fotocopias + Film impresora) = 983 registros originales.
 -- No borra ni sobrescribe productos existentes del cliente.
+--
+-- Preparación multiempresa mínima:
+-- public.productos heredó restricciones UNIQUE globales de la etapa monoempresa.
+-- En SIGO multiempresa un mismo código puede existir en empresas distintas, pero no
+-- repetirse dentro del mismo tenant. Se retiran sólo las restricciones UNIQUE globales
+-- de codigo_interno/codigo_barras y se reemplazan por índices únicos (empresa_id, código).
+-- No se modifica ningún producto existente.
+do $$
+declare
+  v_constraint record;
+begin
+  for v_constraint in
+    select c.conname
+      from pg_constraint c
+     where c.conrelid = 'public.productos'::regclass
+       and c.contype = 'u'
+       and cardinality(c.conkey) = 1
+       and c.conkey[1] in (
+         (select a.attnum from pg_attribute a where a.attrelid = 'public.productos'::regclass and a.attname = 'codigo_interno' and not a.attisdropped),
+         (select a.attnum from pg_attribute a where a.attrelid = 'public.productos'::regclass and a.attname = 'codigo_barras' and not a.attisdropped)
+       )
+  loop
+    execute format('alter table public.productos drop constraint %I', v_constraint.conname);
+  end loop;
+end
+$$;
+
+create unique index if not exists productos_empresa_codigo_interno_uidx
+  on public.productos (empresa_id, codigo_interno)
+  where empresa_id is not null and nullif(btrim(codigo_interno), '') is not null;
+
+create unique index if not exists productos_empresa_codigo_barras_uidx
+  on public.productos (empresa_id, codigo_barras)
+  where empresa_id is not null and nullif(btrim(codigo_barras), '') is not null;
+
 do $$
 declare
   v_user_id uuid;
