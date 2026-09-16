@@ -1,5 +1,5 @@
 -- SIGO: carga controlada del stock de Librería para cristina.veron@hotmail.com.
--- Copia exactamente los 983 productos ya validados del tenant Lápiz y Papel.
+-- Copia exactamente los 983 productos de categoría Librería ya validados en SIGO Administración.
 -- Idempotente: no borra ni sobrescribe productos existentes del cliente.
 
 do $$
@@ -27,18 +27,19 @@ begin
   select e.id
     into v_source_empresa
     from public.empresas e
-   where lower(e.nombre) = lower('Lápiz y Papel')
+   where lower(e.nombre) = lower('SIGO Administración')
    order by e.created_at asc
    limit 1;
 
   if v_source_empresa is null then
-    raise exception 'LIBRERIA_SOURCE_COMPANY_NOT_FOUND';
+    raise exception 'SIGO_ADMIN_SOURCE_COMPANY_NOT_FOUND';
   end if;
 
   select count(*)
     into v_source_rows
     from public.productos p
-   where p.empresa_id = v_source_empresa;
+   where p.empresa_id = v_source_empresa
+     and lower(btrim(coalesce(p.categoria, ''))) = lower('Librería');
 
   if v_source_rows <> 983 then
     raise exception 'LIBRERIA_SOURCE_COUNT_MISMATCH: expected 983, got %', v_source_rows;
@@ -118,7 +119,8 @@ begin
             t.codigo_interno = s.codigo_interno or t.codigo_barras = s.codigo_interno
          ))
        )
-     where lower(btrim(coalesce(t.nombre, ''))) <> lower(btrim(coalesce(s.nombre, '')))
+     where lower(btrim(coalesce(s.categoria, ''))) = lower('Librería')
+       and lower(btrim(coalesce(t.nombre, ''))) <> lower(btrim(coalesce(s.nombre, '')))
   ) then
     raise exception 'CRISTINA_VERON_IMPORT_IDENTITY_CONFLICT';
   end if;
@@ -166,6 +168,7 @@ begin
     s.activo
   from public.productos s
   where s.empresa_id = v_source_empresa
+    and lower(btrim(coalesce(s.categoria, ''))) = lower('Librería')
     and not exists (
       select 1
         from public.productos t
@@ -187,6 +190,7 @@ begin
     into v_verified
     from public.productos s
    where s.empresa_id = v_source_empresa
+     and lower(btrim(coalesce(s.categoria, ''))) = lower('Librería')
      and exists (
        select 1
          from public.productos t
@@ -224,7 +228,7 @@ begin
     v_inserted,
     983 - v_inserted,
     v_verified,
-    format('Carga solicitada para cristina.veron@hotmail.com. Antes=%s. No sobrescribe productos existentes.', v_before)
+    format('Carga solicitada para cristina.veron@hotmail.com. Antes=%s. Fuente: SIGO Administración / categoría Librería. No sobrescribe productos existentes.', v_before)
   )
   on conflict (import_key) do update
     set inserted_rows = excluded.inserted_rows,
