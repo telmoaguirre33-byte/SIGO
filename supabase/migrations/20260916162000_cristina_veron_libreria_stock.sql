@@ -1,7 +1,8 @@
--- SIGO: carga controlada del stock de Librería para cristina.veron@hotmail.com.
--- Copia exactamente los 983 productos de categoría Librería ya validados en SIGO Administración.
--- Idempotente: no borra ni sobrescribe productos existentes del cliente.
-
+-- SIGO: carga exacta del Excel Librería para cristina.veron@hotmail.com.
+-- Fuente operativa validada: 976 productos que conservan categoría Librería +
+-- 7 registros del mismo Excel reclasificados luego como NO_VENDIBLE
+-- (6 Fotocopias + Film impresora) = 983 registros originales.
+-- No borra ni sobrescribe productos existentes del cliente.
 do $$
 declare
   v_user_id uuid;
@@ -27,7 +28,7 @@ begin
   select e.id
     into v_source_empresa
     from public.empresas e
-   where lower(e.nombre) = lower('SIGO Administración')
+   where lower(trim(e.nombre)) = lower('SIGO Administración')
    order by e.created_at asc
    limit 1;
 
@@ -39,13 +40,22 @@ begin
     into v_source_rows
     from public.productos p
    where p.empresa_id = v_source_empresa
-     and lower(btrim(coalesce(p.categoria, ''))) = lower('Librería');
+     and (
+       lower(btrim(coalesce(p.categoria, ''))) = lower('Librería')
+       or (
+         upper(btrim(coalesce(p.categoria, ''))) = 'NO_VENDIBLE'
+         and (
+           lower(btrim(p.nombre)) like 'fotocopia%'
+           or lower(btrim(p.nombre)) = 'film impresora'
+         )
+       )
+     );
 
   if v_source_rows <> 983 then
     raise exception 'LIBRERIA_SOURCE_COUNT_MISMATCH: expected 983, got %', v_source_rows;
   end if;
 
-  -- Preferimos la empresa que SIGO creó con el nombre del usuario.
+  -- Preferimos la empresa exacta creada para cristina.veron.
   select count(*)
     into v_target_matches
     from public.empresas e
@@ -54,7 +64,7 @@ begin
      and eu.user_id = v_user_id
      and eu.activo = true
    where e.activa = true
-     and lower(e.nombre) = lower('cristina.veron');
+     and lower(trim(e.nombre)) = lower('cristina.veron');
 
   if v_target_matches = 1 then
     select e.id
@@ -65,11 +75,11 @@ begin
        and eu.user_id = v_user_id
        and eu.activo = true
      where e.activa = true
-       and lower(e.nombre) = lower('cristina.veron')
+       and lower(trim(e.nombre)) = lower('cristina.veron')
      order by e.created_at asc
      limit 1;
   else
-    -- Fallback sólo si el usuario tiene una única empresa activa.
+    -- Fallback únicamente si Cristina tiene una sola empresa activa.
     select count(*)
       into v_target_matches
       from public.empresas e
@@ -103,13 +113,12 @@ begin
     raise exception 'CRISTINA_VERON_TARGET_EQUALS_SOURCE';
   end if;
 
-  -- Si ya existe el mismo código pero con otra identidad, no hacemos ninguna carga.
+  -- Si un código ya existe en Cristina con otra identidad, se cancela todo.
   if exists (
     select 1
       from public.productos s
       join public.productos t
         on t.empresa_id = v_target_empresa
-       and s.empresa_id = v_source_empresa
        and (
          (nullif(btrim(s.codigo_barras), '') is not null and (
             t.codigo_barras = s.codigo_barras or t.codigo_interno = s.codigo_barras
@@ -119,7 +128,17 @@ begin
             t.codigo_interno = s.codigo_interno or t.codigo_barras = s.codigo_interno
          ))
        )
-     where lower(btrim(coalesce(s.categoria, ''))) = lower('Librería')
+     where s.empresa_id = v_source_empresa
+       and (
+         lower(btrim(coalesce(s.categoria, ''))) = lower('Librería')
+         or (
+           upper(btrim(coalesce(s.categoria, ''))) = 'NO_VENDIBLE'
+           and (
+             lower(btrim(s.nombre)) like 'fotocopia%'
+             or lower(btrim(s.nombre)) = 'film impresora'
+           )
+         )
+       )
        and lower(btrim(coalesce(t.nombre, ''))) <> lower(btrim(coalesce(s.nombre, '')))
   ) then
     raise exception 'CRISTINA_VERON_IMPORT_IDENTITY_CONFLICT';
@@ -168,11 +187,21 @@ begin
     s.activo
   from public.productos s
   where s.empresa_id = v_source_empresa
-    and lower(btrim(coalesce(s.categoria, ''))) = lower('Librería')
+    and (
+      lower(btrim(coalesce(s.categoria, ''))) = lower('Librería')
+      or (
+        upper(btrim(coalesce(s.categoria, ''))) = 'NO_VENDIBLE'
+        and (
+          lower(btrim(s.nombre)) like 'fotocopia%'
+          or lower(btrim(s.nombre)) = 'film impresora'
+        )
+      )
+    )
     and not exists (
       select 1
         from public.productos t
        where t.empresa_id = v_target_empresa
+         and lower(btrim(coalesce(t.nombre, ''))) = lower(btrim(coalesce(s.nombre, '')))
          and (
            (nullif(btrim(s.codigo_barras), '') is not null and (
               t.codigo_barras = s.codigo_barras or t.codigo_interno = s.codigo_barras
@@ -190,7 +219,16 @@ begin
     into v_verified
     from public.productos s
    where s.empresa_id = v_source_empresa
-     and lower(btrim(coalesce(s.categoria, ''))) = lower('Librería')
+     and (
+       lower(btrim(coalesce(s.categoria, ''))) = lower('Librería')
+       or (
+         upper(btrim(coalesce(s.categoria, ''))) = 'NO_VENDIBLE'
+         and (
+           lower(btrim(s.nombre)) like 'fotocopia%'
+           or lower(btrim(s.nombre)) = 'film impresora'
+         )
+       )
+     )
      and exists (
        select 1
          from public.productos t
@@ -228,12 +266,19 @@ begin
     v_inserted,
     983 - v_inserted,
     v_verified,
-    format('Carga solicitada para cristina.veron@hotmail.com. Antes=%s. Fuente: SIGO Administración / categoría Librería. No sobrescribe productos existentes.', v_before)
+    format(
+      'Carga solicitada para cristina.veron@hotmail.com. Antes=%s. Fuente completa: 976 Librería + 7 NO_VENDIBLE del Excel original. No sobrescribe productos existentes.',
+      v_before
+    )
   )
   on conflict (import_key) do update
-    set inserted_rows = excluded.inserted_rows,
+    set empresa_id = excluded.empresa_id,
+        inserted_rows = excluded.inserted_rows,
         skipped_existing = excluded.skipped_existing,
         verified_rows = excluded.verified_rows,
         notes = excluded.notes;
+
+  raise notice 'CRISTINA_VERON_LIBRERIA_IMPORT_OK inserted=% verified=% source=983 before=%',
+    v_inserted, v_verified, v_before;
 end
 $$;
