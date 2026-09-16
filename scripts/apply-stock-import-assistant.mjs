@@ -43,4 +43,23 @@ if (!main.includes(cssLine)) {
   fs.writeFileSync(mainFile, main);
 }
 
+// En producción el lector XLSX anterior dependía de DecompressionStream del navegador.
+// Algunos Android/WebView no soportan correctamente deflate-raw. En build, redirigimos
+// solamente la lectura del archivo al lector móvil basado en fflate/read-excel-file.
+const assistantFile = new URL("../src/StockImportAssistant.tsx", import.meta.url);
+let assistant = fs.readFileSync(assistantFile, "utf8");
+const robustImport = 'import { leerArchivoStockMovil as leerArchivoStock } from "./stockImportReader";';
+if (!assistant.includes(robustImport)) {
+  const facturaImport = 'import { analizarFacturaCompraSigo } from "./facturaIA";';
+  if (!assistant.includes(facturaImport)) throw new Error("No se encontró el import de facturaIA en StockImportAssistant.tsx");
+  assistant = assistant.replace(facturaImport, `${facturaImport}\n${robustImport}`);
+  assistant = assistant.replace('  leerArchivoStock,\n', '');
+}
+
+const inputOld = '<input ref={excelRef} className="stock-import-hidden" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" onChange={(event) => void cargarExcel(event)} />';
+const inputNew = '<input ref={excelRef} className="stock-import-hidden" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" onClick={(event) => { event.currentTarget.value = ""; }} onChange={(event) => void cargarExcel(event)} />';
+if (assistant.includes(inputOld)) assistant = assistant.replace(inputOld, inputNew);
+
+fs.writeFileSync(assistantFile, assistant);
+
 console.log("SIGO stock import assistant aplicado");
