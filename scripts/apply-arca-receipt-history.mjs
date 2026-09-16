@@ -48,8 +48,40 @@ if (!source.includes("SIGO_RECEIPT_SELECTED_SALE")) {
   source = source.replace(printMarker, selectedReceiptEffect);
 }
 
-const oldSaleField = `        <div className="form-group form-span-2">\n          <label>Venta confirmada</label>\n          <select value={ventaId} onChange={(event) => setVentaId(event.target.value)} disabled={loading || emitiendo}>\n            {ventas.length === 0 ? <option value="">No hay ventas pendientes de CAE</option> : null}\n            {ventas.map((item) => <option key={item.id} value={item.id}>Venta {item.numero} · $\${Number(item.total).toLocaleString("es-AR")}</option>)}\n          </select>\n        </div>`;
-const newSaleField = `        <div className="form-group form-span-2">\n          <label>Buscar venta / ticket</label>\n          <input\n            type="search"\n            value={busquedaVenta}\n            onChange={(event) => setBusquedaVenta(event.target.value)}\n            placeholder="N.º de venta, importe (ej. 23000) o fecha"\n            disabled={loading || emitiendo}\n          />\n        </div>\n        <div className="form-group form-span-2">\n          <label>Venta para facturar o reimprimir</label>\n          <select value={ventaId} onChange={(event) => setVentaId(event.target.value)} disabled={loading || emitiendo}>\n            {ventasFiltradas.length === 0 ? <option value="">No se encontraron ventas recientes</option> : null}\n            {ventasFiltradas.map((item) => {\n              const facturada = comprobantesEmitidos.some((cbte) => cbte.venta_id === item.id);\n              return <option key={item.id} value={item.id}>Venta {item.numero} · $\${Number(item.total).toLocaleString("es-AR")} · {new Date(item.created_at).toLocaleString("es-AR")} · {facturada ? "FACTURADA / REIMPRIMIR" : "SIN FACTURAR"}</option>;\n            })}\n          </select>\n          <div className="form-actions" style={{ marginTop: 8 }}>\n            <button className="admin-button" type="button" onClick={() => void cargarVentas()} disabled={loading || emitiendo}>{loading ? "Actualizando…" : "↻ Actualizar ventas"}</button>\n          </div>\n        </div>`;
+const oldSaleField = [
+  '        <div className="form-group form-span-2">',
+  '          <label>Venta confirmada</label>',
+  '          <select value={ventaId} onChange={(event) => setVentaId(event.target.value)} disabled={loading || emitiendo}>',
+  '            {ventas.length === 0 ? <option value="">No hay ventas pendientes de CAE</option> : null}',
+  '            {ventas.map((item) => <option key={item.id} value={item.id}>Venta {item.numero} · ${Number(item.total).toLocaleString("es-AR")}</option>)}',
+  '          </select>',
+  '        </div>',
+].join("\n");
+const newSaleField = [
+  '        <div className="form-group form-span-2">',
+  '          <label>Buscar venta / ticket</label>',
+  '          <input',
+  '            type="search"',
+  '            value={busquedaVenta}',
+  '            onChange={(event) => setBusquedaVenta(event.target.value)}',
+  '            placeholder="N.º de venta, importe (ej. 23000) o fecha"',
+  '            disabled={loading || emitiendo}',
+  '          />',
+  '        </div>',
+  '        <div className="form-group form-span-2">',
+  '          <label>Venta para facturar o reimprimir</label>',
+  '          <select value={ventaId} onChange={(event) => setVentaId(event.target.value)} disabled={loading || emitiendo}>',
+  '            {ventasFiltradas.length === 0 ? <option value="">No se encontraron ventas recientes</option> : null}',
+  '            {ventasFiltradas.map((item) => {',
+  '              const facturada = comprobantesEmitidos.some((cbte) => cbte.venta_id === item.id);',
+  '              return <option key={item.id} value={item.id}>Venta {item.numero} · ${Number(item.total).toLocaleString("es-AR")} · {new Date(item.created_at).toLocaleString("es-AR")} · {facturada ? "FACTURADA / REIMPRIMIR" : "SIN FACTURAR"}</option>;',
+  '            })}',
+  '          </select>',
+  '          <div className="form-actions" style={{ marginTop: 8 }}>',
+  '            <button className="admin-button" type="button" onClick={() => void cargarVentas()} disabled={loading || emitiendo}>{loading ? "Actualizando…" : "↻ Actualizar ventas"}</button>',
+  '          </div>',
+  '        </div>',
+].join("\n");
 replaceRequired(oldSaleField, newSaleField, "sale-picker");
 
 const oldButton = `      <button className="primary-button" type="button" onClick={() => void emitir()} disabled={!habilitado || !ventaId || !puntoVenta || emitiendo}>\n        {emitiendo ? "Solicitando y conciliando…" : ambiente === "produccion" ? "Emitir CAE real" : "Probar CAE en homologación"}\n      </button>`;
