@@ -31,3 +31,59 @@
   .barcode-entry-row input { grid-column:auto; }
   .barcode-entry-row button { width:100%; }
 }
+
+
+/* SIGO accessibility: campos principales de búsqueda con alto contraste visual. */
+.barcode-entry-row {
+  padding: 14px;
+  border: 2px solid #2563eb;
+  border-radius: 16px;
+  background: #eff6ff;
+  box-shadow: 0 4px 14px rgba(37,99,235,.12);
+}
+.barcode-entry-row input,
+.product-search-emphasis input {
+  border: 2px solid #2563eb;
+  background: #fff;
+  color: #0f172a;
+  font-size: 17px;
+  font-weight: 600;
+  min-height: 56px;
+  box-shadow: 0 2px 8px rgba(37,99,235,.10);
+}
+.barcode-entry-row input::placeholder,
+.product-search-emphasis input::placeholder {
+  color: #52657d;
+  opacity: 1;
+  font-weight: 600;
+}
+.barcode-entry-row input:focus,
+.product-search-emphasis input:focus {
+  outline: 3px solid rgba(37,99,235,.24);
+  outline-offset: 2px;
+  border-color: #1d4ed8;
+}
+.product-search-emphasis {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  margin-top: 14px;
+  border: 2px solid #2563eb;
+  border-radius: 16px;
+  background: #eff6ff;
+  box-shadow: 0 4px 14px rgba(37,99,235,.12);
+}
+.product-search-emphasis label {
+  color: #1d4ed8;
+  font-size: 16px;
+  font-weight: 800;
+}
+.product-search-emphasis input {
+  width: 100%;
+  border-radius: 12px;
+  padding: 0 16px;
+}
+@media (max-width:760px) {
+  .barcode-entry-row, .product-search-emphasis { padding: 12px; }
+  .barcode-entry-row input, .product-search-emphasis input { font-size: 16px; min-height: 56px; }
+}
