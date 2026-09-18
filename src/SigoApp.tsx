@@ -52,6 +52,7 @@ function numeroOpcional(valor: string, etiqueta: string): number | null {
 export default function SigoApp({ empresa }: { empresa: EmpresaOperativa }) {
   const [section, setSection] = useState<Section>("Inicio");
   const puedeEditarProductos = can(empresa.rol, "products.write");
+  const puedeAjustarStock = can(empresa.rol, "stock.write");
 
   return (
     <div className="app">
@@ -91,7 +92,7 @@ export default function SigoApp({ empresa }: { empresa: EmpresaOperativa }) {
         </header>
         <section className="content">
           {section === "Inicio" && <Inicio empresa={empresa} onProductos={() => setSection("Productos")} onStock={() => setSection("Stock")} />}
-          {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
+          {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} puedeAjustarStock={puedeAjustarStock} />}
           {section === "Stock" && <Stock empresaId={empresa.empresa_id} />}
           {section === "Ventas" && <VentaRapidaOperativa empresaId={empresa.empresa_id} puedeEditarProductos={puedeEditarProductos} />}
           {section !== "Inicio" && section !== "Productos" && section !== "Stock" && section !== "Ventas" && <Pendiente title={section} />}
@@ -116,7 +117,7 @@ function Inicio({ empresa, onProductos, onStock }: { empresa: EmpresaOperativa; 
   );
 }
 
-function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar: boolean }) {
+function Productos({ empresaId, puedeEditar, puedeAjustarStock }: { empresaId: string; puedeEditar: boolean; puedeAjustarStock: boolean }) {
   const [productos, setProductos] = useState<ProductoSigo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -127,6 +128,10 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [ajustando, setAjustando] = useState<ProductoSigo | null>(null);
+  const [stockAjuste, setStockAjuste] = useState("");
+  const [stockAjusteError, setStockAjusteError] = useState("");
+  const [guardandoAjuste, setGuardandoAjuste] = useState(false);
   const [scanAction, setScanAction] = useState<BarcodeAction>("consultar");
   const [scanResult, setScanResult] = useState<BarcodeProduct | null>(null);
 
@@ -269,6 +274,41 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
     }
   }
 
+  async function guardarAjusteStock() {
+    if (!ajustando || !puedeAjustarStock || guardandoAjuste) return;
+    const cantidad = Number(stockAjuste);
+    if (!Number.isFinite(cantidad) || cantidad < 0) {
+      setStockAjusteError("Ingresá una cantidad igual o mayor a cero.");
+      return;
+    }
+    setGuardandoAjuste(true);
+    setStockAjusteError("");
+    try {
+      await guardarProductoSigo({
+        empresaId,
+        productoId: ajustando.id,
+        nombre: ajustando.nombre,
+        codigoInterno: ajustando.codigo_interno,
+        codigoBarras: ajustando.codigo_barras,
+        descripcion: ajustando.descripcion,
+        categoria: ajustando.categoria,
+        marca: ajustando.marca,
+        proveedor: ajustando.proveedor,
+        precioVenta: ajustando.precio_venta,
+        stockActual: cantidad,
+        stockMinimo: ajustando.stock_minimo,
+        stockMaximo: ajustando.stock_maximo != null && cantidad > Number(ajustando.stock_maximo) ? cantidad : ajustando.stock_maximo,
+      });
+      setAjustando(null);
+      setStockAjuste("");
+      await cargar();
+    } catch (err) {
+      setStockAjusteError(err instanceof Error ? err.message : "No se pudo ajustar el stock.");
+    } finally {
+      setGuardandoAjuste(false);
+    }
+  }
+
   async function eliminar(producto: ProductoSigo) {
     if (!puedeEditar) return;
     if (!window.confirm(`¿Dar de baja ${producto.nombre}? No se borrarán ventas, compras ni históricos y sólo se permitirá si el stock está en cero.`)) return;
@@ -337,6 +377,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
                       {puedeEditar ? (
                         <div className="row-actions">
                           <button className="admin-button" onClick={() => abrirEdicion(p)}>Editar</button>
+                          {puedeAjustarStock && <button className="admin-button" onClick={() => { setAjustando(p); setStockAjuste(String(p.stock_actual ?? 0)); setStockAjusteError(""); }}>Ajustar stock</button>}
                           <button className="admin-button danger-button" disabled={deletingId === p.id} onClick={() => void eliminar(p)}>{deletingId === p.id ? "Dando de baja…" : "Dar de baja"}</button>
                         </div>
                       ) : "Solo lectura"}
@@ -346,6 +387,30 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
               </tbody>
             </table>
             {filtrados.length === 0 && <div className="table-empty">No hay productos para mostrar.</div>}
+          </div>
+        </div>
+      )}
+
+      {ajustando && puedeAjustarStock && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget && !guardandoAjuste) setAjustando(null); }}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="ajuste-stock-title">
+            <div className="page-header modal-header">
+              <div>
+                <h2 id="ajuste-stock-title">Ajustar stock</h2>
+                <p><strong>{ajustando.nombre}</strong> · Usá este ajuste para inventario inicial o mercadería encontrada. No genera compra ni requiere proveedor.</p>
+              </div>
+              <button type="button" className="admin-button" disabled={guardandoAjuste} onClick={() => setAjustando(null)}>Cerrar</button>
+            </div>
+            <div className="form-group">
+              <label htmlFor="stock-ajuste-cantidad">Cantidad real que tenés</label>
+              <input id="stock-ajuste-cantidad" type="number" min="0" step="0.001" inputMode="decimal" value={stockAjuste} onChange={(e) => setStockAjuste(e.target.value)} autoFocus />
+              <small>Stock actual registrado: {ajustando.stock_actual ?? 0}. Ingresá el total contado físicamente.</small>
+            </div>
+            {stockAjusteError && <p className="form-error" role="alert">{stockAjusteError}</p>}
+            <div className="form-actions">
+              <button type="button" className="admin-button" disabled={guardandoAjuste} onClick={() => setAjustando(null)}>Cancelar</button>
+              <button type="button" className="primary-button" disabled={guardandoAjuste || !stockAjuste.trim()} onClick={() => void guardarAjusteStock()}>{guardandoAjuste ? "Guardando…" : "Guardar stock real"}</button>
+            </div>
           </div>
         </div>
       )}
