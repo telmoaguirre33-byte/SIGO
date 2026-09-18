@@ -14,6 +14,8 @@ type Props = {
   onActionChange?: (action: BarcodeAction) => void;
   onProduct: (product: BarcodeProduct, action: BarcodeAction) => void;
   onBlockedProduct?: (product: BarcodeProduct, reason: "precio" | "stock") => void;
+  onQueryChange?: (query: string) => void;
+  onManualQuery?: (query: string) => boolean;
 };
 
 type BarcodeDetectorLike = {
@@ -57,6 +59,8 @@ export default function BarcodeScanner({
   onActionChange,
   onProduct,
   onBlockedProduct,
+  onQueryChange,
+  onManualQuery,
 }: Props) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -191,6 +195,7 @@ export default function BarcodeScanner({
   }
 
   async function resolveCode(raw: string, source: ScanSource = "manual") {
+    if (source === "manual" && onManualQuery?.(raw)) return;
     const normalized = normalizeBarcode(raw);
     if (!normalized) return;
     const empresaOperacion = empresaId;
@@ -450,15 +455,15 @@ export default function BarcodeScanner({
           autoComplete="off"
           autoFocus
           value={code}
-          onChange={(e) => setCode(e.target.value)}
+          onChange={(e) => { setCode(e.target.value); onQueryChange?.(e.target.value); }}
           onKeyDown={(e) => {
             if (isLikelyScannerSubmit(e.key)) {
               e.preventDefault();
               void resolveCode(code, "manual");
             }
           }}
-          placeholder="Código de barras o interno"
-          aria-label="Código de barras o código interno"
+          placeholder="Código de barras, interno o nombre del producto"
+          aria-label="Código de barras, código interno o nombre del producto"
         />
         <button className="admin-button" type="button" disabled={busy || !code.trim()} onClick={() => void resolveCode(code, "manual")}>
           {busy ? "Procesando…" : "Buscar"}
