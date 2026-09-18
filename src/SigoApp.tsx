@@ -300,8 +300,16 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
         )}
       </div>
 
-      <div className="product-tools">
-        <input type="search" placeholder="Buscar producto o código de barras..." value={search} onChange={(e) => setSearch(e.target.value)} />
+      <div className="product-tools product-search-emphasis">
+        <label htmlFor="producto-busqueda-visible">Buscar producto o código de barras</label>
+        <input
+          id="producto-busqueda-visible"
+          type="search"
+          placeholder="Escribí el nombre del producto o el código de barras..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          aria-label="Buscar producto o código de barras"
+        />
       </div>
 
       {loading && <div className="panel"><p>Cargando productos…</p></div>}
