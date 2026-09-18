@@ -294,22 +294,18 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
           action={puedeEditar ? scanAction : "consultar"}
           onActionChange={puedeEditar ? setScanAction : undefined}
           onProduct={handleScan}
+          onQueryChange={setSearch}
+          onManualQuery={(query) => {
+            const q = query.trim().toLowerCase();
+            if (!q) return false;
+            const exactCode = productos.some((p) => p.codigo_barras?.toLowerCase() === q || p.codigo_interno?.toLowerCase() === q);
+            if (exactCode) return false;
+            return productos.some((p) => [p.nombre, p.marca, p.categoria].filter(Boolean).join(" ").toLowerCase().includes(q));
+          }}
         />
         {scanResult && (
           <p><strong>Encontrado:</strong> {scanResult.nombre} · Stock {scanResult.stock_actual ?? "restringido"} · Precio {scanResult.precio_venta == null ? "restringido" : `$ ${Number(scanResult.precio_venta).toLocaleString("es-AR")}`}</p>
         )}
-      </div>
-
-      <div className="product-tools product-search-emphasis">
-        <label htmlFor="producto-busqueda-visible">Buscar producto o código de barras</label>
-        <input
-          id="producto-busqueda-visible"
-          type="search"
-          placeholder="Escribí el nombre del producto o el código de barras..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label="Buscar producto o código de barras"
-        />
       </div>
 
       {loading && <div className="panel"><p>Cargando productos…</p></div>}
