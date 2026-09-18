@@ -297,7 +297,7 @@ function Productos({ empresaId, puedeEditar, puedeAjustarStock }: { empresaId: s
         precioVenta: ajustando.precio_venta,
         stockActual: cantidad,
         stockMinimo: ajustando.stock_minimo,
-        stockMaximo: ajustando.stock_maximo != null && cantidad > Number(ajustando.stock_maximo) ? cantidad : ajustando.stock_maximo,
+        stockMaximo: cantidad > Number(ajustando.stock_maximo ?? 0) ? cantidad : Number(ajustando.stock_maximo ?? 0),
       });
       setAjustando(null);
       setStockAjuste("");
