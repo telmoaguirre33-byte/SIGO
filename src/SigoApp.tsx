@@ -24,6 +24,8 @@ type ProductoForm = {
   precioVenta: string;
   stockMinimo: string;
   stockMaximo: string;
+  stockInicial: string;
+  costoReferencia: string;
 };
 
 const productoVacio: ProductoForm = {
@@ -35,6 +37,8 @@ const productoVacio: ProductoForm = {
   precioVenta: "",
   stockMinimo: "",
   stockMaximo: "",
+  stockInicial: "",
+  costoReferencia: "",
 };
 
 function numeroOpcional(valor: string, etiqueta: string): number | null {
@@ -174,6 +178,8 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
       precioVenta: producto.precio_venta == null ? "" : String(producto.precio_venta),
       stockMinimo: producto.stock_minimo == null ? "" : String(producto.stock_minimo),
       stockMaximo: producto.stock_maximo == null ? "" : String(producto.stock_maximo),
+      stockInicial: "",
+      costoReferencia: "",
     });
     setFormError("");
     setFormOpen(true);
@@ -210,10 +216,14 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
     let precioVenta: number | null;
     let stockMinimo: number | null;
     let stockMaximo: number | null;
+    let stockInicial: number | null;
+    let costoReferencia: number | null;
     try {
       precioVenta = numeroOpcional(form.precioVenta, "El precio de venta");
       stockMinimo = numeroOpcional(form.stockMinimo, "El stock mínimo");
       stockMaximo = numeroOpcional(form.stockMaximo, "El stock máximo");
+      stockInicial = numeroOpcional(form.stockInicial, "El stock inicial");
+      costoReferencia = numeroOpcional(form.costoReferencia, "El costo de referencia");
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Revisá los valores numéricos del producto.");
       return;
@@ -241,12 +251,12 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
         marca: form.marca,
         descripcion: editing?.descripcion ?? null,
         proveedor: editing?.proveedor ?? null,
-        costoActual: null,
-        costoUltimaCompra: null,
+        costoActual: !editing && costoReferencia != null ? costoReferencia : null,
+        costoUltimaCompra: !editing && costoReferencia != null ? costoReferencia : null,
         precioVenta,
         margenGanancia: null,
         margenPorcentaje: null,
-        stockActual: null,
+        stockActual: !editing && stockInicial != null ? stockInicial : null,
         stockMinimo,
         stockMaximo,
       });
@@ -376,6 +386,20 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
                   <label htmlFor="producto-precio">Precio de venta {editing ? "" : "*"}</label>
                   <input id="producto-precio" type="number" min="0" step="0.01" inputMode="decimal" value={form.precioVenta} onChange={(e) => setForm((actual) => ({ ...actual, precioVenta: e.target.value }))} required={!editing} />
                 </div>
+                {!editing && (
+                  <>
+                    <div className="form-group">
+                      <label htmlFor="producto-stock-inicial">Cantidad que ya tengo</label>
+                      <input id="producto-stock-inicial" type="number" min="0" step="0.001" inputMode="decimal" value={form.stockInicial} onChange={(e) => setForm((actual) => ({ ...actual, stockInicial: e.target.value }))} placeholder="Opcional · stock inicial" />
+                      <small>Usalo para mercadería que ya estaba en el negocio. No requiere proveedor ni factura.</small>
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="producto-costo-referencia">Costo de referencia</label>
+                      <input id="producto-costo-referencia" type="number" min="0" step="0.01" inputMode="decimal" value={form.costoReferencia} onChange={(e) => setForm((actual) => ({ ...actual, costoReferencia: e.target.value }))} placeholder="Opcional" />
+                      <small>Si no recordás el costo, dejalo vacío.</small>
+                    </div>
+                  </>
+                )}
                 <div className="form-group">
                   <label htmlFor="producto-stock-min">Stock mínimo</label>
                   <input id="producto-stock-min" type="number" min="0" step="0.001" inputMode="decimal" value={form.stockMinimo} onChange={(e) => setForm((actual) => ({ ...actual, stockMinimo: e.target.value }))} />
@@ -385,7 +409,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
                   <input id="producto-stock-max" type="number" min="0" step="0.001" inputMode="decimal" value={form.stockMaximo} onChange={(e) => setForm((actual) => ({ ...actual, stockMaximo: e.target.value }))} />
                 </div>
                 <div className="form-group form-span-2">
-                  <small>El stock actual no se edita acá: se incrementa desde Compras y se descuenta desde Ventas para no perder trazabilidad.</small>
+                  <small>{editing ? "El stock de productos existentes se modifica mediante movimientos operativos." : "Si ya tenés mercadería, podés cargarla como stock inicial sin inventar una compra ni un proveedor."}</small>
                 </div>
               </div>
               {formError && <p className="form-error" role="alert">{formError}</p>}
