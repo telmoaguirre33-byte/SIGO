@@ -296,7 +296,11 @@ export default async function handler(req, res) {
   const prompt = `Analizá esta factura o ticket de compra argentino para cargar mercadería en un sistema comercial.
 No inventes datos. Si algo no es legible, usá null y baja confianza.
 Extraé únicamente productos/servicios efectivamente facturados; no conviertas IVA, descuentos globales, percepciones, subtotales ni totales en productos.
-Para cada ítem, cantidad y costo_unitario deben ser números. costo_unitario es el precio unitario de compra antes de multiplicar por cantidad. Si sólo figura total de línea y cantidad, calculá costo unitario.
+Para cada ítem, cantidad y costo_unitario deben ser números. SIGO opera minorista y el stock se expresa en UNIDADES VENDIBLES, no en cajas/bultos.
+Si la factura indica cajas, packs, bultos o displays y también informa cuántas unidades contiene cada uno, convertí la cantidad a unidades vendibles: cantidad_stock = cantidad_bultos × unidades_por_bulto. Ejemplo: 2 cajas x 6 botellas = cantidad 12, nunca 2.
+El costo_unitario devuelto también debe corresponder a UNA unidad vendible. Si la factura expresa precio por caja/bulto, dividilo por unidades_por_bulto. El total de línea debe seguir conciliando contra cantidad × costo_unitario.
+Si la factura ya detalla directamente unidades, respetá esa cantidad y no vuelvas a multiplicarla. No adivines unidades por caja: si el empaque no es legible o es ambiguo, bajá la confianza para obligar revisión.
+costo_unitario es el precio de compra por unidad vendible antes de multiplicar por cantidad. Si sólo figura total de línea y cantidad en unidades vendibles, calculá costo unitario.
 Si aparece un código de producto del proveedor, guardalo en codigo. Si aparece un EAN/UPC/código de barras, guardalo en codigo_barras.
 fecha en formato YYYY-MM-DD cuando sea posible. CUIT sólo dígitos. moneda debe ser el código ISO cuando se identifique (por ejemplo ARS o USD).
 Respondé SOLAMENTE JSON válido con esta forma exacta:
