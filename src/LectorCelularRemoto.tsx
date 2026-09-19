@@ -20,13 +20,13 @@ export default function LectorCelularRemoto({empresaId,onCode}:Props){
     setError("");
     const {data:{user}}=await supabase.auth.getUser();
     if(!user){setError("La sesión venció.");return;}
-    const {data,error:e}=await supabase.from("sigo_lector_celular_sesiones")
-      .insert({empresa_id:empresaId,creado_por:user.id}).select("id,token").single();
-    if(e||!data){setError(e?.message||"No se pudo crear la vinculación.");return;}
-    setSessionId(String(data.id)); setToken(String(data.token));
+    const {data,error:e}=await supabase.rpc("crear_sesion_lector_celular",{p_empresa_id:empresaId});
+    const sesion=Array.isArray(data)?data[0]:data;
+    if(e||!sesion){setError(e?.message||"No se pudo crear la vinculación.");return;}
+    setSessionId(String(sesion.id)); setToken(String(sesion.token));
     if(channelRef.current) await supabase.removeChannel(channelRef.current);
-    const ch=supabase.channel("lector-"+data.id)
-      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"sigo_lector_celular_sesiones",filter:`id=eq.${data.id}`},(payload:any)=>{
+    const ch=supabase.channel("lector-"+sesion.id)
+      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"sigo_lector_celular_sesiones",filter:`id=eq.${sesion.id}`},(payload:any)=>{
         const codigo=String(payload.new?.codigo||"").trim();
         if(codigo){setLast(codigo);onCode(codigo);}
       }).subscribe();
