@@ -1,6 +1,6 @@
 .sigo-help-launcher {
   position: fixed;
-  left: 18px;
+  right: 18px;
   bottom: 18px;
   z-index: 70;
   display: flex;
@@ -215,4 +215,28 @@
   .sigo-help-topic-body { padding:0 14px 14px 14px; }
   .sigo-help-topic-body ol { padding-left:22px; }
   .sigo-help-support { grid-template-columns:1fr; padding:18px 15px; border-radius:20px; }
+}
+
+
+/* SIGO Ayuda: launcher compacto para no tapar funciones del menú lateral. */
+@media (min-width:761px) {
+  .sigo-help-launcher {
+    left: auto;
+    right: 18px;
+    width: 54px;
+    height: 54px;
+    min-height: 54px;
+    padding: 7px;
+    justify-content: center;
+    border-radius: 17px;
+  }
+  .sigo-help-launcher > span:last-child { display: none; }
+  .sigo-help-launcher:hover,
+  .sigo-help-launcher:focus-visible {
+    width: auto;
+    padding-right: 13px;
+    gap: 9px;
+  }
+  .sigo-help-launcher:hover > span:last-child,
+  .sigo-help-launcher:focus-visible > span:last-child { display: grid; }
 }
