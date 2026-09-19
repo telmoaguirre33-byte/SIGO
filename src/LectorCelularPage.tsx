@@ -3,7 +3,7 @@ import { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } from "@zxing/
 import { supabase } from "./supabase";
 
 export default function LectorCelularPage({token}:{token:string}){
- const videoRef=useRef<HTMLVideoElement>(null); const [estado,setEstado]=useState("Preparando cámara…"); const [ultimo,setUltimo]=useState(""); const ultimoRef=useRef("");
+ const videoRef=useRef<HTMLVideoElement>(null); const [estado,setEstado]=useState("Preparando cámara…"); const [ultimo,setUltimo]=useState(""); const [flash,setFlash]=useState(false); const ultimoRef=useRef(""); const ultimoAtRef=useRef(0);
  useEffect(()=>{let controls:any;let cancelled=false;
   async function start(){
    const {data,error}=await supabase.rpc("lector_celular_resolver_token",{p_token:token});
@@ -16,12 +16,12 @@ export default function LectorCelularPage({token}:{token:string}){
     const reader=new BrowserMultiFormatReader(hints);
     controls=await reader.decodeFromConstraints({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}}},videoRef.current,async(result)=>{
       const code=result?.getText()?.trim(); if(!code)return;
+      const ahora=Date.now(); if(code===ultimoRef.current && ahora-ultimoAtRef.current<1400)return;
+      ultimoRef.current=code; ultimoAtRef.current=ahora; setUltimo(code); setFlash(true); window.setTimeout(()=>setFlash(false),140);
       setEstado("Detectado: "+code+" · enviando…");
-      if(code===ultimoRef.current)return;
-      ultimoRef.current=code; setUltimo(code);
       if(navigator.vibrate) navigator.vibrate(80);
       const {error:sendError}=await supabase.rpc("lector_celular_enviar_codigo",{p_token:token,p_codigo:code});
-      if(sendError){setEstado("Código leído, pero no se pudo enviar. Reintentá.");ultimoRef.current="";}else{setEstado("✅ LEÍDO Y ENVIADO: "+code);}
+      if(sendError){setEstado("Código leído, pero no se pudo enviar. Reintentá.");ultimoRef.current="";}else{setEstado("✓ TOMADO · "+code);}
     });
     setEstado("Celular vinculado · apuntá al código de barras");
    }catch{setEstado("No se pudo abrir la cámara. Revisá el permiso del navegador.");}
@@ -35,9 +35,9 @@ export default function LectorCelularPage({token}:{token:string}){
   <section style={{maxWidth:620,margin:"0 auto 16px",background:"#14243b",padding:"14px 18px",borderRadius:18}}>
    <strong>Apuntá solo al código de barras</strong><div style={{opacity:.75,marginTop:4}}>El código se envía automáticamente a la computadora.</div>
   </section>
-  <div style={{position:"relative",width:"100%",maxWidth:620,height:"clamp(145px,25vh,200px)",margin:"0 auto",overflow:"hidden",borderRadius:18,border:"3px solid #22c55e"}}>
+  <div style={{position:"relative",width:"100%",maxWidth:620,height:"clamp(130px,21vh,170px)",margin:"0 auto",overflow:"hidden",borderRadius:18,border:"3px solid #22c55e"}}>
    <video ref={videoRef} playsInline muted style={{width:"100%",height:"100%",objectFit:"cover",background:"#000"}}/>
-   <div style={{position:"absolute",left:"4%",right:"4%",top:"22%",bottom:"22%",border:"2px solid #22c55e",borderRadius:10,pointerEvents:"none"}}/><div style={{position:"absolute",left:"4%",right:"4%",top:"50%",height:3,background:"#ef4444",boxShadow:"0 0 10px #ef4444",pointerEvents:"none"}}/>
+   <div style={{position:"absolute",inset:0,background:"#fff",opacity:flash?.82:0,transition:"opacity 120ms",pointerEvents:"none",zIndex:4}}/><div style={{position:"absolute",left:"4%",right:"4%",top:"22%",bottom:"22%",border:"2px solid #22c55e",borderRadius:10,pointerEvents:"none"}}/><div style={{position:"absolute",left:"4%",right:"4%",top:"50%",height:3,background:"#ef4444",boxShadow:"0 0 10px #ef4444",pointerEvents:"none"}}/>
   </div>
   <div style={{maxWidth:620,margin:"14px auto",display:"flex",justifyContent:"space-around",textAlign:"center",fontSize:13,opacity:.9}}>
    <span>⚡<br/>Lectura rápida</span><span>◎<br/>Enfoque automático</span><span>✓<br/>Envío automático</span>
