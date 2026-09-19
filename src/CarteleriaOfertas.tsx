@@ -3,6 +3,7 @@ import type { ProductoSigo } from "./productos";
 
 type Props = { productos: ProductoSigo[] };
 type FormatoOferta = "a4_4" | "a4_2";
+type OrientacionOferta = "horizontal" | "vertical";
 
 function html(value: unknown) {
   return String(value ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
@@ -19,6 +20,7 @@ export default function CarteleriaOfertas({ productos }: Props) {
   const [precioOferta,setPrecioOferta]=useState("");
   const [titulo,setTitulo]=useState("OFERTA");
   const [formato,setFormato]=useState<FormatoOferta>("a4_4");
+  const [orientacion,setOrientacion]=useState<OrientacionOferta>("horizontal");
   const [error,setError]=useState("");
 
   const visibles=useMemo(()=>{
@@ -48,7 +50,11 @@ export default function CarteleriaOfertas({ productos }: Props) {
       ${Number(producto.precio_venta||0)>0?`<div class="antes">Precio habitual: ${html(dinero(producto.precio_venta))}</div>`:""}
       <div class="precio">${html(dinero(oferta))}</div>
     </article>`).join("");
-    const grid=formato==="a4_4"?"grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);":"grid-template-columns:1fr;grid-template-rows:repeat(2,1fr);";
+    const horizontal=orientacion==="horizontal";
+    const grid=formato==="a4_4"
+      ? (horizontal ? "grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);" : "grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);")
+      : (horizontal ? "grid-template-columns:1fr;grid-template-rows:repeat(2,1fr);" : "grid-template-columns:repeat(2,1fr);grid-template-rows:1fr;");
+    const direccion=horizontal ? "row" : "column";
     const ventana=window.open("","_blank","width=980,height=760");
     if(!ventana){setError("El navegador bloqueó la ventana de impresión. Habilitá ventanas emergentes para SIGO.");return;}
     ventana.opener=null;
@@ -56,8 +62,9 @@ export default function CarteleriaOfertas({ productos }: Props) {
     ventana.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>SIGO · Ofertas</title><style>
       @page{size:A4 portrait;margin:8mm} *{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
       html,body{margin:0;padding:0;width:100%;height:100%}.hoja{width:194mm;height:281mm;display:grid;${grid}gap:4mm}
-      .cartel{border:2px solid #111;border-radius:4mm;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:7mm;overflow:hidden;break-inside:avoid}
-      .titulo{font-size:${formato==="a4_4"?"28px":"38px"};font-weight:900;letter-spacing:.08em}.producto{font-size:${formato==="a4_4"?"20px":"27px"};font-weight:800;margin-top:5mm;line-height:1.08}.marca{font-size:15px;margin-top:2mm}.antes{font-size:14px;margin-top:5mm;text-decoration:line-through}.precio{font-size:${formato==="a4_4"?"44px":"62px"};font-weight:900;line-height:1;margin-top:4mm}
+      .cartel{border:3px solid #111;border-radius:4mm;display:flex;flex-direction:${direccion};align-items:center;justify-content:center;text-align:center;padding:7mm;overflow:hidden;break-inside:avoid;position:relative;gap:6mm}
+      .cartel:before{content:"";position:absolute;inset:2mm;border:2px solid #e11d48;border-radius:3mm;pointer-events:none}
+      .titulo{position:relative;z-index:1;display:grid;place-items:center;min-width:${horizontal?"38%":"78%"};min-height:${horizontal?"65%":"28%"};padding:7mm 9mm;background:#ffe500;color:#e10600;font-size:${formato==="a4_4"?"28px":"38px"};font-weight:950;letter-spacing:.06em;clip-path:polygon(50% 0%,61% 18%,80% 6%,82% 29%,100% 34%,87% 50%,100% 67%,79% 72%,78% 96%,59% 83%,50% 100%,40% 82%,20% 95%,20% 72%,0 66%,13% 50%,0 34%,19% 29%,20% 6%,40% 18%);text-shadow:1px 1px 0 #fff}.producto{position:relative;z-index:1;font-size:${formato==="a4_4"?"20px":"27px"};font-weight:800;margin-top:5mm;line-height:1.08}.marca{position:relative;z-index:1;font-size:15px;margin-top:2mm}.antes{position:relative;z-index:1;font-size:14px;margin-top:5mm;text-decoration:line-through}.precio{position:relative;z-index:1;background:#e10600;color:#ffe500;border-radius:4mm;padding:3mm 6mm;font-size:${formato==="a4_4"?"44px":"62px"};font-weight:900;line-height:1;margin-top:4mm}
       @media print{html,body{width:210mm;height:297mm}.hoja{break-after:avoid}}
     </style></head><body><main class="hoja">${carteles}</main><script>window.addEventListener('load',()=>setTimeout(()=>window.print(),120));<\/script></body></html>`);
     ventana.document.close();
@@ -72,7 +79,8 @@ export default function CarteleriaOfertas({ productos }: Props) {
         <div className="form-group form-span-2"><label>Producto</label><select value={productoId} onChange={e=>elegir(e.target.value)}><option value="">Seleccionar…</option>{visibles.map(p=><option key={p.id} value={p.id}>{p.nombre}{p.precio_venta!=null?` · ${dinero(p.precio_venta)}`:""}</option>)}</select></div>
         <div className="form-group"><label>Título</label><select value={titulo} onChange={e=>setTitulo(e.target.value)}><option>OFERTA</option><option>PROMO</option><option>IMPERDIBLE</option></select></div>
         <div className="form-group"><label>Precio oferta</label><input type="number" min="0.01" step="0.01" inputMode="decimal" value={precioOferta} onChange={e=>setPrecioOferta(e.target.value)}/></div>
-        <div className="form-group form-span-2"><label>Formato de impresión</label><select value={formato} onChange={e=>setFormato(e.target.value as FormatoOferta)}><option value="a4_4">A4 dividido en 4 · cuatro carteles</option><option value="a4_2">A4 dividido en 2 · dos carteles</option></select></div>
+        <div className="form-group"><label>Formato de impresión</label><select value={formato} onChange={e=>setFormato(e.target.value as FormatoOferta)}><option value="a4_4">A4 dividido en 4 · cuatro carteles</option><option value="a4_2">A4 dividido en 2 · dos carteles</option></select></div>
+        <div className="form-group"><label>Orientación del cartel</label><select value={orientacion} onChange={e=>setOrientacion(e.target.value as OrientacionOferta)}><option value="horizontal">Horizontal · recomendado</option><option value="vertical">Vertical</option></select></div>
       </div>
       {producto&&<div className="sigo-matriz-success" style={{marginTop:12}}><strong>Vista previa:</strong> {titulo} · {producto.nombre} · {dinero(Number(precioOferta||0))}</div>}
       {error&&<p className="form-error" role="alert">{error}</p>}
