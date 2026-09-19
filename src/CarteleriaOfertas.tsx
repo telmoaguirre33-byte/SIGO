@@ -43,6 +43,8 @@ export default function CarteleriaOfertas({ productos }: Props) {
     const oferta=Number(precioOferta.replace(",","."));
     if(!Number.isFinite(oferta)||oferta<=0){setError("Ingresá un precio de oferta mayor a cero.");return;}
     const cantidad=formato==="a4_4"?4:2;
+    const horizontal=orientacion==="horizontal";
+    const cartelClass=horizontal ? "cartel horizontal" : "cartel vertical";
     const carteles=Array.from({length:cantidad},()=>`<article class="${cartelClass}">
       <div class="titulo">${html(titulo.trim()||"OFERTA")}</div>
       <div class="producto">${html(producto.nombre)}</div>
@@ -50,12 +52,10 @@ export default function CarteleriaOfertas({ productos }: Props) {
       ${Number(producto.precio_venta||0)>0?`<div class="antes">Precio habitual: ${html(dinero(producto.precio_venta))}</div>`:""}
       <div class="precio">${html(dinero(oferta))}</div>
     </article>`).join("");
-    const horizontal=orientacion==="horizontal";
     // La orientación describe cada cartel, no la hoja. A4 x4 siempre conserva 2x2.
     const grid=formato==="a4_4"
       ? "grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);"
       : (horizontal ? "grid-template-columns:1fr;grid-template-rows:repeat(2,1fr);" : "grid-template-columns:repeat(2,1fr);grid-template-rows:1fr;");
-    const cartelClass=horizontal ? "cartel horizontal" : "cartel vertical";
     const ventana=window.open("","_blank","width=980,height=760");
     if(!ventana){setError("El navegador bloqueó la ventana de impresión. Habilitá ventanas emergentes para SIGO.");return;}
     ventana.opener=null;
