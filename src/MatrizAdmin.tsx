@@ -19,6 +19,7 @@ type EmpresaMatriz = {
   depositos: number;
   clientes_portal: number;
   soporte_activo: boolean;
+  busqueda_ean_habilitada?: boolean;
 };
 
 type Resumen = {
@@ -90,6 +91,7 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
         depositos: normalizarNumero(fila.depositos),
         clientes_portal: normalizarNumero(fila.clientes_portal),
         soporte_activo: Boolean(fila.soporte_activo),
+        busqueda_ean_habilitada: Boolean(fila.busqueda_ean_habilitada),
       })));
     } catch (e) {
       console.error(e);
@@ -169,6 +171,33 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
     } catch (e) {
       console.error(e);
       setError("No pudimos actualizar el estado de la empresa.");
+    } finally {
+      setWorkingId(null);
+    }
+  }
+
+  async function cambiarBusquedaEan(empresa: EmpresaMatriz) {
+    if (workingId) return;
+    const proximo = !empresa.busqueda_ean_habilitada;
+    setWorkingId(empresa.empresa_id);
+    setError("");
+    setMensaje("");
+    try {
+      const { error: rpcError } = await supabase.rpc("matriz_actualizar_modulo_empresa_sigo", {
+        p_empresa_id: empresa.empresa_id,
+        p_modulo_clave: "busqueda_ean",
+        p_habilitado: proximo,
+      });
+      if (rpcError) throw rpcError;
+      setEmpresas((actuales) => actuales.map((item) =>
+        item.empresa_id === empresa.empresa_id
+          ? { ...item, busqueda_ean_habilitada: proximo }
+          : item
+      ));
+      setMensaje(`${empresa.nombre}: Buscar productos a través de EAN ${proximo ? "activado" : "desactivado"}.`);
+    } catch (e) {
+      console.error(e);
+      setError("No pudimos actualizar el módulo de búsqueda de productos por EAN.");
     } finally {
       setWorkingId(null);
     }
@@ -324,6 +353,9 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
                   </div>
 
                   <div className="sigo-matriz-actions">
+                    <button className={empresa.busqueda_ean_habilitada ? "admin-button" : "primary-button"} type="button" disabled={workingId === empresa.empresa_id} onClick={() => void cambiarBusquedaEan(empresa)}>
+                      {empresa.busqueda_ean_habilitada ? "EAN: Activo" : "Agregar módulo EAN"}
+                    </button>
                     {empresa.soporte_activo ? (
                       <button className="admin-button" type="button" disabled={workingId === empresa.empresa_id} onClick={() => void cerrarSoporte(empresa)}>Cerrar soporte</button>
                     ) : (
