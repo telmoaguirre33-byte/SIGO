@@ -76,6 +76,7 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
   const [facturaAplicando, setFacturaAplicando] = useState(false);
   const [facturaMensaje, setFacturaMensaje] = useState("");
   const [preciosVentaFactura, setPreciosVentaFactura] = useState<Record<number, string>>({});
+  const [revisionFacturaAbierta, setRevisionFacturaAbierta] = useState(false);
   const fotoRef = useRef<HTMLInputElement | null>(null);
   const archivoRef = useRef<HTMLInputElement | null>(null);
   const idempotencyKeyRef = useRef(nuevaClave());
@@ -204,6 +205,7 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
       const resultado = await analizarFacturaCompraSigo(empresaOperacion, file);
       if (empresaActivaRef.current !== empresaOperacion) return;
       setFacturaIA(resultado);
+      setRevisionFacturaAbierta(true);
       setFacturaMensaje(`IA detectó ${resultado.items.length} ítem${resultado.items.length === 1 ? "" : "s"}. Revisá y definí precio de venta para cada producto nuevo antes de aplicar la factura.`);
     } catch (err) {
       if (empresaActivaRef.current === empresaOperacion) {
@@ -220,6 +222,7 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
     if (!facturaIA || facturaAplicando || facturaProcesando) return;
     const empresaOperacion = empresaId;
     setFacturaAplicando(true);
+    setRevisionFacturaAbierta(true);
     setError("");
     setFacturaMensaje("");
     try {
@@ -461,15 +464,19 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
                   {facturaIA.items.map((item, index) => {
                     const existente = encontrarProducto(item, productos);
                     const precioExistente = Number(existente?.precio_venta ?? 0);
+                    const costoAnterior = Number(existente?.costo_actual ?? existente?.costo_ultima_compra ?? 0);
+                    const stockAnterior = Number(existente?.stock_actual ?? 0);
+                    const margen = Number(existente?.margen_porcentaje ?? (costoAnterior > 0 && precioExistente > 0 ? ((precioExistente-costoAnterior)/costoAnterior)*100 : 0));
+                    const precioSugerido = margen >= 0 ? item.costo_unitario * (1 + margen/100) : precioExistente;
                     return (
                       <tr key={`${item.descripcion}-${index}`}>
-                        <td><strong>{item.descripcion}</strong></td>
+                        <td><strong>{item.descripcion}</strong><small style={{display:"block"}}>{existente ? `Stock: ${stockAnterior} → ${stockAnterior + item.cantidad}` : `Nuevo · ingresan ${item.cantidad} unidades`}</small></td>
                         <td>{item.codigo_barras ?? item.codigo ?? "-"}</td>
-                        <td>{item.cantidad}</td>
-                        <td>$ {item.costo_unitario.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
+                        <td><strong>{item.cantidad}</strong><small style={{display:"block"}}>unidades vendibles</small></td>
+                        <td><span style={{textDecoration:costoAnterior>0?"line-through":"none",opacity:.65}}>{costoAnterior>0?`$ ${costoAnterior.toLocaleString("es-AR",{minimumFractionDigits:2})}`:""}</span><strong style={{display:"block"}}>→ $ {item.costo_unitario.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</strong></td>
                         <td>
                           {existente
-                            ? (precioExistente > 0 ? `$ ${precioExistente.toLocaleString("es-AR", { minimumFractionDigits: 2 })}` : "Sin precio")
+                            ? <div><span style={{textDecoration:"line-through",opacity:.65}}>{precioExistente>0?`$ ${precioExistente.toLocaleString("es-AR",{minimumFractionDigits:2})}`:"Sin precio"}</span><strong style={{display:"block",color:"#15803d"}}>→ $ {precioSugerido.toLocaleString("es-AR",{minimumFractionDigits:2})}</strong><small>Margen {margen.toLocaleString("es-AR",{maximumFractionDigits:2})}%</small></div>
                             : <input
                                 type="number"
                                 min="0.01"
@@ -494,8 +501,8 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
               </p>
             )}
             <div className="form-actions" style={{ justifyContent: "flex-start" }}>
-              <button type="button" className="primary-button" disabled={facturaAplicando || facturaProcesando || saving || preciosFacturaPendientes > 0} onClick={() => void aplicarFacturaAnalizada()}>{facturaAplicando ? "Preparando compra…" : "Usar datos de esta factura"}</button>
-              <button type="button" className="admin-button" disabled={facturaAplicando || facturaProcesando || saving} onClick={() => { setFacturaIA(null); setFacturaMensaje(""); setPreciosVentaFactura({}); }}>Descartar lectura</button>
+              <button type="button" className="primary-button" disabled={facturaAplicando || facturaProcesando || saving || preciosFacturaPendientes > 0} onClick={() => void aplicarFacturaAnalizada()}>{facturaAplicando ? "Preparando compra…" : "REVISADO · PREPARAR COMPRA"}</button>
+              <button type="button" className="admin-button" disabled={facturaAplicando || facturaProcesando || saving} onClick={() => { setFacturaIA(null); setRevisionFacturaAbierta(false); setFacturaMensaje(""); setPreciosVentaFactura({}); }}>Descartar lectura</button>
             </div>
           </div>
         )}
