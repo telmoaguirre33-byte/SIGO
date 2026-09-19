@@ -52,7 +52,6 @@ function numeroOpcional(valor: string, etiqueta: string): number | null {
 export default function SigoApp({ empresa }: { empresa: EmpresaOperativa }) {
   const [section, setSection] = useState<Section>("Inicio");
   const puedeEditarProductos = can(empresa.rol, "products.write");
-  const puedeAjustarStock = can(empresa.rol, "stock.write");
 
   return (
     <div className="app">
@@ -92,7 +91,7 @@ export default function SigoApp({ empresa }: { empresa: EmpresaOperativa }) {
         </header>
         <section className="content">
           {section === "Inicio" && <Inicio empresa={empresa} onProductos={() => setSection("Productos")} onStock={() => setSection("Stock")} />}
-          {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} puedeAjustarStock={puedeAjustarStock} />}
+          {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
           {section === "Stock" && <Stock empresaId={empresa.empresa_id} />}
           {section === "Ventas" && <VentaRapidaOperativa empresaId={empresa.empresa_id} puedeEditarProductos={puedeEditarProductos} />}
           {section !== "Inicio" && section !== "Productos" && section !== "Stock" && section !== "Ventas" && <Pendiente title={section} />}
@@ -117,7 +116,7 @@ function Inicio({ empresa, onProductos, onStock }: { empresa: EmpresaOperativa; 
   );
 }
 
-function Productos({ empresaId, puedeEditar, puedeAjustarStock }: { empresaId: string; puedeEditar: boolean; puedeAjustarStock: boolean }) {
+function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar: boolean }) {
   const [productos, setProductos] = useState<ProductoSigo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -128,10 +127,7 @@ function Productos({ empresaId, puedeEditar, puedeAjustarStock }: { empresaId: s
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
-  const [ajustando, setAjustando] = useState<ProductoSigo | null>(null);
-  const [stockAjuste, setStockAjuste] = useState("");
-  const [stockAjusteError, setStockAjusteError] = useState("");
-  const [guardandoAjuste, setGuardandoAjuste] = useState(false);
+  const [ajusteStock, setAjusteStock] = useState(false);
   const [scanAction, setScanAction] = useState<BarcodeAction>("consultar");
   const [scanResult, setScanResult] = useState<BarcodeProduct | null>(null);
 
@@ -187,6 +183,7 @@ function Productos({ empresaId, puedeEditar, puedeAjustarStock }: { empresaId: s
       costoReferencia: "",
     });
     setFormError("");
+    setAjusteStock(false);
     setFormOpen(true);
   }
 
@@ -196,6 +193,7 @@ function Productos({ empresaId, puedeEditar, puedeAjustarStock }: { empresaId: s
     setEditing(null);
     setForm(productoVacio);
     setFormError("");
+    setAjusteStock(false);
   }
 
   function handleScan(producto: BarcodeProduct, action: BarcodeAction) {
@@ -261,7 +259,7 @@ function Productos({ empresaId, puedeEditar, puedeAjustarStock }: { empresaId: s
         precioVenta,
         margenGanancia: null,
         margenPorcentaje: null,
-        stockActual: !editing && stockInicial != null ? stockInicial : null,
+        stockActual: (!editing || ajusteStock) && stockInicial != null ? stockInicial : null,
         stockMinimo,
         stockMaximo,
       });
@@ -271,41 +269,6 @@ function Productos({ empresaId, puedeEditar, puedeAjustarStock }: { empresaId: s
       setFormError(err instanceof Error ? err.message : "No se pudo guardar el producto");
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function guardarAjusteStock() {
-    if (!ajustando || !puedeAjustarStock || guardandoAjuste) return;
-    const cantidad = Number(stockAjuste);
-    if (!Number.isFinite(cantidad) || cantidad < 0) {
-      setStockAjusteError("Ingresá una cantidad igual o mayor a cero.");
-      return;
-    }
-    setGuardandoAjuste(true);
-    setStockAjusteError("");
-    try {
-      await guardarProductoSigo({
-        empresaId,
-        productoId: ajustando.id,
-        nombre: ajustando.nombre,
-        codigoInterno: ajustando.codigo_interno,
-        codigoBarras: ajustando.codigo_barras,
-        descripcion: ajustando.descripcion,
-        categoria: ajustando.categoria,
-        marca: ajustando.marca,
-        proveedor: ajustando.proveedor,
-        precioVenta: ajustando.precio_venta,
-        stockActual: cantidad,
-        stockMinimo: ajustando.stock_minimo,
-        stockMaximo: cantidad > Number(ajustando.stock_maximo ?? 0) ? cantidad : Number(ajustando.stock_maximo ?? 0),
-      });
-      setAjustando(null);
-      setStockAjuste("");
-      await cargar();
-    } catch (err) {
-      setStockAjusteError(err instanceof Error ? err.message : "No se pudo ajustar el stock.");
-    } finally {
-      setGuardandoAjuste(false);
     }
   }
 
@@ -377,7 +340,7 @@ function Productos({ empresaId, puedeEditar, puedeAjustarStock }: { empresaId: s
                       {puedeEditar ? (
                         <div className="row-actions">
                           <button className="admin-button" onClick={() => abrirEdicion(p)}>Editar</button>
-                          {puedeAjustarStock && <button className="admin-button" onClick={() => { setAjustando(p); setStockAjuste(String(p.stock_actual ?? 0)); setStockAjusteError(""); }}>Ajustar stock</button>}
+                          <button className="admin-button" onClick={() => { abrirEdicion(p); setAjusteStock(true); setForm((actual) => ({ ...actual, stockInicial: String(p.stock_actual ?? 0) })); }}>Ajustar stock</button>
                           <button className="admin-button danger-button" disabled={deletingId === p.id} onClick={() => void eliminar(p)}>{deletingId === p.id ? "Dando de baja…" : "Dar de baja"}</button>
                         </div>
                       ) : "Solo lectura"}
@@ -391,37 +354,13 @@ function Productos({ empresaId, puedeEditar, puedeAjustarStock }: { empresaId: s
         </div>
       )}
 
-      {ajustando && puedeAjustarStock && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget && !guardandoAjuste) setAjustando(null); }}>
-          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="ajuste-stock-title">
-            <div className="page-header modal-header">
-              <div>
-                <h2 id="ajuste-stock-title">Ajustar stock</h2>
-                <p><strong>{ajustando.nombre}</strong> · Usá este ajuste para inventario inicial o mercadería encontrada. No genera compra ni requiere proveedor.</p>
-              </div>
-              <button type="button" className="admin-button" disabled={guardandoAjuste} onClick={() => setAjustando(null)}>Cerrar</button>
-            </div>
-            <div className="form-group">
-              <label htmlFor="stock-ajuste-cantidad">Cantidad real que tenés</label>
-              <input id="stock-ajuste-cantidad" type="number" min="0" step="0.001" inputMode="decimal" value={stockAjuste} onChange={(e) => setStockAjuste(e.target.value)} autoFocus />
-              <small>Stock actual registrado: {ajustando.stock_actual ?? 0}. Ingresá el total contado físicamente.</small>
-            </div>
-            {stockAjusteError && <p className="form-error" role="alert">{stockAjusteError}</p>}
-            <div className="form-actions">
-              <button type="button" className="admin-button" disabled={guardandoAjuste} onClick={() => setAjustando(null)}>Cancelar</button>
-              <button type="button" className="primary-button" disabled={guardandoAjuste || !stockAjuste.trim()} onClick={() => void guardarAjusteStock()}>{guardandoAjuste ? "Guardando…" : "Guardar stock real"}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {formOpen && puedeEditar && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) cerrarForm(); }}>
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="producto-form-title">
             <div className="page-header modal-header">
               <div>
-                <h2 id="producto-form-title">{editing ? "Editar producto" : "Nuevo producto"}</h2>
-                <p>{editing ? "Editá el maestro sin alterar el stock actual ni los costos de compras." : "Alta lista para vender. El stock se ingresa por Compras para conservar trazabilidad."}</p>
+                <h2 id="producto-form-title">{editing ? (ajusteStock ? "Ajustar stock" : "Editar producto") : "Nuevo producto"}</h2>
+                <p>{editing ? (ajusteStock ? "Corregí el stock real contado sin generar una compra ni inventar proveedor." : "Editá el maestro sin alterar el stock actual ni los costos de compras.") : "Alta lista para vender. Podés informar stock inicial si ya tenés mercadería."}</p>
               </div>
               <button type="button" className="admin-button" onClick={cerrarForm} disabled={saving}>Cerrar</button>
             </div>
@@ -451,14 +390,14 @@ function Productos({ empresaId, puedeEditar, puedeAjustarStock }: { empresaId: s
                   <label htmlFor="producto-precio">Precio de venta {editing ? "" : "*"}</label>
                   <input id="producto-precio" type="number" min="0" step="0.01" inputMode="decimal" value={form.precioVenta} onChange={(e) => setForm((actual) => ({ ...actual, precioVenta: e.target.value }))} required={!editing} />
                 </div>
-                {!editing && (
+                {(!editing || ajusteStock) && (
                   <>
                     <div className="form-group">
-                      <label htmlFor="producto-stock-inicial">Cantidad que ya tengo</label>
+                      <label htmlFor="producto-stock-inicial">{editing ? "Cantidad real que tengo" : "Cantidad que ya tengo"}</label>
                       <input id="producto-stock-inicial" type="number" min="0" step="0.001" inputMode="decimal" value={form.stockInicial} onChange={(e) => setForm((actual) => ({ ...actual, stockInicial: e.target.value }))} placeholder="Opcional · stock inicial" />
-                      <small>Usalo para mercadería que ya estaba en el negocio. No requiere proveedor ni factura.</small>
+                      <small>{editing ? "Ingresá el total contado físicamente. No requiere proveedor ni factura." : "Usalo para mercadería que ya estaba en el negocio. No requiere proveedor ni factura."}</small>
                     </div>
-                    <div className="form-group">
+                    <div className="form-group" style={{ display: editing ? "none" : undefined }}>
                       <label htmlFor="producto-costo-referencia">Costo de referencia</label>
                       <input id="producto-costo-referencia" type="number" min="0" step="0.01" inputMode="decimal" value={form.costoReferencia} onChange={(e) => setForm((actual) => ({ ...actual, costoReferencia: e.target.value }))} placeholder="Opcional" />
                       <small>Si no recordás el costo, dejalo vacío.</small>
