@@ -37,7 +37,11 @@ export default function LectorCelularRemoto({empresaId,onCode}:Props){
     <div className="page-header"><div><h3>📱 Lector celular remoto</h3><p>Usá la cámara del teléfono como lector inalámbrico para esta computadora.</p></div>{token&&<strong style={{color:"#15803d"}}>● Esperando celular</strong>}</div>
     {!token?<button className="primary-button" type="button" onClick={()=>void vincular()}>📱 Vincular celular</button>:<>
       <div style={{display:"flex",gap:20,alignItems:"center",flexWrap:"wrap"}}>
-        <img src={qrUrl(link)} width="220" height="220" alt="QR para vincular celular"/>
+        <div style={{display:"grid",gap:10,justifyItems:"center"}}>
+          <img src={qrUrl(link)} width="220" height="220" alt="QR para vincular celular" onError={(e)=>{e.currentTarget.style.display="none";}}/>
+          <a className="primary-button" href={link} target="_blank" rel="noreferrer" style={{textDecoration:"none"}}>Abrir vínculo en celular</a>
+          <small style={{maxWidth:320,wordBreak:"break-all"}}>{link}</small>
+        </div>
         <div><h4>1. Escaneá este QR con el celular</h4><p>2. Abrí el enlace de SIGO.</p><p>3. Permití usar la cámara.</p><p>4. Escaneá productos.</p>{last&&<p><strong>Último código:</strong> {last}</p>}</div>
       </div>
       <button className="admin-button" type="button" onClick={()=>{setToken("");setSessionId("");setLast("");if(channelRef.current)void supabase.removeChannel(channelRef.current);channelRef.current=null;}}>Desvincular</button>
