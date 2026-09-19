@@ -74,3 +74,62 @@ grant execute on function public.matriz_actualizar_modulo_empresa_sigo(uuid, tex
 
 comment on function public.matriz_actualizar_modulo_empresa_sigo(uuid, text, boolean)
 is 'SIGO Matriz: Superadmin activa/desactiva módulos opcionales por empresa.';
+
+-- Extiende la lectura de Matriz para mostrar el estado del módulo EAN sin entrar al tenant.
+drop function if exists public.matriz_listar_empresas_sigo();
+
+create function public.matriz_listar_empresas_sigo()
+returns table (
+  empresa_id uuid,
+  nombre text,
+  razon_social text,
+  cuit text,
+  activa boolean,
+  created_at timestamptz,
+  owner_email text,
+  usuarios_activos bigint,
+  administradores bigint,
+  vendedores bigint,
+  depositos bigint,
+  clientes_portal bigint,
+  soporte_activo boolean,
+  busqueda_ean_habilitada boolean
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.es_superadmin_sigo() then raise exception 'FORBIDDEN'; end if;
+  return query
+  select
+    e.id, e.nombre, e.razon_social, e.cuit, e.activa, e.created_at,
+    (
+      select u.email::text
+      from public.empresa_usuarios euo
+      join auth.users u on u.id = euo.user_id
+      where euo.empresa_id = e.id and euo.rol = 'owner' and euo.activo = true
+      order by euo.created_at asc limit 1
+    ),
+    (select count(*) from public.empresa_usuarios eu where eu.empresa_id=e.id and eu.activo=true),
+    (select count(*) from public.empresa_usuarios eu where eu.empresa_id=e.id and eu.activo=true and eu.rol in ('owner','admin')),
+    (select count(*) from public.empresa_usuarios eu where eu.empresa_id=e.id and eu.activo=true and eu.rol='seller'),
+    (select count(*) from public.empresa_usuarios eu where eu.empresa_id=e.id and eu.activo=true and eu.rol='warehouse'),
+    (select count(*) from public.empresa_usuarios eu where eu.empresa_id=e.id and eu.activo=true and eu.rol='client'),
+    exists (
+      select 1 from public.sigo_soporte_sesiones ss
+      where ss.empresa_id=e.id and ss.superadmin_user_id=auth.uid() and ss.finalizado_at is null
+    ),
+    coalesce((
+      select em.habilitado
+      from public.sigo_empresa_modulos em
+      where em.empresa_id=e.id and em.modulo_clave='busqueda_ean'
+    ), false)
+  from public.empresas e
+  order by e.activa desc, lower(e.nombre), e.created_at;
+end;
+$$;
+
+revoke all on function public.matriz_listar_empresas_sigo() from public;
+grant execute on function public.matriz_listar_empresas_sigo() to authenticated;
