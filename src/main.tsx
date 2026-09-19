@@ -9,6 +9,7 @@ import MobileOperationsMenu from "./MobileOperationsMenu";
 import SigoAyuda from "./SigoAyuda";
 import SigoAuthGate from "./SigoAuthGate";
 import SigoRoot from "./SigoRoot";
+import LectorCelularPage from "./LectorCelularPage";
 import "./index.css";
 import "./barcode-scanner.css";
 import "./premium-mobile.css";
@@ -24,9 +25,10 @@ import "./logout-visible.css";
 import "./sigo-ayuda.css";
 import "./configuracion.css";
 
+const lectorToken = new URLSearchParams(window.location.search).get("lector_token");
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <SigoAuthGate>
+    {lectorToken ? <LectorCelularPage token={lectorToken} /> : <SigoAuthGate>
       <>
         <SigoRoot />
         <ArcaLauncher />
@@ -37,6 +39,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <MobileOperationsMenu />
         <SigoAyuda />
       </>
-    </SigoAuthGate>
+    </SigoAuthGate>}
   </React.StrictMode>,
 );
