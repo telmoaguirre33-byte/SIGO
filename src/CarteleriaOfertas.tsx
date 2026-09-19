@@ -76,7 +76,7 @@ export default function CarteleriaOfertas({ productos }: Props) {
       .marca{position:relative;z-index:1;font-size:13px}
       .antes{position:relative;z-index:1;font-size:13px;text-decoration:line-through}
       .precio{position:relative;z-index:1;background:#e10600;color:#ffe500;border-radius:4mm;padding:3mm 6mm;font-size:${formato==="a4_4"?"35px":"52px"};font-weight:950;line-height:1;white-space:nowrap;max-width:100%}
-      .horizontal .titulo{grid-row:1 / 4;grid-column:1;width:100%;max-width:100mm;max-height:62mm;font-size:${formato==="a4_4"?"43px":"56px"};color:#e10600;-webkit-text-stroke:2px #fff;text-shadow:0 2px 0 #b91c1c;filter:drop-shadow(0 0 0 #e10600) drop-shadow(3px 0 0 #e10600) drop-shadow(-3px 0 0 #e10600) drop-shadow(0 3px 0 #e10600) drop-shadow(0 -3px 0 #e10600)}
+      .horizontal .titulo{grid-row:1 / 4;grid-column:1;width:100%;max-width:100mm;max-height:62mm;font-family:Arial Black,Impact,Arial,sans-serif;font-size:${formato==="a4_4"?"49px":"62px"};font-weight:1000;letter-spacing:-.03em;color:#e10600;-webkit-text-stroke:3px #fff;text-shadow:2px 2px 0 #b91c1c;filter:drop-shadow(0 0 0 #e10600) drop-shadow(4px 0 0 #e10600) drop-shadow(-4px 0 0 #e10600) drop-shadow(0 4px 0 #e10600) drop-shadow(0 -4px 0 #e10600)}
       .horizontal .producto{grid-column:2;grid-row:1;align-self:end;font-size:${formato==="a4_4"?"23px":"31px"};font-weight:950}
       .horizontal .marca{grid-column:2;grid-row:1;align-self:start;margin-top:8mm}
       .horizontal .antes{grid-column:2;grid-row:2;font-size:${formato==="a4_4"?"15px":"19px"};text-decoration-color:#e10600;text-decoration-thickness:2px}
