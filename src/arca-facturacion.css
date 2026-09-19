@@ -84,12 +84,16 @@
   .arca-launcher {
     right: 12px;
     bottom: calc(83px + env(safe-area-inset-bottom));
+    width: 48px;
+    height: 48px;
     min-height: 48px;
-    padding: 5px 10px 5px 6px;
+    padding: 6px;
+    gap: 0;
     border-radius: 15px;
+    justify-content: center;
   }
   .arca-launcher-icon { width: 35px; height: 35px; border-radius: 11px; }
-  .arca-launcher strong { font-size: 12px; }
+  .arca-launcher > span:last-child { display: none; }
   .arca-overlay-topbar { min-height: 58px; padding: 8px 10px; }
   .arca-overlay-topbar { flex-wrap: wrap; }
   .arca-overlay-topbar .admin-button { min-height: 40px; }
