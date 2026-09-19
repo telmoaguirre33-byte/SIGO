@@ -25,13 +25,25 @@ export default function LectorCelularPage({token}:{token:string}){
    }catch{setEstado("No se pudo abrir la cámara. Revisá el permiso del navegador.");}
   } void start(); return()=>{cancelled=true;controls?.stop?.();};
  },[token]);
- return <main style={{minHeight:"100vh",padding:18,background:"#0f172a",color:"white",fontFamily:"Arial"}}>
-  <h1>SIGO · Lector celular</h1><p>{estado}</p>
-  <div style={{position:"relative",width:"100%",maxWidth:620}}>
-   <video ref={videoRef} playsInline muted style={{width:"100%",borderRadius:18,background:"#000"}}/>
-   <div style={{position:"absolute",left:"8%",right:"8%",top:"42%",height:"16%",border:"3px solid #22c55e",borderRadius:12,boxShadow:"0 0 0 9999px rgba(0,0,0,.18)",pointerEvents:"none"}}/>
+ return <main style={{minHeight:"100vh",padding:"18px 18px 34px",background:"linear-gradient(180deg,#0f1b31,#071426)",color:"white",fontFamily:"Arial,sans-serif"}}>
+  <header style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,maxWidth:620,margin:"0 auto 18px"}}>
+   <div><h1 style={{margin:0,fontSize:"clamp(34px,9vw,54px)"}}>SIGO</h1><div style={{fontSize:22,fontWeight:700,opacity:.85}}>Lector celular</div></div>
+   <div style={{background:"#16263f",padding:"12px 16px",borderRadius:18,fontWeight:800}}><span style={{color:"#22c55e"}}>●</span> Conectado</div>
+  </header>
+  <section style={{maxWidth:620,margin:"0 auto 16px",background:"#14243b",padding:"14px 18px",borderRadius:18}}>
+   <strong>Apuntá solo al código de barras</strong><div style={{opacity:.75,marginTop:4}}>El código se envía automáticamente a la computadora.</div>
+  </section>
+  <div style={{position:"relative",width:"100%",maxWidth:620,height:"clamp(120px,22vh,175px)",margin:"0 auto",overflow:"hidden",borderRadius:18,border:"3px solid #22c55e"}}>
+   <video ref={videoRef} playsInline muted style={{width:"100%",height:"100%",objectFit:"cover",background:"#000"}}/>
+   <div style={{position:"absolute",left:0,right:0,top:"50%",height:3,background:"#ef4444",boxShadow:"0 0 10px #ef4444",pointerEvents:"none"}}/>
   </div>
-  <p style={{opacity:.8}}>Acercá el código hasta que ocupe el recuadro verde. Evitá reflejos y mantenelo enfocado.</p>
-  {ultimo&&<h2>Último: {ultimo}</h2>}
+  <div style={{maxWidth:620,margin:"14px auto",display:"flex",justifyContent:"space-around",textAlign:"center",fontSize:13,opacity:.9}}>
+   <span>⚡<br/>Lectura rápida</span><span>◎<br/>Enfoque automático</span><span>✓<br/>Envío automático</span>
+  </div>
+  <section style={{maxWidth:620,margin:"16px auto 0",background:"#14243b",padding:"16px 18px",borderRadius:18}}>
+   <div style={{opacity:.75,fontWeight:700}}>Último código</div>
+   {ultimo ? <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8}}><span style={{fontSize:34,color:"#22c55e"}}>✓</span><div><strong style={{fontSize:"clamp(24px,7vw,36px)"}}>{ultimo}</strong><div style={{color:"#86efac"}}>Enviado a SIGO</div></div></div> : <div style={{marginTop:8,opacity:.65}}>Esperando lectura…</div>}
+  </section>
+  <div style={{maxWidth:620,margin:"12px auto",textAlign:"center",fontWeight:800,color:estado.startsWith("Código")||estado.startsWith("✅")?"#86efac":"white"}}>{estado}</div>
  </main>;
 }
