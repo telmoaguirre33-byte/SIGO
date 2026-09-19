@@ -6,6 +6,7 @@ import ConfiguracionLauncher from "./ConfiguracionLauncher";
 import DevolucionesLauncher from "./DevolucionesLauncher";
 import IngresosLauncher from "./IngresosLauncher";
 import MobileOperationsMenu from "./MobileOperationsMenu";
+import LectorCelularLauncher from "./LectorCelularLauncher";
 import SigoAyuda from "./SigoAyuda";
 import SigoAuthGate from "./SigoAuthGate";
 import SigoRoot from "./SigoRoot";
@@ -34,6 +35,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <ArcaLauncher />
         <ConfiguracionLauncher />
         <CarritoLauncher />
+        <LectorCelularLauncher />
         <DevolucionesLauncher />
         <IngresosLauncher />
         <MobileOperationsMenu />
