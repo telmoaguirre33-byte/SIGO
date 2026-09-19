@@ -38,6 +38,7 @@ export default function SigoAuthGate({ children }: Props) {
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [empresaNombre, setEmpresaNombre] = useState("");
+  const [telefonoRegistro, setTelefonoRegistro] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -132,9 +133,15 @@ export default function SigoAuthGate({ children }: Props) {
     if (!comenzarSolicitud()) return;
     const normalizedEmail = email.trim().toLowerCase();
     const nombre = empresaNombre.trim();
+    const telefono = telefonoRegistro.trim();
 
     if (!nombre) {
-      setError("Ingresá el nombre de tu empresa o negocio.");
+      setError("Ingresá la razón social o nombre de tu empresa.");
+      terminarSolicitud();
+      return;
+    }
+    if (!telefono) {
+      setError("Ingresá un teléfono de contacto.");
       terminarSolicitud();
       return;
     }
@@ -153,6 +160,8 @@ export default function SigoAuthGate({ children }: Props) {
         data: {
           [PENDING_EMPRESA_METADATA_KEY]: nombre,
           [ONBOARDING_MODE_METADATA_KEY]: OWNER_ONBOARDING_MODE,
+          sigo_telefono_contacto: telefono,
+          sigo_email_contacto: normalizedEmail,
           sigo_trial_days: 7,
           sigo_trial_started_at: new Date().toISOString(),
         },
@@ -384,7 +393,7 @@ export default function SigoAuthGate({ children }: Props) {
             <h1 id="sigo-login-title">Prueba gratis 7 días</h1>
             <p className="sigo-auth-subtitle">Creá tu empresa, quedá como administrador principal y probá SIGO durante 7 días sin pagar para empezar.</p>
             <form onSubmit={registrarme} className="sigo-auth-form">
-              <label className="sigo-auth-field"><span>Empresa o negocio</span><input value={empresaNombre} onChange={(e) => setEmpresaNombre(e.target.value)} autoComplete="organization" required /></label>
+              <label className="sigo-auth-field"><span>Razón social / negocio</span><input value={empresaNombre} onChange={(e) => setEmpresaNombre(e.target.value)} autoComplete="organization" required /></label>\n              <label className="sigo-auth-field"><span>Teléfono de contacto</span><input type="tel" inputMode="tel" autoComplete="tel" value={telefonoRegistro} onChange={(e) => setTelefonoRegistro(e.target.value)} placeholder="Ej.: +54 9 376..." required /></label>
               <label className="sigo-auth-field"><span>Email</span><input type="email" inputMode="email" autoComplete="email" autoCapitalize="none" spellCheck={false} value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
               {campoPassword(password, setPassword, "new-password")}
               {error ? <div className="sigo-auth-error" role="alert">{error}</div> : null}
