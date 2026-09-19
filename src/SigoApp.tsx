@@ -5,7 +5,6 @@ import type { BarcodeAction, BarcodeProduct } from "./barcode";
 import VentaRapidaOperativa from "./VentaRapidaOperativa";
 import { can } from "./permissions";
 import { listarModulosEmpresa } from "./modulosEmpresa";
-import LectorCelularRemoto from "./LectorCelularRemoto";
 import {
   eliminarProductoSigo,
   guardarProductoSigo,
@@ -133,7 +132,6 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
   const [scanAction, setScanAction] = useState<BarcodeAction>("consultar");
   const [scanResult, setScanResult] = useState<BarcodeProduct | null>(null);
   const [eanHabilitado, setEanHabilitado] = useState(false);
-  const [lectorCelularHabilitado, setLectorCelularHabilitado] = useState(false);
   const [eanCodigo, setEanCodigo] = useState("");
 
   async function cargar() {
@@ -153,7 +151,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
     void cargar();
     let activo = true;
     void listarModulosEmpresa(empresaId)
-      .then((mods) => { if (activo) { setEanHabilitado(Boolean(mods.find((m) => m.clave === "busqueda_ean")?.habilitado)); setLectorCelularHabilitado(Boolean(mods.find((m) => m.clave === "lector_celular_remoto")?.habilitado)); } })
+      .then((mods) => { if (activo) { setEanHabilitado(Boolean(mods.find((m) => m.clave === "busqueda_ean")?.habilitado)); } })
       .catch(() => { if (activo) setEanHabilitado(false); });
     return () => { activo = false; };
   }, [empresaId]);
@@ -308,10 +306,6 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
           {puedeEditar ? <button className="primary-button" onClick={abrirNuevo}>Nuevo producto</button> : <span>Modo solo lectura</span>}
         </div>
       </div>
-
-      {lectorCelularHabilitado && (
-        <LectorCelularRemoto empresaId={empresaId} onCode={(codigo) => { setSearch(codigo); setScanResult(null); }} />
-      )}
 
       {eanHabilitado && (
         <div className="panel" style={{ border: "2px solid #2563eb" }}>
