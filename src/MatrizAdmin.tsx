@@ -20,6 +20,7 @@ type EmpresaMatriz = {
   clientes_portal: number;
   soporte_activo: boolean;
   busqueda_ean_habilitada?: boolean;
+  lector_celular_habilitado?: boolean;
 };
 
 type Resumen = {
@@ -92,6 +93,7 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
         clientes_portal: normalizarNumero(fila.clientes_portal),
         soporte_activo: Boolean(fila.soporte_activo),
         busqueda_ean_habilitada: Boolean(fila.busqueda_ean_habilitada),
+        lector_celular_habilitado: Boolean(fila.lector_celular_habilitado),
       })));
     } catch (e) {
       console.error(e);
@@ -201,6 +203,24 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
     } finally {
       setWorkingId(null);
     }
+  }
+
+  async function cambiarLectorCelular(empresa: EmpresaMatriz) {
+    if (workingId) return;
+    const proximo = !empresa.lector_celular_habilitado;
+    setWorkingId(empresa.empresa_id); setError(""); setMensaje("");
+    try {
+      const { error: rpcError } = await supabase.rpc("matriz_actualizar_modulo_empresa_sigo", {
+        p_empresa_id: empresa.empresa_id,
+        p_modulo_clave: "lector_celular_remoto",
+        p_habilitado: proximo,
+      });
+      if (rpcError) throw rpcError;
+      setEmpresas((actuales) => actuales.map((item) => item.empresa_id === empresa.empresa_id ? { ...item, lector_celular_habilitado: proximo } : item));
+      setMensaje(`${empresa.nombre}: Lector celular remoto ${proximo ? "activado" : "desactivado"}.`);
+    } catch (e) {
+      console.error(e); setError("No pudimos actualizar el módulo Lector celular remoto.");
+    } finally { setWorkingId(null); }
   }
 
   async function abrirSoporte(empresa: EmpresaMatriz) {
@@ -355,6 +375,9 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
                   <div className="sigo-matriz-actions">
                     <button className={empresa.busqueda_ean_habilitada ? "admin-button" : "primary-button"} type="button" disabled={workingId === empresa.empresa_id} onClick={() => void cambiarBusquedaEan(empresa)}>
                       {empresa.busqueda_ean_habilitada ? "EAN: Activo" : "Agregar módulo EAN"}
+                    </button>
+                    <button className={empresa.lector_celular_habilitado ? "admin-button" : "primary-button"} type="button" disabled={workingId === empresa.empresa_id} onClick={() => void cambiarLectorCelular(empresa)}>
+                      {empresa.lector_celular_habilitado ? "📱 Lector celular: Activo" : "📱 Agregar lector celular"}
                     </button>
                     {empresa.soporte_activo ? (
                       <button className="admin-button" type="button" disabled={workingId === empresa.empresa_id} onClick={() => void cerrarSoporte(empresa)}>Cerrar soporte</button>
