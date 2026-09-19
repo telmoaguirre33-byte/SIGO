@@ -4,6 +4,7 @@ import BarcodeScanner from "./BarcodeScanner";
 import type { BarcodeAction, BarcodeProduct } from "./barcode";
 import VentaRapidaOperativa from "./VentaRapidaOperativa";
 import { can } from "./permissions";
+import { listarModulosEmpresa } from "./modulosEmpresa";
 import {
   eliminarProductoSigo,
   guardarProductoSigo,
@@ -130,6 +131,8 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
   const [ajusteStock, setAjusteStock] = useState(false);
   const [scanAction, setScanAction] = useState<BarcodeAction>("consultar");
   const [scanResult, setScanResult] = useState<BarcodeProduct | null>(null);
+  const [eanHabilitado, setEanHabilitado] = useState(false);
+  const [eanCodigo, setEanCodigo] = useState("");
 
   async function cargar() {
     setLoading(true);
@@ -146,6 +149,11 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
 
   useEffect(() => {
     void cargar();
+    let activo = true;
+    void listarModulosEmpresa(empresaId)
+      .then((mods) => { if (activo) setEanHabilitado(Boolean(mods.find((m) => m.clave === "busqueda_ean")?.habilitado)); })
+      .catch(() => { if (activo) setEanHabilitado(false); });
+    return () => { activo = false; };
   }, [empresaId]);
 
   useEffect(() => {
@@ -298,6 +306,38 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
           {puedeEditar ? <button className="primary-button" onClick={abrirNuevo}>Nuevo producto</button> : <span>Modo solo lectura</span>}
         </div>
       </div>
+
+      {eanHabilitado && (
+        <div className="panel" style={{ border: "2px solid #2563eb" }}>
+          <div className="page-header">
+            <div>
+              <h3>🌐 Buscar producto por EAN</h3>
+              <p>Módulo habilitado por Matriz. Ingresá o escaneá el EAN/GTIN para identificar un producto externo y facilitar su alta.</p>
+            </div>
+            <strong style={{ color: "#15803d" }}>EAN ACTIVO</strong>
+          </div>
+          <div className="form-actions" style={{ justifyContent: "flex-start" }}>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              value={eanCodigo}
+              onChange={(e) => setEanCodigo(e.target.value.replace(/\D/g, "").slice(0, 14))}
+              placeholder="Ej.: 7791234567890"
+              aria-label="Código EAN o GTIN"
+              style={{ minWidth: 280 }}
+            />
+            <button
+              className="primary-button"
+              type="button"
+              disabled={eanCodigo.length < 8}
+              onClick={() => setError("La búsqueda externa EAN está habilitada para esta empresa; falta configurar la fuente mundial de productos antes de consultar datos reales.")}
+            >
+              Buscar EAN
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="panel">
         <h3>Buscar por código</h3>
