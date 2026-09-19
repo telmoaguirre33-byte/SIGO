@@ -10,8 +10,20 @@ export default function LectorCelularRemoto({empresaId,onCode}:Props){
   const [last,setLast]=useState("");
   const [qrData,setQrData]=useState("");
   const channelRef=useRef<any>(null);
+  const lastRef=useRef("");
 
   useEffect(()=>()=>{ if(channelRef.current) void supabase.removeChannel(channelRef.current); },[]);
+  useEffect(()=>{
+    if(!sessionId)return;
+    let alive=true;
+    const timer=window.setInterval(async()=>{
+      const {data}=await supabase.rpc("lector_celular_estado",{p_sesion_id:sessionId});
+      const row=Array.isArray(data)?data[0]:data;
+      const codigo=String(row?.codigo||"").trim();
+      if(alive&&codigo&&codigo!==lastRef.current){lastRef.current=codigo;setLast(codigo);onCode(codigo);}
+    },900);
+    return()=>{alive=false;window.clearInterval(timer);};
+  },[sessionId,onCode]);
 
   async function vincular(){
     setError("");
@@ -25,7 +37,7 @@ export default function LectorCelularRemoto({empresaId,onCode}:Props){
     const ch=supabase.channel("lector-"+sesion.id)
       .on("postgres_changes",{event:"UPDATE",schema:"public",table:"sigo_lector_celular_sesiones",filter:`id=eq.${sesion.id}`},(payload:any)=>{
         const codigo=String(payload.new?.codigo||"").trim();
-        if(codigo){setLast(codigo);onCode(codigo);}
+        if(codigo&&codigo!==lastRef.current){lastRef.current=codigo;setLast(codigo);onCode(codigo);}
       }).subscribe();
     channelRef.current=ch;
   }
