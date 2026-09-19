@@ -111,6 +111,13 @@ export default function MobileOperationsMenu() {
     irOperacion("Ventas");
   }
 
+  function abrirLectorCelular() {
+    cerrar();
+    if (clickSelector(".sigo-mobile-reader-menu-item")) return;
+    clickPorTexto(".sigo-context-actions button", "Operación");
+    window.setTimeout(() => clickSelector(".sigo-mobile-reader-menu-item"), 100);
+  }
+
   function abrirDevoluciones() {
     cerrar();
     if (clickSelector(".sigo-returns-menu-item, .sigo-returns-context-button")) return;
@@ -204,7 +211,7 @@ export default function MobileOperationsMenu() {
               {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={() => irWorkspace("Clientes / Ctas. corrientes")}><span>👥</span><strong>Contactos / Clientes</strong><b>›</b></button>}
               <button className="sigo-mobile-drawer-item" type="button" onClick={() => irOperacion("Productos")}><span>◇</span><strong>Productos</strong><b>›</b></button>
               {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={() => irOperacion("Lista de precios")}><span>$</span><strong>Lista de precios</strong><b>›</b></button>}
-              {puedeVender && <button className="sigo-mobile-drawer-item" type="button" onClick={abrirDevoluciones}><span>↩</span><strong>Devoluciones / Anulaciones</strong><b>›</b></button>}
+              {puedeVender && <button className="sigo-mobile-drawer-item" type="button" onClick={abrirDevoluciones}><span>↩</span><strong>Devoluciones / Anulaciones</strong><b>›</b></button>}\n              {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={abrirLectorCelular}><span>📱</span><strong>Vincular celular</strong><b>›</b></button>}
               {puedeFacturar && <button className="sigo-mobile-drawer-item" type="button" onClick={abrirArca}><span>A</span><strong>ARCA / Facturación</strong><b>›</b></button>}
               {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={() => irWorkspace("Clientes / Ctas. corrientes")}><span>▣</span><strong>Cuentas corrientes</strong><b>›</b></button>}
               {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={() => irWorkspace("Informes")}><span>◔</span><strong>Informes</strong><b>›</b></button>}
