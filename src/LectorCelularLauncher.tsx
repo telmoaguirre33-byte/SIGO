@@ -13,5 +13,10 @@ export default function LectorCelularLauncher(){
  useEffect(()=>{function resolver(){const menu=document.querySelector<HTMLElement>(".sigo-operation-only .sidebar .menu");if(menu){setHost({element:menu,kind:"sidebar"});return;}const c=document.querySelector<HTMLElement>(".sigo-context-actions");setHost(c?{element:c,kind:"context"}:null);}resolver();const o=new MutationObserver(resolver);o.observe(document.body,{childList:true,subtree:true});return()=>o.disconnect();},[]);
  if(!empresa||!activo)return null;
  const boton=host?.kind==="sidebar"?<button className="menu-item sigo-mobile-reader-menu-item" type="button" onClick={()=>setOpen(true)}><span className="menu-icon">📱</span><span>Vincular celular</span></button>:<button className="admin-button" type="button" onClick={()=>setOpen(true)}>📱 Vincular celular</button>;
+ if(host?.kind==="sidebar"){
+   const carrito=host.element.querySelector(".sigo-cart-menu-item");
+   const lector=host.element.querySelector(".sigo-mobile-reader-menu-item");
+   if(carrito&&lector&&carrito.nextElementSibling!==lector) carrito.insertAdjacentElement("afterend",lector);
+ }
  return <>{host?createPortal(boton,host.element):null}{open&&<div className="sigo-cart-overlay" role="dialog" aria-modal="true"><div className="sigo-cart-topbar"><button className="admin-button" onClick={()=>setOpen(false)}>← Cerrar</button><div><strong>📱 Vincular celular</strong><small>{empresa.empresa_nombre}</small></div></div><main className="sigo-cart-content"><LectorCelularRemoto empresaId={empresa.empresa_id} onCode={()=>{}}/></main></div>}</>;
 }
