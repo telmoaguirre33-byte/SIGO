@@ -3,15 +3,12 @@ import { supabase } from "./supabase";
 
 type Props={empresaId:string; onCode:(codigo:string)=>void};
 
-function qrUrl(text:string){
-  return "https://api.qrserver.com/v1/create-qr-code/?size=260x260&data="+encodeURIComponent(text);
-}
-
 export default function LectorCelularRemoto({empresaId,onCode}:Props){
   const [token,setToken]=useState("");
   const [sessionId,setSessionId]=useState("");
   const [error,setError]=useState("");
   const [last,setLast]=useState("");
+  const [qrData,setQrData]=useState("");
   const channelRef=useRef<any>(null);
 
   useEffect(()=>()=>{ if(channelRef.current) void supabase.removeChannel(channelRef.current); },[]);
@@ -33,12 +30,13 @@ export default function LectorCelularRemoto({empresaId,onCode}:Props){
     channelRef.current=ch;
   }
   const link=token ? `${window.location.origin}/?lector_token=${encodeURIComponent(token)}` : "";
+  useEffect(()=>{let active=true;if(!link){setQrData("");return;}void import("qrcode").then((QR)=>QR.toDataURL(link,{width:260,margin:1,errorCorrectionLevel:"M"})).then((url)=>{if(active)setQrData(url);}).catch(()=>{if(active)setQrData("");});return()=>{active=false;};},[link]);
   return <div className="panel" style={{border:"2px solid #16a34a"}}>
     <div className="page-header"><div><h3>📱 Lector celular remoto</h3><p>Usá la cámara del teléfono como lector inalámbrico para esta computadora.</p></div>{token&&<strong style={{color:"#15803d"}}>● Esperando celular</strong>}</div>
     {!token?<button className="primary-button" type="button" onClick={()=>void vincular()}>📱 Vincular celular</button>:<>
       <div style={{display:"flex",gap:20,alignItems:"center",flexWrap:"wrap"}}>
         <div style={{display:"grid",gap:10,justifyItems:"center"}}>
-          <img src={qrUrl(link)} width="220" height="220" alt="QR para vincular celular" onError={(e)=>{e.currentTarget.style.display="none";}}/>
+          {qrData ? <img src={qrData} width="220" height="220" alt="QR para vincular celular"/> : <div style={{width:220,height:220,display:"grid",placeItems:"center",border:"1px solid #cbd5e1",borderRadius:12}}>Generando QR…</div>}
           <a className="primary-button" href={link} target="_blank" rel="noreferrer" style={{textDecoration:"none"}}>Abrir vínculo en celular</a>
           <small style={{maxWidth:320,wordBreak:"break-all"}}>{link}</small>
         </div>
