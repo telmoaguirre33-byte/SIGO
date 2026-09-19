@@ -43,7 +43,7 @@ export default function CarteleriaOfertas({ productos }: Props) {
     const oferta=Number(precioOferta.replace(",","."));
     if(!Number.isFinite(oferta)||oferta<=0){setError("Ingresá un precio de oferta mayor a cero.");return;}
     const cantidad=formato==="a4_4"?4:2;
-    const carteles=Array.from({length:cantidad},()=>`<article class="cartel">
+    const carteles=Array.from({length:cantidad},()=>`<article class="${cartelClass}">
       <div class="titulo">${html(titulo.trim()||"OFERTA")}</div>
       <div class="producto">${html(producto.nombre)}</div>
       ${producto.marca?`<div class="marca">${html(producto.marca)}</div>`:""}
@@ -51,10 +51,11 @@ export default function CarteleriaOfertas({ productos }: Props) {
       <div class="precio">${html(dinero(oferta))}</div>
     </article>`).join("");
     const horizontal=orientacion==="horizontal";
+    // La orientación describe cada cartel, no la hoja. A4 x4 siempre conserva 2x2.
     const grid=formato==="a4_4"
-      ? (horizontal ? "grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);" : "grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);")
+      ? "grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);"
       : (horizontal ? "grid-template-columns:1fr;grid-template-rows:repeat(2,1fr);" : "grid-template-columns:repeat(2,1fr);grid-template-rows:1fr;");
-    const direccion=horizontal ? "row" : "column";
+    const cartelClass=horizontal ? "cartel horizontal" : "cartel vertical";
     const ventana=window.open("","_blank","width=980,height=760");
     if(!ventana){setError("El navegador bloqueó la ventana de impresión. Habilitá ventanas emergentes para SIGO.");return;}
     ventana.opener=null;
@@ -62,9 +63,21 @@ export default function CarteleriaOfertas({ productos }: Props) {
     ventana.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>SIGO · Ofertas</title><style>
       @page{size:A4 portrait;margin:8mm} *{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
       html,body{margin:0;padding:0;width:100%;height:100%}.hoja{width:194mm;height:281mm;display:grid;${grid}gap:4mm}
-      .cartel{border:3px solid #111;border-radius:4mm;display:flex;flex-direction:${direccion};align-items:center;justify-content:center;text-align:center;padding:7mm;overflow:hidden;break-inside:avoid;position:relative;gap:6mm}
+      .cartel{border:3px solid #111;border-radius:4mm;display:grid;align-items:center;justify-items:center;text-align:center;padding:6mm;overflow:hidden;break-inside:avoid;position:relative}
       .cartel:before{content:"";position:absolute;inset:2mm;border:2px solid #e11d48;border-radius:3mm;pointer-events:none}
-      .titulo{position:relative;z-index:1;display:grid;place-items:center;min-width:${horizontal?"38%":"78%"};min-height:${horizontal?"65%":"28%"};padding:7mm 9mm;background:#ffe500;color:#e10600;font-size:${formato==="a4_4"?"28px":"38px"};font-weight:950;letter-spacing:.06em;clip-path:polygon(50% 0%,61% 18%,80% 6%,82% 29%,100% 34%,87% 50%,100% 67%,79% 72%,78% 96%,59% 83%,50% 100%,40% 82%,20% 95%,20% 72%,0 66%,13% 50%,0 34%,19% 29%,20% 6%,40% 18%);text-shadow:1px 1px 0 #fff}.producto{position:relative;z-index:1;font-size:${formato==="a4_4"?"20px":"27px"};font-weight:800;margin-top:5mm;line-height:1.08}.marca{position:relative;z-index:1;font-size:15px;margin-top:2mm}.antes{position:relative;z-index:1;font-size:14px;margin-top:5mm;text-decoration:line-through}.precio{position:relative;z-index:1;background:#e10600;color:#ffe500;border-radius:4mm;padding:3mm 6mm;font-size:${formato==="a4_4"?"44px":"62px"};font-weight:900;line-height:1;margin-top:4mm}
+      .cartel.vertical{grid-template-rows:minmax(42mm,1.15fr) auto auto auto;align-content:center;gap:3mm}
+      .cartel.horizontal{grid-template-columns:minmax(42%,.9fr) minmax(0,1.35fr);grid-template-rows:auto auto auto;column-gap:5mm;row-gap:2mm;align-content:center}
+      .titulo{position:relative;z-index:1;display:grid;place-items:center;width:min(100%,78mm);aspect-ratio:1.75/1;padding:5mm;background:#ffe500;color:#e10600;font-size:${formato==="a4_4"?"25px":"36px"};font-weight:950;letter-spacing:.06em;clip-path:polygon(50% 0%,61% 18%,80% 6%,82% 29%,100% 34%,87% 50%,100% 67%,79% 72%,78% 96%,59% 83%,50% 100%,40% 82%,20% 95%,20% 72%,0 66%,13% 50%,0 34%,19% 29%,20% 6%,40% 18%);text-shadow:1px 1px 0 #fff}
+      .producto{position:relative;z-index:1;font-size:${formato==="a4_4"?"18px":"25px"};font-weight:900;line-height:1.08;max-width:100%;overflow-wrap:anywhere}
+      .marca{position:relative;z-index:1;font-size:13px}
+      .antes{position:relative;z-index:1;font-size:13px;text-decoration:line-through}
+      .precio{position:relative;z-index:1;background:#e10600;color:#ffe500;border-radius:4mm;padding:3mm 6mm;font-size:${formato==="a4_4"?"35px":"52px"};font-weight:950;line-height:1;white-space:nowrap;max-width:100%}
+      .horizontal .titulo{grid-row:1 / 4;grid-column:1;width:100%;max-width:78mm}
+      .horizontal .producto{grid-column:2;grid-row:1;align-self:end}
+      .horizontal .marca{grid-column:2;grid-row:1;align-self:start;margin-top:8mm}
+      .horizontal .antes{grid-column:2;grid-row:2}
+      .horizontal .precio{grid-column:2;grid-row:3;align-self:start}
+      .vertical .titulo,.vertical .producto,.vertical .marca,.vertical .antes,.vertical .precio{max-width:92%}
       @media print{html,body{width:210mm;height:297mm}.hoja{break-after:avoid}}
     </style></head><body><main class="hoja">${carteles}</main><script>window.addEventListener('load',()=>setTimeout(()=>window.print(),120));<\/script></body></html>`);
     ventana.document.close();
