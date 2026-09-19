@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { supabase } from "./supabase";
 import type { ProductoSigo } from "./productos";
 import { descargarProductosExcel } from "./excelProductos";
+import EtiquetasPrecios from "./EtiquetasPrecios";
+import CarteleriaOfertas from "./CarteleriaOfertas";
 
 type Props = {
   empresaId: string;
@@ -176,6 +178,11 @@ export default function ListaPreciosManager({ empresaId, productos, puedeEditar,
         <button className="admin-button" type="button" disabled={productos.length === 0} onClick={() => descargarProductosExcel(productos)}>
           Exportar Excel
         </button>
+      </div>
+
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
+        <EtiquetasPrecios productos={filtrados} />
+        <CarteleriaOfertas productos={filtrados} />
       </div>
 
       <div className="form-grid">
