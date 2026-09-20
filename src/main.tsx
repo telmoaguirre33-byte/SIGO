@@ -11,6 +11,7 @@ import SigoAyuda from "./SigoAyuda";
 import SigoAuthGate from "./SigoAuthGate";
 import SigoRoot from "./SigoRoot";
 import LectorCelularPage from "./LectorCelularPage";
+import PrivacyPolicy from "./PrivacyPolicy";
 import "./index.css";
 import "./barcode-scanner.css";
 import "./premium-mobile.css";
@@ -24,12 +25,14 @@ import "./mobile-operations-menu.css";
 import "./usuarios-permisos.css";
 import "./logout-visible.css";
 import "./sigo-ayuda.css";
+import "./stock-import.css";
 import "./configuracion.css";
 
 const lectorToken = new URLSearchParams(window.location.search).get("lector_token");
+const normalizedPath = window.location.pathname.replace(/\/$/, "") || "/";
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    {lectorToken ? <LectorCelularPage token={lectorToken} /> : <SigoAuthGate>
+    {normalizedPath === "/politica-de-privacidad" ? <PrivacyPolicy /> : lectorToken ? <LectorCelularPage token={lectorToken} /> : <SigoAuthGate>
       <>
         <SigoRoot />
         <ArcaLauncher />
