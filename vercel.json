@@ -7,7 +7,7 @@
     }
   },
   "rewrites": [
-    { "source": "/politica-de-privacidad", "destination": "/" }
+    { "source": "/politica-de-privacidad", "destination": "/politica-de-privacidad.html" }
   ],
   "headers": [
     {
