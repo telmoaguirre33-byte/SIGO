@@ -12,7 +12,18 @@ const PENDING_EMPRESA_METADATA_KEY = "sigo_empresa_nombre";
 const ONBOARDING_MODE_METADATA_KEY = "sigo_onboarding_mode";
 const OWNER_ONBOARDING_MODE = "owner";
 const STAFF_ONBOARDING_MODE = "member";
+const SIGO_TRIAL_DAYS = 15;
+const SIGO_TRIAL_MS = SIGO_TRIAL_DAYS * 24 * 60 * 60 * 1000;
+const SIGO_TRIAL_POLICY_EFFECTIVE_AT = Date.parse("2026-09-20T18:00:00.000Z");
 const MERCADOPAGO_SUBSCRIPTION_URL = String(import.meta.env.VITE_MERCADOPAGO_SUBSCRIPTION_URL ?? "").trim();
+
+function pruebaVencida(session: Session) {
+  const metadata = session.user.user_metadata ?? {};
+  if (metadata[ONBOARDING_MODE_METADATA_KEY] !== OWNER_ONBOARDING_MODE) return false;
+  const createdAt = Date.parse(session.user.created_at);
+  if (!Number.isFinite(createdAt) || createdAt < SIGO_TRIAL_POLICY_EFFECTIVE_AT) return false;
+  return Date.now() >= createdAt + SIGO_TRIAL_MS;
+}
 
 function esLimiteTemporal(errorMessage: string) {
   const normalized = errorMessage.toLowerCase();
@@ -162,7 +173,7 @@ export default function SigoAuthGate({ children }: Props) {
           [ONBOARDING_MODE_METADATA_KEY]: OWNER_ONBOARDING_MODE,
           sigo_telefono_contacto: telefono,
           sigo_email_contacto: normalizedEmail,
-          sigo_trial_days: 15,
+          sigo_trial_days: SIGO_TRIAL_DAYS,
           sigo_trial_started_at: new Date().toISOString(),
         },
       },
@@ -320,7 +331,24 @@ export default function SigoAuthGate({ children }: Props) {
   }
 
   if (loading) return <main className="sigo-auth-screen"><section className="sigo-auth-card">Verificando sesión…</section></main>;
-  if (session && mode !== "recovery") return <>{children}</>;
+  if (session && mode !== "recovery") {
+    if (!pruebaVencida(session)) return <>{children}</>;
+    return (
+      <main className="sigo-auth-screen">
+        <section className="sigo-auth-card" aria-labelledby="sigo-trial-expired-title">
+          <div className="sigo-auth-brand">
+            <div className="sigo-auth-brand-mark" aria-hidden="true">SG</div>
+            <div className="sigo-auth-brand-copy"><strong>SIGO</strong><span>Sistema Inteligente de Gestión Operativa</span></div>
+          </div>
+          <h1 id="sigo-trial-expired-title">Finalizó tu prueba de 15 días</h1>
+          <p className="sigo-auth-subtitle">Tus datos siguen guardados. Activá la suscripción para continuar usando SIGO.</p>
+          {error ? <div className="sigo-auth-error" role="alert">{error}</div> : null}
+          <button className="sigo-auth-submit sigo-mercadopago-button" type="button" onClick={abrirMercadoPago}>Activar con Mercado Pago</button>
+          <button className="sigo-auth-secondary" type="button" onClick={() => void supabase.auth.signOut()}>Cerrar sesión</button>
+        </section>
+      </main>
+    );
+  }
 
   const campoPassword = (value: string, onChange: (value: string) => void, autoComplete: string) => (
     <label className="sigo-auth-field">
@@ -393,7 +421,8 @@ export default function SigoAuthGate({ children }: Props) {
             <h1 id="sigo-login-title">Prueba gratis 15 días</h1>
             <p className="sigo-auth-subtitle">Creá tu empresa, quedá como administrador principal y probá SIGO durante 15 días sin pagar para empezar.</p>
             <form onSubmit={registrarme} className="sigo-auth-form">
-              <label className="sigo-auth-field"><span>Razón social / negocio</span><input value={empresaNombre} onChange={(e) => setEmpresaNombre(e.target.value)} autoComplete="organization" required /></label>\n              <label className="sigo-auth-field"><span>Teléfono de contacto</span><input type="tel" inputMode="tel" autoComplete="tel" value={telefonoRegistro} onChange={(e) => setTelefonoRegistro(e.target.value)} placeholder="Ej.: +54 9 376..." required /></label>
+              <label className="sigo-auth-field"><span>Razón social / negocio</span><input value={empresaNombre} onChange={(e) => setEmpresaNombre(e.target.value)} autoComplete="organization" required /></label>
+              <label className="sigo-auth-field"><span>Teléfono de contacto</span><input type="tel" inputMode="tel" autoComplete="tel" value={telefonoRegistro} onChange={(e) => setTelefonoRegistro(e.target.value)} placeholder="Ej.: +54 9 376..." required /></label>
               <label className="sigo-auth-field"><span>Email</span><input type="email" inputMode="email" autoComplete="email" autoCapitalize="none" spellCheck={false} value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
               {campoPassword(password, setPassword, "new-password")}
               {error ? <div className="sigo-auth-error" role="alert">{error}</div> : null}
