@@ -1,5 +1,6 @@
 import { useEffect,useRef,useState } from "react";
-import { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } from "@zxing/browser";
+import { BrowserMultiFormatReader } from "@zxing/browser";
+import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import { supabase } from "./supabase";
 
 export default function LectorCelularPage({token}:{token:string}){
