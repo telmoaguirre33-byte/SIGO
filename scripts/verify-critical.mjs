@@ -47,7 +47,7 @@ const checks = [
   },
   {
     file: 'src/SigoApp.tsx',
-    required: ['can(empresa.rol, "products.write")', 'Precio de venta', 'El stock actual no se edita acá', 'Dar de baja', 'No se borrarán ventas, compras ni históricos'],
+    required: ['can(empresa.rol, "products.write")', 'Precio de venta', 'El stock de productos existentes se modifica mediante movimientos operativos.', 'Dar de baja', 'No se borrarán ventas, compras ni históricos'],
     label: 'product master does not overwrite operational stock/history',
   },
   {
