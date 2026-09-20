@@ -46,7 +46,7 @@ for (const token of [
 }
 
 for (const token of [
-  "Perfil Vendedor: sólo emisión de comprobantes",
+  "Facturación de vendedor",
   "no puede cambiar CUIT, certificados, puntos de venta, usuarios ni configuración fiscal",
   "<ArcaCaeEmission",
   "config?.activo && config?.ultima_prueba_ok === true",
