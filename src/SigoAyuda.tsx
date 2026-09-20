@@ -155,9 +155,9 @@ const TEMAS: TemaAyuda[] = [
     id: "suscripcion",
     icono: "◇",
     titulo: "Prueba gratis y Suscripción",
-    resumen: "Cómo funciona la prueba de 7 días y el pago de SIGO.",
+    resumen: "Cómo funciona la prueba de 15 días y el pago de SIGO.",
     pasos: [
-      "Al crear una empresa podés iniciar la Prueba gratis 7 días.",
+      "Al crear una empresa podés iniciar la Prueba gratis 15 días.",
       "Desde el acceso elegí Suscripción.",
       "Dentro de Suscripción elegí Mercado Pago.",
       "El pago se procesa fuera de SIGO; SIGO no guarda datos de tarjeta.",
