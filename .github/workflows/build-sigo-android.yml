@@ -1,0 +1,31 @@
+name: Build SIGO Android AAB
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "android-twa.zip"
+      - ".github/workflows/build-sigo-android.yml"
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Extract Android project
+        run: unzip -q android-twa.zip -d android-twa
+      - name: Build unsigned release bundle
+        working-directory: android-twa
+        run: gradle :app:bundleRelease --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sigo-unsigned-aab
+          path: android-twa/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
