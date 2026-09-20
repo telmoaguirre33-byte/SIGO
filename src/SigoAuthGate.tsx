@@ -162,7 +162,7 @@ export default function SigoAuthGate({ children }: Props) {
           [ONBOARDING_MODE_METADATA_KEY]: OWNER_ONBOARDING_MODE,
           sigo_telefono_contacto: telefono,
           sigo_email_contacto: normalizedEmail,
-          sigo_trial_days: 7,
+          sigo_trial_days: 15,
           sigo_trial_started_at: new Date().toISOString(),
         },
       },
@@ -184,7 +184,7 @@ export default function SigoAuthGate({ children }: Props) {
     if (!data.session) {
       terminarSolicitud();
       setEmail(normalizedEmail);
-      setSuccess("Cuenta creada. Te enviamos un correo para activarla. Tu prueba gratis de 7 días queda asociada al alta de la empresa.");
+      setSuccess("Cuenta creada. Te enviamos un correo para activarla. Tu prueba gratis de 15 días queda asociada al alta de la empresa.");
       setPuedeReenviarActivacion(true);
       setMode("login");
       return;
@@ -210,7 +210,7 @@ export default function SigoAuthGate({ children }: Props) {
       return;
     }
 
-    setSuccess("Cuenta y empresa creadas correctamente. Tu prueba gratis de 7 días ya comenzó.");
+    setSuccess("Cuenta y empresa creadas correctamente. Tu prueba gratis de 15 días ya comenzó.");
     setSession(data.session);
   }
 
@@ -390,15 +390,15 @@ export default function SigoAuthGate({ children }: Props) {
           </>
         ) : mode === "register" ? (
           <>
-            <h1 id="sigo-login-title">Prueba gratis 7 días</h1>
-            <p className="sigo-auth-subtitle">Creá tu empresa, quedá como administrador principal y probá SIGO durante 7 días sin pagar para empezar.</p>
+            <h1 id="sigo-login-title">Prueba gratis 15 días</h1>
+            <p className="sigo-auth-subtitle">Creá tu empresa, quedá como administrador principal y probá SIGO durante 15 días sin pagar para empezar.</p>
             <form onSubmit={registrarme} className="sigo-auth-form">
               <label className="sigo-auth-field"><span>Razón social / negocio</span><input value={empresaNombre} onChange={(e) => setEmpresaNombre(e.target.value)} autoComplete="organization" required /></label>\n              <label className="sigo-auth-field"><span>Teléfono de contacto</span><input type="tel" inputMode="tel" autoComplete="tel" value={telefonoRegistro} onChange={(e) => setTelefonoRegistro(e.target.value)} placeholder="Ej.: +54 9 376..." required /></label>
               <label className="sigo-auth-field"><span>Email</span><input type="email" inputMode="email" autoComplete="email" autoCapitalize="none" spellCheck={false} value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
               {campoPassword(password, setPassword, "new-password")}
               {error ? <div className="sigo-auth-error" role="alert">{error}</div> : null}
               {success ? <div className="sigo-auth-success" role="status">{success}</div> : null}
-              <button className="sigo-auth-submit" type="submit" disabled={submitting}>{submitting ? "Creando cuenta…" : "Comenzar prueba gratis 7 días"}</button>
+              <button className="sigo-auth-submit" type="submit" disabled={submitting}>{submitting ? "Creando cuenta…" : "Comenzar prueba gratis 15 días"}</button>
               <button className="sigo-auth-secondary" type="button" onClick={() => cambiarModo("subscription")}>Suscripción</button>
               <button className="sigo-auth-secondary" type="button" onClick={() => cambiarModo("register_member")}>Me voy a sumar a una empresa</button>
               <button className="sigo-auth-secondary" type="button" onClick={() => cambiarModo("login")}>Ya tengo cuenta</button>
@@ -415,7 +415,7 @@ export default function SigoAuthGate({ children }: Props) {
               {success ? <div className="sigo-auth-success" role="status">{success}</div> : null}
               <button className="sigo-auth-submit" type="submit" disabled={submitting}>{submitting ? "Ingresando…" : "Ingresar a SIGO"}</button>
               {puedeReenviarActivacion ? <button className="sigo-auth-secondary" type="button" disabled={submitting} onClick={() => void reenviarActivacion()}>Reenviar activación</button> : null}
-              <button className="sigo-auth-trial" type="button" disabled={submitting} onClick={() => cambiarModo("register")}>Probar gratis 7 días</button>
+              <button className="sigo-auth-trial" type="button" disabled={submitting} onClick={() => cambiarModo("register")}>Probar gratis 15 días</button>
               <button className="sigo-auth-subscription" type="button" disabled={submitting} onClick={() => cambiarModo("subscription")}>Suscripción</button>
               <button className="sigo-auth-secondary" type="button" disabled={submitting} onClick={() => cambiarModo("register_member")}>Crear cuenta de usuario</button>
               <button className="sigo-auth-secondary" type="button" disabled={submitting} onClick={() => void recuperarAcceso()}>Recuperar acceso</button>
