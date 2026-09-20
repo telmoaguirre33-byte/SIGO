@@ -14,7 +14,7 @@ const OWNER_ONBOARDING_MODE = "owner";
 const STAFF_ONBOARDING_MODE = "member";
 const SIGO_TRIAL_DAYS = 15;
 const SIGO_TRIAL_MS = SIGO_TRIAL_DAYS * 24 * 60 * 60 * 1000;
-const SIGO_TRIAL_POLICY_EFFECTIVE_AT = Date.parse("2026-09-20T18:00:00.000Z");
+const SIGO_TRIAL_POLICY_EFFECTIVE_AT = Date.parse("2026-09-20T17:00:00.000Z");
 const MERCADOPAGO_SUBSCRIPTION_URL = String(import.meta.env.VITE_MERCADOPAGO_SUBSCRIPTION_URL ?? "").trim();
 
 function pruebaVencida(session: Session) {
