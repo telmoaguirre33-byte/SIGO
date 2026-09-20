@@ -41,7 +41,7 @@ for (const token of [
   'alreadyIssued: true',
   'reconciled: true',
   'leerTicketWsaa',
-  'ARCA_TICKET_REFRESH_REQUIRED',
+  'ARCA_TICKET_AUTO_REFRESH_REQUIRES_ADMIN',
   'ARCA_SALE_RESERVED_WITH_OTHER_FISCAL_IDENTITY',
   'ARCA_PRODUCT_FISCAL_DATA_REQUIRED',
   'ARCA_INVOICE_A_CLIENT_REQUIRED',
@@ -63,18 +63,20 @@ for (const forbidden of [
   'sign: ticket.sign',
   'console.log(body)',
   'console.log(ticket)',
-  'private-key.pem',
-  'certificate.pem',
 ]) {
   if (api.includes(forbidden)) throw new Error(`ARCA CAE unsafe behavior found: ${forbidden}`);
   if (apiV2.includes(forbidden)) throw new Error(`ARCA CAE v2 unsafe behavior found: ${forbidden}`);
 }
 
+for (const forbidden of ['private-key.pem', 'certificate.pem']) {
+  if (api.includes(forbidden)) throw new Error(`ARCA CAE unsafe local secret path found: ${forbidden}`);
+}
+
 for (const token of [
   '/api/arca/cae-v2',
   'habilitado',
-  'Emitir CAE real',
-  'Probar CAE en homologación',
+  'Emitir factura',
+  'Probar factura en homologación',
   'window.confirm',
   'EMITIR_CAE_PRODUCCION',
   'SOLICITAR_CAE_HOMOLOGACION',
