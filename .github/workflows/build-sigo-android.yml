@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - "android-twa.zip"
+      - "android-twa-v2.zip"
       - ".github/workflows/build-sigo-android.yml"
 
 jobs:
@@ -18,9 +18,9 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.9"
+          gradle-version: "8.11.1"
       - name: Extract Android project
-        run: unzip -q android-twa.zip -d android-twa
+        run: unzip -q android-twa-v2.zip -d android-twa
       - name: Build unsigned release bundle
         working-directory: android-twa
         run: gradle :app:bundleRelease --no-daemon
