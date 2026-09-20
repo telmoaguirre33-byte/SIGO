@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.sigo.gestion",
+      "sha256_cert_fingerprints": [
+        "24:7D:EF:B1:D3:DD:5E:6F:91:84:A5:37:0B:61:62:65:57:33:E7:09:30:B6:3E:E6:45:5A:2D:13:8A:15:BE:D4"
+      ]
+    }
+  }
+]
