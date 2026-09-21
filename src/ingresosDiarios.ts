@@ -18,6 +18,23 @@ export type ResumenIngresosDiariosSigo = {
   dias: IngresoDiaSigo[];
 };
 
+export type ItemVentaDiaSigo = {
+  producto: string;
+  codigo: string | null;
+  cantidad: number;
+  precioUnitario: number;
+  subtotal: number;
+};
+
+export type VentaDiaSigo = {
+  id: string;
+  numero: number | null;
+  total: number;
+  medioPago: string;
+  createdAt: string;
+  items: ItemVentaDiaSigo[];
+};
+
 type VentaIngresoRow = {
   total?: number | string | null;
   medio_pago?: string | null;
@@ -65,6 +82,53 @@ function crearDias(desde: Date, hasta: Date): Map<string, IngresoDiaSigo> {
     cursor.setDate(cursor.getDate() + 1);
   }
   return dias;
+}
+
+export async function cargarVentasDelDiaSigo(empresaId: string, fecha: string): Promise<VentaDiaSigo[]> {
+  if (!empresaId) throw new Error("Seleccioná una empresa activa.");
+  const desde = inicioDia(fecha);
+  const hasta = finDia(fecha);
+  const { data: ventas, error } = await supabase
+    .from("ventas_sigo")
+    .select("id,numero,total,medio_pago,created_at")
+    .eq("empresa_id", empresaId)
+    .eq("estado", "confirmada")
+    .gte("created_at", desde.toISOString())
+    .lte("created_at", hasta.toISOString())
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+
+  const ids = (ventas ?? []).map((v: any) => String(v.id));
+  const itemsPorVenta = new Map<string, ItemVentaDiaSigo[]>();
+  if (ids.length) {
+    const { data: items, error: itemsError } = await supabase
+      .from("venta_items_sigo")
+      .select("venta_id,cantidad,precio_unitario,subtotal,productos(nombre,codigo_interno,codigo_barras)")
+      .eq("empresa_id", empresaId)
+      .in("venta_id", ids);
+    if (itemsError) throw itemsError;
+    for (const row of items ?? []) {
+      const producto = Array.isArray((row as any).productos) ? (row as any).productos[0] : (row as any).productos;
+      const item: ItemVentaDiaSigo = {
+        producto: String(producto?.nombre ?? "Producto"),
+        codigo: producto?.codigo_interno ? String(producto.codigo_interno) : producto?.codigo_barras ? String(producto.codigo_barras) : null,
+        cantidad: numeroSeguro((row as any).cantidad),
+        precioUnitario: numeroSeguro((row as any).precio_unitario),
+        subtotal: numeroSeguro((row as any).subtotal),
+      };
+      const ventaId = String((row as any).venta_id);
+      itemsPorVenta.set(ventaId, [...(itemsPorVenta.get(ventaId) ?? []), item]);
+    }
+  }
+
+  return (ventas ?? []).map((v: any) => ({
+    id: String(v.id),
+    numero: v.numero == null ? null : Number(v.numero),
+    total: numeroSeguro(v.total),
+    medioPago: String(v.medio_pago ?? "otro"),
+    createdAt: String(v.created_at),
+    items: itemsPorVenta.get(String(v.id)) ?? [],
+  }));
 }
 
 export async function cargarIngresosDiariosSigo(
