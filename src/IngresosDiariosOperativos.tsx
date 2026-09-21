@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { cargarIngresosDiariosSigo, type ResumenIngresosDiariosSigo } from "./ingresosDiarios";
+import { cargarIngresosDiariosSigo, cargarVentasDelDiaSigo, type ResumenIngresosDiariosSigo, type VentaDiaSigo } from "./ingresosDiarios";
 
 type Preset = "hoy" | "ayer" | "7" | "30" | "90" | "mes" | "mes_pasado" | "personalizado";
 
@@ -49,6 +49,10 @@ export default function IngresosDiariosOperativos({ empresaId }: { empresaId: st
   const [resumen, setResumen] = useState<ResumenIngresosDiariosSigo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [detalleFecha, setDetalleFecha] = useState<string | null>(null);
+  const [ventasDia, setVentasDia] = useState<VentaDiaSigo[]>([]);
+  const [detalleLoading, setDetalleLoading] = useState(false);
+  const [detalleError, setDetalleError] = useState("");
   const requestRef = useRef(0);
 
   async function cargar(rango = { desde, hasta }) {
@@ -66,6 +70,16 @@ export default function IngresosDiariosOperativos({ empresaId }: { empresaId: st
     } finally {
       if (requestRef.current === requestId) setLoading(false);
     }
+  }
+
+  async function abrirDetalle(fecha: string) {
+    if (detalleFecha === fecha) { setDetalleFecha(null); return; }
+    setDetalleFecha(fecha);
+    setDetalleLoading(true);
+    setDetalleError("");
+    try { setVentasDia(await cargarVentasDelDiaSigo(empresaId, fecha)); }
+    catch (err) { setVentasDia([]); setDetalleError(err instanceof Error ? err.message : "No se pudo cargar el detalle de ventas."); }
+    finally { setDetalleLoading(false); }
   }
 
   function aplicarPreset(nuevo: Preset) {
@@ -152,13 +166,46 @@ export default function IngresosDiariosOperativos({ empresaId }: { empresaId: st
               </thead>
               <tbody>
                 {resumen.dias.map((dia) => (
-                  <tr key={dia.fecha} className={dia.cantidadVentas === 0 ? "empty-day" : ""}>
-                    <td><strong>{fechaCorta(dia.fecha)}</strong><small>{dia.fecha}</small></td>
-                    <td>{dia.cantidadVentas}</td>
-                    <td>{dinero(dia.cobrado)}</td>
-                    <td>{dinero(dia.aCobrar)}</td>
-                    <td><strong>{dinero(dia.totalVentas)}</strong></td>
-                  </tr>
+                  <>
+                    <tr key={dia.fecha} className={dia.cantidadVentas === 0 ? "empty-day" : ""}>
+                      <td><strong>{fechaCorta(dia.fecha)}</strong><small>{dia.fecha}</small></td>
+                      <td>
+                        {dia.cantidadVentas > 0 ? (
+                          <button type="button" className="admin-button" onClick={() => void abrirDetalle(dia.fecha)} aria-expanded={detalleFecha === dia.fecha}>
+                            {dia.cantidadVentas} · Ver productos
+                          </button>
+                        ) : 0}
+                      </td>
+                      <td>{dinero(dia.cobrado)}</td>
+                      <td>{dinero(dia.aCobrar)}</td>
+                      <td><strong>{dinero(dia.totalVentas)}</strong></td>
+                    </tr>
+                    {detalleFecha === dia.fecha && (
+                      <tr key={`${dia.fecha}-detalle`}>
+                        <td colSpan={5}>
+                          <div className="sigo-income-state">
+                            {detalleLoading && "Cargando productos vendidos…"}
+                            {!detalleLoading && detalleError && <span role="alert">{detalleError}</span>}
+                            {!detalleLoading && !detalleError && ventasDia.map((venta) => (
+                              <div key={venta.id} style={{ textAlign: "left", marginBottom: 16 }}>
+                                <strong>Venta {venta.numero ? `#${venta.numero}` : ""} · {dinero(venta.total)}</strong>
+                                <small style={{ display: "block" }}>{new Date(venta.createdAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })} · {venta.medioPago.replace("_", " ")}</small>
+                                <table className="sigo-income-table" style={{ marginTop: 8 }}>
+                                  <thead><tr><th>Producto</th><th>Cantidad</th><th>Precio</th><th>Subtotal</th></tr></thead>
+                                  <tbody>{venta.items.map((item, index) => (
+                                    <tr key={`${venta.id}-${index}`}>
+                                      <td><strong>{item.producto}</strong>{item.codigo && <small>{item.codigo}</small>}</td>
+                                      <td>{item.cantidad}</td><td>{dinero(item.precioUnitario)}</td><td>{dinero(item.subtotal)}</td>
+                                    </tr>
+                                  ))}</tbody>
+                                </table>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 ))}
               </tbody>
             </table>
