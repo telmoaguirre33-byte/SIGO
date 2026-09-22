@@ -49,6 +49,7 @@ export default function IngresosDiariosOperativos({ empresaId }: { empresaId: st
   const [resumen, setResumen] = useState<ResumenIngresosDiariosSigo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [diaAbierto, setDiaAbierto] = useState<string | null>(null);
   const requestRef = useRef(0);
 
   async function cargar(rango = { desde, hasta }) {
@@ -152,13 +153,42 @@ export default function IngresosDiariosOperativos({ empresaId }: { empresaId: st
               </thead>
               <tbody>
                 {resumen.dias.map((dia) => (
-                  <tr key={dia.fecha} className={dia.cantidadVentas === 0 ? "empty-day" : ""}>
-                    <td><strong>{fechaCorta(dia.fecha)}</strong><small>{dia.fecha}</small></td>
-                    <td>{dia.cantidadVentas}</td>
-                    <td>{dinero(dia.cobrado)}</td>
-                    <td>{dinero(dia.aCobrar)}</td>
-                    <td><strong>{dinero(dia.totalVentas)}</strong></td>
-                  </tr>
+                  <>
+                    <tr
+                      key={dia.fecha}
+                      className={dia.cantidadVentas === 0 ? "empty-day" : ""}
+                      onClick={() => dia.cantidadVentas > 0 && setDiaAbierto((actual) => actual === dia.fecha ? null : dia.fecha)}
+                      style={dia.cantidadVentas > 0 ? { cursor: "pointer" } : undefined}
+                      aria-expanded={dia.cantidadVentas > 0 ? diaAbierto === dia.fecha : undefined}
+                    >
+                      <td><strong>{fechaCorta(dia.fecha)}</strong><small>{dia.fecha}{dia.cantidadVentas > 0 ? " · tocar para ver productos" : ""}</small></td>
+                      <td>{dia.cantidadVentas}</td>
+                      <td>{dinero(dia.cobrado)}</td>
+                      <td>{dinero(dia.aCobrar)}</td>
+                      <td><strong>{dinero(dia.totalVentas)}</strong></td>
+                    </tr>
+                    {diaAbierto === dia.fecha && dia.cantidadVentas > 0 && (
+                      <tr key={`${dia.fecha}-detalle`} className="sigo-income-products-row">
+                        <td colSpan={5}>
+                          <div style={{ padding: "12px 8px" }}>
+                            <strong>Productos vendidos</strong>
+                            {dia.productos.length === 0 ? (
+                              <p style={{ margin: "8px 0 0" }}>No se encontró detalle de productos para estas ventas.</p>
+                            ) : (
+                              <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+                                {dia.productos.map((producto) => (
+                                  <div key={producto.productoId} style={{ display: "flex", justifyContent: "space-between", gap: 12, borderBottom: "1px solid #e5e7eb", paddingBottom: 8 }}>
+                                    <span><strong>{producto.nombre}</strong><br /><small>{producto.cantidad} unidad{producto.cantidad === 1 ? "" : "es"}</small></span>
+                                    <strong>{dinero(producto.total)}</strong>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 ))}
               </tbody>
             </table>
