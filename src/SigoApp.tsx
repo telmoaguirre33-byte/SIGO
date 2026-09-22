@@ -248,6 +248,11 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
       setFormError("El stock máximo no puede ser menor que el stock mínimo.");
       return;
     }
+    // Si se hace un conteo físico y supera el máximo anterior, el máximo no debe bloquear
+    // la corrección del stock real. Lo elevamos al nuevo stock contado.
+    if (editing && ajusteStock && stockInicial != null && stockMaximo != null && stockInicial > stockMaximo) {
+      stockMaximo = stockInicial;
+    }
 
     setSaving(true);
     setFormError("");
