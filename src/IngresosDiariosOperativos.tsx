@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { cargarIngresosDiariosSigo, type ResumenIngresosDiariosSigo } from "./ingresosDiarios";
 
 type Preset = "hoy" | "ayer" | "7" | "30" | "90" | "mes" | "mes_pasado" | "personalizado";
@@ -153,7 +153,7 @@ export default function IngresosDiariosOperativos({ empresaId }: { empresaId: st
               </thead>
               <tbody>
                 {resumen.dias.map((dia) => (
-                  <>
+                  <Fragment key={dia.fecha}>
                     <tr
                       key={dia.fecha}
                       className={dia.cantidadVentas === 0 ? "empty-day" : ""}
@@ -188,7 +188,7 @@ export default function IngresosDiariosOperativos({ empresaId }: { empresaId: st
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
