@@ -1,11 +1,19 @@
 import { supabase } from "./supabase";
 
+export type ProductoVendidoDiaSigo = {
+  productoId: string;
+  nombre: string;
+  cantidad: number;
+  total: number;
+};
+
 export type IngresoDiaSigo = {
   fecha: string;
   cantidadVentas: number;
   cobrado: number;
   aCobrar: number;
   totalVentas: number;
+  productos: ProductoVendidoDiaSigo[];
 };
 
 export type ResumenIngresosDiariosSigo = {
@@ -19,9 +27,18 @@ export type ResumenIngresosDiariosSigo = {
 };
 
 type VentaIngresoRow = {
+  id?: string | null;
   total?: number | string | null;
   medio_pago?: string | null;
   created_at?: string | null;
+};
+
+type VentaItemIngresoRow = {
+  venta_id?: string | null;
+  producto_id?: string | null;
+  cantidad?: number | string | null;
+  subtotal?: number | string | null;
+  productos?: { nombre?: string | null } | Array<{ nombre?: string | null }> | null;
 };
 
 const PAGE_SIZE = 1000;
@@ -61,7 +78,7 @@ function crearDias(desde: Date, hasta: Date): Map<string, IngresoDiaSigo> {
 
   while (cursor.getTime() <= limite.getTime()) {
     const fecha = fechaClave(cursor);
-    dias.set(fecha, { fecha, cantidadVentas: 0, cobrado: 0, aCobrar: 0, totalVentas: 0 });
+    dias.set(fecha, { fecha, cantidadVentas: 0, cobrado: 0, aCobrar: 0, totalVentas: 0, productos: [] });
     cursor.setDate(cursor.getDate() + 1);
   }
   return dias;
@@ -86,7 +103,7 @@ export async function cargarIngresosDiariosSigo(
   for (let offset = 0; ; offset += PAGE_SIZE) {
     const { data, error } = await supabase
       .from("ventas_sigo")
-      .select("total,medio_pago,created_at")
+      .select("id,total,medio_pago,created_at")
       .eq("empresa_id", empresaId)
       .eq("estado", "confirmada")
       .gte("created_at", desdeDate.toISOString())
@@ -101,6 +118,46 @@ export async function cargarIngresosDiariosSigo(
   }
 
   const porDia = crearDias(desdeDate, hastaDate);
+  const fechaPorVenta = new Map<string, string>();
+  for (const venta of ventas) {
+    if (!venta.id || !venta.created_at) continue;
+    const fechaVenta = new Date(venta.created_at);
+    if (!Number.isNaN(fechaVenta.getTime())) fechaPorVenta.set(venta.id, fechaClave(fechaVenta));
+  }
+
+  const items: VentaItemIngresoRow[] = [];
+  const ventaIds = Array.from(fechaPorVenta.keys());
+  for (let inicio = 0; inicio < ventaIds.length; inicio += 200) {
+    const loteIds = ventaIds.slice(inicio, inicio + 200);
+    const { data, error } = await supabase
+      .from("venta_items_sigo")
+      .select("venta_id,producto_id,cantidad,subtotal,productos(nombre)")
+      .eq("empresa_id", empresaId)
+      .in("venta_id", loteIds);
+    if (error) throw error;
+    items.push(...((data ?? []) as VentaItemIngresoRow[]));
+  }
+
+  const productosPorDia = new Map<string, Map<string, ProductoVendidoDiaSigo>>();
+  for (const item of items) {
+    if (!item.venta_id || !item.producto_id) continue;
+    const fecha = fechaPorVenta.get(item.venta_id);
+    if (!fecha) continue;
+    const relacion = Array.isArray(item.productos) ? item.productos[0] : item.productos;
+    const nombre = String(relacion?.nombre ?? "Producto sin nombre");
+    const porProducto = productosPorDia.get(fecha) ?? new Map<string, ProductoVendidoDiaSigo>();
+    const actual = porProducto.get(item.producto_id) ?? { productoId: item.producto_id, nombre, cantidad: 0, total: 0 };
+    actual.cantidad += numeroSeguro(item.cantidad);
+    actual.total += numeroSeguro(item.subtotal);
+    porProducto.set(item.producto_id, actual);
+    productosPorDia.set(fecha, porProducto);
+  }
+
+  for (const [fecha, porProducto] of productosPorDia) {
+    const dia = porDia.get(fecha);
+    if (dia) dia.productos = Array.from(porProducto.values()).sort((a, b) => b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre));
+  }
+
   let cantidadVentas = 0;
   let cobrado = 0;
   let aCobrar = 0;

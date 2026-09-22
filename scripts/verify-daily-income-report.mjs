@@ -18,7 +18,9 @@ for (const required of [
   'from("ventas_sigo")',
   '.eq("empresa_id", empresaId)',
   '.eq("estado", "confirmada")',
-  '.select("total,medio_pago,created_at")',
+  '.select("id,total,medio_pago,created_at")',
+  'from("venta_items_sigo")',
+  '.select("venta_id,producto_id,cantidad,subtotal,productos(nombre)")',
   'cantidadVentas',
   'cobrado',
   'aCobrar',
@@ -38,6 +40,8 @@ for (const required of [
   'Personalizado',
   'Cantidad de ventas',
   'A cobrar',
+  'Productos vendidos',
+  'tocar para ver productos',
 ]) {
   if (!ui.includes(required)) throw new Error(`Daily income UI safeguard missing: ${required}`);
 }
