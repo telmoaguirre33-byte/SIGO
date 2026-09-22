@@ -418,7 +418,7 @@ export default function SigoAuthGate({ children }: Props) {
           </>
         ) : mode === "register" ? (
           <>
-            <h1 id="sigo-login-title">Inscribirse</h1>
+            <h1 id="sigo-login-title">Crear cuenta y comenzar</h1>
             <p className="sigo-auth-subtitle">Creá tu empresa y registrá tus datos de contacto para comenzar.</p>
             <form onSubmit={registrarme} className="sigo-auth-form">
               <label className="sigo-auth-field"><span>Razón social / negocio</span><input value={empresaNombre} onChange={(e) => setEmpresaNombre(e.target.value)} autoComplete="organization" required /></label>
@@ -427,7 +427,7 @@ export default function SigoAuthGate({ children }: Props) {
               {campoPassword(password, setPassword, "new-password")}
               {error ? <div className="sigo-auth-error" role="alert">{error}</div> : null}
               {success ? <div className="sigo-auth-success" role="status">{success}</div> : null}
-              <button className="sigo-auth-submit" type="submit" disabled={submitting}>{submitting ? "Creando cuenta…" : "Inscribirse"}</button>
+              <button className="sigo-auth-submit" type="submit" disabled={submitting}>{submitting ? "Creando cuenta…" : "Crear cuenta y comenzar"}</button>
               <button className="sigo-auth-secondary" type="button" onClick={() => cambiarModo("register_member")}>Me voy a sumar a una empresa</button>
               <button className="sigo-auth-secondary" type="button" onClick={() => cambiarModo("login")}>Ya tengo cuenta</button>
             </form>
@@ -443,8 +443,7 @@ export default function SigoAuthGate({ children }: Props) {
               {success ? <div className="sigo-auth-success" role="status">{success}</div> : null}
               <button className="sigo-auth-submit" type="submit" disabled={submitting}>{submitting ? "Ingresando…" : "Ingresar a SIGO"}</button>
               {puedeReenviarActivacion ? <button className="sigo-auth-secondary" type="button" disabled={submitting} onClick={() => void reenviarActivacion()}>Reenviar activación</button> : null}
-              <button className="sigo-auth-trial" type="button" disabled={submitting} onClick={() => cambiarModo("register")}>Inscribirse</button>
-              <button className="sigo-auth-secondary" type="button" disabled={submitting} onClick={() => cambiarModo("register_member")}>Crear cuenta de usuario</button>
+              <button className="sigo-auth-trial" type="button" disabled={submitting} onClick={() => cambiarModo("register")}>Crear cuenta y comenzar</button>
               <button className="sigo-auth-secondary" type="button" disabled={submitting} onClick={() => void recuperarAcceso()}>Recuperar acceso</button>
             </form>
           </>
