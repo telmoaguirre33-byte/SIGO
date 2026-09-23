@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+i81
+const [revisionFacturaAbierta, setRevisionFacturaAbierta] = useState(false);
+  const [busquedaManual, setBusquedaManual] = useState("");
 import type { FormEvent } from "react";
 import BarcodeScanner from "./BarcodeScanner";
 import type { BarcodeProduct } from "./barcode";
