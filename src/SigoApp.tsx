@@ -56,7 +56,7 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
   const puedeEditarProductos = can(empresa.rol, "products.write");
 
   return (
-    <div className="app">
+    <div className={purchasesOnly ? "app purchases-hub-only" : "app"}>
       {!purchasesOnly && <aside className="sidebar">
         <div className="brand">
           <div className="brand-logo">S</div>
@@ -84,7 +84,7 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
         </div>
       </aside>}
 
-      <main className="main">
+      <main className="main" style={purchasesOnly ? {width:"100%",maxWidth:"100%",margin:0} : undefined}>
         <header className="topbar">
           <div>
             <h1>{section === "Compras" ? "Compras / Proveedores" : section}</h1>
