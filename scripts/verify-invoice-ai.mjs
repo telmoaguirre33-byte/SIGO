@@ -33,7 +33,7 @@ if (!api.includes('signal: controller.signal')) throw new Error('Invoice AI regr
 if (api.includes('OPENAI_API_KEY') || api.includes('api.openai.com')) {
   throw new Error('Invoice AI regression: purchase document analyzer must use Gemini, not OpenAI');
 }
-if (!api.includes('responseMimeType: "application/json"') || !api.includes('responseJsonSchema: FACTURA_RESPONSE_SCHEMA')) {
+if (!api.includes('responseMimeType: "application/json"') || !api.includes('responseSchema: FACTURA_RESPONSE_SCHEMA')) {
   throw new Error('Invoice AI regression: Gemini output must remain constrained to the invoice JSON contract');
 }
 if (!api.includes('Código de barras descartado por dígito verificador inválido')) {
