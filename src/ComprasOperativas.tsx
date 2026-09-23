@@ -133,6 +133,22 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
   );
 
   const proveedorMap = useMemo(() => new Map(proveedores.map((p) => [p.id, p.razon_social])), [proveedores]);
+  const compraValida = useMemo(() => Boolean(
+    proveedorId &&
+    total > 0 &&
+    lineas.length > 0 &&
+    lineas.every((l) => Boolean(l.producto_id) && Number(l.cantidad) > 0 && Number(l.costo_unitario) > 0)
+  ), [proveedorId, total, lineas]);
+  const cambiosPrecio = useMemo(() => lineas.flatMap((l) => {
+    const p = productos.find((x) => x.id === l.producto_id);
+    if (!p) return [];
+    const costoAnterior = Number(p.costo_actual ?? p.costo_ultima_compra ?? 0);
+    const costoNuevo = Number(l.costo_unitario || 0);
+    const precioAnterior = Number(p.precio_venta ?? 0);
+    const margen = Number(p.margen_porcentaje ?? (costoAnterior > 0 && precioAnterior > 0 ? ((precioAnterior - costoAnterior) / costoAnterior) * 100 : 0));
+    const precioNuevo = costoNuevo > costoAnterior && margen >= 0 ? Math.round(costoNuevo * (1 + margen / 100) * 100) / 100 : precioAnterior;
+    return costoNuevo > costoAnterior ? [{ id:p.id, nombre:p.nombre, costoAnterior, costoNuevo, precioAnterior, precioNuevo, margen }] : [];
+  }), [lineas, productos]);
 
   const preciosFacturaPendientes = useMemo(() => {
     if (!facturaIA) return 0;
@@ -435,16 +451,16 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
       <div className="panel" style={{ border: "1px solid #bfdbfe", background: "linear-gradient(135deg,#eff6ff,#ffffff)" }}>
         <div className="page-header">
           <div>
-            <h3 style={{ marginBottom: 6 }}>📷 Escanear factura con IA</h3>
-            <p style={{ margin: 0 }}>Sacá una foto o elegí una imagen. SIGO lee proveedor, fecha, comprobante, productos, cantidades y costos. Si un producto no existe, definís su precio de venta antes de crearlo; el stock se modifica recién cuando confirmás la compra.</p>
+            <h3 style={{ marginBottom: 6 }}>📷 Leer comprobante de compra con IA</h3>
+            <p style={{ margin: 0 }}>Sacá una foto o elegí una imagen/PDF. SIGO admite factura, ticket, remito, nota de pedido, orden de compra, talonario X y otros comprobantes de compra/recepción; lee proveedor, fecha, comprobante, productos, cantidades y costos. Si un producto no existe, definís su precio de venta antes de crearlo; el stock se modifica recién cuando confirmás la compra.</p>
           </div>
           <span style={{ fontSize: 12, fontWeight: 700, color: "#1d4ed8" }}>IA · revisión antes de stock</span>
         </div>
         <input ref={fotoRef} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden onChange={(e) => void leerFactura(e.target.files?.[0])} />
-        <input ref={archivoRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => void leerFactura(e.target.files?.[0])} />
+        <input ref={archivoRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.pdf" hidden onChange={(e) => void leerFactura(e.target.files?.[0])} />
         <div className="form-actions" style={{ justifyContent: "flex-start", gap: 10, flexWrap: "wrap" }}>
           <button type="button" className="primary-button" disabled={facturaProcesando || facturaAplicando || saving} onClick={() => fotoRef.current?.click()}>{facturaProcesando ? "Analizando…" : "📸 Tomar foto de factura"}</button>
-          <button type="button" className="admin-button" disabled={facturaProcesando || facturaAplicando || saving} onClick={() => archivoRef.current?.click()}>Elegir foto / escaneo</button>
+          <button type="button" className="admin-button" disabled={facturaProcesando || facturaAplicando || saving} onClick={() => archivoRef.current?.click()}>Elegir foto / PDF</button>
         </div>
 
         {facturaMensaje && <p style={{ fontWeight: 700, color: "#1e3a8a" }}>{facturaMensaje}</p>}
@@ -552,7 +568,11 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
           <button type="button" className="admin-button" onClick={() => setLineas((actual) => [...actual, nuevaLinea()])}>+ Agregar producto</button>
           <div><strong>Total compra: $ {total.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</strong></div>
         </div>
-        <div className="form-actions"><button type="submit" className="primary-button" disabled={saving || loading || !proveedorId || facturaAplicando}>{saving ? "Confirmando…" : "Confirmar compra e ingresar stock"}</button></div>
+        {cambiosPrecio.length > 0 && <div className="panel" style={{marginTop:16}}>
+          <h4>Precios que se actualizarán al confirmar</h4>
+          {cambiosPrecio.map((x) => <p key={x.id} style={{margin:"8px 0"}}><strong>{x.nombre}</strong>: costo $ {x.costoAnterior.toLocaleString("es-AR")} → $ {x.costoNuevo.toLocaleString("es-AR")} · precio $ {x.precioAnterior.toLocaleString("es-AR")} → $ {x.precioNuevo.toLocaleString("es-AR")} · margen {x.margen.toFixed(2)}%</p>)}
+        </div>}
+        <div className="form-actions"><button type="submit" className="primary-button" disabled={saving || loading || facturaAplicando || !compraValida}>{saving ? "Confirmando…" : "Confirmar compra e ingresar stock"}</button></div>
       </form>
 
       <div className="panel">

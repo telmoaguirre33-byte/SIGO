@@ -39,6 +39,8 @@ type ProveedorMaestroFactura = {
 };
 
 const TIPOS_IMAGEN_PERMITIDOS = new Set(["image/jpeg", "image/png", "image/webp"]);
+const TIPO_PDF = "application/pdf";
+const MAX_PDF_BYTES = 4 * 1024 * 1024;
 const GTIN_LENGTHS = new Set([8, 12, 13, 14]);
 const MAX_INVOICE_ITEMS = 300;
 const CLIENT_TIMEOUT_MS = 55_000;
@@ -56,7 +58,13 @@ function leerComoDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-async function comprimirImagen(file: File): Promise<string> {
+async function prepararDocumento(file: File): Promise<{ dataUrl: string; tipo: "imagen" | "pdf"; nombre: string }> {
+  if (file.type === TIPO_PDF) {
+    if (file.size <= 0) throw new Error("El PDF está vacío.");
+    if (file.size > MAX_PDF_BYTES) throw new Error("El PDF supera 4 MB. Reducilo o dividilo antes de cargarlo.");
+    return { dataUrl: await leerComoDataUrl(file), tipo: "pdf", nombre: file.name || "documento.pdf" };
+  }
+
   if (!TIPOS_IMAGEN_PERMITIDOS.has(file.type)) throw new Error("Usá una foto o imagen JPG, PNG o WebP de la factura.");
   if (file.size <= 0) throw new Error("La imagen de la factura está vacía.");
   if (file.size > 15 * 1024 * 1024) throw new Error("La imagen supera 15 MB. Tomá una foto más liviana.");
@@ -81,9 +89,9 @@ async function comprimirImagen(file: File): Promise<string> {
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d");
-  if (!ctx) return original;
+  if (!ctx) return { dataUrl: original, tipo: "imagen", nombre: file.name || "documento.jpg" };
   ctx.drawImage(img, 0, 0, width, height);
-  return canvas.toDataURL("image/jpeg", 0.84);
+  return { dataUrl: canvas.toDataURL("image/jpeg", 0.84), tipo: "imagen", nombre: file.name || "documento.jpg" };
 }
 
 function normalizarMoneda(value: unknown): string | null {
@@ -426,7 +434,7 @@ function validarFactura(data: unknown): FacturaCompraIA {
 
 export async function analizarFacturaCompraSigo(empresaId: string, file: File): Promise<FacturaCompraIA> {
   if (!empresaId) throw new Error("No hay empresa activa para analizar la factura.");
-  const imageDataUrl = await comprimirImagen(file);
+  const documento = await prepararDocumento(file);
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
   if (!token) throw new Error("La sesión venció. Volvé a ingresar a SIGO.");
@@ -442,7 +450,7 @@ export async function analizarFacturaCompraSigo(empresaId: string, file: File): 
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ empresaId, imageDataUrl }),
+      body: JSON.stringify({ empresaId, documentDataUrl: documento.dataUrl, documentType: documento.tipo, filename: documento.nombre }),
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
@@ -458,7 +466,7 @@ export async function analizarFacturaCompraSigo(empresaId: string, file: File): 
     const code = String(payload?.error ?? "");
     if (code === "AI_NOT_CONFIGURED") throw new Error("La IA de facturas todavía no tiene configurada su clave en producción.");
     if (code === "FORBIDDEN") throw new Error("Tu usuario no tiene permiso para ingresar compras en esta empresa.");
-    if (code === "INVALID_IMAGE") throw new Error("La foto no tiene un formato válido o es demasiado pesada.");
+    if (code === "INVALID_IMAGE" || code === "INVALID_DOCUMENT") throw new Error("El archivo no tiene un formato válido o supera el límite permitido.");
     if (code === "AI_TIMEOUT") throw new Error("La lectura de la factura tardó demasiado. Probá nuevamente con una foto más nítida.");
     if (code === "AI_UNAVAILABLE") throw new Error("El servicio de lectura de facturas no está disponible en este momento. La compra manual sigue funcionando.");
     if (code === "AI_REVIEW_REQUIRED") throw new Error(String(payload?.message ?? "La factura necesita revisión manual antes de ingresar stock."));
