@@ -51,13 +51,13 @@ function numeroOpcional(valor: string, etiqueta: string): number | null {
   return numero;
 }
 
-export default function SigoApp({ empresa }: { empresa: EmpresaOperativa }) {
-  const [section, setSection] = useState<Section>("Inicio");
+export default function SigoApp({ empresa, initialSection = "Inicio", purchasesOnly = false }: { empresa: EmpresaOperativa; initialSection?: Section; purchasesOnly?: boolean }) {
+  const [section, setSection] = useState<Section>(initialSection);
   const puedeEditarProductos = can(empresa.rol, "products.write");
 
   return (
     <div className="app">
-      <aside className="sidebar">
+      {!purchasesOnly && <aside className="sidebar">
         <div className="brand">
           <div className="brand-logo">S</div>
           <div>
@@ -82,7 +82,7 @@ export default function SigoApp({ empresa }: { empresa: EmpresaOperativa }) {
             </div>
           </div>
         </div>
-      </aside>
+      </aside>}
 
       <main className="main">
         <header className="topbar">
