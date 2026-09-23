@@ -79,6 +79,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
   const [codigosBarrasFactura, setCodigosBarrasFactura] = useState<Record<number, string>>({});
   const [codigosInternosFactura, setCodigosInternosFactura] = useState<Record<number, string>>({});
   const [revisionFacturaAbierta, setRevisionFacturaAbierta] = useState(false);
+  const [correccionFacturaAbierta, setCorreccionFacturaAbierta] = useState(false);
   const fotoRef = useRef<HTMLInputElement | null>(null);
   const archivoRef = useRef<HTMLInputElement | null>(null);
   const idempotencyKeyRef = useRef(nuevaClave());
@@ -228,6 +229,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
       if (empresaActivaRef.current !== empresaOperacion) return;
       setFacturaIA(resultado);
       setRevisionFacturaAbierta(true);
+      setCorreccionFacturaAbierta(false);
       setFacturaMensaje(`IA detectó ${resultado.items.length} ítem${resultado.items.length === 1 ? "" : "s"}. Revisá y definí precio de venta para cada producto nuevo antes de aplicar la factura.`);
     } catch (err) {
       if (empresaActivaRef.current === empresaOperacion) {
@@ -483,6 +485,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
             {facturaIA.advertencias.length > 0 && <div style={{marginTop:12}}>
               {facturaIA.advertencias.map((a,i)=><p key={i} className={a.startsWith("CRÍTICO") ? "form-error" : ""} style={{fontWeight:a.startsWith("CRÍTICO")?800:600}}>⚠️ {a}</p>)}
             </div>}
+            <div className="form-actions" style={{justifyContent:"flex-start",marginTop:12}}><button type="button" className="admin-button" onClick={()=>setCorreccionFacturaAbierta((v)=>!v)}>🔎 {correccionFacturaAbierta ? "Cerrar corrección" : "REVISAR / CORREGIR"}</button></div>
             <div className="table-wrapper" style={{ marginTop: 14 }}>
               <table className="products-table">
                 <thead><tr><th>Producto leído</th><th>Código</th><th>Cant.</th><th>Costo unit.</th><th>Precio venta</th><th>Confianza</th><th>Estado</th></tr></thead>
@@ -503,8 +506,8 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
                           <input value={codigosInternosFactura[index] ?? item.codigo ?? ""} onChange={(e)=>setCodigosInternosFactura(a=>({...a,[index]:e.target.value}))} placeholder="Código interno (opcional)" aria-label={`Código interno para ${item.descripcion}`} />
                           {!((codigosBarrasFactura[index] ?? item.codigo_barras ?? "").trim()) && <small style={{color:"#b45309"}}>Falta código de barras. Podés completarlo ahora o continuar sin EAN.</small>}
                         </div>}</td>
-                        <td><strong>{item.cantidad}</strong><small style={{display:"block"}}>unidades vendibles</small></td>
-                        <td><span style={{textDecoration:costoAnterior>0?"line-through":"none",opacity:.65}}>{costoAnterior>0?`$ ${costoAnterior.toLocaleString("es-AR",{minimumFractionDigits:2})}`:""}</span><strong style={{display:"block"}}>→ $ {item.costo_unitario.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</strong></td>
+                        <td>{correccionFacturaAbierta ? <input type="number" min="0.001" step="0.001" value={item.cantidad} onChange={(e)=>setFacturaIA((actual)=>actual ? ({...actual,items:actual.items.map((x,i)=>i===index?{...x,cantidad:Number(e.target.value)}:x)}) : actual)} aria-label={`Cantidad para ${item.descripcion}`} /> : <strong>{item.cantidad}</strong>}<small style={{display:"block"}}>unidades vendibles</small></td>
+                        <td><span style={{textDecoration:costoAnterior>0?"line-through":"none",opacity:.65}}>{costoAnterior>0?`$ ${costoAnterior.toLocaleString("es-AR",{minimumFractionDigits:2})}`:""}</span>{correccionFacturaAbierta ? <input type="number" min="0" step="0.01" value={item.costo_unitario} onChange={(e)=>setFacturaIA((actual)=>actual ? ({...actual,items:actual.items.map((x,i)=>i===index?{...x,costo_unitario:Number(e.target.value)}:x)}) : actual)} aria-label={`Costo unitario para ${item.descripcion}`} /> : <strong style={{display:"block"}}>→ $ {item.costo_unitario.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</strong>}<small style={{display:"block"}}>Total línea: $ {(item.total_linea ?? item.cantidad*item.costo_unitario).toLocaleString("es-AR",{minimumFractionDigits:2})}</small></td>
                         <td>
                           {existente
                             ? <div><span style={{textDecoration:"line-through",opacity:.65}}>{precioExistente>0?`$ ${precioExistente.toLocaleString("es-AR",{minimumFractionDigits:2})}`:"Sin precio"}</span><strong style={{display:"block",color:"#15803d"}}>→ $ {precioSugerido.toLocaleString("es-AR",{minimumFractionDigits:2})}</strong><small>Margen {margen.toLocaleString("es-AR",{maximumFractionDigits:2})}%</small></div>
@@ -532,8 +535,8 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
               </p>
             )}
             <div className="form-actions" style={{ justifyContent: "flex-start" }}>
-              <button type="button" className="primary-button" disabled={facturaAplicando || facturaProcesando || saving || preciosFacturaPendientes > 0 || facturaIA.advertencias.some((a)=>a.startsWith("CRÍTICO"))} onClick={() => void aplicarFacturaAnalizada()}>{facturaAplicando ? "Preparando compra…" : "REVISADO · PREPARAR COMPRA"}</button>
-              <button type="button" className="admin-button" disabled={facturaAplicando || facturaProcesando || saving} onClick={() => { setFacturaIA(null); setRevisionFacturaAbierta(false); setFacturaMensaje(""); setPreciosVentaFactura({}); setCodigosBarrasFactura({}); setCodigosInternosFactura({}); }}>Descartar lectura</button>
+              <button type="button" className="primary-button" disabled={facturaAplicando || facturaProcesando || saving || preciosFacturaPendientes > 0 || facturaIA.advertencias.some((a)=>a.startsWith("CRÍTICO"))} onClick={() => void aplicarFacturaAnalizada()}>{facturaAplicando ? "Preparando compra…" : "🛒 PREPARAR COMPRA"}</button>
+              <button type="button" className="admin-button" disabled={facturaAplicando || facturaProcesando || saving} onClick={() => { setFacturaIA(null); setRevisionFacturaAbierta(false); setFacturaMensaje(""); setPreciosVentaFactura({}); setCodigosBarrasFactura({}); setCodigosInternosFactura({}); }}>❌ CANCELAR / DESCARTAR</button>
             </div>
           </div>
         )}
