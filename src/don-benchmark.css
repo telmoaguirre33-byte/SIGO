@@ -58,6 +58,11 @@
 .products-page .panel {
   overflow: hidden;
 }
+/* Reports can be taller than the Android WebView viewport. Do not clip their content. */
+.products-page.sigo-reports-page .panel,
+.sigo-reports-page .sigo-report-detail {
+  overflow: visible;
+}
 .products-page .products-table th {
   background: #f8fafc;
   color: #7b8798;
@@ -108,6 +113,18 @@
 @media (max-width: 760px) {
   .sigo-root {
     background: #f6f8fc;
+  }
+  .sigo-reports-page {
+    min-height: max-content;
+    padding-bottom: 120px;
+    overflow: visible;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sigo-reports-page .sigo-report-detail {
+    max-height: none;
+    height: auto;
+    overflow: visible;
   }
 
   /* Keep global administration available but visually secondary. */
