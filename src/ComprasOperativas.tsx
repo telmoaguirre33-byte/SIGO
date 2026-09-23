@@ -168,6 +168,22 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
     setLineas((actual) => actual.map((l) => l.key === key ? { ...l, ...patch } : l));
   }
 
+  function buscarProductoManual(query: string) {
+    const q = normalizar(query).trim();
+    if (!q) return false;
+    const coincidencias = productos.filter((p) => [p.nombre, p.codigo_interno, p.codigo_barras, p.marca, p.categoria]
+      .filter(Boolean).some((valor) => normalizar(String(valor)).includes(q)));
+    if (coincidencias.length === 0) return false;
+    if (coincidencias.length === 1) {
+      agregarProductoEscaneado(coincidencias[0] as BarcodeProduct);
+      return true;
+    }
+    const elegido = window.prompt(`Encontré ${coincidencias.length} productos. Escribí el número:\n${coincidencias.slice(0,20).map((p,i)=>`${i+1}. ${p.nombre}`).join("\n")}`);
+    const indice = Number(elegido) - 1;
+    if (Number.isInteger(indice) && indice >= 0 && indice < coincidencias.length) agregarProductoEscaneado(coincidencias[indice] as BarcodeProduct);
+    return true;
+  }
+
   function agregarProductoEscaneado(producto: BarcodeProduct) {
     if (saving || loading) return;
     setError("");
@@ -564,7 +580,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
         <div style={{ marginTop: 18 }}>
           <h4 style={{ marginBottom: 6 }}>Escanear mercadería</h4>
           <p style={{ marginTop: 0 }}>Pistola, ingreso manual o cámara: cada lectura agrega una unidad del producto a esta compra. Si ya estaba agregado, incrementa la cantidad.</p>
-          <BarcodeScanner empresaId={empresaId} action="ingresar" onProduct={agregarProductoEscaneado} />
+          <BarcodeScanner empresaId={empresaId} action="ingresar" onProduct={agregarProductoEscaneado} onManualQuery={buscarProductoManual} />
         </div>
 
         <div className="table-wrapper" style={{ marginTop: 18 }}>
