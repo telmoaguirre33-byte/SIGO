@@ -56,7 +56,7 @@ function encontrarProducto(item: FacturaItemIA, productos: ProductoSigo[]) {
   return productos.find((p) => normalizar(p.nombre) === nombre);
 }
 
-export default function ComprasOperativas({ empresaId }: { empresaId: string }) {
+export default function ComprasOperativas({ empresaId, vista = "todo" }: { empresaId: string; vista?: "todo" | "manual" | "ia" | "historial" }) {
   const [proveedores, setProveedores] = useState<ProveedorSigo[]>([]);
   const [compras, setCompras] = useState<CompraSigo[]>([]);
   const [productos, setProductos] = useState<ProductoSigo[]>([]);
