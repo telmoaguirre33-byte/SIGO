@@ -355,7 +355,8 @@ confianza_general y confianza van de 0 a 1.`;
   const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
   let aiResponse;
   try {
-    aiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+    const fetchGemini = () => fetch(geminiUrl, {
       method: "POST",
       signal: controller.signal,
       headers: {
@@ -385,6 +386,13 @@ confianza_general y confianza van de 0 a 1.`;
         },
       }),
     });
+    const esperas = [800, 1800, 3500];
+    aiResponse = await fetchGemini();
+    for (const espera of esperas) {
+      if (aiResponse.status !== 503) break;
+      await new Promise((resolve) => setTimeout(resolve, espera));
+      aiResponse = await fetchGemini();
+    }
   } catch (error) {
     if (error?.name === "AbortError") {
       return json(res, 504, { error: "AI_TIMEOUT", message: "La lectura de la factura tardó demasiado. Probá nuevamente con una foto más nítida." });
@@ -398,6 +406,7 @@ confianza_general y confianza van de 0 a 1.`;
     const detail = await aiResponse.text().catch(() => "");
     console.error("SIGO invoice Gemini error", aiResponse.status, detail.slice(0, 1200));
     if (aiResponse.status === 404) return json(res, 502, { error: "AI_MODEL_UNAVAILABLE", message: "El modelo de IA configurado no está disponible para este proyecto." });
+    if (aiResponse.status === 503) return json(res, 503, { error: "AI_TEMPORARILY_UNAVAILABLE", message: "Gemini está temporalmente con alta demanda. SIGO reintentó automáticamente; esperá unos segundos y volvé a intentar." });
     if (aiResponse.status === 429) return json(res, 429, { error: "AI_RATE_LIMIT", message: "Gemini alcanzó temporalmente su límite de uso. Intentá nuevamente en unos minutos." });
     return json(res, 502, { error: "AI_ERROR", message: "La IA no pudo procesar el comprobante." });
   }
