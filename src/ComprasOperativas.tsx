@@ -76,6 +76,8 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
   const [facturaAplicando, setFacturaAplicando] = useState(false);
   const [facturaMensaje, setFacturaMensaje] = useState("");
   const [preciosVentaFactura, setPreciosVentaFactura] = useState<Record<number, string>>({});
+  const [codigosBarrasFactura, setCodigosBarrasFactura] = useState<Record<number, string>>({});
+  const [codigosInternosFactura, setCodigosInternosFactura] = useState<Record<number, string>>({});
   const [revisionFacturaAbierta, setRevisionFacturaAbierta] = useState(false);
   const fotoRef = useRef<HTMLInputElement | null>(null);
   const archivoRef = useRef<HTMLInputElement | null>(null);
@@ -122,6 +124,8 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
     setFacturaIA(null);
     setFacturaMensaje("");
     setPreciosVentaFactura({});
+    setCodigosBarrasFactura({});
+    setCodigosInternosFactura({});
     setError("");
     void cargar(empresaId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -216,6 +220,8 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
     setFacturaIA(null);
     setFacturaMensaje("");
     setPreciosVentaFactura({});
+    setCodigosBarrasFactura({});
+    setCodigosInternosFactura({});
     setError("");
     try {
       const resultado = await analizarFacturaCompraSigo(empresaOperacion, file);
@@ -287,8 +293,8 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
           if (!Number.isFinite(precioVenta) || precioVenta <= 0) {
             throw new Error(`Definí un precio de venta mayor a cero para "${item.descripcion}" antes de crear el producto.`);
           }
-          const codigoBarras = item.codigo_barras?.trim() || null;
-          const codigoInterno = item.codigo?.trim() && item.codigo?.trim() !== codigoBarras ? item.codigo.trim() : null;
+          const codigoBarras = codigosBarrasFactura[index]?.trim() || item.codigo_barras?.trim() || null;
+          const codigoInterno = codigosInternosFactura[index]?.trim() || (item.codigo?.trim() && item.codigo?.trim() !== codigoBarras ? item.codigo.trim() : null);
           const id = await guardarProductoSigo({
             empresaId: empresaOperacion,
             nombre: item.descripcion,
@@ -412,6 +418,8 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
       setFacturaIA(null);
       setFacturaMensaje("");
       setPreciosVentaFactura({});
+      setCodigosBarrasFactura({});
+      setCodigosInternosFactura({});
       await cargar(empresaOperacion);
     } catch (err) {
       if (empresaActivaRef.current === empresaOperacion) {
@@ -487,7 +495,12 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
                     return (
                       <tr key={`${item.descripcion}-${index}`}>
                         <td><strong>{item.descripcion}</strong><small style={{display:"block"}}>{existente ? `Stock: ${stockAnterior} → ${stockAnterior + item.cantidad}` : `Nuevo · ingresan ${item.cantidad} unidades`}</small></td>
-                        <td>{item.codigo_barras ?? item.codigo ?? "-"}</td>
+                        <td>{existente ? (item.codigo_barras ?? item.codigo ?? "-") : <div style={{display:"grid",gap:6,minWidth:190}}>
+                          <strong style={{color:"#b45309"}}>⚠ PRODUCTO NUEVO</strong>
+                          <input value={codigosBarrasFactura[index] ?? item.codigo_barras ?? ""} onChange={(e)=>setCodigosBarrasFactura(a=>({...a,[index]:e.target.value}))} placeholder="EAN / código de barras (recomendado)" aria-label={`Código de barras para ${item.descripcion}`} />
+                          <input value={codigosInternosFactura[index] ?? item.codigo ?? ""} onChange={(e)=>setCodigosInternosFactura(a=>({...a,[index]:e.target.value}))} placeholder="Código interno (opcional)" aria-label={`Código interno para ${item.descripcion}`} />
+                          {!((codigosBarrasFactura[index] ?? item.codigo_barras ?? "").trim()) && <small style={{color:"#b45309"}}>Falta código de barras. Podés completarlo o continuar sin EAN.</small>}
+                        </div>}</td>
                         <td><strong>{item.cantidad}</strong><small style={{display:"block"}}>unidades vendibles</small></td>
                         <td><span style={{textDecoration:costoAnterior>0?"line-through":"none",opacity:.65}}>{costoAnterior>0?`$ ${costoAnterior.toLocaleString("es-AR",{minimumFractionDigits:2})}`:""}</span><strong style={{display:"block"}}>→ $ {item.costo_unitario.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</strong></td>
                         <td>
@@ -518,7 +531,7 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
             )}
             <div className="form-actions" style={{ justifyContent: "flex-start" }}>
               <button type="button" className="primary-button" disabled={facturaAplicando || facturaProcesando || saving || preciosFacturaPendientes > 0} onClick={() => void aplicarFacturaAnalizada()}>{facturaAplicando ? "Preparando compra…" : "REVISADO · PREPARAR COMPRA"}</button>
-              <button type="button" className="admin-button" disabled={facturaAplicando || facturaProcesando || saving} onClick={() => { setFacturaIA(null); setRevisionFacturaAbierta(false); setFacturaMensaje(""); setPreciosVentaFactura({}); }}>Descartar lectura</button>
+              <button type="button" className="admin-button" disabled={facturaAplicando || facturaProcesando || saving} onClick={() => { setFacturaIA(null); setRevisionFacturaAbierta(false); setFacturaMensaje(""); setPreciosVentaFactura({}); setCodigosBarrasFactura({}); setCodigosInternosFactura({}); }}>Descartar lectura</button>
             </div>
           </div>
         )}
