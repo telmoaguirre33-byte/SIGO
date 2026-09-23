@@ -89,7 +89,7 @@ async function prepararDocumento(file: File): Promise<{ dataUrl: string; tipo: "
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d");
-  if (!ctx) return original;
+  if (!ctx) return { dataUrl: original, tipo: "imagen", nombre: file.name || "documento.jpg" };
   ctx.drawImage(img, 0, 0, width, height);
   return { dataUrl: canvas.toDataURL("image/jpeg", 0.84), tipo: "imagen", nombre: file.name || "documento.jpg" };
 }
