@@ -461,6 +461,7 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
             <p style={{ margin: 0 }}>Sacá una foto o elegí una imagen/PDF. SIGO admite factura, ticket, remito, nota de pedido, orden de compra, talonario X y otros comprobantes de compra/recepción; lee proveedor, fecha, comprobante, productos, cantidades y costos. Si un producto no existe, definís su precio de venta antes de crearlo; el stock se modifica recién cuando confirmás la compra.</p>
           </div>
           <span style={{ fontSize: 12, fontWeight: 700, color: "#1d4ed8" }}>IA · revisión antes de stock</span>
+          <p style={{ margin:"8px 0 0", fontWeight:800, color:"#92400e" }}>⚠️ Importante: cargá y revisá los comprobantes de a uno.</p>
         </div>
         <input ref={fotoRef} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden onChange={(e) => void leerFactura(e.target.files?.[0])} />
         <input ref={archivoRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.pdf" hidden onChange={(e) => void leerFactura(e.target.files?.[0])} />
