@@ -474,6 +474,11 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
 
         {facturaMensaje && <p style={{ fontWeight: 700, color: "#1e3a8a" }}>{facturaMensaje}</p>}
 
+        <div className="form-actions" style={{justifyContent:"flex-start",marginTop:12,marginBottom:12}}>
+          <button type="button" className="admin-button" disabled={!facturaIA || facturaProcesando} onClick={()=>setCorreccionFacturaAbierta(true)}>🔎 REVISAR / CORREGIR</button>
+          <button type="button" className="primary-button" disabled={!facturaIA || facturaAplicando || facturaProcesando || saving || preciosFacturaPendientes > 0 || Boolean(facturaIA?.advertencias.some((a)=>a.startsWith("CRÍTICO")))} onClick={()=>void aplicarFacturaAnalizada()}>🛒 PREPARAR COMPRA</button>
+          <button type="button" className="admin-button danger-button" disabled={!facturaIA || facturaAplicando || facturaProcesando || saving} onClick={()=>{setFacturaIA(null);setRevisionFacturaAbierta(false);setCorreccionFacturaAbierta(false);setFacturaMensaje("");setPreciosVentaFactura({});setCodigosBarrasFactura({});setCodigosInternosFactura({});}}>❌ CANCELAR / DESCARTAR</button>
+        </div>
         {facturaIA && (
           <div style={{ marginTop: 16 }}>
             <div className="form-grid">
