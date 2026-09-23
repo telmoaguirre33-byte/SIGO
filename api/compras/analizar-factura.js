@@ -1,6 +1,6 @@
 const MAX_DATA_URL_LENGTH = 8_000_000;
 const MAX_INVOICE_ITEMS = 300;
-const OPENAI_TIMEOUT_MS = 45_000;
+const GEMINI_TIMEOUT_MS = 45_000;
 const ALLOWED_IMAGE = /^data:image\/(jpeg|jpg|png|webp);base64,/i;
 const ALLOWED_PDF = /^data:application\/pdf;base64,/i;
 const GTIN_LENGTHS = new Set([8, 12, 13, 14]);
@@ -11,16 +11,56 @@ function json(res, status, body) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8").send(JSON.stringify(body));
 }
 
-function getOutputText(data) {
-  if (typeof data?.output_text === "string" && data.output_text.trim()) return data.output_text.trim();
+function getGeminiOutputText(data) {
   const parts = [];
-  for (const output of Array.isArray(data?.output) ? data.output : []) {
-    for (const content of Array.isArray(output?.content) ? output.content : []) {
-      if (typeof content?.text === "string") parts.push(content.text);
+  for (const candidate of Array.isArray(data?.candidates) ? data.candidates : []) {
+    for (const part of Array.isArray(candidate?.content?.parts) ? candidate.content.parts : []) {
+      if (typeof part?.text === "string") parts.push(part.text);
     }
   }
   return parts.join("\n").trim();
 }
+
+const FACTURA_RESPONSE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    proveedor: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        razon_social: { type: ["string", "null"] },
+        cuit: { type: ["string", "null"] },
+      },
+      required: ["razon_social", "cuit"],
+    },
+    fecha: { type: ["string", "null"] },
+    tipo_comprobante: { type: ["string", "null"] },
+    numero_comprobante: { type: ["string", "null"] },
+    moneda: { type: ["string", "null"] },
+    total: { type: ["number", "null"] },
+    confianza_general: { type: "number", minimum: 0, maximum: 1 },
+    items: {
+      type: "array",
+      maxItems: MAX_INVOICE_ITEMS,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          descripcion: { type: "string" },
+          codigo: { type: ["string", "null"] },
+          codigo_barras: { type: ["string", "null"] },
+          cantidad: { type: "number" },
+          costo_unitario: { type: "number" },
+          total_linea: { type: ["number", "null"] },
+          confianza: { type: "number", minimum: 0, maximum: 1 },
+        },
+        required: ["descripcion", "codigo", "codigo_barras", "cantidad", "costo_unitario", "total_linea", "confianza"],
+      },
+    },
+  },
+  required: ["proveedor", "fecha", "tipo_comprobante", "numero_comprobante", "moneda", "total", "confianza_general", "items"],
+};
 
 function parseJsonText(text) {
   const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
@@ -293,10 +333,10 @@ export default async function handler(req, res) {
     return json(res, 403, { error: "FORBIDDEN" });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return json(res, 503, { error: "AI_NOT_CONFIGURED" });
 
-  const model = process.env.OPENAI_INVOICE_MODEL || "gpt-5.6-luna";
+  const model = process.env.GEMINI_INVOICE_MODEL || "gemini-2.5-flash";
   const prompt = `Analizá este comprobante comercial argentino para cargar mercadería en un sistema comercial. Puede ser factura, ticket, remito, nota de pedido, orden/pedido de compra, talonario X, comprobante X u otro documento de compra/recepción. Identificá el tipo real en tipo_comprobante.
 No inventes datos. Si algo no es legible, usá null y baja confianza.
 Extraé únicamente productos/servicios efectivamente facturados; no conviertas IVA, descuentos globales, percepciones, subtotales ni totales en productos.
@@ -312,28 +352,37 @@ Respondé SOLAMENTE JSON válido con esta forma exacta:
 confianza_general y confianza van de 0 a 1.`;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
   let aiResponse;
   try {
-    aiResponse = await fetch("https://api.openai.com/v1/responses", {
+    aiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: "POST",
       signal: controller.signal,
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        "x-goog-api-key": apiKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model,
-        max_output_tokens: 6000,
-        input: [{
+        contents: [{
           role: "user",
-          content: [
-            { type: "input_text", text: prompt },
-            documentType === "pdf"
-              ? { type: "input_file", file_data: documentDataUrl.split(",")[1], filename }
-              : { type: "input_image", image_url: documentDataUrl, detail: "high" },
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType: documentType === "pdf"
+                  ? "application/pdf"
+                  : (documentDataUrl.match(/^data:([^;]+);base64,/i)?.[1] || "image/jpeg"),
+                data: documentDataUrl.split(",")[1],
+              },
+            },
           ],
         }],
+        generationConfig: {
+          maxOutputTokens: 6000,
+          temperature: 0,
+          responseMimeType: "application/json",
+          responseJsonSchema: FACTURA_RESPONSE_SCHEMA,
+        },
       }),
     });
   } catch (error) {
@@ -347,13 +396,13 @@ confianza_general y confianza van de 0 a 1.`;
 
   if (!aiResponse.ok) {
     const detail = await aiResponse.text().catch(() => "");
-    console.error("SIGO invoice AI error", aiResponse.status, detail.slice(0, 1200));
+    console.error("SIGO invoice Gemini error", aiResponse.status, detail.slice(0, 1200));
     return json(res, 502, { error: "AI_ERROR", message: "La IA no pudo procesar la factura." });
   }
 
   try {
     const aiData = await aiResponse.json();
-    const text = getOutputText(aiData);
+    const text = getGeminiOutputText(aiData);
     if (!text) throw new Error("EMPTY_AI_OUTPUT");
     const factura = normalizarFacturaIA(parseJsonText(text));
     return json(res, 200, { factura, model });
