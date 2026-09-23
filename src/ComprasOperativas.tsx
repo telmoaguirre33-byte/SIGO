@@ -1,6 +1,4 @@
-i81
-const [revisionFacturaAbierta, setRevisionFacturaAbierta] = useState(false);
-  const [busquedaManual, setBusquedaManual] = useState("");
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import BarcodeScanner from "./BarcodeScanner";
 import type { BarcodeProduct } from "./barcode";
@@ -80,7 +78,8 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
   const [preciosVentaFactura, setPreciosVentaFactura] = useState<Record<number, string>>({});
   const [codigosBarrasFactura, setCodigosBarrasFactura] = useState<Record<number, string>>({});
   const [codigosInternosFactura, setCodigosInternosFactura] = useState<Record<number, string>>({});
-  const [revisionFacturaAbierta, setRevisionFacturaAbierta] = useState(false);\n  const [busquedaManual, setBusquedaManual] = useState("");
+  const [revisionFacturaAbierta, setRevisionFacturaAbierta] = useState(false);
+  const [busquedaManual, setBusquedaManual] = useState("");
   const [correccionFacturaAbierta, setCorreccionFacturaAbierta] = useState(false);
   const fotoRef = useRef<HTMLInputElement | null>(null);
   const archivoRef = useRef<HTMLInputElement | null>(null);
