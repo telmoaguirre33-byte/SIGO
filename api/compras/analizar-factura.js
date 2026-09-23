@@ -2,6 +2,7 @@ const MAX_DATA_URL_LENGTH = 8_000_000;
 const MAX_INVOICE_ITEMS = 300;
 const OPENAI_TIMEOUT_MS = 45_000;
 const ALLOWED_IMAGE = /^data:image\/(jpeg|jpg|png|webp);base64,/i;
+const ALLOWED_PDF = /^data:application\/pdf;base64,/i;
 const GTIN_LENGTHS = new Set([8, 12, 13, 14]);
 const MIN_GENERAL_CONFIDENCE_AUTO = 0.35;
 const MIN_LINE_CONFIDENCE_AUTO = 0.30;
@@ -277,10 +278,13 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { error: "METHOD_NOT_ALLOWED" });
 
   const empresaId = String(req.body?.empresaId || "").trim();
-  const imageDataUrl = String(req.body?.imageDataUrl || "");
+  const documentDataUrl = String(req.body?.documentDataUrl || req.body?.imageDataUrl || "");
+  const documentType = String(req.body?.documentType || (ALLOWED_PDF.test(documentDataUrl) ? "pdf" : "imagen"));
+  const filename = textoSeguro(req.body?.filename, 120) || (documentType === "pdf" ? "documento.pdf" : "documento.jpg");
   if (!empresaId) return json(res, 400, { error: "EMPRESA_REQUIRED" });
-  if (!ALLOWED_IMAGE.test(imageDataUrl) || imageDataUrl.length > MAX_DATA_URL_LENGTH) {
-    return json(res, 400, { error: "INVALID_IMAGE" });
+  const formatoValido = documentType === "pdf" ? ALLOWED_PDF.test(documentDataUrl) : ALLOWED_IMAGE.test(documentDataUrl);
+  if (!formatoValido || documentDataUrl.length > MAX_DATA_URL_LENGTH) {
+    return json(res, 400, { error: "INVALID_DOCUMENT" });
   }
 
   try {
@@ -293,7 +297,7 @@ export default async function handler(req, res) {
   if (!apiKey) return json(res, 503, { error: "AI_NOT_CONFIGURED" });
 
   const model = process.env.OPENAI_INVOICE_MODEL || "gpt-5.6-luna";
-  const prompt = `Analizá esta factura o ticket de compra argentino para cargar mercadería en un sistema comercial.
+  const prompt = `Analizá este comprobante comercial argentino para cargar mercadería en un sistema comercial. Puede ser factura, ticket, remito, nota de pedido, orden/pedido de compra, talonario X, comprobante X u otro documento de compra/recepción. Identificá el tipo real en tipo_comprobante.
 No inventes datos. Si algo no es legible, usá null y baja confianza.
 Extraé únicamente productos/servicios efectivamente facturados; no conviertas IVA, descuentos globales, percepciones, subtotales ni totales en productos.
 Para cada ítem, cantidad y costo_unitario deben ser números. SIGO opera minorista y el stock se expresa en UNIDADES VENDIBLES, no en cajas/bultos.
@@ -325,7 +329,9 @@ confianza_general y confianza van de 0 a 1.`;
           role: "user",
           content: [
             { type: "input_text", text: prompt },
-            { type: "input_image", image_url: imageDataUrl, detail: "high" },
+            documentType === "pdf"
+              ? { type: "input_file", file_data: documentDataUrl.split(",")[1], filename }
+              : { type: "input_image", image_url: documentDataUrl, detail: "high" },
           ],
         }],
       }),
