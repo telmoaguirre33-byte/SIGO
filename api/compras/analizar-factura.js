@@ -336,7 +336,7 @@ export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return json(res, 503, { error: "AI_NOT_CONFIGURED" });
 
-  const model = process.env.GEMINI_INVOICE_MODEL || "gemini-2.5-flash";
+  const model = process.env.GEMINI_INVOICE_MODEL || "gemini-3.8-flash";
   const prompt = `Analizá este comprobante comercial argentino para cargar mercadería en un sistema comercial. Puede ser factura, ticket, remito, nota de pedido, orden/pedido de compra, talonario X, comprobante X u otro documento de compra/recepción. Identificá el tipo real en tipo_comprobante.
 No inventes datos. Si algo no es legible, usá null y baja confianza.
 Extraé únicamente productos/servicios efectivamente facturados; no conviertas IVA, descuentos globales, percepciones, subtotales ni totales en productos.
@@ -397,7 +397,9 @@ confianza_general y confianza van de 0 a 1.`;
   if (!aiResponse.ok) {
     const detail = await aiResponse.text().catch(() => "");
     console.error("SIGO invoice Gemini error", aiResponse.status, detail.slice(0, 1200));
-    return json(res, 502, { error: "AI_ERROR", message: "La IA no pudo procesar la factura." });
+    if (aiResponse.status === 404) return json(res, 502, { error: "AI_MODEL_UNAVAILABLE", message: "El modelo de IA configurado no está disponible para este proyecto." });
+    if (aiResponse.status === 429) return json(res, 429, { error: "AI_RATE_LIMIT", message: "Gemini alcanzó temporalmente su límite de uso. Intentá nuevamente en unos minutos." });
+    return json(res, 502, { error: "AI_ERROR", message: "La IA no pudo procesar el comprobante." });
   }
 
   try {
