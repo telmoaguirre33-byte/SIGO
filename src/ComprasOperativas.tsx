@@ -480,6 +480,9 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
               <div className="form-group"><label>Fecha</label><div>{facturaIA.fecha ?? "No leída"}</div></div>
               <div className="form-group"><label>Confianza IA</label><div>{Math.round(facturaIA.confianza_general * 100)}%</div></div>
             </div>
+            {facturaIA.advertencias.length > 0 && <div style={{marginTop:12}}>
+              {facturaIA.advertencias.map((a,i)=><p key={i} className={a.startsWith("CRÍTICO") ? "form-error" : ""} style={{fontWeight:a.startsWith("CRÍTICO")?800:600}}>⚠️ {a}</p>)}
+            </div>}
             <div className="table-wrapper" style={{ marginTop: 14 }}>
               <table className="products-table">
                 <thead><tr><th>Producto leído</th><th>Código</th><th>Cant.</th><th>Costo unit.</th><th>Precio venta</th><th>Confianza</th><th>Estado</th></tr></thead>
@@ -529,7 +532,7 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
               </p>
             )}
             <div className="form-actions" style={{ justifyContent: "flex-start" }}>
-              <button type="button" className="primary-button" disabled={facturaAplicando || facturaProcesando || saving || preciosFacturaPendientes > 0} onClick={() => void aplicarFacturaAnalizada()}>{facturaAplicando ? "Preparando compra…" : "REVISADO · PREPARAR COMPRA"}</button>
+              <button type="button" className="primary-button" disabled={facturaAplicando || facturaProcesando || saving || preciosFacturaPendientes > 0 || facturaIA.advertencias.some((a)=>a.startsWith("CRÍTICO"))} onClick={() => void aplicarFacturaAnalizada()}>{facturaAplicando ? "Preparando compra…" : "REVISADO · PREPARAR COMPRA"}</button>
               <button type="button" className="admin-button" disabled={facturaAplicando || facturaProcesando || saving} onClick={() => { setFacturaIA(null); setRevisionFacturaAbierta(false); setFacturaMensaje(""); setPreciosVentaFactura({}); setCodigosBarrasFactura({}); setCodigosInternosFactura({}); }}>Descartar lectura</button>
             </div>
           </div>
