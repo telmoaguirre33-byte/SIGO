@@ -31,7 +31,7 @@ if (!source.includes(preciosRender)) {
   source = source.replace(productosRender, `${productosRender}\n${preciosRender}`);
 }
 
-const oldPendiente = '          {section !== "Inicio" && section !== "Productos" && section !== "Stock" && section !== "Ventas" && <Pendiente title={section} />}';
+const oldPendiente = '          {section !== "Inicio" && section !== "Productos" && section !== "Stock" && section !== "Ventas" && section !== "Compras" && <Pendiente title={section} />}';
 const newPendiente = '          {section !== "Inicio" && section !== "Productos" && section !== "Lista de precios" && section !== "Stock" && section !== "Ventas" && <Pendiente title={section} />}';
 if (!source.includes(newPendiente)) {
   if (!source.includes(oldPendiente)) throw new Error("No se encontró el fallback de secciones pendientes en SigoApp.tsx");
