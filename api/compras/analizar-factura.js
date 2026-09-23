@@ -22,38 +22,34 @@ function getGeminiOutputText(data) {
 }
 
 const FACTURA_RESPONSE_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
+  type: "OBJECT",
   properties: {
     proveedor: {
-      type: "object",
-      additionalProperties: false,
+      type: "OBJECT",
       properties: {
-        razon_social: { type: ["string", "null"] },
-        cuit: { type: ["string", "null"] },
+        razon_social: { type: "STRING", nullable: true },
+        cuit: { type: "STRING", nullable: true },
       },
       required: ["razon_social", "cuit"],
     },
-    fecha: { type: ["string", "null"] },
-    tipo_comprobante: { type: ["string", "null"] },
-    numero_comprobante: { type: ["string", "null"] },
-    moneda: { type: ["string", "null"] },
-    total: { type: ["number", "null"] },
-    confianza_general: { type: "number", minimum: 0, maximum: 1 },
+    fecha: { type: "STRING", nullable: true },
+    tipo_comprobante: { type: "STRING", nullable: true },
+    numero_comprobante: { type: "STRING", nullable: true },
+    moneda: { type: "STRING", nullable: true },
+    total: { type: "NUMBER", nullable: true },
+    confianza_general: { type: "NUMBER" },
     items: {
-      type: "array",
-      maxItems: MAX_INVOICE_ITEMS,
+      type: "ARRAY",
       items: {
-        type: "object",
-        additionalProperties: false,
+        type: "OBJECT",
         properties: {
-          descripcion: { type: "string" },
-          codigo: { type: ["string", "null"] },
-          codigo_barras: { type: ["string", "null"] },
-          cantidad: { type: "number" },
-          costo_unitario: { type: "number" },
-          total_linea: { type: ["number", "null"] },
-          confianza: { type: "number", minimum: 0, maximum: 1 },
+          descripcion: { type: "STRING" },
+          codigo: { type: "STRING", nullable: true },
+          codigo_barras: { type: "STRING", nullable: true },
+          cantidad: { type: "NUMBER" },
+          costo_unitario: { type: "NUMBER" },
+          total_linea: { type: "NUMBER", nullable: true },
+          confianza: { type: "NUMBER" },
         },
         required: ["descripcion", "codigo", "codigo_barras", "cantidad", "costo_unitario", "total_linea", "confianza"],
       },
@@ -382,16 +378,22 @@ confianza_general y confianza van de 0 a 1.`;
           maxOutputTokens: 6000,
           temperature: 0,
           responseMimeType: "application/json",
-          responseJsonSchema: FACTURA_RESPONSE_SCHEMA,
+          responseSchema: FACTURA_RESPONSE_SCHEMA,
         },
       }),
     });
     const esperas = [800, 1800, 3500];
+    const inicioGemini = Date.now();
     aiResponse = await fetchGemini();
+    console.info("SIGO Gemini attempt", { intento: 1, status: aiResponse.status, model, ms: Date.now() - inicioGemini });
+    let intento = 1;
     for (const espera of esperas) {
       if (aiResponse.status !== 503) break;
       await new Promise((resolve) => setTimeout(resolve, espera));
+      intento += 1;
+      const inicioReintento = Date.now();
       aiResponse = await fetchGemini();
+      console.info("SIGO Gemini attempt", { intento, status: aiResponse.status, model, ms: Date.now() - inicioReintento });
     }
   } catch (error) {
     if (error?.name === "AbortError") {
