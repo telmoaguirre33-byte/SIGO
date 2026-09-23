@@ -211,9 +211,8 @@ function normalizarFacturaIA(raw) {
       const tolerancia = Math.max(2, calculado * 0.03);
       const toleranciaCritica = Math.max(10, calculado * 0.15);
       if (diferencia > toleranciaCritica) {
-        throw errorRevision("INVOICE_LINE_TOTAL_MISMATCH", descripcion);
-      }
-      if (diferencia > tolerancia) {
+        advertencias.push(`CRÍTICO · Revisar ${descripcion}: cantidad × costo unitario no coincide con el total de línea leído. Corregí esta línea antes de confirmar.`);
+      } else if (diferencia > tolerancia) {
         advertencias.push(`Revisar ${descripcion}: cantidad × costo unitario no coincide con el total de línea leído.`);
       }
     }
