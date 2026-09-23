@@ -78,7 +78,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
   const [preciosVentaFactura, setPreciosVentaFactura] = useState<Record<number, string>>({});
   const [codigosBarrasFactura, setCodigosBarrasFactura] = useState<Record<number, string>>({});
   const [codigosInternosFactura, setCodigosInternosFactura] = useState<Record<number, string>>({});
-  const [revisionFacturaAbierta, setRevisionFacturaAbierta] = useState(false);
+  const [revisionFacturaAbierta, setRevisionFacturaAbierta] = useState(false);\n  const [busquedaManual, setBusquedaManual] = useState("");
   const [correccionFacturaAbierta, setCorreccionFacturaAbierta] = useState(false);
   const fotoRef = useRef<HTMLInputElement | null>(null);
   const archivoRef = useRef<HTMLInputElement | null>(null);
@@ -166,6 +166,18 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
 
   function editarLinea(key: string, patch: Partial<Linea>) {
     setLineas((actual) => actual.map((l) => l.key === key ? { ...l, ...patch } : l));
+  }
+
+  const resultadosBusquedaManual = useMemo(() => {
+    const q = normalizar(busquedaManual).trim();
+    if (!q) return [];
+    return productos.filter((p) => [p.nombre, p.codigo_interno, p.codigo_barras, p.marca, p.categoria]
+      .filter(Boolean).some((v) => normalizar(String(v)).includes(q))).slice(0, 12);
+  }, [busquedaManual, productos]);
+
+  function seleccionarBusquedaManual(producto: ProductoSigo) {
+    agregarProductoEscaneado(producto as BarcodeProduct);
+    setBusquedaManual("");
   }
 
   function agregarProductoEscaneado(producto: BarcodeProduct) {
@@ -564,7 +576,19 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
         <div style={{ marginTop: 18 }}>
           <h4 style={{ marginBottom: 6 }}>Escanear mercadería</h4>
           <p style={{ marginTop: 0 }}>Pistola, ingreso manual o cámara: cada lectura agrega una unidad del producto a esta compra. Si ya estaba agregado, incrementa la cantidad.</p>
-          <BarcodeScanner empresaId={empresaId} action="ingresar" onProduct={agregarProductoEscaneado} />
+          <div style={{position:"relative"}}>
+            <BarcodeScanner empresaId={empresaId} action="ingresar" onProduct={agregarProductoEscaneado} onQueryChange={setBusquedaManual} />
+            {busquedaManual.trim() && resultadosBusquedaManual.length > 0 && (
+              <div className="panel" style={{position:"absolute",zIndex:30,left:0,right:0,top:"100%",marginTop:4,maxHeight:320,overflowY:"auto",padding:6}}>
+                {resultadosBusquedaManual.map((p) => (
+                  <button key={p.id} type="button" className="admin-button" style={{display:"flex",width:"100%",justifyContent:"space-between",marginBottom:4,textAlign:"left"}} onMouseDown={(e)=>e.preventDefault()} onClick={()=>seleccionarBusquedaManual(p)}>
+                    <strong>{p.nombre}</strong><span>{p.codigo_barras || p.codigo_interno || ""}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {busquedaManual.trim() && resultadosBusquedaManual.length === 0 && <small style={{display:"block",marginTop:6}}>Sin coincidencias por nombre o código.</small>}
+          </div>
         </div>
 
         <div className="table-wrapper" style={{ marginTop: 18 }}>
