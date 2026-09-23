@@ -78,7 +78,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
   const [preciosVentaFactura, setPreciosVentaFactura] = useState<Record<number, string>>({});
   const [codigosBarrasFactura, setCodigosBarrasFactura] = useState<Record<number, string>>({});
   const [codigosInternosFactura, setCodigosInternosFactura] = useState<Record<number, string>>({});
-  const [revisionFacturaAbierta, setRevisionFacturaAbierta] = useState(false);
+  const [revisionFacturaAbierta, setRevisionFacturaAbierta] = useState(false);\n  const [busquedaManual, setBusquedaManual] = useState("");
   const [correccionFacturaAbierta, setCorreccionFacturaAbierta] = useState(false);
   const fotoRef = useRef<HTMLInputElement | null>(null);
   const archivoRef = useRef<HTMLInputElement | null>(null);
@@ -166,6 +166,18 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
 
   function editarLinea(key: string, patch: Partial<Linea>) {
     setLineas((actual) => actual.map((l) => l.key === key ? { ...l, ...patch } : l));
+  }
+
+  const resultadosBusquedaManual = useMemo(() => {
+    const q = normalizar(busquedaManual).trim();
+    if (!q) return [];
+    return productos.filter((p) => [p.nombre, p.codigo_interno, p.codigo_barras, p.marca, p.categoria]
+      .filter(Boolean).some((v) => normalizar(String(v)).includes(q))).slice(0, 12);
+  }, [busquedaManual, productos]);
+
+  function seleccionarBusquedaManual(producto: ProductoSigo) {
+    agregarProductoEscaneado(producto as BarcodeProduct);
+    setBusquedaManual("");
   }
 
   function agregarProductoEscaneado(producto: BarcodeProduct) {
@@ -564,7 +576,19 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
         <div style={{ marginTop: 18 }}>
           <h4 style={{ marginBottom: 6 }}>Escanear mercadería</h4>
           <p style={{ marginTop: 0 }}>Pistola, ingreso manual o cámara: cada lectura agrega una unidad del producto a esta compra. Si ya estaba agregado, incrementa la cantidad.</p>
-          <BarcodeScanner empresaId={empresaId} action="ingresar" onProduct={agregarProductoEscaneado} />
+          <div style={{position:"relative"}}>
+            <BarcodeScanner empresaId={empresaId} action="ingresar" onProduct={agregarProductoEscaneado} onQueryChange={setBusquedaManual} />
+            {busquedaManual.trim() && resultadosBusquedaManual.length > 0 && (
+              <div className="panel" style={{position:"absolute",zIndex:30,left:0,right:0,top:"100%",marginTop:4,maxHeight:320,overflowY:"auto",padding:6}}>
+                {resultadosBusquedaManual.map((p) => (
+                  <button key={p.id} type="button" className="admin-button" style={{display:"flex",width:"100%",justifyContent:"space-between",marginBottom:4,textAlign:"left"}} onMouseDown={(e)=>e.preventDefault()} onClick={()=>seleccionarBusquedaManual(p)}>
+                    <strong>{p.nombre}</strong><span>{p.codigo_barras || p.codigo_interno || ""}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {busquedaManual.trim() && resultadosBusquedaManual.length === 0 && <small style={{display:"block",marginTop:6}}>Sin coincidencias por nombre o código.</small>}
+          </div>
         </div>
 
         <div className="table-wrapper" style={{ marginTop: 18 }}>
@@ -575,7 +599,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
                 <tr key={l.key}>
                   <td><select value={l.producto_id} onChange={(e) => { const p = productos.find((x) => x.id === e.target.value); editarLinea(l.key, { producto_id: e.target.value, costo_unitario: Number(p?.costo_actual ?? p?.costo_ultima_compra ?? 0) }); }} required><option value="">Seleccionar producto</option>{productos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></td>
                   <td><input type="number" min="0.001" step="0.001" value={l.cantidad} onChange={(e) => editarLinea(l.key, { cantidad: Number(e.target.value) })} /></td>
-                  <td><input type="number" min="0" step="0.01" value={l.costo_unitario} onChange={(e) => editarLinea(l.key, { costo_unitario: Number(e.target.value) })} /></td>
+                  <td><input type="number" min="0" step="0.01" value={l.costo_unitario || ""} onFocus={(e) => e.currentTarget.select()} onChange={(e) => editarLinea(l.key, { costo_unitario: e.target.value === "" ? 0 : Number(e.target.value) })} /></td>
                   <td>$ {(l.cantidad * l.costo_unitario).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
                   <td><button type="button" className="admin-button danger-button" disabled={lineas.length === 1} onClick={() => setLineas((actual) => actual.filter((x) => x.key !== l.key))}>Quitar</button></td>
                 </tr>
