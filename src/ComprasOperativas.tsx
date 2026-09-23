@@ -56,7 +56,7 @@ function encontrarProducto(item: FacturaItemIA, productos: ProductoSigo[]) {
   return productos.find((p) => normalizar(p.nombre) === nombre);
 }
 
-export default function ComprasOperativas({ empresaId }: { empresaId: string }) {
+export default function ComprasOperativas({ empresaId, vista = "todo" }: { empresaId: string; vista?: "todo" | "manual" | "ia" | "historial" }) {
   const [proveedores, setProveedores] = useState<ProveedorSigo[]>([]);
   const [compras, setCompras] = useState<CompraSigo[]>([]);
   const [productos, setProductos] = useState<ProductoSigo[]>([]);
@@ -454,7 +454,7 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
         </div>
       )}
 
-      <div className="panel" style={{ border: "1px solid #bfdbfe", background: "linear-gradient(135deg,#eff6ff,#ffffff)" }}>
+      {(vista === "todo" || vista === "ia") && (<div className="panel" style={{ border: "1px solid #bfdbfe", background: "linear-gradient(135deg,#eff6ff,#ffffff)" }}>
         <div className="page-header">
           <div>
             <h3 style={{ marginBottom: 6 }}>📷 Leer comprobante de compra con IA</h3>
@@ -538,8 +538,9 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
           </div>
         )}
       </div>
-
-      <div className="panel">
+)}
+      
+      {(vista === "todo" || vista === "manual") && <><div className="panel">
         <h3>Alta rápida de proveedor</h3>
         <div className="form-grid">
           <div className="form-group"><label>Razón social</label><input value={nuevoProveedor} onChange={(e) => setNuevoProveedor(e.target.value)} placeholder="Proveedor" /></div>
@@ -590,7 +591,8 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
         <div className="form-actions"><button type="submit" className="primary-button" disabled={saving || loading || facturaAplicando || !compraValida}>{saving ? "Confirmando…" : "Confirmar compra e ingresar stock"}</button></div>
       </form>
 
-      <div className="panel">
+      </>}
+      {(vista === "todo" || vista === "historial") && (<div className="panel">
         <h3>Últimas compras</h3>
         {loading ? <p>Cargando…</p> : compras.length === 0 ? <p>Sin compras confirmadas.</p> : (
           <div className="table-wrapper">
@@ -610,7 +612,8 @@ export default function ComprasOperativas({ empresaId }: { empresaId: string }) 
             </table>
           </div>
         )}
-      </div>
+      </div>)}
+      
     </div>
   );
 }

@@ -3,6 +3,7 @@ import type { EmpresaOperativa } from "./tenant";
 import BarcodeScanner from "./BarcodeScanner";
 import type { BarcodeAction, BarcodeProduct } from "./barcode";
 import VentaRapidaOperativa from "./VentaRapidaOperativa";
+import ComprasOperativas from "./ComprasOperativas";
 import { can } from "./permissions";
 import { listarModulosEmpresa } from "./modulosEmpresa";
 import {
@@ -68,7 +69,7 @@ export default function SigoApp({ empresa }: { empresa: EmpresaOperativa }) {
           {sections.map((item) => (
             <button key={item} className={section === item ? "menu-item active" : "menu-item"} onClick={() => setSection(item)}>
               <span className="menu-icon">{item.slice(0, 2).toUpperCase()}</span>
-              <span>{item}</span>
+              <span>{item === "Compras" ? "Compras / Proveedores" : item}</span>
             </button>
           ))}
         </nav>
@@ -86,7 +87,7 @@ export default function SigoApp({ empresa }: { empresa: EmpresaOperativa }) {
       <main className="main">
         <header className="topbar">
           <div>
-            <h1>{section}</h1>
+            <h1>{section === "Compras" ? "Compras / Proveedores" : section}</h1>
             <p>{empresa.empresa_nombre} · SIGO</p>
           </div>
         </header>
@@ -95,11 +96,33 @@ export default function SigoApp({ empresa }: { empresa: EmpresaOperativa }) {
           {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
           {section === "Stock" && <Stock empresaId={empresa.empresa_id} />}
           {section === "Ventas" && <VentaRapidaOperativa empresaId={empresa.empresa_id} puedeEditarProductos={puedeEditarProductos} />}
-          {section !== "Inicio" && section !== "Productos" && section !== "Stock" && section !== "Ventas" && <Pendiente title={section} />}
+          {section === "Compras" && <ComprasHub empresaId={empresa.empresa_id} />}
+          {section !== "Inicio" && section !== "Productos" && section !== "Stock" && section !== "Ventas" && section !== "Compras" && <Pendiente title={section} />}
         </section>
       </main>
     </div>
   );
+}
+
+function ComprasHub({ empresaId }: { empresaId: string }) {
+  const [modo, setModo] = useState<"menu" | "manual" | "ia" | "historial">("menu");
+  if (modo !== "menu") {
+    return <div>
+      <button type="button" className="admin-button" style={{marginBottom:16}} onClick={()=>setModo("menu")}>← Volver a Compras / Proveedores</button>
+      <ComprasOperativas empresaId={empresaId} vista={modo} />
+    </div>;
+  }
+  return <div className="products-page">
+    <div className="panel">
+      <h2>Compras / Proveedores</h2>
+      <p>Elegí cómo querés trabajar. En celular cada opción abre una pantalla simple y separada.</p>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:14,marginTop:18}}>
+        <button type="button" className="primary-button" style={{minHeight:90,fontSize:18}} onClick={()=>setModo("manual")}>📦 Carga manual</button>
+        <button type="button" className="primary-button" style={{minHeight:90,fontSize:18}} onClick={()=>setModo("ia")}>✨ Compra inteligente con IA</button>
+        <button type="button" className="admin-button" style={{minHeight:90,fontSize:18}} onClick={()=>setModo("historial")}>📋 Historial de compras</button>
+      </div>
+    </div>
+  </div>;
 }
 
 function Inicio({ empresa, onProductos, onStock }: { empresa: EmpresaOperativa; onProductos: () => void; onStock: () => void }) {
