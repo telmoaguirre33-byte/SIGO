@@ -333,6 +333,7 @@ export default async function handler(req, res) {
   if (!apiKey) return json(res, 503, { error: "AI_NOT_CONFIGURED" });
 
   const model = process.env.GEMINI_INVOICE_MODEL || "gemini-3.8-flash";
+  const fallbackModel = process.env.GEMINI_INVOICE_FALLBACK_MODEL || "gemini-3.1-flash-lite-preview";
   const prompt = `Analizá este comprobante comercial argentino para cargar mercadería en un sistema comercial. Puede ser factura, ticket, remito, nota de pedido, orden/pedido de compra, talonario X, comprobante X u otro documento de compra/recepción. Identificá el tipo real en tipo_comprobante.
 No inventes datos. Si algo no es legible, usá null y baja confianza.
 Extraé únicamente productos/servicios efectivamente facturados; no conviertas IVA, descuentos globales, percepciones, subtotales ni totales en productos.
@@ -351,8 +352,7 @@ confianza_general y confianza van de 0 a 1.`;
   const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
   let aiResponse;
   try {
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-    const fetchGemini = () => fetch(geminiUrl, {
+    const fetchGemini = (modelo) => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
       method: "POST",
       signal: controller.signal,
       headers: {
@@ -384,7 +384,7 @@ confianza_general y confianza van de 0 a 1.`;
     });
     const esperas = [800, 1800, 3500];
     const inicioGemini = Date.now();
-    aiResponse = await fetchGemini();
+    aiResponse = await fetchGemini(model);
     console.info("SIGO Gemini attempt", { intento: 1, status: aiResponse.status, model, ms: Date.now() - inicioGemini });
     let intento = 1;
     for (const espera of esperas) {
@@ -392,8 +392,13 @@ confianza_general y confianza van de 0 a 1.`;
       await new Promise((resolve) => setTimeout(resolve, espera));
       intento += 1;
       const inicioReintento = Date.now();
-      aiResponse = await fetchGemini();
+      aiResponse = await fetchGemini(model);
       console.info("SIGO Gemini attempt", { intento, status: aiResponse.status, model, ms: Date.now() - inicioReintento });
+    }
+    if ((aiResponse.status === 503 || aiResponse.status === 429) && fallbackModel && fallbackModel !== model) {
+      const inicioFallback = Date.now();
+      aiResponse = await fetchGemini(fallbackModel);
+      console.info("SIGO Gemini fallback", { status: aiResponse.status, model: fallbackModel, ms: Date.now() - inicioFallback });
     }
   } catch (error) {
     if (error?.name === "AbortError") {
@@ -418,7 +423,7 @@ confianza_general y confianza van de 0 a 1.`;
     const text = getGeminiOutputText(aiData);
     if (!text) throw new Error("EMPTY_AI_OUTPUT");
     const factura = normalizarFacturaIA(parseJsonText(text));
-    return json(res, 200, { factura, model });
+    return json(res, 200, { factura, model: aiData?.modelVersion || model });
   } catch (error) {
     if (error?.message === "AMBIGUOUS_INVOICE_CODES") {
       return json(res, 422, {
