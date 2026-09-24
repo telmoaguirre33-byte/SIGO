@@ -16,7 +16,7 @@ import {
   type VerificacionCompraSigo,
 } from "./compras";
 
-type Linea = CompraItemInput & { key: string };
+type Linea = CompraItemInput & { key: string; margen_porcentaje?: number; precio_venta?: number };
 
 type UltimaConciliacion = {
   compraId: string;
@@ -29,7 +29,7 @@ function nuevaClave() {
 }
 
 function nuevaLinea(): Linea {
-  return { key: nuevaClave(), producto_id: "", cantidad: 1, costo_unitario: 0 };
+  return { key: nuevaClave(), producto_id: "", cantidad: 1, costo_unitario: 0, margen_porcentaje: 0, precio_venta: 0 };
 }
 
 function normalizar(value?: string | null) {
@@ -80,6 +80,8 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
   const [codigosInternosFactura, setCodigosInternosFactura] = useState<Record<number, string>>({});
   const [revisionFacturaAbierta, setRevisionFacturaAbierta] = useState(false);
   const [busquedaManual, setBusquedaManual] = useState("");
+  const [altaManualAbierta, setAltaManualAbierta] = useState(false);
+  const [nuevoProductoManual, setNuevoProductoManual] = useState({ nombre:"", codigo:"", costo:"", margen:"", precio:"" });
   const [correccionFacturaAbierta, setCorreccionFacturaAbierta] = useState(false);
   const fotoRef = useRef<HTMLInputElement | null>(null);
   const archivoRef = useRef<HTMLInputElement | null>(null);
@@ -175,6 +177,20 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
     return productos.filter((p) => [p.nombre, p.codigo_interno, p.codigo_barras, p.marca, p.categoria]
       .filter(Boolean).some((v) => normalizar(String(v)).includes(q))).slice(0, 12);
   }, [busquedaManual, productos]);
+
+  async function crearProductoManual() {
+    const nombre=nuevoProductoManual.nombre.trim();
+    if(!nombre) { setError("Ingresá el nombre del producto nuevo."); return; }
+    const costo=Number(nuevoProductoManual.costo||0), margen=Number(nuevoProductoManual.margen||0);
+    const precio=Number(nuevoProductoManual.precio||0) || Math.round(costo*(1+margen/100)*100)/100;
+    setSaving(true); setError("");
+    try {
+      const id=await guardarProductoSigo({empresaId,nombre,codigoBarras:nuevoProductoManual.codigo.trim()||null,costoActual:costo,costoUltimaCompra:costo,precioVenta:precio,margenPorcentaje:margen,stockActual:0});
+      await cargar();
+      setLineas((actual)=>actual.length===1&&!actual[0].producto_id?[{...actual[0],producto_id:id,costo_unitario:costo,margen_porcentaje:margen,precio_venta:precio}]:[...actual,{key:nuevaClave(),producto_id:id,cantidad:1,costo_unitario:costo,margen_porcentaje:margen,precio_venta:precio}]);
+      setNuevoProductoManual({nombre:"",codigo:"",costo:"",margen:"",precio:""}); setAltaManualAbierta(false); setBusquedaManual("");
+    } catch(err){setError(err instanceof Error?err.message:"No se pudo crear el producto.");} finally {setSaving(false);}
+  }
 
   function seleccionarBusquedaManual(producto: ProductoSigo) {
     agregarProductoEscaneado(producto as BarcodeProduct);
@@ -503,7 +519,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
             {facturaIA.advertencias.length > 0 && <div style={{marginTop:12}}>
               {facturaIA.advertencias.map((a,i)=><p key={i} className={a.startsWith("CRÍTICO") ? "form-error" : ""} style={{fontWeight:a.startsWith("CRÍTICO")?800:600}}>⚠️ {a}</p>)}
             </div>}
-            <div className="form-actions" style={{justifyContent:"flex-start",marginTop:12}}><button type="button" className="admin-button" onClick={()=>setCorreccionFacturaAbierta((v)=>!v)}>🔎 {correccionFacturaAbierta ? "Cerrar corrección" : "REVISAR / CORREGIR"}</button></div>
+            <div className="form-actions" style={{justifyContent:"flex-start",marginTop:12}}><button type="button" className="admin-button" onClick={()=>setCorreccionFacturaAbierta((v)=>!v)}>🔎 {correccionFacturaAbierta ? "Cerrar corrección" : "REVISAR / CORREGIR"}</button>{correccionFacturaAbierta && <button type="button" className="primary-button" onClick={()=>{setCorreccionFacturaAbierta(false);setFacturaMensaje("Cambios guardados para esta revisión. No se modificó stock ni se confirmó la compra.");}}>💾 GUARDAR CAMBIOS</button>}</div>
             <div className="table-wrapper" style={{ marginTop: 14 }}>
               <table className="products-table">
                 <thead><tr><th>Producto leído</th><th>Código</th><th>Cant.</th><th>Costo unit.</th><th>Precio venta</th><th>Confianza</th><th>Estado</th></tr></thead>
@@ -593,20 +609,21 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
                 ))}
               </div>
             )}
-            {busquedaManual.trim() && resultadosBusquedaManual.length === 0 && <small style={{display:"block",marginTop:6}}>Sin coincidencias por nombre o código.</small>}
+            {busquedaManual.trim() && resultadosBusquedaManual.length === 0 && <div style={{marginTop:6}}><small>Sin coincidencias por nombre o código.</small> <button type="button" className="admin-button" onClick={()=>{setAltaManualAbierta(true);setNuevoProductoManual((v)=>({...v,nombre:busquedaManual}));}}>➕ CREAR PRODUCTO NUEVO</button></div>}
+            {altaManualAbierta && <div className="panel" style={{marginTop:10}}><h4>Nuevo producto</h4><div className="form-grid"><div className="form-group"><label>Nombre</label><input value={nuevoProductoManual.nombre} onChange={e=>setNuevoProductoManual(v=>({...v,nombre:e.target.value}))}/></div><div className="form-group"><label>Código / EAN</label><input value={nuevoProductoManual.codigo} onChange={e=>setNuevoProductoManual(v=>({...v,codigo:e.target.value}))}/></div><div className="form-group"><label>Costo</label><input type="number" value={nuevoProductoManual.costo} onChange={e=>setNuevoProductoManual(v=>({...v,costo:e.target.value}))}/></div><div className="form-group"><label>% margen</label><input type="number" value={nuevoProductoManual.margen} onChange={e=>{const margen=e.target.value,costo=Number(nuevoProductoManual.costo||0);setNuevoProductoManual(v=>({...v,margen,precio:costo?String(Math.round(costo*(1+Number(margen)/100)*100)/100):v.precio}));}}/></div><div className="form-group"><label>Precio al público</label><input type="number" value={nuevoProductoManual.precio} onChange={e=>setNuevoProductoManual(v=>({...v,precio:e.target.value}))}/></div></div><div className="form-actions"><button type="button" className="primary-button" disabled={saving} onClick={crearProductoManual}>Crear y agregar</button><button type="button" className="admin-button" onClick={()=>setAltaManualAbierta(false)}>Cancelar</button></div></div>}
           </div>
         </div>
 
         <div className="table-wrapper" style={{ marginTop: 18 }}>
           <table className="products-table">
-            <thead><tr><th>Producto</th><th>Cantidad</th><th>Costo unitario</th><th>Subtotal</th><th></th></tr></thead>
+            <thead><tr><th>Producto</th><th>Cantidad</th><th>Costo unitario</th><th>% margen</th><th>Precio al público</th><th>Subtotal</th><th></th></tr></thead>
             <tbody>
               {lineas.map((l) => (
                 <tr key={l.key}>
-                  <td><select value={l.producto_id} onChange={(e) => { const p = productos.find((x) => x.id === e.target.value); editarLinea(l.key, { producto_id: e.target.value, costo_unitario: Number(p?.costo_actual ?? p?.costo_ultima_compra ?? 0) }); }} required><option value="">Seleccionar producto</option>{productos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></td>
+                  <td><select value={l.producto_id} onChange={(e) => { const p = productos.find((x) => x.id === e.target.value); const costo = Number(p?.costo_actual ?? p?.costo_ultima_compra ?? 0); const precio = Number(p?.precio_venta ?? 0); const margen = Number(p?.margen_porcentaje ?? (costo > 0 && precio > 0 ? ((precio-costo)/costo)*100 : 0)); editarLinea(l.key, { producto_id: e.target.value, costo_unitario: costo, margen_porcentaje: margen, precio_venta: precio }); }} required><option value="">Seleccionar producto</option>{productos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></td>
                   <td><input type="number" min="0.001" step="0.001" value={l.cantidad} onChange={(e) => editarLinea(l.key, { cantidad: Number(e.target.value) })} /></td>
                   <td><input type="number" min="0" step="0.01" value={l.costo_unitario || ""} onFocus={(e) => e.currentTarget.select()} onChange={(e) => editarLinea(l.key, { costo_unitario: e.target.value === "" ? 0 : Number(e.target.value) })} /></td>
-                  <td>$ {(l.cantidad * l.costo_unitario).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
+                  <td><input type="number" step="0.01" value={l.margen_porcentaje ?? 0} onChange={(e) => { const margen=Number(e.target.value); editarLinea(l.key,{margen_porcentaje:margen,precio_venta:Math.round(l.costo_unitario*(1+margen/100)*100)/100}); }} /></td><td><input type="number" min="0" step="0.01" value={l.precio_venta || ""} onChange={(e) => { const precio=e.target.value===""?0:Number(e.target.value); editarLinea(l.key,{precio_venta:precio,margen_porcentaje:l.costo_unitario>0?((precio-l.costo_unitario)/l.costo_unitario)*100:0}); }} /></td><td>$ {(l.cantidad * l.costo_unitario).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
                   <td><button type="button" className="admin-button danger-button" disabled={lineas.length === 1} onClick={() => setLineas((actual) => actual.filter((x) => x.key !== l.key))}>Quitar</button></td>
                 </tr>
               ))}
@@ -630,7 +647,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
         {loading ? <p>Cargando…</p> : compras.length === 0 ? <p>Sin compras confirmadas.</p> : (
           <div className="table-wrapper">
             <table className="products-table">
-              <thead><tr><th>Fecha</th><th>Proveedor</th><th>Comprobante</th><th>Total</th><th>Estado</th></tr></thead>
+              <thead><tr><th>Fecha</th><th>Proveedor</th><th>Comprobante</th><th>Origen</th><th>Total</th><th>Estado</th><th>Acciones</th></tr></thead>
               <tbody>
                 {compras.map((compra) => (
                   <tr key={compra.id}>
