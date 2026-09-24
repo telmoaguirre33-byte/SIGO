@@ -263,7 +263,7 @@ function validarProductoFacturaContraMaestro(item: FacturaItemIA, productos: Pro
       normalizarCodigoMaestro(existente.codigo_interno),
     ].filter(Boolean));
     if (codigosExistentes.size > 0 && !codigosFactura.some((codigo) => codigosExistentes.has(codigo))) {
-      throw new Error(`La línea “${item.descripcion}” tiene el mismo nombre que un producto existente pero un código diferente. Confirmá la identidad manualmente antes de ingresar stock.`);
+      // No abortar el análisis: la revisión de Compra IA permite vincular explícitamente esta línea al producto existente.\n      // La asociación definitiva se valida antes de preparar/confirmar; hasta entonces no se modifica stock ni el maestro.
     }
   }
 }
