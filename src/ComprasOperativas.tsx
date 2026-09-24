@@ -111,6 +111,8 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
   const [altaManualAbierta, setAltaManualAbierta] = useState(false);
   const [nuevoProductoManual, setNuevoProductoManual] = useState({ nombre:"", codigo:"", costo:"", margen:"", precio:"" });
   const [correccionFacturaAbierta, setCorreccionFacturaAbierta] = useState(false);
+  const [filtroRevisionIA, setFiltroRevisionIA] = useState<"todos"|"pendientes"|"nuevos"|"vinculados">("todos");
+  const [margenMasivoIA, setMargenMasivoIA] = useState("");
   const fotoRef = useRef<HTMLInputElement | null>(null);
   const archivoRef = useRef<HTMLInputElement | null>(null);
   const idempotencyKeyRef = useRef(nuevaClave());
@@ -548,6 +550,17 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
             </div>}
             <div className="form-actions" style={{justifyContent:"flex-start",marginTop:12}}><button type="button" className="admin-button" onClick={()=>setCorreccionFacturaAbierta((v)=>!v)}>🔎 {correccionFacturaAbierta ? "Cerrar corrección" : "REVISAR / CORREGIR"}</button>{correccionFacturaAbierta && <button type="button" className="primary-button" onClick={guardarBorradorIA}>💾 GUARDAR CAMBIOS</button>}</div>
             {correccionFacturaAbierta && <div className="form-actions" style={{justifyContent:"flex-start",marginTop:10}}><button type="button" className="admin-button" onClick={()=>setFacturaIA((actual)=>actual?({...actual,items:[...actual.items,{descripcion:"Producto agregado manualmente",codigo:null,codigo_barras:null,cantidad:1,costo_unitario:0,total_linea:0,confianza:1}] as FacturaItemIA[]}):actual)}>➕ AGREGAR PRODUCTO FALTANTE</button></div>}
+            <div className="panel" style={{marginTop:12}}>
+              <strong>Centro de revisión</strong>
+              <p style={{margin:"8px 0"}}>🟢 {facturaIA.items.length-pendientesFactura.length} listos · 🟡 {pendientesFactura.length} pendientes · 🔵 {facturaIA.items.filter((item,index)=>!productoFactura(item,index)).length} nuevos · 🔗 {facturaIA.items.filter((item,index)=>Boolean(vinculosFactura[index])).length} vinculados</p>
+              <div className="form-actions" style={{justifyContent:"flex-start"}}>
+                {(["todos","pendientes","nuevos","vinculados"] as const).map((f)=><button key={f} type="button" className={filtroRevisionIA===f?"primary-button":"admin-button"} onClick={()=>setFiltroRevisionIA(f)}>{f.toUpperCase()}</button>)}
+              </div>
+              <div className="form-actions" style={{justifyContent:"flex-start",marginTop:8}}>
+                <input type="number" step="0.01" value={margenMasivoIA} onChange={e=>setMargenMasivoIA(e.target.value)} placeholder="% margen para productos nuevos" />
+                <button type="button" className="admin-button" disabled={margenMasivoIA===""} onClick={()=>{const m=Number(margenMasivoIA);if(!Number.isFinite(m)||m<0)return;const precios={...preciosVentaFactura},margenes={...margenesFactura};facturaIA.items.forEach((item,index)=>{if(!productoFactura(item,index)){margenes[index]=String(m);precios[index]=String(Math.round(Number(item.costo_unitario||0)*(1+m/100)*100)/100);}});setMargenesFactura(margenes);setPreciosVentaFactura(precios);setCompraPreparadaIA(null);}}>APLICAR MARGEN A NUEVOS</button>
+              </div>
+            </div>
             {pendientesFactura.length > 0 && <div className="panel" role="alert" style={{marginTop:12,border:"1px solid #f59e0b",background:"#fffbeb"}}>
               <h4 style={{marginTop:0}}>⚠️ NO SE PUEDE PREPARAR LA COMPRA</h4>
               <p>{pendientesFactura.length} producto{pendientesFactura.length === 1 ? "" : "s"} pendiente{pendientesFactura.length === 1 ? "" : "s"}:</p>
@@ -559,6 +572,10 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
                 <thead><tr><th>Producto leído</th><th>Código</th><th>Cant.</th><th>Costo unit.</th><th>Precio venta</th><th>Confianza</th><th>Estado</th></tr></thead>
                 <tbody>
                   {facturaIA.items.map((item, index) => {
+                    const esPendiente = pendientesFactura.some((p)=>p.index===index);
+                    const esNuevo = !productoFactura(item,index);
+                    const esVinculado = Boolean(vinculosFactura[index]);
+                    if ((filtroRevisionIA==="pendientes"&&!esPendiente)||(filtroRevisionIA==="nuevos"&&!esNuevo)||(filtroRevisionIA==="vinculados"&&!esVinculado)) return null;
                     const existente = productoFactura(item, index);
                     const precioExistente = Number(existente?.precio_venta ?? 0);
                     const costoAnterior = Number(existente?.costo_actual ?? existente?.costo_ultima_compra ?? 0);
