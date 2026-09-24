@@ -80,6 +80,8 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
   const [codigosInternosFactura, setCodigosInternosFactura] = useState<Record<number, string>>({});
   const [revisionFacturaAbierta, setRevisionFacturaAbierta] = useState(false);
   const [busquedaManual, setBusquedaManual] = useState("");
+  const [altaManualAbierta, setAltaManualAbierta] = useState(false);
+  const [nuevoProductoManual, setNuevoProductoManual] = useState({ nombre:"", codigo:"", costo:"", margen:"", precio:"" });
   const [correccionFacturaAbierta, setCorreccionFacturaAbierta] = useState(false);
   const fotoRef = useRef<HTMLInputElement | null>(null);
   const archivoRef = useRef<HTMLInputElement | null>(null);
@@ -175,6 +177,20 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
     return productos.filter((p) => [p.nombre, p.codigo_interno, p.codigo_barras, p.marca, p.categoria]
       .filter(Boolean).some((v) => normalizar(String(v)).includes(q))).slice(0, 12);
   }, [busquedaManual, productos]);
+
+  async function crearProductoManual() {
+    const nombre=nuevoProductoManual.nombre.trim();
+    if(!nombre) { setError("Ingresá el nombre del producto nuevo."); return; }
+    const costo=Number(nuevoProductoManual.costo||0), margen=Number(nuevoProductoManual.margen||0);
+    const precio=Number(nuevoProductoManual.precio||0) || Math.round(costo*(1+margen/100)*100)/100;
+    setSaving(true); setError("");
+    try {
+      const id=await guardarProductoSigo({empresaId,nombre,codigoBarras:nuevoProductoManual.codigo.trim()||null,costoActual:costo,costoUltimaCompra:costo,precioVenta:precio,margenPorcentaje:margen,stockActual:0});
+      await cargar();
+      setLineas((actual)=>actual.length===1&&!actual[0].producto_id?[{...actual[0],producto_id:id,costo_unitario:costo,margen_porcentaje:margen,precio_venta:precio}]:[...actual,{key:nuevaClave(),producto_id:id,cantidad:1,costo_unitario:costo,margen_porcentaje:margen,precio_venta:precio}]);
+      setNuevoProductoManual({nombre:"",codigo:"",costo:"",margen:"",precio:""}); setAltaManualAbierta(false); setBusquedaManual("");
+    } catch(err){setError(err instanceof Error?err.message:"No se pudo crear el producto.");} finally {setSaving(false);}
+  }
 
   function seleccionarBusquedaManual(producto: ProductoSigo) {
     agregarProductoEscaneado(producto as BarcodeProduct);
@@ -593,7 +609,8 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
                 ))}
               </div>
             )}
-            {busquedaManual.trim() && resultadosBusquedaManual.length === 0 && <small style={{display:"block",marginTop:6}}>Sin coincidencias por nombre o código.</small>}
+            {busquedaManual.trim() && resultadosBusquedaManual.length === 0 && <div style={{marginTop:6}}><small>Sin coincidencias por nombre o código.</small> <button type="button" className="admin-button" onClick={()=>{setAltaManualAbierta(true);setNuevoProductoManual((v)=>({...v,nombre:busquedaManual}));}}>➕ CREAR PRODUCTO NUEVO</button></div>}
+            {altaManualAbierta && <div className="panel" style={{marginTop:10}}><h4>Nuevo producto</h4><div className="form-grid"><div className="form-group"><label>Nombre</label><input value={nuevoProductoManual.nombre} onChange={e=>setNuevoProductoManual(v=>({...v,nombre:e.target.value}))}/></div><div className="form-group"><label>Código / EAN</label><input value={nuevoProductoManual.codigo} onChange={e=>setNuevoProductoManual(v=>({...v,codigo:e.target.value}))}/></div><div className="form-group"><label>Costo</label><input type="number" value={nuevoProductoManual.costo} onChange={e=>setNuevoProductoManual(v=>({...v,costo:e.target.value}))}/></div><div className="form-group"><label>% margen</label><input type="number" value={nuevoProductoManual.margen} onChange={e=>{const margen=e.target.value,costo=Number(nuevoProductoManual.costo||0);setNuevoProductoManual(v=>({...v,margen,precio:costo?String(Math.round(costo*(1+Number(margen)/100)*100)/100):v.precio}));}}/></div><div className="form-group"><label>Precio al público</label><input type="number" value={nuevoProductoManual.precio} onChange={e=>setNuevoProductoManual(v=>({...v,precio:e.target.value}))}/></div></div><div className="form-actions"><button type="button" className="primary-button" disabled={saving} onClick={crearProductoManual}>Crear y agregar</button><button type="button" className="admin-button" onClick={()=>setAltaManualAbierta(false)}>Cancelar</button></div></div>}
           </div>
         </div>
 
