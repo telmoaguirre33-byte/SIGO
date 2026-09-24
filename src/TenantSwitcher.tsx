@@ -11,6 +11,23 @@ import { supabase } from "./supabase";
 
 type TenantState = "loading" | "ready" | "empty" | "error";
 
+type ContextoCargado = { userId: string; empresa: EmpresaOperativa | null };
+
+function mismaEmpresa(a: EmpresaOperativa | null, b: EmpresaOperativa | null) {
+  if (!a || !b) return a === b;
+  return a.empresa_id === b.empresa_id && a.rol === b.rol
+    && a.nombre === b.nombre && a.empresa_nombre === b.empresa_nombre
+    && a.razon_social === b.razon_social;
+}
+
+function esErrorDeConexion(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const e = error as { status?: number; name?: string; message?: string };
+  if (e.status === 401 || e.status === 403) return false;
+  return e.name === "AuthRetryableFetchError" || [502, 503, 504].includes(e.status ?? 0)
+    || /failed to fetch|networkerror|network request failed|load failed|fetch failed/i.test(e.message ?? "");
+}
+
 type Props = {
   value?: string | null;
   onChange: (empresa: EmpresaOperativa | null) => void;
@@ -24,27 +41,44 @@ export default function TenantSwitcher({ value, onChange, onStateChange, disable
   const [error, setError] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const requestRef = useRef(0);
+  const contextoRef = useRef<ContextoCargado | null>(null);
+  const [errorActualizacion, setErrorActualizacion] = useState(false);
 
   const load = useCallback(async () => {
     const requestId = ++requestRef.current;
-    setLoading(true);
+    const contextoAnterior = contextoRef.current;
+    const conservarPantalla = Boolean(contextoAnterior?.empresa && contextoAnterior.empresa.empresa_id === value);
+    // Cámara/galería ocultan la página en Android. Revalidar no debe desmontar
+    // Compra IA ni destruir el archivo seleccionado o su análisis en curso.
+    if (!conservarPantalla) {
+      setLoading(true);
+      onStateChange?.("loading");
+    }
     setError(false);
-    onStateChange?.("loading");
+    setErrorActualizacion(false);
 
     try {
       const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (requestRef.current !== requestId) return;
       if (authError) throw authError;
       const currentUser = authData.user ?? null;
       const currentUserId = currentUser?.id ?? null;
       if (!currentUserId) throw new Error("Sesión no disponible para cargar empresas.");
 
+      const cambioUsuario = Boolean(contextoAnterior && contextoAnterior.userId !== currentUserId);
+      if (cambioUsuario) {
+        contextoRef.current = null;
+        setEmpresas([]);
+        onChange(null);
+        onStateChange?.("loading");
+      }
       let disponibles = await cargarMisEmpresas();
       if (requestRef.current !== requestId) return;
 
       // La empresa sigue siendo el contenedor técnico que separa datos, pero ya no bloquea el acceso.
       // Si el usuario autenticado todavía no tiene ninguna, SIGO crea un espacio operativo mínimo
       // automáticamente y continúa. Luego el nombre/datos de empresa se pueden editar normalmente.
-      if (disponibles.length === 0) {
+      if (disponibles.length === 0 && !contextoAnterior) {
         const metadataNombre = String(currentUser?.user_metadata?.sigo_empresa_nombre ?? "").trim();
         const emailNombre = String(currentUser?.email ?? "").split("@")[0]?.trim() ?? "";
         const nombreInicial = metadataNombre || emailNombre || "Mi negocio";
@@ -66,15 +100,26 @@ export default function TenantSwitcher({ value, onChange, onStateChange, disable
         if (metadataError) console.warn("No se pudo limpiar el nombre pendiente de empresa", metadataError);
       }
 
+      if (requestRef.current !== requestId) return;
       setUserId(currentUserId);
       setEmpresas(disponibles);
-      const preferida = value ?? leerEmpresaActivaGuardada(currentUserId);
+      const preferida = cambioUsuario ? leerEmpresaActivaGuardada(currentUserId) : value ?? leerEmpresaActivaGuardada(currentUserId);
       const activa = resolverEmpresaActiva(disponibles, preferida, currentUserId);
-      onChange(activa);
+      const mismoContexto = contextoAnterior?.userId === currentUserId
+        && mismaEmpresa(contextoAnterior.empresa, activa) && value === activa?.empresa_id;
+      contextoRef.current = { userId: currentUserId, empresa: activa };
+      // SigoRoot reinicia el workspace cuando recibe onChange: emitir sólo si
+      // cambió realmente la empresa, sus datos o permisos, no al volver al foco.
+      if (!mismoContexto) onChange(activa);
       onStateChange?.(activa ? "ready" : "empty");
     } catch (e) {
       if (requestRef.current !== requestId) return;
+      if (conservarPantalla && contextoRef.current === contextoAnterior && esErrorDeConexion(e)) {
+        setErrorActualizacion(true);
+        return;
+      }
       console.error(e);
+      contextoRef.current = null;
       setEmpresas([]);
       setError(true);
       onChange(null);
@@ -106,12 +151,15 @@ export default function TenantSwitcher({ value, onChange, onStateChange, disable
 
   function selectEmpresa(empresaId: string) {
     const empresa = empresas.find((item) => item.empresa_id === empresaId) ?? null;
+    requestRef.current += 1;
+    contextoRef.current = userId ? { userId, empresa } : null;
     guardarEmpresaActiva(empresa?.empresa_id ?? null, userId);
     onChange(empresa);
   }
 
   async function cerrarSesion() {
     requestRef.current += 1;
+    contextoRef.current = null;
     guardarEmpresaActiva(null, userId);
     await supabase.auth.signOut();
   }
@@ -136,6 +184,7 @@ export default function TenantSwitcher({ value, onChange, onStateChange, disable
           ))}
         </select>
       </label>
+      {errorActualizacion && <span role="status">No pudimos actualizar la conexión. Tu pantalla sigue abierta. Tocá Actualizar para reintentar.</span>}
       <div className="sigo-company-actions">
         <button type="button" disabled={disabled} onClick={() => void load()} className="sigo-company-button" aria-label="Actualizar empresa">
           <span aria-hidden="true">↻</span><span>Actualizar</span>
