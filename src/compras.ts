@@ -346,6 +346,7 @@ export async function confirmarCompraSigo(input: {
   tipoComprobante?: string;
   numeroComprobante?: string;
   idempotencyKey: string;
+  origen?: "manual" | "ia";
 }): Promise<string> {
   const empresaId = input.empresaId?.trim() ?? "";
   const proveedorId = input.proveedorId?.trim() ?? "";
@@ -402,6 +403,9 @@ export async function confirmarCompraSigo(input: {
   if (error) throw new Error(mensajeCompra(error.message || "No se pudo confirmar la compra."));
   const compraId = String(data ?? "").trim();
   if (!compraId) throw new Error("La compra no devolvió comprobante. No la repitas hasta verificar su estado.");
+  const origen = input.origen === "ia" ? "ia" : "manual";
+  const { error: origenError } = await supabase.from("compras_sigo").update({ origen }).eq("id", compraId).eq("empresa_id", empresaId);
+  if (origenError) console.warn("No se pudo registrar origen de compra", origenError.message);
   return compraId;
 }
 
