@@ -113,6 +113,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
   const [correccionFacturaAbierta, setCorreccionFacturaAbierta] = useState(false);
   const [filtroRevisionIA, setFiltroRevisionIA] = useState<"todos"|"pendientes"|"nuevos"|"vinculados">("todos");
   const [margenMasivoIA, setMargenMasivoIA] = useState("");
+  const [busquedasVinculoIA, setBusquedasVinculoIA] = useState<Record<number,string>>({});
   const fotoRef = useRef<HTMLInputElement | null>(null);
   const archivoRef = useRef<HTMLInputElement | null>(null);
   const idempotencyKeyRef = useRef(nuevaClave());
@@ -191,8 +192,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
   function guardarBorradorIA() {
     if (!facturaIA) return;
     localStorage.setItem(borradorKey, JSON.stringify({facturaIA,preciosVentaFactura,margenesFactura,codigosBarrasFactura,codigosInternosFactura,vinculosFactura,compraPreparadaIA,guardadoEn:new Date().toISOString()}));
-    setFacturaMensaje("💾 Borrador guardado. Podés salir y continuar después sin perder la revisión.");
-    setCorreccionFacturaAbierta(false);
+    setFacturaMensaje("✓ Guardado. Podés seguir editando o salir cuando quieras.");
   }
 
   const total = useMemo(
@@ -249,11 +249,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
         if (!Number.isFinite(precio) || precio <= 0) motivos.push("Falta un precio al público válido.");
         if (!Number.isFinite(margen) || margen < 0) motivos.push("Falta un margen de ganancia válido.");
       }
-      if (item.total_linea != null && Number.isFinite(Number(item.total_linea)) && cantidad > 0 && costo > 0) {
-        const calculado = cantidad * costo;
-        const diferencia = Math.abs(Number(item.total_linea) - calculado);
-        if (diferencia > Math.max(10, calculado * 0.15)) motivos.push("Cantidad × costo no coincide con el total de línea leído.");
-      }
+      // Diferencias entre neto/impuestos se muestran como información de revisión, no bloquean Guardar.
       return motivos.length ? [{ index, producto: nombre || `Producto ${index + 1}`, motivos }] : [];
     });
   }, [facturaIA, productos, vinculosFactura, codigosBarrasFactura, codigosInternosFactura, preciosVentaFactura, margenesFactura]);
@@ -557,8 +553,8 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
                 {(["todos","pendientes","nuevos","vinculados"] as const).map((f)=><button key={f} type="button" className={filtroRevisionIA===f?"primary-button":"admin-button"} onClick={()=>setFiltroRevisionIA(f)}>{f.toUpperCase()}</button>)}
               </div>
               <div className="form-actions" style={{justifyContent:"flex-start",marginTop:8}}>
-                <input type="number" step="0.01" value={margenMasivoIA} onChange={e=>setMargenMasivoIA(e.target.value)} placeholder="% margen para productos nuevos" />
-                <button type="button" className="admin-button" disabled={margenMasivoIA===""} onClick={()=>{const m=Number(margenMasivoIA);if(!Number.isFinite(m)||m<0)return;const precios={...preciosVentaFactura},margenes={...margenesFactura};facturaIA.items.forEach((item,index)=>{if(!productoFactura(item,index)){margenes[index]=String(m);precios[index]=String(Math.round(Number(item.costo_unitario||0)*(1+m/100)*100)/100);}});setMargenesFactura(margenes);setPreciosVentaFactura(precios);setCompraPreparadaIA(null);}}>APLICAR MARGEN A NUEVOS</button>
+                <input type="number" step="0.01" value={margenMasivoIA} onChange={e=>setMargenMasivoIA(e.target.value)} placeholder="% margen para todos" />
+                <button type="button" className="admin-button" disabled={margenMasivoIA===""} onClick={()=>{const m=Number(margenMasivoIA);if(!Number.isFinite(m)||m<0)return;const precios={...preciosVentaFactura},margenes={...margenesFactura};facturaIA.items.forEach((item,index)=>{margenes[index]=String(m);precios[index]=String(Math.round(Number(item.costo_unitario||0)*(1+m/100)*100)/100);});setMargenesFactura(margenes);setPreciosVentaFactura(precios);setCompraPreparadaIA(null);}}>APLICAR MARGEN A TODOS</button>
               </div>
             </div>
             {pendientesFactura.length > 0 && <div className="panel" role="alert" style={{marginTop:12,border:"1px solid #f59e0b",background:"#fffbeb"}}>
@@ -587,13 +583,12 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
                         <td>{correccionFacturaAbierta ? <input value={item.descripcion} onChange={(e)=>{setCompraPreparadaIA(null);setFacturaIA((actual)=>actual ? ({...actual,items:actual.items.map((x,i)=>i===index?{...x,descripcion:e.target.value}:x)}) : actual);}} aria-label={`Nombre para producto ${index + 1}`} /> : <strong>{item.descripcion}</strong>}<small style={{display:"block"}}>{existente ? `Stock: ${stockAnterior} → ${stockAnterior + item.cantidad}` : `Nuevo · ingresan ${item.cantidad} unidades`}</small></td>
                         <td>{existente ? (item.codigo_barras ?? item.codigo ?? "-") : <div style={{display:"grid",gap:6}}>
                           <strong style={{color:"#b45309"}}>⚠️ PRODUCTO NUEVO</strong>
-                          <select value={vinculosFactura[index] ?? ""} onChange={(e)=>{setCompraPreparadaIA(null);setVinculosFactura(a=>({...a,[index]:e.target.value}));}}>
-                            <option value="">Crear como producto nuevo</option>
-                            {productos.map((p)=><option key={p.id} value={p.id}>Vincular existente: {p.nombre}{p.codigo_barras ? ` · ${p.codigo_barras}` : ""}</option>)}
-                          </select>
+                          <input value={busquedasVinculoIA[index] ?? ""} onChange={(e)=>setBusquedasVinculoIA(a=>({...a,[index]:e.target.value}))} placeholder="Buscar producto existente por nombre, código o EAN" />
+                          {(busquedasVinculoIA[index] ?? "").trim() && <div style={{display:"grid",gap:4}}>{productos.filter((p)=>[p.nombre,p.codigo_interno,p.codigo_barras].filter(Boolean).some((v)=>normalizar(String(v)).includes(normalizar(busquedasVinculoIA[index])))).slice(0,8).map((p)=><button type="button" className="admin-button" key={p.id} onClick={()=>{setCompraPreparadaIA(null);setVinculosFactura(a=>({...a,[index]:p.id}));setBusquedasVinculoIA(a=>({...a,[index]:""}));}}>🔗 {p.nombre}{p.codigo_barras ? ` · ${p.codigo_barras}` : ""}</button>)}</div>}
+                          {vinculosFactura[index] && <small>✓ Vinculado a {productos.find((p)=>p.id===vinculosFactura[index])?.nombre}</small>}
                           <input value={codigosBarrasFactura[index] ?? item.codigo_barras ?? ""} onChange={(e)=>{setCompraPreparadaIA(null);setCodigosBarrasFactura(a=>({...a,[index]:e.target.value}));}} placeholder="Código de barras / EAN (recomendado)" aria-label={`Código de barras para ${item.descripcion}`} />
                           <input value={codigosInternosFactura[index] ?? item.codigo ?? ""} onChange={(e)=>{setCompraPreparadaIA(null);setCodigosInternosFactura(a=>({...a,[index]:e.target.value}));}} placeholder="Código interno (opcional)" aria-label={`Código interno para ${item.descripcion}`} />
-                          {!((codigosBarrasFactura[index] ?? item.codigo_barras ?? "").trim()) && <small style={{color:"#b45309"}}>Falta código de barras. Podés completarlo ahora o continuar sin EAN.</small>}
+                          {!((codigosBarrasFactura[index] ?? item.codigo_barras ?? "").trim()) && <small style={{color:"#b45309"}}>EAN opcional · podés continuar sin código de barras.</small>}
                         </div>}</td>
                         <td>{correccionFacturaAbierta ? <input type="number" min="0.001" step="0.001" value={item.cantidad} onChange={(e)=>{const cantidad=Number(e.target.value);setCompraPreparadaIA(null);setFacturaIA((actual)=>actual ? ({...actual,items:actual.items.map((x,i)=>i===index?{...x,cantidad,total_linea:cantidad*Number(x.costo_unitario)}:x)}) : actual);}} aria-label={`Cantidad para ${item.descripcion}`} /> : <strong>{item.cantidad}</strong>}<small style={{display:"block"}}>unidades vendibles</small></td>
                         <td><span style={{textDecoration:costoAnterior>0?"line-through":"none",opacity:.65}}>{costoAnterior>0?`$ ${costoAnterior.toLocaleString("es-AR",{minimumFractionDigits:2})}`:""}</span>{correccionFacturaAbierta ? <input type="number" min="0" step="0.01" value={item.costo_unitario} onChange={(e)=>{const costo=Number(e.target.value);setCompraPreparadaIA(null);setFacturaIA((actual)=>actual ? ({...actual,items:actual.items.map((x,i)=>i===index?{...x,costo_unitario:costo,total_linea:Number(x.cantidad)*costo}:x)}) : actual);const margen=Number(margenesFactura[index]);if(!existente&&costo>0&&Number.isFinite(margen))setPreciosVentaFactura((actual)=>({...actual,[index]:String(Math.round(costo*(1+margen/100)*100)/100)}));}} aria-label={`Costo unitario para ${item.descripcion}`} /> : <strong style={{display:"block"}}>→ $ {item.costo_unitario.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</strong>}<small style={{display:"block"}}>Total línea: $ {(item.total_linea ?? item.cantidad*item.costo_unitario).toLocaleString("es-AR",{minimumFractionDigits:2})}</small></td>
