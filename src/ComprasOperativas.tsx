@@ -263,7 +263,13 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
     window.setTimeout(() => document.getElementById(`factura-item-${primero.index}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
   }
 
-  function editarLinea(key: string, patch: Partial<Linea>) {
+function descartarItemFactura(index: number) {
+    setFacturaIA((actual)=>actual ? ({...actual,items:actual.items.filter((_,i)=>i!==index)}) : actual);
+    const compactar=(obj:Record<number,string>)=>Object.fromEntries(Object.entries(obj).flatMap(([k,v])=>{const n=Number(k);return n===index?[]:[[n>index?n-1:n,v]];}));
+    setPreciosVentaFactura(compactar); setMargenesFactura(compactar); setCodigosBarrasFactura(compactar); setCodigosInternosFactura(compactar); setVinculosFactura(compactar); setBusquedasVinculoIA(compactar); setCompraPreparadaIA(null);
+  }
+
+    function editarLinea(key: string, patch: Partial<Linea>) {
     setLineas((actual) => actual.map((l) => l.key === key ? { ...l, ...patch } : l));
   }
 
