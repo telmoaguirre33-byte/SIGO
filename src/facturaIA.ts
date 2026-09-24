@@ -378,9 +378,8 @@ function validarFactura(data: unknown): FacturaCompraIA {
     const tolerancia = Math.max(2, calculado * 0.03);
     const toleranciaCritica = Math.max(10, calculado * 0.15);
     if (diferencia > toleranciaCritica) {
-      throw new Error(`La línea “${item.descripcion}” tiene una diferencia crítica entre cantidad × costo y total leído. Revisala manualmente antes de ingresar stock.`);
-    }
-    if (diferencia > tolerancia) {
+      advertenciasCliente.push(`CRÍTICO · Revisar ${item.descripcion}: cantidad × costo unitario no coincide con el total de línea leído. Corregí esta línea antes de preparar la compra.`);
+    } else if (diferencia > tolerancia) {
       advertenciasCliente.push(`Revisar ${item.descripcion}: cantidad × costo unitario no coincide con el total de línea leído.`);
     }
   }
