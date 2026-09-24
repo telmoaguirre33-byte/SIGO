@@ -16,7 +16,7 @@ import {
   type VerificacionCompraSigo,
 } from "./compras";
 
-type Linea = CompraItemInput & { key: string };
+type Linea = CompraItemInput & { key: string; margen_porcentaje?: number; precio_venta?: number };
 
 type UltimaConciliacion = {
   compraId: string;
@@ -29,7 +29,7 @@ function nuevaClave() {
 }
 
 function nuevaLinea(): Linea {
-  return { key: nuevaClave(), producto_id: "", cantidad: 1, costo_unitario: 0 };
+  return { key: nuevaClave(), producto_id: "", cantidad: 1, costo_unitario: 0, margen_porcentaje: 0, precio_venta: 0 };
 }
 
 function normalizar(value?: string | null) {
@@ -599,14 +599,14 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
 
         <div className="table-wrapper" style={{ marginTop: 18 }}>
           <table className="products-table">
-            <thead><tr><th>Producto</th><th>Cantidad</th><th>Costo unitario</th><th>Subtotal</th><th></th></tr></thead>
+            <thead><tr><th>Producto</th><th>Cantidad</th><th>Costo unitario</th><th>% margen</th><th>Precio al público</th><th>Subtotal</th><th></th></tr></thead>
             <tbody>
               {lineas.map((l) => (
                 <tr key={l.key}>
-                  <td><select value={l.producto_id} onChange={(e) => { const p = productos.find((x) => x.id === e.target.value); editarLinea(l.key, { producto_id: e.target.value, costo_unitario: Number(p?.costo_actual ?? p?.costo_ultima_compra ?? 0) }); }} required><option value="">Seleccionar producto</option>{productos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></td>
+                  <td><select value={l.producto_id} onChange={(e) => { const p = productos.find((x) => x.id === e.target.value); const costo = Number(p?.costo_actual ?? p?.costo_ultima_compra ?? 0); const precio = Number(p?.precio_venta ?? 0); const margen = Number(p?.margen_porcentaje ?? (costo > 0 && precio > 0 ? ((precio-costo)/costo)*100 : 0)); editarLinea(l.key, { producto_id: e.target.value, costo_unitario: costo, margen_porcentaje: margen, precio_venta: precio }); }} required><option value="">Seleccionar producto</option>{productos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></td>
                   <td><input type="number" min="0.001" step="0.001" value={l.cantidad} onChange={(e) => editarLinea(l.key, { cantidad: Number(e.target.value) })} /></td>
                   <td><input type="number" min="0" step="0.01" value={l.costo_unitario || ""} onFocus={(e) => e.currentTarget.select()} onChange={(e) => editarLinea(l.key, { costo_unitario: e.target.value === "" ? 0 : Number(e.target.value) })} /></td>
-                  <td>$ {(l.cantidad * l.costo_unitario).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
+                  <td><input type="number" step="0.01" value={l.margen_porcentaje ?? 0} onChange={(e) => { const margen=Number(e.target.value); editarLinea(l.key,{margen_porcentaje:margen,precio_venta:Math.round(l.costo_unitario*(1+margen/100)*100)/100}); }} /></td><td><input type="number" min="0" step="0.01" value={l.precio_venta || ""} onChange={(e) => { const precio=e.target.value===""?0:Number(e.target.value); editarLinea(l.key,{precio_venta:precio,margen_porcentaje:l.costo_unitario>0?((precio-l.costo_unitario)/l.costo_unitario)*100:0}); }} /></td><td>$ {(l.cantidad * l.costo_unitario).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
                   <td><button type="button" className="admin-button danger-button" disabled={lineas.length === 1} onClick={() => setLineas((actual) => actual.filter((x) => x.key !== l.key))}>Quitar</button></td>
                 </tr>
               ))}
@@ -630,7 +630,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
         {loading ? <p>Cargando…</p> : compras.length === 0 ? <p>Sin compras confirmadas.</p> : (
           <div className="table-wrapper">
             <table className="products-table">
-              <thead><tr><th>Fecha</th><th>Proveedor</th><th>Comprobante</th><th>Total</th><th>Estado</th></tr></thead>
+              <thead><tr><th>Fecha</th><th>Proveedor</th><th>Comprobante</th><th>Origen</th><th>Total</th><th>Estado</th><th>Acciones</th></tr></thead>
               <tbody>
                 {compras.map((compra) => (
                   <tr key={compra.id}>
