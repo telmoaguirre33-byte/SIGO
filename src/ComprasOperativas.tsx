@@ -90,6 +90,8 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
   const archivoRef = useRef<HTMLInputElement | null>(null);
   const idempotencyKeyRef = useRef(nuevaClave());
   const empresaActivaRef = useRef(empresaId);
+  const borradorCargadoRef = useRef(false);
+  const borradorKey = `sigo:compra-ia:borrador:${empresaId}`;
 
   async function cargar(targetEmpresaId = empresaId) {
     setLoading(true);
@@ -128,15 +130,43 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
     setNuevoProveedor("");
     setNuevoCuit("");
     setUltimaConciliacion(null);
-    setFacturaIA(null);
-    setFacturaMensaje("");
-    setPreciosVentaFactura({});
-    setCodigosBarrasFactura({});
-    setCodigosInternosFactura({});
+    borradorCargadoRef.current = false;
+    let restaurado = false;
+    try {
+      const raw = localStorage.getItem(`sigo:compra-ia:borrador:${empresaId}`);
+      if (raw) {
+        const b = JSON.parse(raw);
+        if (b?.facturaIA) {
+          setFacturaIA(b.facturaIA); setFacturaMensaje("📄 Compra IA en preparación recuperada.");
+          setPreciosVentaFactura(b.preciosVentaFactura ?? {}); setMargenesFactura(b.margenesFactura ?? {});
+          setCodigosBarrasFactura(b.codigosBarrasFactura ?? {}); setCodigosInternosFactura(b.codigosInternosFactura ?? {});
+          setVinculosFactura(b.vinculosFactura ?? {}); setRevisionFacturaAbierta(true);
+          restaurado = true;
+        }
+      }
+    } catch { localStorage.removeItem(`sigo:compra-ia:borrador:${empresaId}`); }
+    if (!restaurado) { setFacturaIA(null); setFacturaMensaje(""); setPreciosVentaFactura({}); setMargenesFactura({}); setCodigosBarrasFactura({}); setCodigosInternosFactura({}); setVinculosFactura({}); }
+    borradorCargadoRef.current = true;
     setError("");
     void cargar(empresaId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId]);
+
+  useEffect(() => {
+    if (!borradorCargadoRef.current || typeof localStorage === "undefined") return;
+    if (!facturaIA) return;
+    const timer = window.setTimeout(() => {
+      localStorage.setItem(borradorKey, JSON.stringify({facturaIA,preciosVentaFactura,margenesFactura,codigosBarrasFactura,codigosInternosFactura,vinculosFactura,guardadoEn:new Date().toISOString()}));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [borradorKey,facturaIA,preciosVentaFactura,margenesFactura,codigosBarrasFactura,codigosInternosFactura,vinculosFactura]);
+
+  function guardarBorradorIA() {
+    if (!facturaIA) return;
+    localStorage.setItem(borradorKey, JSON.stringify({facturaIA,preciosVentaFactura,margenesFactura,codigosBarrasFactura,codigosInternosFactura,vinculosFactura,guardadoEn:new Date().toISOString()}));
+    setFacturaMensaje("💾 Borrador guardado. Podés salir y continuar después sin perder la revisión.");
+    setCorreccionFacturaAbierta(false);
+  }
 
   const total = useMemo(
     () => lineas.reduce((sum, l) => sum + Number(l.cantidad || 0) * Number(l.costo_unitario || 0), 0),
@@ -514,7 +544,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
         <div className="form-actions" style={{justifyContent:"flex-start",marginTop:12,marginBottom:12}}>
           <button type="button" className="admin-button" disabled={!facturaIA || facturaProcesando} onClick={()=>setCorreccionFacturaAbierta(true)}>🔎 REVISAR / CORREGIR</button>
           <button type="button" className="primary-button" disabled={!facturaIA || facturaAplicando || facturaProcesando || saving || preciosFacturaPendientes > 0 || Boolean(facturaIA?.advertencias.some((a)=>a.startsWith("CRÍTICO")))} onClick={()=>void aplicarFacturaAnalizada()}>🛒 PREPARAR COMPRA</button>
-          <button type="button" className="admin-button danger-button" disabled={!facturaIA || facturaAplicando || facturaProcesando || saving} onClick={()=>{setFacturaIA(null);setRevisionFacturaAbierta(false);setCorreccionFacturaAbierta(false);setFacturaMensaje("");setPreciosVentaFactura({});setCodigosBarrasFactura({});setCodigosInternosFactura({});}}>❌ CANCELAR / DESCARTAR</button>
+          <button type="button" className="admin-button danger-button" disabled={!facturaIA || facturaAplicando || facturaProcesando || saving} onClick={()=>{localStorage.removeItem(borradorKey);setFacturaIA(null);setRevisionFacturaAbierta(false);setCorreccionFacturaAbierta(false);setFacturaMensaje("");setPreciosVentaFactura({});setMargenesFactura({});setCodigosBarrasFactura({});setCodigosInternosFactura({});setVinculosFactura({});}}>❌ CANCELAR / DESCARTAR</button>
         </div>
         {facturaIA && (
           <div style={{ marginTop: 16 }}>
@@ -527,7 +557,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
             {facturaIA.advertencias.length > 0 && <div style={{marginTop:12}}>
               {facturaIA.advertencias.map((a,i)=><p key={i} className={a.startsWith("CRÍTICO") ? "form-error" : ""} style={{fontWeight:a.startsWith("CRÍTICO")?800:600}}>⚠️ {a}</p>)}
             </div>}
-            <div className="form-actions" style={{justifyContent:"flex-start",marginTop:12}}><button type="button" className="admin-button" onClick={()=>setCorreccionFacturaAbierta((v)=>!v)}>🔎 {correccionFacturaAbierta ? "Cerrar corrección" : "REVISAR / CORREGIR"}</button>{correccionFacturaAbierta && <button type="button" className="primary-button" onClick={()=>{setCorreccionFacturaAbierta(false);setFacturaMensaje("Cambios guardados para esta revisión. No se modificó stock ni se confirmó la compra.");}}>💾 GUARDAR CAMBIOS</button>}</div>
+            <div className="form-actions" style={{justifyContent:"flex-start",marginTop:12}}><button type="button" className="admin-button" onClick={()=>setCorreccionFacturaAbierta((v)=>!v)}>🔎 {correccionFacturaAbierta ? "Cerrar corrección" : "REVISAR / CORREGIR"}</button>{correccionFacturaAbierta && <button type="button" className="primary-button" onClick={guardarBorradorIA}>💾 GUARDAR CAMBIOS</button>}</div>
             {correccionFacturaAbierta && <div className="form-actions" style={{justifyContent:"flex-start",marginTop:10}}><button type="button" className="admin-button" onClick={()=>setFacturaIA((actual)=>actual?({...actual,items:[...actual.items,{descripcion:"Producto agregado manualmente",codigo:null,codigo_barras:null,cantidad:1,costo_unitario:0,total_linea:0,confianza:1}] as FacturaItemIA[]}):actual)}>➕ AGREGAR PRODUCTO FALTANTE</button></div>}
             <div className="table-wrapper" style={{ marginTop: 14 }}>
               <table className="products-table">
