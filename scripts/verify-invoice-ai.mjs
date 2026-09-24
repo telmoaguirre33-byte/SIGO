@@ -15,9 +15,23 @@ for (const [file, required] of checks) {
 }
 
 const compras = fs.readFileSync('src/ComprasOperativas.tsx', 'utf8');
-if (!compras.includes('precioVenta,')) throw new Error('Invoice AI regression: new products must persist the operator-defined sale price');
+if (!compras.includes('precioVenta: existente ? precioExistente : Number(preciosVentaFactura[index])')) {
+  throw new Error('Invoice AI regression: prepared new products must persist the operator-defined sale price');
+}
+if (!compras.includes('margenPorcentaje: existente ? margenExistente : Number(margenesFactura[index])')) {
+  throw new Error('Invoice AI regression: prepared new products must persist the operator-defined margin');
+}
+if (!compras.includes('compraPreparadaIA,guardadoEn:')) {
+  throw new Error('Invoice AI regression: the prepared invoice must remain in the persistent draft');
+}
 if (!compras.includes('preciosFacturaPendientes > 0')) throw new Error('Invoice AI regression: invoice apply must remain blocked while a new product has no sale price');
-if (!compras.includes('stockActual: null')) throw new Error('Invoice AI regression: AI must not write stock before purchase confirmation');
+const prepararCompra = compras.slice(compras.indexOf('function aplicarFacturaAnalizada()'), compras.indexOf('async function confirmar('));
+if (!prepararCompra.includes('setCompraPreparadaIA(preparada)')) {
+  throw new Error('Invoice AI regression: prepare must stage the purchase locally before confirmation');
+}
+if (prepararCompra.includes('guardarProductoSigo(') || prepararCompra.includes('confirmarCompraSigo(')) {
+  throw new Error('Invoice AI regression: prepare must not create products or confirm a purchase');
+}
 
 const api = fs.readFileSync('api/compras/analizar-factura.js', 'utf8');
 const rejectsOversizedInvoice = api.includes('itemsRaw.length > MAX_INVOICE_ITEMS') && api.includes('TOO_MANY_INVOICE_ITEMS');
