@@ -27,9 +27,12 @@ export default function TenantSwitcher({ value, onChange, onStateChange, disable
 
   const load = useCallback(async () => {
     const requestId = ++requestRef.current;
-    setLoading(true);
+    const primeraCarga = empresas.length === 0;
+    if (primeraCarga) {
+      setLoading(true);
+      onStateChange?.("loading");
+    }
     setError(false);
-    onStateChange?.("loading");
 
     try {
       const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -70,7 +73,7 @@ export default function TenantSwitcher({ value, onChange, onStateChange, disable
       setEmpresas(disponibles);
       const preferida = value ?? leerEmpresaActivaGuardada(currentUserId);
       const activa = resolverEmpresaActiva(disponibles, preferida, currentUserId);
-      onChange(activa);
+      if (!value || value !== activa?.empresa_id) onChange(activa);
       onStateChange?.(activa ? "ready" : "empty");
     } catch (e) {
       if (requestRef.current !== requestId) return;
@@ -82,7 +85,7 @@ export default function TenantSwitcher({ value, onChange, onStateChange, disable
     } finally {
       if (requestRef.current === requestId) setLoading(false);
     }
-  }, [onChange, onStateChange, value]);
+  }, [onChange, onStateChange, value, empresas.length]);
 
   useEffect(() => {
     void load();
