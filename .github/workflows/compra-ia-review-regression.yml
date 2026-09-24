@@ -1,0 +1,45 @@
+name: Compra IA review regression
+
+on:
+  push:
+    branches: [feat/ia-review-center]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/ComprasOperativas.tsx'
+      - 'src/facturaIA.ts'
+      - 'api/compras/analizar-factura.js'
+      - 'scripts/verify-compra-ia-review.mjs'
+      - '.github/workflows/compra-ia-review-regression.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Archive only tracked source for isolated regression inspection
+        run: git archive --format=tar HEAD src api scripts package.json tsconfig.json vite.config.ts > /tmp/compra-ia-source.tar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compra-ia-source-${{ github.sha }}
+          path: /tmp/compra-ia-source.tar
+          retention-days: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+      - name: Targeted document and price regression tests
+        run: |
+          if [ -f scripts/verify-compra-ia-review.mjs ]; then
+            node scripts/verify-compra-ia-review.mjs
+          else
+            echo 'Targeted tests not implemented yet; source snapshot only.'
+            exit 1
+          fi
