@@ -548,7 +548,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
             {facturaIA.advertencias.some((a)=>!a.startsWith("CRÍTICO")) && <div style={{marginTop:12}}>
               {facturaIA.advertencias.filter((a)=>!a.startsWith("CRÍTICO")).map((a,i)=><p key={i} style={{fontWeight:600}}>⚠️ {a}</p>)}
             </div>}
-            <div className="form-actions" style={{justifyContent:"flex-start",marginTop:12}}><button type="button" className="admin-button" onClick={()=>setCorreccionFacturaAbierta((v)=>!v)}>🔎 {correccionFacturaAbierta ? "Cerrar corrección" : "REVISAR / CORREGIR"}</button>{correccionFacturaAbierta && <button type="button" className="primary-button" onClick={guardarBorradorIA}>💾 GUARDAR CAMBIOS</button>}</div>
+            <div className="form-actions" style={{justifyContent:"flex-start",marginTop:12}}><button type="button" className="admin-button" onClick={()=>setCorreccionFacturaAbierta((v)=>!v)}>🔎 {correccionFacturaAbierta ? "Cerrar corrección" : "REVISAR / CORREGIR"}</button><button type="button" className="primary-button" onClick={guardarBorradorIA}>💾 GUARDAR BORRADOR</button></div>
             {correccionFacturaAbierta && <div className="form-actions" style={{justifyContent:"flex-start",marginTop:10}}><button type="button" className="admin-button" onClick={()=>setFacturaIA((actual)=>actual?({...actual,items:[...actual.items,{descripcion:"Producto agregado manualmente",codigo:null,codigo_barras:null,cantidad:1,costo_unitario:0,total_linea:0,confianza:1}] as FacturaItemIA[]}):actual)}>➕ AGREGAR PRODUCTO FALTANTE</button></div>}
             <div className="panel" style={{marginTop:12}}>
               <strong>Centro de revisión</strong>
@@ -562,7 +562,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
               </div>
             </div>
             {pendientesFactura.length > 0 && <div className="panel" role="alert" style={{marginTop:12,border:"1px solid #f59e0b",background:"#fffbeb"}}>
-              <h4 style={{marginTop:0}}>⚠️ NO SE PUEDE PREPARAR LA COMPRA</h4>
+              <h4 style={{marginTop:0}}>⚠️ HAY PRODUCTOS PARA REVISAR ANTES DE PREPARAR</h4>
               <p>{pendientesFactura.length} producto{pendientesFactura.length === 1 ? "" : "s"} pendiente{pendientesFactura.length === 1 ? "" : "s"}:</p>
               {pendientesFactura.map((pendiente)=><p key={pendiente.index} style={{margin:"8px 0"}}><strong>{pendiente.producto}:</strong> {pendiente.motivos.join(" ")}</p>)}
               <button type="button" className="admin-button" onClick={irAlPrimerPendiente}>IR AL PRIMER PENDIENTE</button>
