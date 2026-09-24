@@ -76,6 +76,8 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
   const [facturaAplicando, setFacturaAplicando] = useState(false);
   const [facturaMensaje, setFacturaMensaje] = useState("");
   const [preciosVentaFactura, setPreciosVentaFactura] = useState<Record<number, string>>({});
+  const [margenesFactura, setMargenesFactura] = useState<Record<number, string>>({});
+  const [origenCompra, setOrigenCompra] = useState<"manual"|"ia">("manual");
   const [codigosBarrasFactura, setCodigosBarrasFactura] = useState<Record<number, string>>({});
   const [codigosInternosFactura, setCodigosInternosFactura] = useState<Record<number, string>>({});
   const [revisionFacturaAbierta, setRevisionFacturaAbierta] = useState(false);
@@ -388,6 +390,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
       if (facturaIA.tipo_comprobante) setTipo(facturaIA.tipo_comprobante);
       if (facturaIA.numero_comprobante) setNumero(facturaIA.numero_comprobante);
       idempotencyKeyRef.current = nuevaClave();
+      setOrigenCompra("ia");
       setFacturaMensaje(`Factura preparada: ${existentes} producto${existentes === 1 ? "" : "s"} existente${existentes === 1 ? "" : "s"} y ${creados} nuevo${creados === 1 ? "" : "s"} con precio de venta definido. Revisá las líneas y confirmá para ingresar el stock.`);
     } catch (err) {
       if (empresaActivaRef.current === empresaOperacion) {
@@ -437,6 +440,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
         tipoComprobante: tipo,
         numeroComprobante: numero,
         idempotencyKey: idempotencyKeyRef.current,
+        origen: origenCompra,
       });
       if (empresaActivaRef.current !== empresaOperacion) return;
 
@@ -447,6 +451,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
       setLineas([nuevaLinea()]);
       setNumero("");
       setFacturaIA(null);
+      setOrigenCompra("manual");
       setFacturaMensaje("");
       setPreciosVentaFactura({});
       await cargar(empresaOperacion);
@@ -545,15 +550,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
                         <td>
                           {existente
                             ? <div><span style={{textDecoration:"line-through",opacity:.65}}>{precioExistente>0?`$ ${precioExistente.toLocaleString("es-AR",{minimumFractionDigits:2})}`:"Sin precio"}</span><strong style={{display:"block",color:"#15803d"}}>→ $ {precioSugerido.toLocaleString("es-AR",{minimumFractionDigits:2})}</strong><small>Margen {margen.toLocaleString("es-AR",{maximumFractionDigits:2})}%</small></div>
-                            : <input
-                                type="number"
-                                min="0.01"
-                                step="0.01"
-                                value={preciosVentaFactura[index] ?? ""}
-                                onChange={(e) => setPreciosVentaFactura((actual) => ({ ...actual, [index]: e.target.value }))}
-                                placeholder="Obligatorio"
-                                aria-label={`Precio de venta para ${item.descripcion}`}
-                              />}
+                            : <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}><input type="number" step="0.01" value={margenesFactura[index] ?? ""} onChange={(e)=>{const m=e.target.value;setMargenesFactura(a=>({...a,[index]:m}));const costo=Number(item.costo_unitario||0);if(costo>0&&m!=="")setPreciosVentaFactura(a=>({...a,[index]:String(Math.round(costo*(1+Number(m)/100)*100)/100)}));}} placeholder="% margen" aria-label={`Margen para ${item.descripcion}`}/><input type="number" min="0.01" step="0.01" value={preciosVentaFactura[index] ?? ""} onChange={(e)=>{const precio=e.target.value;setPreciosVentaFactura(a=>({...a,[index]:precio}));const costo=Number(item.costo_unitario||0);if(costo>0&&precio!=="")setMargenesFactura(a=>({...a,[index]:String(((Number(precio)-costo)/costo)*100)}));}} placeholder="Precio público" aria-label={`Precio de venta para ${item.descripcion}`}/></div>}
                         </td>
                         <td>{Math.round(item.confianza * 100)}%</td>
                         <td>{existente ? `Existente: ${existente.nombre}` : "NUEVO · se creará recién al confirmar"}</td>
