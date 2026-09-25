@@ -10,41 +10,23 @@ function replaceOnce(from, to, label) {
 }
 
 replaceOnce(
-`  const empresaActivaRef = useRef(empresaId);`,
-`  const empresaActivaRef = useRef(empresaId);
-  const busquedaProductoRef = useRef<HTMLInputElement | null>(null);`,
-"search-ref",
-);
-
-replaceOnce(
 `  function vaciar() {`,
 `  function seguirAgregando() {
     if (confirmando) return;
     setBusquedaProducto("");
+    setBusquedaResetKey((key) => key + 1);
     setProductoBloqueado(null);
     setError("");
     setExito("");
     window.setTimeout(() => {
-      busquedaProductoRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      busquedaProductoRef.current?.focus();
+      const campo = document.querySelector<HTMLInputElement>(".barcode-entry-row input");
+      campo?.scrollIntoView({ behavior: "smooth", block: "center" });
+      campo?.focus();
     }, 0);
   }
 
   function vaciar() {`,
 "continue-shopping",
-);
-
-replaceOnce(
-`          <input
-            id="venta-buscar-producto"
-            type="search"
-            autoComplete="off"`,
-`          <input
-            ref={busquedaProductoRef}
-            id="venta-buscar-producto"
-            type="search"
-            autoComplete="off"`,
-"search-input-ref",
 );
 
 replaceOnce(
