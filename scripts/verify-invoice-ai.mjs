@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 const checks = [
-  ['src/ComprasOperativas.tsx', ['Leer comprobante de compra con IA', 'Tomar foto de factura', 'application/pdf', 'capture="environment"', '🛒 PREPARAR COMPRA', 'guardarProductoSigo', 'analizarFacturaCompraSigo', 'Confirmar compra e ingresar stock', 'preciosVentaFactura', 'preciosFacturaPendientes', 'PRODUCTO NUEVO', 'SIGO no los creará sin precio']],
+  ['src/ComprasOperativas.tsx', ['Leer comprobante de compra con IA', 'Tomar foto de comprobante', 'application/pdf', 'capture="environment"', '🛒 PREPARAR COMPRA', 'guardarProductoSigo', 'analizarFacturaCompraSigo', 'Confirmar compra e ingresar stock', 'preciosVentaFactura', 'preciosFacturaPendientes', 'PRODUCTO NUEVO', 'SIGO no los creará sin precio']],
   ['src/facturaIA.ts', ['analizarFacturaCompraSigo', '/api/compras/analizar-factura', 'TIPOS_IMAGEN_PERMITIDOS', 'CLIENT_TIMEOUT_MS', 'AbortController', 'AI_TIMEOUT', 'moneda !== "ARS"', 'validarFactura', 'cuitArgentinoValido', 'gtinValido', 'validarCodigosNoAmbiguos', 'AI_REVIEW_REQUIRED']],
   ['api/compras/analizar-factura.js', ['GEMINI_API_KEY', 'purchases.write', 'generativelanguage.googleapis.com', 'inlineData', 'application/pdf', 'No inventes datos', 'normalizarFacturaIA', 'MAX_INVOICE_ITEMS', 'NO_VALID_INVOICE_ITEMS', 'GEMINI_TIMEOUT_MS', 'AbortController', 'AI_TIMEOUT', 'normalizarMoneda', 'cuitArgentinoValido', 'gtinValido', 'detectarCodigosConflictivos', 'AI_REVIEW_REQUIRED', 'advertencias']],
   ['supabase/migrations/20260913023000_compras_identidad_documental_guard.sql', ['normalizar_identificador_comercial_sigo', 'trg_guard_compra_documento_normalizado_sigo', 'PURCHASE_DOCUMENT_DUPLICATE', 'trg_guard_proveedor_cuit_sigo', 'SUPPLIER_CUIT_DUPLICATE']],
@@ -15,11 +15,11 @@ for (const [file, required] of checks) {
 }
 
 const compras = fs.readFileSync('src/ComprasOperativas.tsx', 'utf8');
-if (!compras.includes('precioVenta: existente ? precioExistente : Number(preciosVentaFactura[index])')) {
-  throw new Error('Invoice AI regression: prepared new products must persist the operator-defined sale price');
+if (!compras.includes('precioVenta: precioRevisado.precio')) {
+  throw new Error('Invoice AI regression: prepared existing and new products must retain the operator-defined sale price');
 }
-if (!compras.includes('margenPorcentaje: existente ? margenExistente : Number(margenesFactura[index])')) {
-  throw new Error('Invoice AI regression: prepared new products must persist the operator-defined margin');
+if (!compras.includes('margenPorcentaje: precioRevisado.margen')) {
+  throw new Error('Invoice AI regression: prepared existing and new products must retain the operator-defined margin');
 }
 if (!compras.includes('compraPreparadaIA,guardadoEn:')) {
   throw new Error('Invoice AI regression: the prepared invoice must remain in the persistent draft');

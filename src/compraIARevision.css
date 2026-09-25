@@ -1,0 +1,25 @@
+.compra-ia-review input, .compra-ia-review textarea { box-sizing: border-box; max-width: 100%; }
+.compra-ia-review textarea { width: 100%; resize: vertical; font: inherit; }
+.compra-ia-precio { display: grid; gap: 10px; min-width: 160px; }
+.compra-ia-precio label { display: grid; gap: 4px; white-space: normal; }
+.compra-ia-check { display: flex; align-items: flex-start; gap: 8px; margin-top: 10px; white-space: normal; }
+.compra-ia-check input[type="checkbox"] { width: 20px; min-width: 20px; height: 20px; }
+@media (max-width: 640px) {
+  .compra-ia-review { min-width: 0; }
+  .compra-ia-table-wrapper { overflow: visible !important; }
+  .compra-ia-items, .compra-ia-items tbody, .compra-ia-items tr, .compra-ia-items td { display: block; width: 100%; min-width: 0; box-sizing: border-box; }
+  .compra-ia-items thead { display: none; }
+  .compra-ia-items tr { padding: 12px; margin-bottom: 16px; border: 1px solid #cbd5e1; border-radius: 12px; background: white; }
+  .compra-ia-items td { padding: 8px 0 !important; border: 0; white-space: normal; overflow-wrap: anywhere; }
+  .compra-ia-items td::before { display: block; font-weight: 700; margin-bottom: 6px; }
+  .compra-ia-items td:nth-child(1)::before { content: "Producto"; }
+  .compra-ia-items td:nth-child(2)::before { content: "Código / vinculación"; }
+  .compra-ia-items td:nth-child(3)::before { content: "Cantidad en unidades"; }
+  .compra-ia-items td:nth-child(4)::before { content: "Costo unitario"; }
+  .compra-ia-items td:nth-child(5)::before { content: "Porcentaje y precio de venta"; }
+  .compra-ia-items td:nth-child(6)::before { content: "Revisión de lectura"; }
+  .compra-ia-items td:nth-child(7)::before { content: "Estado"; }
+  .compra-ia-items input, .compra-ia-items select, .compra-ia-items button { width: 100%; min-width: 0; min-height: 44px; font-size: 16px; }
+  .compra-ia-items input[type="checkbox"] { width: 20px; min-height: 20px; }
+  .compra-ia-precio { min-width: 0; }
+}

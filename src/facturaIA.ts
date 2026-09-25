@@ -8,6 +8,8 @@ export type FacturaItemIA = {
   costo_unitario: number;
   total_linea: number | null;
   confianza: number;
+  requiere_revision?: boolean;
+  revisado?: boolean;
 };
 
 export type FacturaCompraIA = {
@@ -21,6 +23,9 @@ export type FacturaCompraIA = {
   moneda: string | null;
   total: number | null;
   confianza_general: number;
+  requiere_revision?: boolean;
+  revision_confirmada?: boolean;
+  referencia_borrador?: string;
   items: FacturaItemIA[];
   advertencias: string[];
 };
@@ -44,6 +49,7 @@ const MAX_PDF_BYTES = 4 * 1024 * 1024;
 const GTIN_LENGTHS = new Set([8, 12, 13, 14]);
 const MAX_INVOICE_ITEMS = 300;
 const CLIENT_TIMEOUT_MS = 55_000;
+const MAX_DOCUMENT_TEXT_LENGTH = 30_000;
 const MIN_GENERAL_CONFIDENCE_AUTO = 0.35;
 const MIN_LINE_CONFIDENCE_AUTO = 0.30;
 const PAGINA_MAESTROS_FACTURA = 1000;
@@ -325,12 +331,14 @@ function validarFactura(data: unknown): FacturaCompraIA {
       descripcion: String(item.descripcion).trim(),
       codigo: normalizarCodigoProveedor(item.codigo),
       codigo_barras: normalizarCodigoBarras(item.codigo_barras),
-      cantidad: Number(item.cantidad ?? 0),
-      costo_unitario: Number(item.costo_unitario ?? 0),
+      cantidad: Number.isFinite(Number(item.cantidad)) && Number(item.cantidad) > 0 ? Number(item.cantidad) : 0,
+      costo_unitario: Number.isFinite(Number(item.costo_unitario)) && Number(item.costo_unitario) > 0 ? Number(item.costo_unitario) : 0,
+      requiere_revision: Boolean(item.requiere_revision) || !Number.isFinite(Number(item.cantidad)) || Number(item.cantidad) <= 0 || !Number.isFinite(Number(item.costo_unitario)) || Number(item.costo_unitario) <= 0 || Number(item.confianza ?? 0) < MIN_LINE_CONFIDENCE_AUTO,
+      revisado: false,
       total_linea: item.total_linea == null ? null : Number(item.total_linea),
       confianza: Math.max(0, Math.min(1, Number(item.confianza ?? 0))),
     }))
-    .filter((item) => Number.isFinite(item.cantidad) && item.cantidad > 0 && Number.isFinite(item.costo_unitario) && item.costo_unitario >= 0);
+    ;
 
   if (validos.length === 0) throw new Error("No pude reconocer productos con cantidad y costo válidos. Probá con otra foto más nítida.");
   validarCodigosNoAmbiguos(validos);
@@ -353,22 +361,22 @@ function validarFactura(data: unknown): FacturaCompraIA {
   const razonSocial = proveedor.razon_social ? String(proveedor.razon_social).trim() : "";
   const cuit = cuitArgentinoValido(cuitLeido) ? cuitLeido : null;
   if (!razonSocial && !cuit) {
-    throw new Error("No pude identificar con seguridad al proveedor. Seleccionalo o crealo manualmente antes de ingresar stock.");
+    advertenciasCliente.push("No pude identificar con seguridad al proveedor. Completalo en la revisión; el borrador conserva los productos.");
   }
 
   const numeroComprobante = factura.numero_comprobante ? String(factura.numero_comprobante).trim() : "";
   if (!numeroComprobante) {
-    throw new Error("No pude leer el número de comprobante. Cargalo manualmente para conservar el control contra facturas duplicadas.");
+    advertenciasCliente.push("No pude leer el número de comprobante o el respaldo no lo tiene. Podés revisar y guardar el borrador sin inventar un número.");
   }
 
   const confianzaGeneral = Math.max(0, Math.min(1, Number(factura.confianza_general ?? 0)));
   if (confianzaGeneral < MIN_GENERAL_CONFIDENCE_AUTO) {
-    throw new Error("La confianza general de lectura es demasiado baja para preparar stock automáticamente. Revisá la factura y cargala manualmente.");
+    advertenciasCliente.push("Lectura general incierta. Revisá y confirmá el respaldo antes de preparar la compra.");
   }
 
   const lineaMuyIncierta = validos.find((item) => item.confianza < MIN_LINE_CONFIDENCE_AUTO);
   if (lineaMuyIncierta) {
-    throw new Error(`La línea “${lineaMuyIncierta.descripcion}” tiene confianza demasiado baja. Revisala manualmente antes de ingresar stock.`);
+    advertenciasCliente.push(`La línea “${lineaMuyIncierta.descripcion}” necesita revisión. Los productos se conservan en el borrador.`);
   }
 
   for (const item of validos) {
@@ -417,10 +425,12 @@ function validarFactura(data: unknown): FacturaCompraIA {
     },
     fecha,
     tipo_comprobante: factura.tipo_comprobante ? String(factura.tipo_comprobante).trim() : null,
-    numero_comprobante: numeroComprobante,
+    numero_comprobante: numeroComprobante || null,
     moneda: moneda ?? "ARS",
     total,
     confianza_general: confianzaGeneral,
+    requiere_revision: Boolean(factura.requiere_revision) || confianzaGeneral < MIN_GENERAL_CONFIDENCE_AUTO,
+    revision_confirmada: false,
     items: validos,
     advertencias: [...new Set([
       ...(Array.isArray(factura.advertencias)
@@ -431,9 +441,13 @@ function validarFactura(data: unknown): FacturaCompraIA {
   };
 }
 
-export async function analizarFacturaCompraSigo(empresaId: string, file: File): Promise<FacturaCompraIA> {
+export async function analizarFacturaCompraSigo(empresaId: string, file: File | string): Promise<FacturaCompraIA> {
   if (!empresaId) throw new Error("No hay empresa activa para analizar la factura.");
-  const documento = await prepararDocumento(file);
+  const texto = typeof file === "string" ? file.trim() : null;
+  if (texto !== null && (!texto || texto.length > MAX_DOCUMENT_TEXT_LENGTH)) {
+    throw new Error("Pegá un mensaje de compra de hasta 30.000 caracteres.");
+  }
+  const documento = typeof file === "string" ? null : await prepararDocumento(file);
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
   if (!token) throw new Error("La sesión venció. Volvé a ingresar a SIGO.");
@@ -449,7 +463,9 @@ export async function analizarFacturaCompraSigo(empresaId: string, file: File): 
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ empresaId, documentDataUrl: documento.dataUrl, documentType: documento.tipo, filename: documento.nombre }),
+      body: JSON.stringify(documento
+        ? { empresaId, documentDataUrl: documento.dataUrl, documentType: documento.tipo, filename: documento.nombre }
+        : { empresaId, documentText: texto, documentType: "texto", filename: "mensaje de compra" }),
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {

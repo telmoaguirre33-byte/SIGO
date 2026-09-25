@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { numeroCompra, resolverPrecioCompra, textoNumeroCompra, type ModoPrecioCompra } from "./compraIARevision";
+import "./compraIARevision.css";
 import BarcodeScanner from "./BarcodeScanner";
 import type { BarcodeProduct } from "./barcode";
 import { analizarFacturaCompraSigo, type FacturaCompraIA, type FacturaItemIA } from "./facturaIA";
@@ -37,6 +39,7 @@ type CompraPreparadaIA = {
   fecha: string | null;
   tipoComprobante: string | null;
   numeroComprobante: string | null;
+  referenciaBorrador: string | null;
   items: ItemPreparadoIA[];
 };
 
@@ -101,6 +104,9 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
   const [facturaMensaje, setFacturaMensaje] = useState("");
   const [preciosVentaFactura, setPreciosVentaFactura] = useState<Record<number, string>>({});
   const [margenesFactura, setMargenesFactura] = useState<Record<number, string>>({});
+  const [modosPrecioFactura, setModosPrecioFactura] = useState<Record<number, ModoPrecioCompra>>({});
+  const [textoCompraIA, setTextoCompraIA] = useState("");
+  const lecturaVersionRef = useRef(0);
   const [origenCompra, setOrigenCompra] = useState<"manual"|"ia">("manual");
   const [codigosBarrasFactura, setCodigosBarrasFactura] = useState<Record<number, string>>({});
   const [codigosInternosFactura, setCodigosInternosFactura] = useState<Record<number, string>>({});
@@ -146,6 +152,10 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
 
   useEffect(() => {
     empresaActivaRef.current = empresaId;
+    lecturaVersionRef.current += 1;
+    setFacturaProcesando(false);
+    setTextoCompraIA("");
+    setModosPrecioFactura({});
     idempotencyKeyRef.current = nuevaClave();
     setProveedores([]);
     setCompras([]);
@@ -167,6 +177,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
         if (b?.facturaIA) {
           setFacturaIA(b.facturaIA); setFacturaMensaje("📄 Compra IA en preparación recuperada.");
           setPreciosVentaFactura(b.preciosVentaFactura ?? {}); setMargenesFactura(b.margenesFactura ?? {});
+          setModosPrecioFactura(b.modosPrecioFactura ?? {});
           setCodigosBarrasFactura(b.codigosBarrasFactura ?? {}); setCodigosInternosFactura(b.codigosInternosFactura ?? {});
           setVinculosFactura(b.vinculosFactura ?? {}); setCompraPreparadaIA(b.compraPreparadaIA ?? null); setRevisionFacturaAbierta(true);
           restaurado = true;
@@ -184,15 +195,20 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
     if (!borradorCargadoRef.current || typeof localStorage === "undefined") return;
     if (!facturaIA) return;
     const timer = window.setTimeout(() => {
-      localStorage.setItem(borradorKey, JSON.stringify({facturaIA,preciosVentaFactura,margenesFactura,codigosBarrasFactura,codigosInternosFactura,vinculosFactura,compraPreparadaIA,guardadoEn:new Date().toISOString()}));
+      try {
+        localStorage.setItem(borradorKey, JSON.stringify({facturaIA,preciosVentaFactura,margenesFactura,modosPrecioFactura,codigosBarrasFactura,codigosInternosFactura,vinculosFactura,compraPreparadaIA,guardadoEn:new Date().toISOString()}));
+      } catch { setError("No se pudo guardar el borrador en este dispositivo. No cierres la pantalla; liberá espacio y volvé a guardar."); }
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [borradorKey,facturaIA,preciosVentaFactura,margenesFactura,codigosBarrasFactura,codigosInternosFactura,vinculosFactura,compraPreparadaIA]);
+  }, [borradorKey,facturaIA,preciosVentaFactura,margenesFactura,modosPrecioFactura,codigosBarrasFactura,codigosInternosFactura,vinculosFactura,compraPreparadaIA]);
 
   function guardarBorradorIA() {
     if (!facturaIA) return;
-    localStorage.setItem(borradorKey, JSON.stringify({facturaIA,preciosVentaFactura,margenesFactura,codigosBarrasFactura,codigosInternosFactura,vinculosFactura,compraPreparadaIA,guardadoEn:new Date().toISOString()}));
-    setFacturaMensaje("✓ Guardado. Podés seguir editando o salir cuando quieras.");
+    try {
+      localStorage.setItem(borradorKey, JSON.stringify({facturaIA,preciosVentaFactura,margenesFactura,modosPrecioFactura,codigosBarrasFactura,codigosInternosFactura,vinculosFactura,compraPreparadaIA,guardadoEn:new Date().toISOString()}));
+      setCorreccionFacturaAbierta(false);
+      setFacturaMensaje("✓ Borrador guardado en este dispositivo. Podés volver a editarlo; todavía no se ingresó stock ni se cambiaron precios del catálogo.");
+    } catch { setError("No se pudo guardar el borrador. No cierres la pantalla; liberá espacio y volvé a guardar."); }
   }
 
   const total = useMemo(
@@ -243,16 +259,14 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
       if (!nombre) motivos.push("Falta el nombre del producto.");
       if (!Number.isFinite(cantidad) || cantidad <= 0) motivos.push("La cantidad debe ser mayor que cero.");
       if (!Number.isFinite(costo) || costo <= 0) motivos.push("El costo unitario debe ser mayor que cero.");
-      if (!existente) {
-        const precio = Number(preciosVentaFactura[index]);
-        const margen = Number(margenesFactura[index]);
-        if (!Number.isFinite(precio) || precio <= 0) motivos.push("Falta un precio al público válido.");
-        if (!Number.isFinite(margen) || margen < 0) motivos.push("Falta un margen de ganancia válido.");
-      }
+      const { precio, margen } = resolverPrecioCompra(costo, existente, margenesFactura[index], preciosVentaFactura[index], modosPrecioFactura[index]);
+      if (!Number.isFinite(precio) || precio <= 0) motivos.push("Falta un precio al público válido.");
+      if (!Number.isFinite(margen) || margen < 0) motivos.push("Falta un porcentaje sobre costo válido.");
+      if (item.requiere_revision && !item.revisado) motivos.push("Confirmá que revisaste cantidad, costo y presentación de esta línea.");
       // Diferencias entre neto/impuestos se muestran como información de revisión, no bloquean Guardar.
       return motivos.length ? [{ index, producto: nombre || `Producto ${index + 1}`, motivos }] : [];
     });
-  }, [facturaIA, productos, vinculosFactura, codigosBarrasFactura, codigosInternosFactura, preciosVentaFactura, margenesFactura]);
+  }, [facturaIA, productos, vinculosFactura, codigosBarrasFactura, codigosInternosFactura, preciosVentaFactura, margenesFactura, modosPrecioFactura]);
 
   const preciosFacturaPendientes = pendientesFactura.filter((p) => p.motivos.some((m) => m.includes("precio al público"))).length;
 
@@ -266,7 +280,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
 function descartarItemFactura(index: number) {
     setFacturaIA((actual)=>actual ? ({...actual,items:actual.items.filter((_,i)=>i!==index)}) : actual);
     const compactar=(obj:Record<number,string>)=>Object.fromEntries(Object.entries(obj).flatMap(([k,v])=>{const n=Number(k);return n===index?[]:[[n>index?n-1:n,v]];}));
-    setPreciosVentaFactura(compactar); setMargenesFactura(compactar); setCodigosBarrasFactura(compactar); setCodigosInternosFactura(compactar); setVinculosFactura(compactar); setBusquedasVinculoIA(compactar); setCompraPreparadaIA(null);
+    setPreciosVentaFactura(compactar); setMargenesFactura(compactar); setModosPrecioFactura((actual)=>compactar(actual) as Record<number, ModoPrecioCompra>); setCodigosBarrasFactura(compactar); setCodigosInternosFactura(compactar); setVinculosFactura(compactar); setBusquedasVinculoIA(compactar); setCompraPreparadaIA(null);
   }
 
     function editarLinea(key: string, patch: Partial<Linea>) {
@@ -345,34 +359,33 @@ function descartarItemFactura(index: number) {
     }
   }
 
-  async function leerFactura(file?: File | null) {
+  async function leerFactura(file?: File | string | null) {
     if (!file || facturaProcesando || facturaAplicando) return;
     const empresaOperacion = empresaId;
+    const versionLectura = ++lecturaVersionRef.current;
     setFacturaProcesando(true);
-    setFacturaIA(null);
-    setFacturaMensaje("");
-    setPreciosVentaFactura({});
-    setMargenesFactura({});
-    setCodigosBarrasFactura({});
-    setCodigosInternosFactura({});
-    setVinculosFactura({});
-    setCompraPreparadaIA(null);
     setError("");
+    // Do not erase the previous draft until a replacement has been successfully analyzed.
     try {
       const resultado = await analizarFacturaCompraSigo(empresaOperacion, file);
-      if (empresaActivaRef.current !== empresaOperacion) return;
-      setFacturaIA(resultado);
+      if (empresaActivaRef.current !== empresaOperacion || lecturaVersionRef.current !== versionLectura) return;
+      setPreciosVentaFactura({}); setMargenesFactura({}); setModosPrecioFactura({});
+      setCodigosBarrasFactura({}); setCodigosInternosFactura({}); setVinculosFactura({});
+      setCompraPreparadaIA(null); setBusquedasVinculoIA({}); setFiltroRevisionIA("todos");
+      setFacturaIA({ ...resultado, referencia_borrador: `BORRADOR-${nuevaClave()}` });
       setRevisionFacturaAbierta(true);
-      setCorreccionFacturaAbierta(false);
-      setFacturaMensaje(`IA detectó ${resultado.items.length} ítem${resultado.items.length === 1 ? "" : "s"}. Revisá y definí precio de venta para cada producto nuevo antes de aplicar la factura.`);
+      setCorreccionFacturaAbierta(true);
+      setFacturaMensaje(`IA detectó ${resultado.items.length} ítem${resultado.items.length === 1 ? "" : "s"}. Revisá cantidades, costos y porcentajes. Guardar borrador no modifica stock ni precios del catálogo.`);
     } catch (err) {
-      if (empresaActivaRef.current === empresaOperacion) {
+      if (empresaActivaRef.current === empresaOperacion && lecturaVersionRef.current === versionLectura) {
         setError(err instanceof Error ? err.message : "No se pudo analizar la factura.");
       }
     } finally {
-      if (empresaActivaRef.current === empresaOperacion) setFacturaProcesando(false);
-      if (fotoRef.current) fotoRef.current.value = "";
-      if (archivoRef.current) archivoRef.current.value = "";
+      if (empresaActivaRef.current === empresaOperacion && lecturaVersionRef.current === versionLectura) {
+        setFacturaProcesando(false);
+        if (fotoRef.current) fotoRef.current.value = "";
+        if (archivoRef.current) archivoRef.current.value = "";
+      }
     }
   }
 
@@ -381,6 +394,14 @@ function descartarItemFactura(index: number) {
     setRevisionFacturaAbierta(true);
     setError("");
     setCompraPreparadaIA(null);
+    if (facturaIA.items.length === 0) { setError("Agregá al menos un producto. El borrador se conserva."); return; }
+    if (!facturaIA.proveedor.razon_social?.trim() && !facturaIA.proveedor.cuit?.trim()) {
+      setError("Completá o elegí el proveedor en la revisión antes de preparar. El borrador se conserva.");
+      setCorreccionFacturaAbierta(true); return;
+    }
+    if (facturaIA.requiere_revision && !facturaIA.revision_confirmada) {
+      setError("Confirmá la revisión del respaldo de lectura incierta antes de preparar."); return;
+    }
     if (pendientesFactura.length > 0) {
       const detalle = pendientesFactura.map((pendiente) => `${pendiente.producto}: ${pendiente.motivos.join(" ")}`).join(" · ");
       setError(`NO SE PUEDE PREPARAR LA COMPRA. ${pendientesFactura.length} producto${pendientesFactura.length === 1 ? "" : "s"} pendiente${pendientesFactura.length === 1 ? "" : "s"}: ${detalle}`);
@@ -395,8 +416,7 @@ function descartarItemFactura(index: number) {
     const items: ItemPreparadoIA[] = facturaIA.items.map((item, index) => {
       const existente = productoFactura(item, index);
       const costo = Number(item.costo_unitario);
-      const precioExistente = Number(existente?.precio_venta ?? 0);
-      const margenExistente = Number(existente?.margen_porcentaje ?? (costo > 0 && precioExistente > 0 ? ((precioExistente - costo) / costo) * 100 : 0));
+      const precioRevisado = resolverPrecioCompra(costo, existente, margenesFactura[index], preciosVentaFactura[index], modosPrecioFactura[index]);
       return {
         index,
         productoId: existente?.id ?? null,
@@ -406,8 +426,8 @@ function descartarItemFactura(index: number) {
         codigoBarras: (codigosBarrasFactura[index] ?? item.codigo_barras ?? "").trim() || null,
         cantidad: Number(item.cantidad),
         costoUnitario: costo,
-        margenPorcentaje: existente ? margenExistente : Number(margenesFactura[index]),
-        precioVenta: existente ? precioExistente : Number(preciosVentaFactura[index]),
+        margenPorcentaje: precioRevisado.margen,
+        precioVenta: precioRevisado.precio,
       };
     });
     const preparada: CompraPreparadaIA = {
@@ -416,13 +436,14 @@ function descartarItemFactura(index: number) {
       fecha: facturaIA.fecha,
       tipoComprobante: facturaIA.tipo_comprobante,
       numeroComprobante: facturaIA.numero_comprobante,
+      referenciaBorrador: facturaIA.referencia_borrador ?? null,
       items,
     };
     setCompraPreparadaIA(preparada);
     if (proveedor) setProveedorId(proveedor.id);
     if (facturaIA.fecha && /^\d{4}-\d{2}-\d{2}$/.test(facturaIA.fecha)) setFecha(facturaIA.fecha);
     if (facturaIA.tipo_comprobante) setTipo(facturaIA.tipo_comprobante);
-    if (facturaIA.numero_comprobante) setNumero(facturaIA.numero_comprobante);
+    setNumero(facturaIA.numero_comprobante ?? "");
     setOrigenCompra("ia");
     setFacturaMensaje(`✅ COMPRA PREPARADA / PENDIENTE DE CONFIRMACIÓN. ${items.filter((item) => !item.nuevo).length} producto${items.filter((item) => !item.nuevo).length === 1 ? "" : "s"} existente${items.filter((item) => !item.nuevo).length === 1 ? "" : "s"} y ${items.filter((item) => item.nuevo).length} producto${items.filter((item) => item.nuevo).length === 1 ? "" : "s"} nuevo${items.filter((item) => item.nuevo).length === 1 ? "" : "s"} pendiente${items.filter((item) => item.nuevo).length === 1 ? "" : "s"} de creación. No se modificó stock, costo, precio, productos ni compras.`);
   }
@@ -516,11 +537,11 @@ function descartarItemFactura(index: number) {
         </div>
       )}
 
-      {(vista === "todo" || vista === "ia") && (<div className="panel" style={{ border: "1px solid #bfdbfe", background: "linear-gradient(135deg,#eff6ff,#ffffff)" }}>
+      {(vista === "todo" || vista === "ia") && (<div className="panel compra-ia-review" style={{ border: "1px solid #bfdbfe", background: "linear-gradient(135deg,#eff6ff,#ffffff)" }}>
         <div className="page-header">
           <div>
             <h3 style={{ marginBottom: 6 }}>📷 Leer comprobante de compra con IA</h3>
-            <p style={{ margin: 0 }}>Sacá una foto o elegí una imagen/PDF. SIGO admite factura, ticket, remito, nota de pedido, orden de compra, talonario X y otros comprobantes de compra/recepción; lee proveedor, fecha, comprobante, productos, cantidades y costos. Si un producto no existe, definís su precio de venta antes de crearlo; el stock se modifica recién cuando confirmás la compra.</p>
+            <p style={{ margin: 0 }}>Sacá una foto, elegí una imagen/PDF o pegá un mensaje. SIGO admite factura, ticket, remito, presupuesto, talonario X, nota manuscrita legible y mensajes del proveedor; lee proveedor, fecha, comprobante, productos, cantidades y costos. Revisás y elegís el porcentaje o precio de venta de cada producto, nuevo o existente; el stock se modifica recién cuando confirmás la compra.</p>
           </div>
           <span style={{ fontSize: 12, fontWeight: 700, color: "#1d4ed8" }}>IA · revisión antes de stock</span>
           <p style={{ margin:"8px 0 0", fontWeight:800, color:"#92400e" }}>⚠️ Importante: cargá y revisá los comprobantes de a uno.</p>
@@ -528,8 +549,14 @@ function descartarItemFactura(index: number) {
         <input ref={fotoRef} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden onChange={(e) => void leerFactura(e.target.files?.[0])} />
         <input ref={archivoRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.pdf" hidden onChange={(e) => void leerFactura(e.target.files?.[0])} />
         <div className="form-actions" style={{ justifyContent: "flex-start", gap: 10, flexWrap: "wrap" }}>
-          <button type="button" className="primary-button" disabled={facturaProcesando || facturaAplicando || saving} onClick={() => fotoRef.current?.click()}>{facturaProcesando ? "Analizando…" : "📸 Tomar foto de factura"}</button>
+          <button type="button" className="primary-button" disabled={facturaProcesando || facturaAplicando || saving} onClick={() => fotoRef.current?.click()}>{facturaProcesando ? "Analizando…" : "📸 Tomar foto de comprobante"}</button>
           <button type="button" className="admin-button" disabled={facturaProcesando || facturaAplicando || saving} onClick={() => archivoRef.current?.click()}>Elegir foto / PDF</button>
+        </div>
+
+        <div className="form-group" style={{ marginTop: 12 }}>
+          <label htmlFor="texto-compra-ia">Pegar mensaje o detalle de compra</label>
+          <textarea id="texto-compra-ia" rows={5} maxLength={30000} value={textoCompraIA} onChange={(e)=>setTextoCompraIA(e.target.value)} placeholder="Pegá el mensaje del proveedor con productos, cantidades y costos. También podés cargar una captura con Elegir foto / PDF." disabled={facturaProcesando || saving} />
+          <button type="button" className="admin-button" disabled={!textoCompraIA.trim() || facturaProcesando || facturaAplicando || saving} onClick={()=>void leerFactura(textoCompraIA)}>LEER MENSAJE CON IA</button>
         </div>
 
         {facturaMensaje && <p style={{ fontWeight: 700, color: "#1e3a8a" }}>{facturaMensaje}</p>}
@@ -542,13 +569,16 @@ function descartarItemFactura(index: number) {
         {facturaIA && (
           <div style={{ marginTop: 16 }}>
             <div className="form-grid">
-              <div className="form-group"><label>Proveedor detectado</label><div><strong>{facturaIA.proveedor.razon_social ?? "No leído"}</strong>{facturaIA.proveedor.cuit ? ` · CUIT ${facturaIA.proveedor.cuit}` : ""}</div></div>
-              <div className="form-group"><label>Comprobante</label><div>{facturaIA.tipo_comprobante ?? "Factura"} {facturaIA.numero_comprobante ?? ""}</div></div>
-              <div className="form-group"><label>Fecha</label><div>{facturaIA.fecha ?? "No leída"}</div></div>
-              <div className="form-group"><label>Confianza IA</label><div>{Math.round(facturaIA.confianza_general * 100)}%</div></div>
+              <div className="form-group"><label>Proveedor</label><input value={facturaIA.proveedor.razon_social ?? ""} placeholder="Completar proveedor" onChange={(e)=>{setCompraPreparadaIA(null);setFacturaIA({...facturaIA,proveedor:{...facturaIA.proveedor,razon_social:e.target.value || null}});}} /></div>
+              <div className="form-group"><label>CUIT (opcional)</label><input value={facturaIA.proveedor.cuit ?? ""} onChange={(e)=>{setCompraPreparadaIA(null);setFacturaIA({...facturaIA,proveedor:{...facturaIA.proveedor,cuit:e.target.value || null}});}} /></div>
+              <div className="form-group"><label>Tipo de respaldo</label><input value={facturaIA.tipo_comprobante ?? ""} placeholder="Factura, remito, presupuesto, mensaje…" onChange={(e)=>{setCompraPreparadaIA(null);setFacturaIA({...facturaIA,tipo_comprobante:e.target.value || null});}} /></div>
+              <div className="form-group"><label>Número externo (si existe)</label><input value={facturaIA.numero_comprobante ?? ""} placeholder="Sin número: dejar vacío" onChange={(e)=>{setCompraPreparadaIA(null);setFacturaIA({...facturaIA,numero_comprobante:e.target.value.trim() || null});}} /><small>No inventes un número. La referencia del borrador no es un número de factura.</small></div>
+              <div className="form-group"><label>Fecha del respaldo</label><input type="date" value={facturaIA.fecha ?? ""} onChange={(e)=>{setCompraPreparadaIA(null);setFacturaIA({...facturaIA,fecha:e.target.value || null});}} /></div>
+              <div className="form-group"><label>Referencia del borrador</label><small>{facturaIA.referencia_borrador ?? "Borrador recuperado"}</small><small>Confianza de lectura: {Math.round(facturaIA.confianza_general * 100)}%</small></div>
             </div>
-            {facturaIA.advertencias.some((a)=>!a.startsWith("CRÍTICO")) && <div style={{marginTop:12}}>
-              {facturaIA.advertencias.filter((a)=>!a.startsWith("CRÍTICO")).map((a,i)=><p key={i} style={{fontWeight:600}}>⚠️ {a}</p>)}
+            {facturaIA.requiere_revision && <label className="compra-ia-check"><input type="checkbox" checked={Boolean(facturaIA.revision_confirmada)} onChange={(e)=>{setCompraPreparadaIA(null);setFacturaIA({...facturaIA,revision_confirmada:e.target.checked});}} />Revisé el respaldo y los datos de lectura incierta.</label>}
+            {facturaIA.advertencias.length > 0 && <div style={{marginTop:12}}>
+              {facturaIA.advertencias.map((a,i)=><p key={i} style={{fontWeight:600}}>⚠️ {a}</p>)}
             </div>}
             <div className="form-actions" style={{justifyContent:"flex-start",marginTop:12}}><button type="button" className="admin-button" onClick={()=>setCorreccionFacturaAbierta((v)=>!v)}>🔎 {correccionFacturaAbierta ? "Cerrar corrección" : "REVISAR / CORREGIR"}</button><button type="button" className="primary-button" onClick={guardarBorradorIA}>💾 GUARDAR BORRADOR</button></div>
             {correccionFacturaAbierta && <div className="form-actions" style={{justifyContent:"flex-start",marginTop:10}}><button type="button" className="admin-button" onClick={()=>setFacturaIA((actual)=>actual?({...actual,items:[...actual.items,{descripcion:"Producto agregado manualmente",codigo:null,codigo_barras:null,cantidad:1,costo_unitario:0,total_linea:0,confianza:1}] as FacturaItemIA[]}):actual)}>➕ AGREGAR PRODUCTO FALTANTE</button></div>}
@@ -559,8 +589,8 @@ function descartarItemFactura(index: number) {
                 {(["todos","pendientes","nuevos","vinculados"] as const).map((f)=><button key={f} type="button" className={filtroRevisionIA===f?"primary-button":"admin-button"} onClick={()=>setFiltroRevisionIA(f)}>{f.toUpperCase()}</button>)}
               </div>
               <div className="form-actions" style={{justifyContent:"flex-start",marginTop:8}}>
-                <input type="number" step="0.01" value={margenMasivoIA} onChange={e=>setMargenMasivoIA(e.target.value)} placeholder="% margen para todos" />
-                <button type="button" className="admin-button" disabled={margenMasivoIA===""} onClick={()=>{const m=Number(margenMasivoIA);if(!Number.isFinite(m)||m<0)return;const precios={...preciosVentaFactura},margenes={...margenesFactura};facturaIA.items.forEach((item,index)=>{margenes[index]=String(m);precios[index]=String(Math.round(Number(item.costo_unitario||0)*(1+m/100)*100)/100);});setMargenesFactura(margenes);setPreciosVentaFactura(precios);setCompraPreparadaIA(null);}}>APLICAR MARGEN A TODOS</button>
+                <label>Porcentaje sobre costo para todos<input type="text" inputMode="decimal" value={margenMasivoIA} onChange={e=>setMargenMasivoIA(e.target.value)} placeholder="Ej.: 60" aria-label="Porcentaje sobre costo para todos" /></label>
+                <button type="button" className="admin-button" disabled={margenMasivoIA===""} onClick={()=>{const m=numeroCompra(margenMasivoIA);if(!Number.isFinite(m)||m<0)return;const precios={...preciosVentaFactura},margenes={...margenesFactura};facturaIA.items.forEach((item,index)=>{margenes[index]=String(m);precios[index]=String(Math.round(Number(item.costo_unitario||0)*(1+m/100)*100)/100);});setMargenesFactura(margenes);setPreciosVentaFactura(precios);setModosPrecioFactura(Object.fromEntries(facturaIA.items.map((_,index)=>[index,"margen" as const])));setCompraPreparadaIA(null);}}>APLICAR % A TODOS</button>
               </div>
             </div>
             {pendientesFactura.length > 0 && <div className="panel" role="alert" style={{marginTop:12,border:"1px solid #f59e0b",background:"#fffbeb"}}>
@@ -569,8 +599,8 @@ function descartarItemFactura(index: number) {
               {pendientesFactura.map((pendiente)=><p key={pendiente.index} style={{margin:"8px 0"}}><strong>{pendiente.producto}:</strong> {pendiente.motivos.join(" ")}</p>)}
               <button type="button" className="admin-button" onClick={irAlPrimerPendiente}>IR AL PRIMER PENDIENTE</button>
             </div>}
-            <div className="table-wrapper" style={{ marginTop: 14 }}>
-              <table className="products-table">
+            <div className="table-wrapper compra-ia-table-wrapper" style={{ marginTop: 14 }}>
+              <table className="products-table compra-ia-items">
                 <thead><tr><th>Producto leído</th><th>Código</th><th>Cant.</th><th>Costo unit.</th><th>Precio venta</th><th>Confianza</th><th>Estado</th></tr></thead>
                 <tbody>
                   {facturaIA.items.map((item, index) => {
@@ -582,10 +612,9 @@ function descartarItemFactura(index: number) {
                     const precioExistente = Number(existente?.precio_venta ?? 0);
                     const costoAnterior = Number(existente?.costo_actual ?? existente?.costo_ultima_compra ?? 0);
                     const stockAnterior = Number(existente?.stock_actual ?? 0);
-                    const margen = Number(existente?.margen_porcentaje ?? (costoAnterior > 0 && precioExistente > 0 ? ((precioExistente-costoAnterior)/costoAnterior)*100 : 0));
-                    const precioSugerido = margen >= 0 ? item.costo_unitario * (1 + margen/100) : precioExistente;
+                    const precioRevisado = resolverPrecioCompra(item.costo_unitario, existente, margenesFactura[index], preciosVentaFactura[index], modosPrecioFactura[index]);
                     return (
-                      <tr id={`factura-item-${index}`} key={`${item.descripcion}-${index}`}>
+                      <tr id={`factura-item-${index}`} key={index}>
                         <td>{correccionFacturaAbierta ? <input value={item.descripcion} onChange={(e)=>{setCompraPreparadaIA(null);setFacturaIA((actual)=>actual ? ({...actual,items:actual.items.map((x,i)=>i===index?{...x,descripcion:e.target.value}:x)}) : actual);}} aria-label={`Nombre para producto ${index + 1}`} /> : <strong>{item.descripcion}</strong>}<small style={{display:"block"}}>{existente ? `Stock: ${stockAnterior} → ${stockAnterior + item.cantidad}` : `Nuevo · ingresan ${item.cantidad} unidades`}</small></td>
                         <td>{existente ? (item.codigo_barras ?? item.codigo ?? "-") : <div style={{display:"grid",gap:6}}>
                           <strong style={{color:"#b45309"}}>⚠️ PRODUCTO NUEVO</strong>
@@ -597,14 +626,21 @@ function descartarItemFactura(index: number) {
                           {!((codigosBarrasFactura[index] ?? item.codigo_barras ?? "").trim()) && <small style={{color:"#b45309"}}>EAN opcional · podés continuar sin código de barras.</small>}
                         </div>}</td>
                         <td>{correccionFacturaAbierta ? <input type="number" min="0.001" step="0.001" value={item.cantidad} onChange={(e)=>{const cantidad=Number(e.target.value);setCompraPreparadaIA(null);setFacturaIA((actual)=>actual ? ({...actual,items:actual.items.map((x,i)=>i===index?{...x,cantidad,total_linea:cantidad*Number(x.costo_unitario)}:x)}) : actual);}} aria-label={`Cantidad para ${item.descripcion}`} /> : <strong>{item.cantidad}</strong>}<small style={{display:"block"}}>unidades vendibles</small></td>
-                        <td><span style={{textDecoration:costoAnterior>0?"line-through":"none",opacity:.65}}>{costoAnterior>0?`$ ${costoAnterior.toLocaleString("es-AR",{minimumFractionDigits:2})}`:""}</span>{correccionFacturaAbierta ? <input type="number" min="0" step="0.01" value={item.costo_unitario} onChange={(e)=>{const costo=Number(e.target.value);setCompraPreparadaIA(null);setFacturaIA((actual)=>actual ? ({...actual,items:actual.items.map((x,i)=>i===index?{...x,costo_unitario:costo,total_linea:Number(x.cantidad)*costo}:x)}) : actual);const margen=Number(margenesFactura[index]);if(!existente&&costo>0&&Number.isFinite(margen))setPreciosVentaFactura((actual)=>({...actual,[index]:String(Math.round(costo*(1+margen/100)*100)/100)}));}} aria-label={`Costo unitario para ${item.descripcion}`} /> : <strong style={{display:"block"}}>→ $ {item.costo_unitario.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</strong>}<small style={{display:"block"}}>Total línea: $ {(item.total_linea ?? item.cantidad*item.costo_unitario).toLocaleString("es-AR",{minimumFractionDigits:2})}</small></td>
+                        <td><span style={{textDecoration:costoAnterior>0?"line-through":"none",opacity:.65}}>{costoAnterior>0?`$ ${costoAnterior.toLocaleString("es-AR",{minimumFractionDigits:2})}`:""}</span>{correccionFacturaAbierta ? <input type="number" min="0" step="0.01" value={item.costo_unitario} onChange={(e)=>{const costo=Number(e.target.value);setCompraPreparadaIA(null);setFacturaIA((actual)=>actual ? ({...actual,items:actual.items.map((x,i)=>i===index?{...x,costo_unitario:costo,total_linea:Number(x.cantidad)*costo}:x)}) : actual);const calculo=resolverPrecioCompra(costo,existente,margenesFactura[index],preciosVentaFactura[index],modosPrecioFactura[index]);setMargenesFactura((actual)=>({...actual,[index]:textoNumeroCompra(calculo.margen)}));setPreciosVentaFactura((actual)=>({...actual,[index]:textoNumeroCompra(calculo.precio)}));}} aria-label={`Costo unitario para ${item.descripcion}`} /> : <strong style={{display:"block"}}>→ $ {item.costo_unitario.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</strong>}<small style={{display:"block"}}>Total línea: $ {(item.total_linea ?? item.cantidad*item.costo_unitario).toLocaleString("es-AR",{minimumFractionDigits:2})}</small></td>
                         <td>
-                          {existente
-                            ? <div><span style={{textDecoration:"line-through",opacity:.65}}>{precioExistente>0?`$ ${precioExistente.toLocaleString("es-AR",{minimumFractionDigits:2})}`:"Sin precio"}</span><strong style={{display:"block",color:"#15803d"}}>→ $ {precioSugerido.toLocaleString("es-AR",{minimumFractionDigits:2})}</strong><small>Margen {margen.toLocaleString("es-AR",{maximumFractionDigits:2})}%</small></div>
-                            : <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}><input type="number" step="0.01" value={margenesFactura[index] ?? ""} onChange={(e)=>{const m=e.target.value;setCompraPreparadaIA(null);setMargenesFactura(a=>({...a,[index]:m}));const costo=Number(item.costo_unitario||0);if(costo>0&&m!=="")setPreciosVentaFactura(a=>({...a,[index]:String(Math.round(costo*(1+Number(m)/100)*100)/100)}));}} placeholder="% margen" aria-label={`Margen para ${item.descripcion}`}/><input type="number" min="0.01" step="0.01" value={preciosVentaFactura[index] ?? ""} onChange={(e)=>{const precio=e.target.value;setCompraPreparadaIA(null);setPreciosVentaFactura(a=>({...a,[index]:precio}));const costo=Number(item.costo_unitario||0);if(costo>0&&precio!=="")setMargenesFactura(a=>({...a,[index]:String(((Number(precio)-costo)/costo)*100)}));}} placeholder="Precio público" aria-label={`Precio de venta para ${item.descripcion}`}/></div>}
+                          <div className="compra-ia-precio">
+                            {existente && <small>Precio anterior: $ {precioExistente.toLocaleString("es-AR",{minimumFractionDigits:2})}</small>}
+                            <label>Porcentaje sobre costo
+                              <input type="text" inputMode="decimal" value={margenesFactura[index] ?? textoNumeroCompra(precioRevisado.margen)} onChange={(e)=>{const m=e.target.value;setCompraPreparadaIA(null);setModosPrecioFactura(a=>({...a,[index]:"margen"}));setMargenesFactura(a=>({...a,[index]:m}));const calculo=resolverPrecioCompra(item.costo_unitario,existente,m,undefined,"margen");setPreciosVentaFactura(a=>({...a,[index]:textoNumeroCompra(calculo.precio)}));}} placeholder="Ej.: 40" aria-label={`Margen para ${item.descripcion}`} />
+                            </label>
+                            <label>Precio de venta por unidad
+                              <input type="text" inputMode="decimal" value={preciosVentaFactura[index] ?? textoNumeroCompra(precioRevisado.precio)} onChange={(e)=>{const precio=e.target.value;setCompraPreparadaIA(null);setModosPrecioFactura(a=>({...a,[index]:"precio"}));setPreciosVentaFactura(a=>({...a,[index]:precio}));const calculo=resolverPrecioCompra(item.costo_unitario,existente,undefined,precio,"precio");setMargenesFactura(a=>({...a,[index]:textoNumeroCompra(calculo.margen)}));}} placeholder="Precio al público" aria-label={`Precio de venta para ${item.descripcion}`} />
+                            </label>
+                            <small>{modosPrecioFactura[index] === "precio" ? "Precio manual: se mantiene si corregís el costo." : "Se recalcula con el porcentaje elegido si corregís el costo."}</small>
+                          </div>
                         </td>
-                        <td>{Math.round(item.confianza * 100)}%</td>
-                        <td>{existente ? `Existente: ${existente.nombre}` : "NUEVO · se creará recién al confirmar"}</td>
+                        <td>{Math.round(item.confianza * 100)}%{item.requiere_revision && <label className="compra-ia-check"><input type="checkbox" checked={Boolean(item.revisado)} onChange={(e)=>{setCompraPreparadaIA(null);setFacturaIA((actual)=>actual?({...actual,items:actual.items.map((x,i)=>i===index?{...x,revisado:e.target.checked}:x)}):actual);}} />Verifiqué cantidad, costo y presentación.</label>}</td>
+                        <td>{existente ? `Existente: ${existente.nombre}` : "NUEVO · se creará recién al confirmar"}<button type="button" className="admin-button" onClick={()=>descartarItemFactura(index)}>Descartar esta línea</button></td>
                       </tr>
                     );
                   })}

@@ -13,7 +13,7 @@ const clientRequired = [
   ['MIN_GENERAL_CONFIDENCE_AUTO = 0.35', 'minimum general confidence for automatic preparation'],
   ['MIN_LINE_CONFIDENCE_AUTO = 0.30', 'minimum per-line confidence for automatic preparation'],
   ['No pude identificar con seguridad al proveedor', 'supplier identity must be known before automatic stock preparation'],
-  ['No pude leer el número de comprobante', 'document number must be known before automatic stock preparation'],
+  ['numero_comprobante: numeroComprobante || null', 'missing document number remains null for manual review'],
   ['toleranciaCritica = Math.max(10, calculado * 0.15)', 'critical line arithmetic mismatch guard'],
   ['cantidad × costo unitario no coincide con el total de línea leído. Corregí esta línea antes de preparar la compra.', 'critical line mismatch user-facing block'],
   ['PAGINA_MAESTROS_FACTURA = 1000', 'paginated live-master reconciliation'],
@@ -99,4 +99,14 @@ for (const code of reviewCodes) {
   }
 }
 
+// Missing metadata is reviewable; it must never authorize stock or become a fabricated invoice number.
+const reviewUI = fs.readFileSync('src/ComprasOperativas.tsx', 'utf8');
+if (!client.includes('requiere_revision:') || !server.includes('requiere_revision:')
+    || !reviewUI.includes('item.requiere_revision && !item.revisado')
+    || !reviewUI.includes('facturaIA.requiere_revision && !facturaIA.revision_confirmada')) {
+  throw new Error('Uncertain readings must remain pending until the operator explicitly reviews them');
+}
+for (const oldBlock of ['throw errorRevision("SUPPLIER_IDENTITY_MISSING")', 'throw errorRevision("DOCUMENT_NUMBER_MISSING")']) {
+  if (server.includes(oldBlock)) throw new Error('Missing metadata must not discard the editable purchase draft');
+}
 console.log('Invoice AI server/client reconciliation guard OK');
