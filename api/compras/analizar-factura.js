@@ -315,9 +315,10 @@ export default async function handler(req, res) {
   const empresaId = String(req.body?.empresaId || "").trim();
   const documentDataUrl = String(req.body?.documentDataUrl || req.body?.imageDataUrl || "");
   const documentType = String(req.body?.documentType || (ALLOWED_PDF.test(documentDataUrl) ? "pdf" : "imagen"));
+  const mensajeTexto = String(req.body?.mensajeTexto || "").trim();
   const filename = textoSeguro(req.body?.filename, 120) || (documentType === "pdf" ? "documento.pdf" : "documento.jpg");
   if (!empresaId) return json(res, 400, { error: "EMPRESA_REQUIRED" });
-  const formatoValido = documentType === "pdf" ? ALLOWED_PDF.test(documentDataUrl) : ALLOWED_IMAGE.test(documentDataUrl);
+  const formatoValido = documentType === "texto" ? mensajeTexto.length >= 4 && mensajeTexto.length <= 15000 : documentType === "pdf" ? ALLOWED_PDF.test(documentDataUrl) : ALLOWED_IMAGE.test(documentDataUrl);
   if (!formatoValido || documentDataUrl.length > MAX_DATA_URL_LENGTH) {
     return json(res, 400, { error: "INVALID_DOCUMENT" });
   }
@@ -333,7 +334,7 @@ export default async function handler(req, res) {
 
   const model = process.env.GEMINI_INVOICE_MODEL || "gemini-3.8-flash";
   const fallbackModel = process.env.GEMINI_INVOICE_FALLBACK_MODEL || "gemini-3.1-flash-lite-preview";
-  const prompt = `Analizá este comprobante comercial argentino para cargar mercadería en un sistema comercial. Puede ser factura, ticket, remito, nota de pedido, orden/pedido de compra, talonario X, comprobante X u otro documento de compra/recepción. Identificá el tipo real en tipo_comprobante.
+  const prompt = `Analizá este comprobante o mensaje comercial argentino para cargar mercadería en un sistema comercial. Puede ser factura, ticket, remito, nota de pedido, orden/pedido de compra, talonario X, comprobante X, mensaje de WhatsApp u otro registro de compra/recepción. Identificá el tipo real en tipo_comprobante.
 No inventes datos. Si algo no es legible, usá null y baja confianza.
 Extraé únicamente productos/servicios efectivamente facturados; no conviertas IVA, descuentos globales, percepciones, subtotales ni totales en productos.
 Para cada ítem, cantidad y costo_unitario deben ser números. SIGO opera minorista y el stock se expresa en UNIDADES VENDIBLES, no en cajas/bultos.
@@ -363,14 +364,14 @@ confianza_general y confianza van de 0 a 1.`;
           role: "user",
           parts: [
             { text: prompt },
-            {
+            ...(documentType === "texto" ? [{ text: `Mensaje comercial a registrar como compra:\n${mensajeTexto}` }] : [{
               inlineData: {
                 mimeType: documentType === "pdf"
                   ? "application/pdf"
                   : (documentDataUrl.match(/^data:([^;]+);base64,/i)?.[1] || "image/jpeg"),
                 data: documentDataUrl.split(",")[1],
               },
-            },
+            }]),
           ],
         }],
         generationConfig: {
@@ -421,7 +422,14 @@ confianza_general y confianza van de 0 a 1.`;
     const aiData = await aiResponse.json();
     const text = getGeminiOutputText(aiData);
     if (!text) throw new Error("EMPTY_AI_OUTPUT");
-    const factura = normalizarFacturaIA(parseJsonText(text));
+    const leido = parseJsonText(text);
+    const tipo = String(leido?.tipo_comprobante || "").toLowerCase();
+    if (documentType === "texto" || (tipo && !tipo.includes("factura"))) {
+      if (!leido.proveedor?.razon_social && !leido.proveedor?.cuit) leido.proveedor = { razon_social: "Proveedor sin identificar", cuit: null };
+      if (!leido.numero_comprobante) leido.numero_comprobante = `COMPRA-${Date.now()}`;
+      if (!leido.tipo_comprobante) leido.tipo_comprobante = documentType === "texto" ? "Mensaje de WhatsApp" : "Comprobante";
+    }
+    const factura = normalizarFacturaIA(leido);
     return json(res, 200, { factura, model: aiData?.modelVersion || model });
   } catch (error) {
     if (error?.message === "AMBIGUOUS_INVOICE_CODES") {
