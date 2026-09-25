@@ -38,11 +38,13 @@ const ARCA_WSFE = "https://www.arca.gob.ar/ws/documentacion/ws-factura-electroni
 export default function ArcaFacturacion({
   empresaId,
   empresaNombre,
+  ventaInicialId,
   empresas,
   productosCount,
 }: {
   empresaId: string;
   empresaNombre: string;
+  ventaInicialId?: string | null;
   empresas: EmpresaOperativa[];
   productosCount: number | null;
 }) {
@@ -287,6 +289,7 @@ export default function ArcaFacturacion({
 
             <ArcaCaeEmission
               empresaId={empresaId}
+              ventaInicialId={ventaInicialId}
               ambiente={config?.ambiente ?? ambiente}
               habilitado={config?.activo === true && config?.ultima_prueba_ok === true}
               puntos={puntos}
