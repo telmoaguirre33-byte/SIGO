@@ -731,6 +731,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
                             <input type="number" min="0.01" step="0.01" value={preciosVentaFactura[index] ?? ""} onChange={(e)=>{const precio=e.target.value;setCompraPreparadaIA(null);setPreciosVentaFactura(a=>({...a,[index]:precio}));const costo=Number(item.costo_unitario||0);setMargenesFactura(a=>({...a,[index]:costo>0&&precio!==""?String(((Number(precio)-costo)/costo)*100):""}));}} placeholder="Precio público" aria-label={`Precio de venta para ${item.descripcion}`}/>
                           </div>
                           {existente && <small>Precio actual: {precioExistente>0?`$ ${precioExistente.toLocaleString("es-AR",{minimumFractionDigits:2})}`:"sin precio"}. Dejá vacío para conservarlo.</small>}
+                          {!existente && !preciosVentaFactura[index] && <small>Precio que se aplicará al confirmar: $ {(Math.round(Number(item.costo_unitario)*(1+(margenesFactura[index]===""||margenesFactura[index]===undefined?30:Number(margenesFactura[index]))/100)*100)/100).toLocaleString("es-AR",{minimumFractionDigits:2})} (margen {margenesFactura[index]===""||margenesFactura[index]===undefined?"30 % provisional":`${margenesFactura[index]} %`}).</small>}
                         </td>
                         <td>{Math.round(item.confianza * 100)}%</td>
                         <td>{existente ? `Existente: ${existente.nombre}` : "NUEVO · se creará recién al confirmar"}</td>
