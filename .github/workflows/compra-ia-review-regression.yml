@@ -13,7 +13,8 @@ concurrency:
 
 jobs:
   apply-tested-review-patch:
-    if: github.repository == 'telmoaguirre33-byte/SIGO' && github.ref == 'refs/heads/feat/ia-review-center' && github.event.head_commit.message == 'fix: apply verified Compra IA review patch'
+    if: >-
+      github.repository == 'telmoaguirre33-byte/SIGO' && github.ref == 'refs/heads/feat/ia-review-center' && github.event.head_commit.message == 'fix: apply verified Compra IA review patch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
