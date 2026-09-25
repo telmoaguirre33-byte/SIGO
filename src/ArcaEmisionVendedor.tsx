@@ -6,7 +6,7 @@ type Ambiente = "homologacion" | "produccion";
 type PuntoVenta = { numero: number; ambiente: Ambiente; activo: boolean };
 type Config = { ambiente: Ambiente; activo: boolean; ultima_prueba_ok: boolean | null };
 
-export default function ArcaEmisionVendedor({ empresaId, empresaNombre }: { empresaId: string; empresaNombre: string }) {
+export default function ArcaEmisionVendedor({ empresaId, empresaNombre, ventaInicialId }: { empresaId: string; empresaNombre: string; ventaInicialId?: string | null }) {
   const [config, setConfig] = useState<Config | null>(null);
   const [puntos, setPuntos] = useState<PuntoVenta[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +66,7 @@ export default function ArcaEmisionVendedor({ empresaId, empresaNombre }: { empr
       {!config ? <p className="form-error">ARCA todavía no está configurado para esta empresa.</p> : (
         <ArcaCaeEmission
           empresaId={empresaId}
+          ventaInicialId={ventaInicialId}
           ambiente={config.ambiente}
           habilitado={habilitado}
           puntos={puntosEmpresa}
