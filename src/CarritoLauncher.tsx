@@ -59,6 +59,12 @@ export default function CarritoLauncher() {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    const abrirCaja = () => { if (empresa) setOpen(true); };
+    window.addEventListener("sigo:abrir-caja", abrirCaja);
+    return () => window.removeEventListener("sigo:abrir-caja", abrirCaja);
+  }, [empresa]);
+
   function cerrar() {
     if (window.confirm("¿Cerrar el carrito? Si hay una venta sin confirmar, se descartará sin modificar stock ni caja.")) {
       setOpen(false);
@@ -86,7 +92,7 @@ export default function CarritoLauncher() {
           <div className="sigo-cart-topbar">
             <button className="admin-button" type="button" onClick={cerrar}>← Cerrar / cancelar</button>
             <div>
-              <strong>🛒 Carrito · Nueva venta</strong>
+              <strong>CAJA - VENTA</strong>
               <small>{empresa.empresa_nombre}</small>
             </div>
           </div>
