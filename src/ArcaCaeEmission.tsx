@@ -112,11 +112,13 @@ function escapeHtml(value: string) {
 
 export default function ArcaCaeEmission({
   empresaId,
+  ventaInicialId,
   ambiente,
   habilitado,
   puntos,
 }: {
   empresaId: string;
+  ventaInicialId?: string | null;
   ambiente: Ambiente;
   habilitado: boolean;
   puntos: PuntoVenta[];
