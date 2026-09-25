@@ -738,10 +738,11 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
               <p><strong>Proveedor:</strong> {compraPreparadaIA.proveedorNombre}</p>
               <p><strong>Comprobante:</strong> {compraPreparadaIA.tipoComprobante ?? "Comprobante"} {compraPreparadaIA.numeroComprobante ?? ""}</p>
               <p><strong>Productos:</strong> {compraPreparadaIA.items.length} · Nuevos pendientes de creación: {compraPreparadaIA.items.filter((item)=>item.nuevo).length}</p>
-              <p style={{marginBottom:0}}>No se modificó stock, costo, precio, productos ni compras. Al presionar “Guardar compra” se registrarán la compra y el ingreso de stock, sin exigir código de barras.</p>
+              <p style={{marginBottom:0}}>Guardá el comprobante y tus correcciones en el historial. Cuando esté completo, podés confirmar el ingreso de stock sin exigir código de barras.</p>
             </div>}
             <div className="form-actions" style={{ justifyContent: "flex-start" }}>
-              <button type="button" className="admin-button" disabled={guardandoBorradorServidor || facturaAplicando} onClick={()=>void guardarEnHistorialPendiente()}>{guardandoBorradorServidor?"Guardando pendiente…":"📋 GUARDAR PENDIENTE EN HISTORIAL"}</button>
+              <button type="button" className="primary-button" disabled={guardandoBorradorServidor || facturaAplicando} onClick={()=>void guardarEnHistorialPendiente()}>{guardandoBorradorServidor?"Guardando…":"💾 GUARDAR COMPRA"}</button>
+              <small>Guarda siempre el comprobante y los cambios en el historial como pendiente, aunque falten datos. No ingresa stock.</small>
               <GuardarCompraIA empresaId={empresaId} idempotencyKey={idempotencyKeyRef.current}
                 factura={facturaIA} productos={productos} vinculos={vinculosFactura} barras={codigosBarrasFactura}
                 codigos={codigosInternosFactura} precios={preciosVentaFactura} margenes={margenesFactura}
