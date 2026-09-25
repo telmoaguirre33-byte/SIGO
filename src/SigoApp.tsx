@@ -92,7 +92,7 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
           </div>
         </header>
         <section className="content">
-          {section === "Inicio" && <Inicio empresa={empresa} onProductos={() => setSection("Productos")} onStock={() => setSection("Stock")} />}
+          {section === "Inicio" && <Inicio empresa={empresa} onProductos={() => setSection("Productos")} onStock={() => setSection("Stock")} onCaja={() => window.dispatchEvent(new CustomEvent("sigo:abrir-caja"))} />}
           {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
           {section === "Stock" && <Stock empresaId={empresa.empresa_id} />}
           {section === "Ventas" && <VentaRapidaOperativa empresaId={empresa.empresa_id} puedeEditarProductos={puedeEditarProductos} />}
@@ -125,7 +125,7 @@ function ComprasHub({ empresaId }: { empresaId: string }) {
   </div>;
 }
 
-function Inicio({ empresa, onProductos, onStock }: { empresa: EmpresaOperativa; onProductos: () => void; onStock: () => void }) {
+function Inicio({ empresa, onProductos, onStock, onCaja }: { empresa: EmpresaOperativa; onProductos: () => void; onStock: () => void; onCaja: () => void }) {
   return (
     <div className="welcome">
       <div>
@@ -134,6 +134,7 @@ function Inicio({ empresa, onProductos, onStock }: { empresa: EmpresaOperativa; 
       </div>
       <div className="topbar-actions">
         <button className="admin-button" onClick={onStock}>Ver stock</button>
+        <button className="primary-button" onClick={onCaja}>CAJA</button>
         <button className="primary-button" onClick={onProductos}>Abrir productos</button>
       </div>
     </div>
