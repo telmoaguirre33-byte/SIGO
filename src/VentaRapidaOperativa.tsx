@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import BarcodeScanner from "./BarcodeScanner";
+import { imprimirTicketVenta } from "./ticketVenta";
 import { isLegacyDuplicateProduct, type BarcodeProduct } from "./barcode";
 import { listarClientesSigo, type ClienteSigo } from "./clientes";
 import { guardarProductoSigo, listarProductosSigo, type ProductoSigo } from "./productos";
@@ -49,6 +50,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   const [confirmando, setConfirmando] = useState(false);
   const [error, setError] = useState("");
   const [exito, setExito] = useState("");
+  const [ultimaVentaTicket, setUltimaVentaTicket] = useState<string | null>(null);
   const [advertencia, setAdvertencia] = useState("");
   const [idempotencyKey, setIdempotencyKey] = useState(nuevaClaveVenta);
   const empresaActivaRef = useRef(empresaId);
@@ -82,6 +84,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     setVentasError("");
     setError("");
     setExito("");
+    setUltimaVentaTicket(null);
     setAdvertencia("");
     setIdempotencyKey(nuevaClaveVenta());
 
@@ -325,6 +328,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       }
 
       setExito(`Venta confirmada · ${resultado.ventaId.slice(0, 8).toUpperCase()} · Total verificado $ ${totalConfirmado.toLocaleString("es-AR")}`);
+      setUltimaVentaTicket(resultado.ventaId);
       setAdvertencia(advertencias.join(" "));
       setItems([]);
       setClienteId("");
@@ -500,6 +504,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
           <button className="primary-button" disabled={!puedeConfirmar || confirmando} onClick={() => void confirmar()}>
             {confirmando ? "Confirmando…" : "Confirmar venta"}
           </button>
+          <button type="button" className="admin-button" disabled={!ultimaVentaTicket || confirmando} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir el ticket."));}}>Imprimir ticket</button>
         </div>
       </div>
 
