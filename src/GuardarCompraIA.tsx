@@ -7,6 +7,8 @@ type Props = GuardarCompraIAInput & {
   empresaId: string;
   idempotencyKey: string;
   disabled?: boolean;
+  faltantes?: string[];
+  onIrAlPrimerPendiente?: () => void;
   onAntesGuardar: () => void;
   onEstado: (guardando: boolean) => void;
   onError: (mensaje: string) => void;
@@ -22,6 +24,7 @@ type Resultado = {
 export default function GuardarCompraIA(props: Props) {
   const [guardando, setGuardando] = useState(false);
   const [pendiente, setPendiente] = useState(false);
+  const [mensajeValidacion, setMensajeValidacion] = useState("");
   const envioKey = `sigo:compra-ia:envio:${props.empresaId}:${props.idempotencyKey}`;
   const lock = useRef(false);
   const context = useRef({ active: true });
@@ -39,6 +42,12 @@ export default function GuardarCompraIA(props: Props) {
 
   async function guardar() {
     if (lock.current || props.disabled) return;
+    if (!pendiente && props.faltantes?.length) {
+      setMensajeValidacion(`Faltan ${props.faltantes.length} dato(s) para ingresar stock. Revisá la lista junto a los botones y corregí el primero.`);
+      props.onIrAlPrimerPendiente?.();
+      return;
+    }
+    setMensajeValidacion("");
     lock.current = true;
     const current = context.current;
     setGuardando(true);
@@ -98,5 +107,5 @@ export default function GuardarCompraIA(props: Props) {
   return <div style={{ display: "grid", gap: 6 }}><button type="button" className="primary-button" disabled={props.disabled || guardando}
     onClick={() => void guardar()} aria-label="Confirmar compra e ingresar stock">
     {guardando ? "Confirmando compra…" : pendiente ? "✅ REINTENTAR CONFIRMACIÓN" : "✅ CONFIRMAR COMPRA E INGRESAR STOCK"}
-  </button>{pendiente && !guardando && <small role="status">Hay un envío pendiente. Reintentá para recuperar su resultado sin duplicar la compra ni el stock.</small>}</div>;
+  </button>{mensajeValidacion && <small role="alert" style={{color:"#b91c1c",fontWeight:700}}>{mensajeValidacion}</small>}{pendiente && !guardando && <small role="status">Hay un envío pendiente. Reintentá para recuperar su resultado sin duplicar la compra ni el stock.</small>}</div>;
 }
