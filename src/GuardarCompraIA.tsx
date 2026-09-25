@@ -105,7 +105,7 @@ export default function GuardarCompraIA(props: Props) {
   }
 
   return <div style={{ display: "grid", gap: 6 }}><button type="button" className="primary-button" disabled={props.disabled || guardando}
-    onClick={() => void guardar()} aria-label="Confirmar compra e ingresar stock">
-    {guardando ? "Confirmando compra…" : pendiente ? "✅ REINTENTAR CONFIRMACIÓN" : "✅ CONFIRMAR COMPRA E INGRESAR STOCK"}
+    onClick={() => void guardar()} aria-label="Guardar compra e ingresar stock">
+    {guardando ? "Confirmando compra…" : pendiente ? "💾 REINTENTAR INGRESO DE STOCK" : "💾 GUARDAR COMPRA E INGRESAR STOCK"}
   </button>{mensajeValidacion && <small role="alert" style={{color:"#b91c1c",fontWeight:700}}>{mensajeValidacion}</small>}{pendiente && !guardando && <small role="status">Hay un envío pendiente. Reintentá para recuperar su resultado sin duplicar la compra ni el stock.</small>}</div>;
 }
