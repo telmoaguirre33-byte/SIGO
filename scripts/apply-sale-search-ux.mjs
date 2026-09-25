@@ -82,7 +82,8 @@ replaceOnce(
 );
 
 replaceOnce(
-`          <label htmlFor="venta-buscar-producto">O buscar por nombre, código o marca</label>
+`        <div className="form-group" style={{ marginTop: 16 }}>
+          <label htmlFor="venta-buscar-producto">O buscar por nombre, código o marca</label>
           <input
             id="venta-buscar-producto"
             type="search"
@@ -90,25 +91,57 @@ replaceOnce(
             value={busquedaProducto}
             onChange={(event) => setBusquedaProducto(event.target.value)}
             disabled={confirmando}
-          />`,
-`          <label htmlFor="venta-buscar-producto">Buscar producto</label>
-          <input
-            id="venta-buscar-producto"
-            type="search"
-            autoComplete="off"
-            placeholder="Escribí nombre, marca, categoría o código"
-            value={busquedaProducto}
-            onChange={(event) => setBusquedaProducto(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && productosEncontrados.length === 1) {
-                event.preventDefault();
-                seleccionarProductoManual(productosEncontrados[0]);
-              }
-            }}
-            disabled={confirmando}
           />
-          <small className="barcode-help">Catálogo de esta empresa: {catalogo.length.toLocaleString("es-AR")} productos. La búsqueda ignora acentos y acepta varias palabras en cualquier orden.</small>`,
-"input",
+        </div>`,
+`        <p className="barcode-help" style={{ marginTop: 10 }}>Buscá en el campo azul por nombre, código interno o EAN. También podés leer con pistola o cámara. Catálogo: {catalogo.length.toLocaleString("es-AR")} productos.</p>`,
+"one-search",
+);
+
+replaceOnce(
+`          onBlockedProduct={marcarProductoBloqueado}
+        />`,
+`          onBlockedProduct={marcarProductoBloqueado}
+          onQueryChange={setBusquedaProducto}
+          queryResetKey={busquedaResetKey}
+          onManualQuery={(query) => {
+            const codigo = query.trim().toLocaleLowerCase("es-AR");
+            if (!codigo) return true;
+            const exacto = catalogo.some((producto) => [producto.codigo_interno, producto.codigo_barras]
+              .some((valor) => String(valor ?? "").trim().toLocaleLowerCase("es-AR") === codigo));
+            if (exacto) return false;
+            setBusquedaProducto(query);
+            return true;
+          }}
+        />`,
+"scanner-search",
+);
+
+replaceOnce(
+`  const [busquedaProducto, setBusquedaProducto] = useState("");`,
+`  const [busquedaProducto, setBusquedaProducto] = useState("");
+  const [busquedaResetKey, setBusquedaResetKey] = useState(0);`,
+"reset-key",
+);
+
+replaceOnce(
+`    setItems((actual) => {
+      const existente = actual.find((item) => item.producto.id === producto.id);`,
+`    setBusquedaProducto("");
+    setBusquedaResetKey((key) => key + 1);
+    setItems((actual) => {
+      const existente = actual.find((item) => item.producto.id === producto.id);`,
+"reset-after-add",
+);
+
+replaceOnce(
+`    setPrecioRapido("");
+    setBusquedaProducto("");
+    setIdempotencyKey(nuevaClaveVenta());`,
+`    setPrecioRapido("");
+    setBusquedaProducto("");
+    setBusquedaResetKey((key) => key + 1);
+    setIdempotencyKey(nuevaClaveVenta());`,
+"reset-after-empty",
 );
 
 replaceOnce(
