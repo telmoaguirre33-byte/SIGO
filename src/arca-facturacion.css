@@ -115,3 +115,6 @@
   .arca-card .form-span-2 { grid-column: auto; }
   .arca-card .form-actions button { width: 100%; min-height: 48px; }
 }
+
+/* ARCA se muestra delante de Caja cuando se emite desde una venta. */
+.arca-overlay{z-index:100000}
