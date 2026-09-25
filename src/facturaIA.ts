@@ -431,9 +431,9 @@ function validarFactura(data: unknown): FacturaCompraIA {
   };
 }
 
-export async function analizarFacturaCompraSigo(empresaId: string, file: File): Promise<FacturaCompraIA> {
+export async function analizarFacturaCompraSigo(empresaId: string, file: File | string): Promise<FacturaCompraIA> {
   if (!empresaId) throw new Error("No hay empresa activa para analizar la factura.");
-  const documento = await prepararDocumento(file);
+  const documento = typeof file === "string" ? null : await prepararDocumento(file);
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
   if (!token) throw new Error("La sesión venció. Volvé a ingresar a SIGO.");
@@ -449,7 +449,7 @@ export async function analizarFacturaCompraSigo(empresaId: string, file: File): 
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ empresaId, documentDataUrl: documento.dataUrl, documentType: documento.tipo, filename: documento.nombre }),
+      body: JSON.stringify({ empresaId, documentDataUrl: documento?.dataUrl, documentType: documento?.tipo ?? "texto", filename: documento?.nombre, mensajeTexto: typeof file === "string" ? file : undefined }),
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {

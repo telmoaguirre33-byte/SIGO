@@ -1,0 +1,51 @@
+name: Compra IA guardar - isolated regression
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'supabase/migrations/**'
+      - 'package.json'
+      - '.github/workflows/compra-ia-save-regression.yml'
+permissions:
+  contents: read
+jobs:
+  save-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: sigo_guardado_qa
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: isolated_test_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Actual build and strict UI patch
+        run: npm run build
+      - name: Client behavior and mobile regression
+        run: node scripts/verify-guardar-compra-ia.mjs && node scripts/verify-mobile-purchase-resume.mjs
+      - name: Patch idempotency
+        run: |
+          sha256sum src/ComprasOperativas.tsx > /tmp/compra-ui.sha
+          node scripts/apply-compra-ia-guardar.mjs
+          sha256sum --check /tmp/compra-ui.sha
+      - name: PostgreSQL client
+        run: command -v psql || (sudo apt-get update && sudo apt-get install -y postgresql-client)
+      - name: Actual RPCs against isolated PostgreSQL only
+        env:
+          SIGO_ISOLATED_TEST_DB: '1'
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGDATABASE: sigo_guardado_qa
+          PGUSER: postgres
+          PGPASSWORD: isolated_test_only
+        run: node scripts/verify-guardar-compra-ia-db.mjs

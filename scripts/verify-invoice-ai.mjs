@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 const checks = [
-  ['src/ComprasOperativas.tsx', ['Leer comprobante de compra con IA', 'Tomar foto de factura', 'application/pdf', 'capture="environment"', '🛒 PREPARAR COMPRA', 'guardarProductoSigo', 'analizarFacturaCompraSigo', 'Confirmar compra e ingresar stock', 'preciosVentaFactura', 'preciosFacturaPendientes', 'PRODUCTO NUEVO', 'SIGO no los creará sin precio']],
+  ['src/ComprasOperativas.tsx', ['Leer comprobante de compra con IA', 'Tomar foto de comprobante', 'application/pdf', 'capture="environment"', 'GuardarCompraIA', 'guardarProductoSigo', 'analizarFacturaCompraSigo', 'Confirmar compra e ingresar stock', 'preciosVentaFactura', 'preciosFacturaPendientes', 'PRODUCTO NUEVO', 'SIGO no los creará sin precio']],
   ['src/facturaIA.ts', ['analizarFacturaCompraSigo', '/api/compras/analizar-factura', 'TIPOS_IMAGEN_PERMITIDOS', 'CLIENT_TIMEOUT_MS', 'AbortController', 'AI_TIMEOUT', 'moneda !== "ARS"', 'validarFactura', 'cuitArgentinoValido', 'gtinValido', 'validarCodigosNoAmbiguos', 'AI_REVIEW_REQUIRED']],
   ['api/compras/analizar-factura.js', ['GEMINI_API_KEY', 'purchases.write', 'generativelanguage.googleapis.com', 'inlineData', 'application/pdf', 'No inventes datos', 'normalizarFacturaIA', 'MAX_INVOICE_ITEMS', 'NO_VALID_INVOICE_ITEMS', 'GEMINI_TIMEOUT_MS', 'AbortController', 'AI_TIMEOUT', 'normalizarMoneda', 'cuitArgentinoValido', 'gtinValido', 'detectarCodigosConflictivos', 'AI_REVIEW_REQUIRED', 'advertencias']],
   ['supabase/migrations/20260913023000_compras_identidad_documental_guard.sql', ['normalizar_identificador_comercial_sigo', 'trg_guard_compra_documento_normalizado_sigo', 'PURCHASE_DOCUMENT_DUPLICATE', 'trg_guard_proveedor_cuit_sigo', 'SUPPLIER_CUIT_DUPLICATE']],
@@ -15,9 +15,11 @@ for (const [file, required] of checks) {
 }
 
 const compras = fs.readFileSync('src/ComprasOperativas.tsx', 'utf8');
-if (!compras.includes('precioVenta,')) throw new Error('Invoice AI regression: new products must persist the operator-defined sale price');
-if (!compras.includes('preciosFacturaPendientes > 0')) throw new Error('Invoice AI regression: invoice apply must remain blocked while a new product has no sale price');
-if (!compras.includes('stockActual: null')) throw new Error('Invoice AI regression: AI must not write stock before purchase confirmation');
+const guardar = fs.readFileSync('src/GuardarCompraIA.tsx', 'utf8');
+const construir = fs.readFileSync('src/guardarCompraIA.ts', 'utf8');
+if (!construir.includes('precio_venta: precio')) throw new Error('Invoice AI regression: new products must persist the operator-defined sale price');
+if (!compras.includes('preciosFacturaPendientes > 0')) throw new Error('Invoice AI regression: invoice review must show missing sale prices');
+if (!guardar.includes('guardar_compra_ia_sigo') || !guardar.includes('verificarCompraSigo')) throw new Error('Invoice AI regression: purchase and stock must be saved via the atomic RPC and verified');
 
 const api = fs.readFileSync('api/compras/analizar-factura.js', 'utf8');
 const rejectsOversizedInvoice = api.includes('itemsRaw.length > MAX_INVOICE_ITEMS') && api.includes('TOO_MANY_INVOICE_ITEMS');
