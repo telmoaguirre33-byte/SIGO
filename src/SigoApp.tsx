@@ -109,7 +109,7 @@ function ComprasHub({ empresaId }: { empresaId: string }) {
   if (modo !== "menu") {
     return <div>
       <button type="button" className="admin-button" style={{marginBottom:16}} onClick={()=>setModo("menu")}>← Volver a Compras / Proveedores</button>
-      <ComprasOperativas empresaId={empresaId} vista={modo} />
+      <ComprasOperativas empresaId={empresaId} vista={modo} onCambiarVista={setModo} />
     </div>;
   }
   return <div className="products-page">
