@@ -6,6 +6,8 @@
 .compra-ia-check input[type="checkbox"] { width: 20px; min-width: 20px; height: 20px; }
 @media (max-width: 640px) {
   .compra-ia-review { min-width: 0; }
+  /* Override the shared desktop-table minimum width regardless of CSS import order. */
+  .compra-ia-review .products-table.compra-ia-items { width: 100%; min-width: 0; max-width: 100%; }
   .compra-ia-table-wrapper { overflow: visible !important; }
   .compra-ia-items, .compra-ia-items tbody, .compra-ia-items tr, .compra-ia-items td { display: block; width: 100%; min-width: 0; box-sizing: border-box; }
   .compra-ia-items thead { display: none; }
