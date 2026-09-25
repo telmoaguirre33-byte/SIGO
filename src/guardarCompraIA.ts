@@ -36,7 +36,8 @@ export function construirCompraIA(input: GuardarCompraIAInput) {
   const { factura } = input;
   if (!factura.items.length || factura.items.length > 300) throw new Error("La compra debe tener entre 1 y 300 productos.");
   const proveedor = texto(factura.proveedor.razon_social);
-  if (!proveedor) throw new Error("Completá el proveedor antes de guardar la compra.");
+  if (!proveedor || /^(proveedor sin identificar|proveedor pendiente de revisión|no le[ií]do)$/i.test(proveedor)) throw new Error("Completá el nombre real del proveedor antes de guardar la compra.");
+  if (!factura.fecha) throw new Error("Completá la fecha real del comprobante antes de guardar la compra.");
   return {
     proveedor_nombre: proveedor,
     proveedor_cuit: texto(factura.proveedor.cuit),
