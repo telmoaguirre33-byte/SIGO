@@ -83,9 +83,14 @@ function encontrarProducto(item: FacturaItemIA, productos: ProductoSigo[]) {
   return productos.find((p) => normalizar(p.nombre) === nombre);
 }
 
-export default function ComprasOperativas({ empresaId, vista = "todo" }: { empresaId: string; vista?: "todo" | "manual" | "ia" | "historial" }) {
+type BorradorCompraSigo = { id:string; empresa_id:string; documento:{facturaIA:FacturaCompraIA;preciosVentaFactura:Record<number,string>;margenesFactura:Record<number,string>;codigosBarrasFactura:Record<number,string>;codigosInternosFactura:Record<number,string>;vinculosFactura:Record<number,string>;idempotencyKey:string};estado:string;created_at:string };
+
+export default function ComprasOperativas({ empresaId, vista = "todo", onCambiarVista }: { empresaId: string; vista?: "todo" | "manual" | "ia" | "historial"; onCambiarVista?:(vista:"menu"|"manual"|"ia"|"historial")=>void }) {
   const [proveedores, setProveedores] = useState<ProveedorSigo[]>([]);
   const [compras, setCompras] = useState<CompraSigo[]>([]);
+  const [borradoresServidor,setBorradoresServidor]=useState<BorradorCompraSigo[]>([]);
+  const [borradorServidorId,setBorradorServidorId]=useState<string|null>(null);
+  const [guardandoBorradorServidor,setGuardandoBorradorServidor]=useState(false);
   const [detalleCompra,setDetalleCompra]=useState<{compra:CompraSigo;titulo:string;items:{productoId:string;nombre:string;codigo:string;cantidad:number;costo:number}[]}|null>(null);
   const [edicionCompra,setEdicionCompra]=useState<{proveedorId:string;fecha:string;tipo:string;numero:string;items:{productoId:string;cantidad:string;costo:string}[]}|null>(null);
   const [guardandoHistorial,setGuardandoHistorial]=useState(false);
@@ -132,14 +137,17 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
     setLoading(true);
     setError("");
     try {
-      const [ps, cs, prods] = await Promise.all([
+      const [ps, cs, prods, borradores] = await Promise.all([
         listarProveedoresSigo(targetEmpresaId),
         listarComprasSigo(targetEmpresaId),
         listarProductosSigo(targetEmpresaId),
+        supabase.from("compra_borradores_sigo").select("id,empresa_id,documento,estado,created_at").eq("empresa_id",targetEmpresaId).eq("estado","pendiente").order("created_at",{ascending:false}).limit(50),
       ]);
+      if(borradores.error)throw borradores.error;
       if (empresaActivaRef.current !== targetEmpresaId) return;
       setProveedores(ps);
       setCompras(cs);
+      setBorradoresServidor((borradores.data??[]) as BorradorCompraSigo[]);
       setProductos(prods);
       setProveedorId((actual) => actual && ps.some((p) => p.id === actual) ? actual : (ps[0]?.id ?? ""));
     } catch (err) {
@@ -156,6 +164,8 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
     idempotencyKeyRef.current = nuevaClave();
     setProveedores([]);
     setCompras([]);
+    setBorradoresServidor([]);
+    setBorradorServidorId(null);
     setProductos([]);
     setProveedorId("");
     setFecha(new Date().toISOString().slice(0, 10));
@@ -371,6 +381,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
       const resultado = await analizarFacturaCompraSigo(empresaOperacion, file);
       if (empresaActivaRef.current !== empresaOperacion) return;
       idempotencyKeyRef.current = nuevaClave();
+      setBorradorServidorId(null);
       setFacturaIA(resultado);
       setRevisionFacturaAbierta(true);
       setCorreccionFacturaAbierta(false);
@@ -391,7 +402,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
     setFacturaProcesando(true);setError("");
     try{
       const resultado=await analizarFacturaCompraSigo(empresaId,mensajeWhatsApp.trim());
-      idempotencyKeyRef.current=nuevaClave();setFacturaIA(resultado);setCompraPreparadaIA(null);
+      idempotencyKeyRef.current=nuevaClave();setBorradorServidorId(null);setFacturaIA(resultado);setCompraPreparadaIA(null);
       setPreciosVentaFactura({});setMargenesFactura({});setCodigosBarrasFactura({});setCodigosInternosFactura({});setVinculosFactura({});
       setRevisionFacturaAbierta(true);setCorreccionFacturaAbierta(true);
       setFacturaMensaje("Mensaje analizado. Revisá artículos y precios; guardá la compra al final.");
@@ -435,6 +446,39 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
       setDetalleCompra(null);setEdicionCompra(null);await cargar();
     }catch(err){setError(err instanceof Error?err.message:"No se pudo actualizar la compra.");}
     finally{setGuardandoHistorial(false);}
+  }
+
+  async function guardarEnHistorialPendiente(){
+    if(!facturaIA || guardandoBorradorServidor)return;
+    setGuardandoBorradorServidor(true);setError("");
+    try{
+      const documento={facturaIA,preciosVentaFactura,margenesFactura,codigosBarrasFactura,codigosInternosFactura,vinculosFactura,idempotencyKey:idempotencyKeyRef.current};
+      const valores={empresa_id:empresaId,documento,estado:"pendiente"};
+      const q=borradorServidorId
+        ?supabase.from("compra_borradores_sigo").update({documento,updated_at:new Date().toISOString()}).eq("id",borradorServidorId).eq("empresa_id",empresaId).select("id").single()
+        :supabase.from("compra_borradores_sigo").insert({...valores,created_by:(await supabase.auth.getUser()).data.user?.id}).select("id").single();
+      const {data,error:saveError}=await q;
+      if(saveError || !data?.id)throw saveError??new Error("No se pudo registrar el borrador.");
+      setBorradorServidorId(data.id);setFacturaMensaje("📋 Comprobante registrado como pendiente en el historial. No se ingresó stock.");
+      await cargar();
+    }catch(err){setError(err instanceof Error?err.message:"No se pudo guardar pendiente.");}
+    finally{setGuardandoBorradorServidor(false);}
+  }
+
+  function abrirBorradorServidor(b:BorradorCompraSigo){
+    const d=b.documento;
+    idempotencyKeyRef.current=d.idempotencyKey||nuevaClave();
+    setFacturaIA(d.facturaIA);setPreciosVentaFactura(d.preciosVentaFactura??{});setMargenesFactura(d.margenesFactura??{});
+    setCodigosBarrasFactura(d.codigosBarrasFactura??{});setCodigosInternosFactura(d.codigosInternosFactura??{});
+    setVinculosFactura(d.vinculosFactura??{});setCompraPreparadaIA(null);setBorradorServidorId(b.id);
+    setRevisionFacturaAbierta(true);setCorreccionFacturaAbierta(true);setFacturaMensaje("📋 Compra pendiente recuperada del historial. Corregila y guardá cuando corresponda.");
+    onCambiarVista?.("ia");
+  }
+
+  async function descartarBorradorServidor(b:BorradorCompraSigo){
+    if(!window.confirm("¿Eliminar este borrador pendiente? No ingresó stock y quedará marcado como descartado."))return;
+    const {error:discardError}=await supabase.from("compra_borradores_sigo").update({estado:"descartado",updated_at:new Date().toISOString()}).eq("empresa_id",empresaId).eq("id",b.id);
+    if(discardError)setError(discardError.message);else{if(borradorServidorId===b.id)setBorradorServidorId(null);await cargar();}
   }
 
   function aplicarFacturaAnalizada() {
@@ -610,7 +654,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
         <div className="form-actions" style={{justifyContent:"flex-start",marginTop:12,marginBottom:12}}>
           <button type="button" className="admin-button" disabled={!facturaIA || facturaProcesando || facturaAplicando || guardadoPendienteIA} onClick={()=>setCorreccionFacturaAbierta(true)}>🔎 REVISAR / CORREGIR</button>
           <button type="button" className="primary-button" disabled={!facturaIA || facturaAplicando || facturaProcesando || saving || guardadoPendienteIA} onClick={aplicarFacturaAnalizada}>🛒 PREPARAR COMPRA</button>
-          <button type="button" className="admin-button danger-button" disabled={!facturaIA || facturaAplicando || facturaProcesando || saving || guardadoPendienteIA} onClick={()=>{localStorage.removeItem(borradorKey);setFacturaIA(null);setRevisionFacturaAbierta(false);setCorreccionFacturaAbierta(false);setFacturaMensaje("");setPreciosVentaFactura({});setMargenesFactura({});setCodigosBarrasFactura({});setCodigosInternosFactura({});setVinculosFactura({});setCompraPreparadaIA(null);}}>❌ CANCELAR / DESCARTAR</button>
+          <button type="button" className="admin-button danger-button" disabled={!facturaIA || facturaAplicando || facturaProcesando || saving || guardadoPendienteIA} onClick={()=>{localStorage.removeItem(borradorKey);setBorradorServidorId(null);setFacturaIA(null);setRevisionFacturaAbierta(false);setCorreccionFacturaAbierta(false);setFacturaMensaje("");setPreciosVentaFactura({});setMargenesFactura({});setCodigosBarrasFactura({});setCodigosInternosFactura({});setVinculosFactura({});setCompraPreparadaIA(null);}}>❌ CANCELAR / DESCARTAR</button>
         </div>
         {facturaIA && (
           <div style={{ marginTop: 16 }}>
@@ -691,6 +735,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
               <p style={{marginBottom:0}}>No se modificó stock, costo, precio, productos ni compras. Al presionar “Guardar compra” se registrarán la compra y el ingreso de stock, sin exigir código de barras.</p>
             </div>}
             <div className="form-actions" style={{ justifyContent: "flex-start" }}>
+              <button type="button" className="admin-button" disabled={guardandoBorradorServidor || facturaAplicando} onClick={()=>void guardarEnHistorialPendiente()}>{guardandoBorradorServidor?"Guardando pendiente…":"📋 GUARDAR PENDIENTE EN HISTORIAL"}</button>
               <GuardarCompraIA empresaId={empresaId} idempotencyKey={idempotencyKeyRef.current}
                 factura={facturaIA} productos={productos} vinculos={vinculosFactura} barras={codigosBarrasFactura}
                 codigos={codigosInternosFactura} precios={preciosVentaFactura} margenes={margenesFactura}
@@ -698,6 +743,8 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
                 onEstado={setFacturaAplicando} onPendiente={setGuardadoPendienteIA} onError={setError}
                 onGuardada={(compraId, resultado) => {
                   localStorage.removeItem(borradorKey);
+                  if(borradorServidorId)void supabase.from("compra_borradores_sigo").update({estado:"confirmado",compra_id:compraId,updated_at:new Date().toISOString()}).eq("id",borradorServidorId).eq("empresa_id",empresaId);
+                  setBorradorServidorId(null);
                   setUltimaConciliacion({compraId,resultado});
                   setFacturaIA(null);setCompraPreparadaIA(null);setRevisionFacturaAbierta(false);setCorreccionFacturaAbierta(false);
                   setPreciosVentaFactura({});setMargenesFactura({});setCodigosBarrasFactura({});setCodigosInternosFactura({});setVinculosFactura({});
@@ -706,7 +753,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
                   setFacturaMensaje("✅ COMPRA GUARDADA. Se registraron la compra y el ingreso de stock.");
                   void cargar(empresaId);
                 }} />
-              <button type="button" className="admin-button" disabled={facturaAplicando || facturaProcesando || saving || guardadoPendienteIA} onClick={() => { localStorage.removeItem(borradorKey); setFacturaIA(null); setRevisionFacturaAbierta(false); setFacturaMensaje(""); setPreciosVentaFactura({}); setMargenesFactura({}); setCodigosBarrasFactura({}); setCodigosInternosFactura({}); setVinculosFactura({}); setCompraPreparadaIA(null); }}>❌ CANCELAR / DESCARTAR</button>
+              <button type="button" className="admin-button" disabled={facturaAplicando || facturaProcesando || saving || guardadoPendienteIA} onClick={() => { localStorage.removeItem(borradorKey); setBorradorServidorId(null); setFacturaIA(null); setRevisionFacturaAbierta(false); setFacturaMensaje(""); setPreciosVentaFactura({}); setMargenesFactura({}); setCodigosBarrasFactura({}); setCodigosInternosFactura({}); setVinculosFactura({}); setCompraPreparadaIA(null); }}>❌ CANCELAR / DESCARTAR</button>
             </div>
           </div>
         )}
@@ -779,7 +826,8 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
 
       </>}
       {(vista === "todo" || vista === "historial") && (<div className="panel">
-        <h3>Últimas compras</h3>
+        <h3>Historial de compras</h3>
+        {borradoresServidor.length>0&&<div className="panel" style={{marginBottom:16,border:"1px solid #f59e0b"}}><h4>Comprobantes pendientes · sin ingreso de stock</h4><div className="table-wrapper"><table className="products-table"><thead><tr><th>Fecha de carga</th><th>Comprobante</th><th>Proveedor</th><th>Artículos</th><th>Acciones</th></tr></thead><tbody>{borradoresServidor.map(b=><tr key={b.id}><td>{new Date(b.created_at).toLocaleDateString("es-AR")}</td><td>{b.documento.facturaIA.tipo_comprobante??"Comprobante"} {b.documento.facturaIA.numero_comprobante??"sin número"}</td><td>{b.documento.facturaIA.proveedor.razon_social??"Sin identificar"}</td><td>{b.documento.facturaIA.items.length}</td><td><div className="form-actions"><button type="button" className="admin-button" onClick={()=>abrirBorradorServidor(b)}>Abrir / modificar</button><button type="button" className="admin-button danger-button" onClick={()=>void descartarBorradorServidor(b)}>Eliminar pendiente</button></div></td></tr>)}</tbody></table></div></div>}
         {loading ? <p>Cargando…</p> : compras.length === 0 ? <p>Sin compras confirmadas.</p> : (
           <div className="table-wrapper">
             <table className="products-table">
