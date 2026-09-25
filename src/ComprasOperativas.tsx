@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import BarcodeScanner from "./BarcodeScanner";
+import GuardarCompraIA from "./GuardarCompraIA";
+import { supabase } from "./supabase";
+/* compra-ia-guardar-atomico-v1 */
 import type { BarcodeProduct } from "./barcode";
 import { analizarFacturaCompraSigo, type FacturaCompraIA, type FacturaItemIA } from "./facturaIA";
 import { guardarProductoSigo, listarProductosSigo, type ProductoSigo } from "./productos";
@@ -83,6 +86,10 @@ function encontrarProducto(item: FacturaItemIA, productos: ProductoSigo[]) {
 export default function ComprasOperativas({ empresaId, vista = "todo" }: { empresaId: string; vista?: "todo" | "manual" | "ia" | "historial" }) {
   const [proveedores, setProveedores] = useState<ProveedorSigo[]>([]);
   const [compras, setCompras] = useState<CompraSigo[]>([]);
+  const [detalleCompra,setDetalleCompra]=useState<{titulo:string;items:{nombre:string;codigo:string;cantidad:number;costo:number}[]}|null>(null);
+  const [mensajeWhatsApp,setMensajeWhatsApp]=useState("");
+  const [margenGeneral,setMargenGeneral]=useState("");
+  const [precioGeneral,setPrecioGeneral]=useState("");
   const [productos, setProductos] = useState<ProductoSigo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -98,6 +105,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
   const [facturaIA, setFacturaIA] = useState<FacturaCompraIA | null>(null);
   const [facturaProcesando, setFacturaProcesando] = useState(false);
   const [facturaAplicando, setFacturaAplicando] = useState(false);
+  const [guardadoPendienteIA, setGuardadoPendienteIA] = useState(false);
   const [facturaMensaje, setFacturaMensaje] = useState("");
   const [preciosVentaFactura, setPreciosVentaFactura] = useState<Record<number, string>>({});
   const [margenesFactura, setMargenesFactura] = useState<Record<number, string>>({});
@@ -155,6 +163,8 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
     setNuevoProveedor("");
     setNuevoCuit("");
     setUltimaConciliacion(null);
+    setFacturaAplicando(false);
+    setGuardadoPendienteIA(false);
     borradorCargadoRef.current = false;
     let restaurado = false;
     try {
@@ -162,6 +172,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
       if (raw) {
         const b = JSON.parse(raw);
         if (b?.facturaIA) {
+          idempotencyKeyRef.current = typeof b.idempotencyKey === "string" && b.idempotencyKey ? b.idempotencyKey : nuevaClave();
           setFacturaIA(b.facturaIA); setFacturaMensaje("📄 Compra IA en preparación recuperada.");
           setPreciosVentaFactura(b.preciosVentaFactura ?? {}); setMargenesFactura(b.margenesFactura ?? {});
           setCodigosBarrasFactura(b.codigosBarrasFactura ?? {}); setCodigosInternosFactura(b.codigosInternosFactura ?? {});
@@ -181,14 +192,14 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
     if (!borradorCargadoRef.current || typeof localStorage === "undefined") return;
     if (!facturaIA) return;
     const timer = window.setTimeout(() => {
-      localStorage.setItem(borradorKey, JSON.stringify({facturaIA,preciosVentaFactura,margenesFactura,codigosBarrasFactura,codigosInternosFactura,vinculosFactura,compraPreparadaIA,guardadoEn:new Date().toISOString()}));
+      localStorage.setItem(borradorKey, JSON.stringify({facturaIA,preciosVentaFactura,margenesFactura,codigosBarrasFactura,codigosInternosFactura,vinculosFactura,compraPreparadaIA,idempotencyKey:idempotencyKeyRef.current,guardadoEn:new Date().toISOString()}));
     }, 250);
     return () => window.clearTimeout(timer);
   }, [borradorKey,facturaIA,preciosVentaFactura,margenesFactura,codigosBarrasFactura,codigosInternosFactura,vinculosFactura,compraPreparadaIA]);
 
   function guardarBorradorIA() {
     if (!facturaIA) return;
-    localStorage.setItem(borradorKey, JSON.stringify({facturaIA,preciosVentaFactura,margenesFactura,codigosBarrasFactura,codigosInternosFactura,vinculosFactura,compraPreparadaIA,guardadoEn:new Date().toISOString()}));
+    localStorage.setItem(borradorKey, JSON.stringify({facturaIA,preciosVentaFactura,margenesFactura,codigosBarrasFactura,codigosInternosFactura,vinculosFactura,compraPreparadaIA,idempotencyKey:idempotencyKeyRef.current,guardadoEn:new Date().toISOString()}));
     setFacturaMensaje("💾 Borrador guardado. Podés salir y continuar después sin perder la revisión.");
     setCorreccionFacturaAbierta(false);
   }
@@ -357,6 +368,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
     try {
       const resultado = await analizarFacturaCompraSigo(empresaOperacion, file);
       if (empresaActivaRef.current !== empresaOperacion) return;
+      idempotencyKeyRef.current = nuevaClave();
       setFacturaIA(resultado);
       setRevisionFacturaAbierta(true);
       setCorreccionFacturaAbierta(false);
@@ -370,6 +382,30 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
       if (fotoRef.current) fotoRef.current.value = "";
       if (archivoRef.current) archivoRef.current.value = "";
     }
+  }
+
+  async function leerMensaje() {
+    if(!mensajeWhatsApp.trim()||facturaProcesando||guardadoPendienteIA)return;
+    setFacturaProcesando(true);setError("");
+    try{
+      const resultado=await analizarFacturaCompraSigo(empresaId,mensajeWhatsApp.trim());
+      idempotencyKeyRef.current=nuevaClave();setFacturaIA(resultado);setCompraPreparadaIA(null);
+      setPreciosVentaFactura({});setMargenesFactura({});setCodigosBarrasFactura({});setCodigosInternosFactura({});setVinculosFactura({});
+      setRevisionFacturaAbierta(true);setCorreccionFacturaAbierta(true);
+      setFacturaMensaje("Mensaje analizado. Revisá artículos y precios; guardá la compra al final.");
+    }catch(err){setError(err instanceof Error?err.message:"No se pudo analizar el mensaje.");}
+    finally{setFacturaProcesando(false);}
+  }
+
+  async function abrirCompra(compra:CompraSigo){
+    setError("");
+    const {data,error:detalleError}=await supabase.from("compra_items_sigo")
+      .select("producto_id,cantidad,costo_unitario,productos(nombre,codigo_interno,codigo_barras)")
+      .eq("empresa_id",empresaId).eq("compra_id",compra.id);
+    if(detalleError){setError(detalleError.message);return;}
+    setDetalleCompra({titulo:`${compra.tipo_comprobante??"Compra"} ${compra.numero_comprobante??""}`,
+      items:(data??[]).map(fila=>{const p=Array.isArray(fila.productos)?fila.productos[0]:fila.productos;
+        return {nombre:p?.nombre??"Producto",codigo:p?.codigo_interno||p?.codigo_barras||"—",cantidad:Number(fila.cantidad),costo:Number(fila.costo_unitario)};})});
   }
 
   function aplicarFacturaAnalizada() {
@@ -398,8 +434,8 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
         productoId: existente?.id ?? null,
         nuevo: !existente,
         nombre: item.descripcion.trim(),
-        codigoInterno: (codigosInternosFactura[index] ?? item.codigo ?? "").trim() || null,
-        codigoBarras: (codigosBarrasFactura[index] ?? item.codigo_barras ?? "").trim() || null,
+        codigoInterno: existente?.codigo_interno ?? ((codigosInternosFactura[index] ?? item.codigo ?? "").trim() || null),
+        codigoBarras: existente?.codigo_barras ?? ((codigosBarrasFactura[index] ?? item.codigo_barras ?? "").trim() || null),
         cantidad: Number(item.cantidad),
         costoUnitario: costo,
         margenPorcentaje: existente ? margenExistente : Number(margenesFactura[index]),
@@ -524,19 +560,28 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
         <input ref={fotoRef} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden onChange={(e) => void leerFactura(e.target.files?.[0])} />
         <input ref={archivoRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.pdf" hidden onChange={(e) => void leerFactura(e.target.files?.[0])} />
         <div className="form-actions" style={{ justifyContent: "flex-start", gap: 10, flexWrap: "wrap" }}>
-          <button type="button" className="primary-button" disabled={facturaProcesando || facturaAplicando || saving} onClick={() => fotoRef.current?.click()}>{facturaProcesando ? "Analizando…" : "📸 Tomar foto de factura"}</button>
-          <button type="button" className="admin-button" disabled={facturaProcesando || facturaAplicando || saving} onClick={() => archivoRef.current?.click()}>Elegir foto / PDF</button>
+          <button type="button" className="primary-button" disabled={facturaProcesando || facturaAplicando || saving || guardadoPendienteIA} onClick={() => fotoRef.current?.click()}>{facturaProcesando ? "Analizando…" : "📸 Tomar foto de comprobante"}</button>
+          <button type="button" className="admin-button" disabled={facturaProcesando || facturaAplicando || saving || guardadoPendienteIA} onClick={() => archivoRef.current?.click()}>Elegir foto / PDF</button>
         </div>
+
+        <div className="form-group"><label>Mensaje de WhatsApp o texto de compra</label><textarea rows={4} value={mensajeWhatsApp} onChange={e=>setMensajeWhatsApp(e.target.value)} placeholder="Pegá productos, cantidades y costos"/><button type="button" className="admin-button" disabled={facturaProcesando||guardadoPendienteIA||!mensajeWhatsApp.trim()} onClick={()=>void leerMensaje()}>Analizar mensaje</button></div>
 
         {facturaMensaje && <p style={{ fontWeight: 700, color: "#1e3a8a" }}>{facturaMensaje}</p>}
 
         <div className="form-actions" style={{justifyContent:"flex-start",marginTop:12,marginBottom:12}}>
-          <button type="button" className="admin-button" disabled={!facturaIA || facturaProcesando} onClick={()=>setCorreccionFacturaAbierta(true)}>🔎 REVISAR / CORREGIR</button>
-          <button type="button" className="primary-button" disabled={!facturaIA || facturaAplicando || facturaProcesando || saving} onClick={aplicarFacturaAnalizada}>🛒 PREPARAR COMPRA</button>
-          <button type="button" className="admin-button danger-button" disabled={!facturaIA || facturaAplicando || facturaProcesando || saving} onClick={()=>{localStorage.removeItem(borradorKey);setFacturaIA(null);setRevisionFacturaAbierta(false);setCorreccionFacturaAbierta(false);setFacturaMensaje("");setPreciosVentaFactura({});setMargenesFactura({});setCodigosBarrasFactura({});setCodigosInternosFactura({});setVinculosFactura({});setCompraPreparadaIA(null);}}>❌ CANCELAR / DESCARTAR</button>
+          <button type="button" className="admin-button" disabled={!facturaIA || facturaProcesando || facturaAplicando || guardadoPendienteIA} onClick={()=>setCorreccionFacturaAbierta(true)}>🔎 REVISAR / CORREGIR</button>
+          <button type="button" className="primary-button" disabled={!facturaIA || facturaAplicando || facturaProcesando || saving || guardadoPendienteIA} onClick={aplicarFacturaAnalizada}>🛒 PREPARAR COMPRA</button>
+          <button type="button" className="admin-button danger-button" disabled={!facturaIA || facturaAplicando || facturaProcesando || saving || guardadoPendienteIA} onClick={()=>{localStorage.removeItem(borradorKey);setFacturaIA(null);setRevisionFacturaAbierta(false);setCorreccionFacturaAbierta(false);setFacturaMensaje("");setPreciosVentaFactura({});setMargenesFactura({});setCodigosBarrasFactura({});setCodigosInternosFactura({});setVinculosFactura({});setCompraPreparadaIA(null);}}>❌ CANCELAR / DESCARTAR</button>
         </div>
         {facturaIA && (
           <div style={{ marginTop: 16 }}>
+            <fieldset disabled={facturaAplicando || guardadoPendienteIA || saving} style={{border:0,padding:0,minWidth:0}}>
+            <div className="form-actions" style={{justifyContent:"flex-start"}}>
+              <label>Margen para todos los nuevos <input type="number" step="0.01" value={margenGeneral} onChange={e=>setMargenGeneral(e.target.value)} placeholder="%"/></label>
+              <button type="button" className="admin-button" onClick={()=>{if(margenGeneral==="")return;const m:Record<number,string>={},p:Record<number,string>={};facturaIA.items.forEach((item,i)=>{if(!productoFactura(item,i)){m[i]=margenGeneral;p[i]=String(Math.round(item.costo_unitario*(1+Number(margenGeneral)/100)*100)/100);}});setMargenesFactura(v=>({...v,...m}));setPreciosVentaFactura(v=>({...v,...p}));setCompraPreparadaIA(null);}}>Aplicar margen</button>
+              <label>Precio para todos los nuevos <input type="number" step="0.01" value={precioGeneral} onChange={e=>setPrecioGeneral(e.target.value)} placeholder="$"/></label>
+              <button type="button" className="admin-button" onClick={()=>{if(precioGeneral==="")return;const m:Record<number,string>={},p:Record<number,string>={};facturaIA.items.forEach((item,i)=>{if(!productoFactura(item,i)){p[i]=precioGeneral;if(item.costo_unitario>0)m[i]=String((Number(precioGeneral)/item.costo_unitario-1)*100);}});setMargenesFactura(v=>({...v,...m}));setPreciosVentaFactura(v=>({...v,...p}));setCompraPreparadaIA(null);}}>Aplicar precio</button>
+            </div>
             <div className="form-grid">
               <div className="form-group"><label>Proveedor detectado</label><div><strong>{facturaIA.proveedor.razon_social ?? "No leído"}</strong>{facturaIA.proveedor.cuit ? ` · CUIT ${facturaIA.proveedor.cuit}` : ""}</div></div>
               <div className="form-group"><label>Comprobante</label><div>{facturaIA.tipo_comprobante ?? "Factura"} {facturaIA.numero_comprobante ?? ""}</div></div>
@@ -568,15 +613,15 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
                     return (
                       <tr id={`factura-item-${index}`} key={`${item.descripcion}-${index}`}>
                         <td>{correccionFacturaAbierta ? <input value={item.descripcion} onChange={(e)=>{setCompraPreparadaIA(null);setFacturaIA((actual)=>actual ? ({...actual,items:actual.items.map((x,i)=>i===index?{...x,descripcion:e.target.value}:x)}) : actual);}} aria-label={`Nombre para producto ${index + 1}`} /> : <strong>{item.descripcion}</strong>}<small style={{display:"block"}}>{existente ? `Stock: ${stockAnterior} → ${stockAnterior + item.cantidad}` : `Nuevo · ingresan ${item.cantidad} unidades`}</small></td>
-                        <td>{existente ? (item.codigo_barras ?? item.codigo ?? "-") : <div style={{display:"grid",gap:6}}>
+                        <td>{existente ? (existente.codigo_interno ?? existente.codigo_barras ?? "Código interno automático") : <div style={{display:"grid",gap:6}}>
                           <strong style={{color:"#b45309"}}>⚠️ PRODUCTO NUEVO</strong>
                           <select value={vinculosFactura[index] ?? ""} onChange={(e)=>{setCompraPreparadaIA(null);setVinculosFactura(a=>({...a,[index]:e.target.value}));}}>
                             <option value="">Crear como producto nuevo</option>
                             {productos.map((p)=><option key={p.id} value={p.id}>Vincular existente: {p.nombre}{p.codigo_barras ? ` · ${p.codigo_barras}` : ""}</option>)}
                           </select>
-                          <input value={codigosBarrasFactura[index] ?? item.codigo_barras ?? ""} onChange={(e)=>{setCompraPreparadaIA(null);setCodigosBarrasFactura(a=>({...a,[index]:e.target.value}));}} placeholder="Código de barras / EAN (recomendado)" aria-label={`Código de barras para ${item.descripcion}`} />
+                          <input value={codigosBarrasFactura[index] ?? item.codigo_barras ?? ""} onChange={(e)=>{setCompraPreparadaIA(null);setCodigosBarrasFactura(a=>({...a,[index]:e.target.value}));}} placeholder="Código de barras (opcional)" aria-label={`Código de barras para ${item.descripcion}`} />
                           <input value={codigosInternosFactura[index] ?? item.codigo ?? ""} onChange={(e)=>{setCompraPreparadaIA(null);setCodigosInternosFactura(a=>({...a,[index]:e.target.value}));}} placeholder="Código interno (opcional)" aria-label={`Código interno para ${item.descripcion}`} />
-                          {!((codigosBarrasFactura[index] ?? item.codigo_barras ?? "").trim()) && <small style={{color:"#b45309"}}>Falta código de barras. Podés completarlo ahora o continuar sin EAN.</small>}
+                          {!((codigosBarrasFactura[index] ?? item.codigo_barras ?? "").trim()) && <small style={{color:"#b45309"}}>El código de barras es opcional. SIGO usará el código interno o generará uno al guardar.</small>}
                         </div>}</td>
                         <td>{correccionFacturaAbierta ? <input type="number" min="0.001" step="0.001" value={item.cantidad} onChange={(e)=>{const cantidad=Number(e.target.value);setCompraPreparadaIA(null);setFacturaIA((actual)=>actual ? ({...actual,items:actual.items.map((x,i)=>i===index?{...x,cantidad,total_linea:cantidad*Number(x.costo_unitario)}:x)}) : actual);}} aria-label={`Cantidad para ${item.descripcion}`} /> : <strong>{item.cantidad}</strong>}<small style={{display:"block"}}>unidades vendibles</small></td>
                         <td><span style={{textDecoration:costoAnterior>0?"line-through":"none",opacity:.65}}>{costoAnterior>0?`$ ${costoAnterior.toLocaleString("es-AR",{minimumFractionDigits:2})}`:""}</span>{correccionFacturaAbierta ? <input type="number" min="0" step="0.01" value={item.costo_unitario} onChange={(e)=>{const costo=Number(e.target.value);setCompraPreparadaIA(null);setFacturaIA((actual)=>actual ? ({...actual,items:actual.items.map((x,i)=>i===index?{...x,costo_unitario:costo,total_linea:Number(x.cantidad)*costo}:x)}) : actual);const margen=Number(margenesFactura[index]);if(!existente&&costo>0&&Number.isFinite(margen))setPreciosVentaFactura((actual)=>({...actual,[index]:String(Math.round(costo*(1+margen/100)*100)/100)}));}} aria-label={`Costo unitario para ${item.descripcion}`} /> : <strong style={{display:"block"}}>→ $ {item.costo_unitario.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</strong>}<small style={{display:"block"}}>Total línea: $ {(item.total_linea ?? item.cantidad*item.costo_unitario).toLocaleString("es-AR",{minimumFractionDigits:2})}</small></td>
@@ -598,16 +643,31 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
                 Falta definir precio de venta para {preciosFacturaPendientes} producto{preciosFacturaPendientes === 1 ? "" : "s"} nuevo{preciosFacturaPendientes === 1 ? "" : "s"}. SIGO no los creará sin precio.
               </p>
             )}
+            </fieldset>
             {compraPreparadaIA && <div className="panel" style={{marginTop:12,border:"1px solid #16a34a",background:"#f0fdf4"}}>
               <h4 style={{marginTop:0}}>✅ COMPRA PREPARADA / PENDIENTE DE CONFIRMACIÓN</h4>
               <p><strong>Proveedor:</strong> {compraPreparadaIA.proveedorNombre}</p>
               <p><strong>Comprobante:</strong> {compraPreparadaIA.tipoComprobante ?? "Comprobante"} {compraPreparadaIA.numeroComprobante ?? ""}</p>
               <p><strong>Productos:</strong> {compraPreparadaIA.items.length} · Nuevos pendientes de creación: {compraPreparadaIA.items.filter((item)=>item.nuevo).length}</p>
-              <p style={{marginBottom:0}}>No se modificó stock, costo, precio, productos ni compras. Los cambios definitivos quedan reservados para “Confirmar compra e ingresar stock”.</p>
+              <p style={{marginBottom:0}}>No se modificó stock, costo, precio, productos ni compras. Al presionar “Guardar compra” se registrarán la compra y el ingreso de stock, sin exigir código de barras.</p>
             </div>}
             <div className="form-actions" style={{ justifyContent: "flex-start" }}>
-              <button type="button" className="primary-button" disabled={facturaAplicando || facturaProcesando || saving} onClick={aplicarFacturaAnalizada}>{facturaAplicando ? "Preparando compra…" : "🛒 PREPARAR COMPRA"}</button>
-              <button type="button" className="admin-button" disabled={facturaAplicando || facturaProcesando || saving} onClick={() => { localStorage.removeItem(borradorKey); setFacturaIA(null); setRevisionFacturaAbierta(false); setFacturaMensaje(""); setPreciosVentaFactura({}); setMargenesFactura({}); setCodigosBarrasFactura({}); setCodigosInternosFactura({}); setVinculosFactura({}); setCompraPreparadaIA(null); }}>❌ CANCELAR / DESCARTAR</button>
+              <GuardarCompraIA empresaId={empresaId} idempotencyKey={idempotencyKeyRef.current}
+                factura={facturaIA} productos={productos} vinculos={vinculosFactura} barras={codigosBarrasFactura}
+                codigos={codigosInternosFactura} precios={preciosVentaFactura} margenes={margenesFactura}
+                disabled={facturaProcesando || saving} onAntesGuardar={guardarBorradorIA}
+                onEstado={setFacturaAplicando} onPendiente={setGuardadoPendienteIA} onError={setError}
+                onGuardada={(compraId, resultado) => {
+                  localStorage.removeItem(borradorKey);
+                  setUltimaConciliacion({compraId,resultado});
+                  setFacturaIA(null);setCompraPreparadaIA(null);setRevisionFacturaAbierta(false);setCorreccionFacturaAbierta(false);
+                  setPreciosVentaFactura({});setMargenesFactura({});setCodigosBarrasFactura({});setCodigosInternosFactura({});setVinculosFactura({});
+                  setLineas([nuevaLinea()]);setNumero("");setOrigenCompra("manual");setFacturaAplicando(false);setGuardadoPendienteIA(false);
+                  idempotencyKeyRef.current=nuevaClave();
+                  setFacturaMensaje("✅ COMPRA GUARDADA. Se registraron la compra y el ingreso de stock.");
+                  void cargar(empresaId);
+                }} />
+              <button type="button" className="admin-button" disabled={facturaAplicando || facturaProcesando || saving || guardadoPendienteIA} onClick={() => { localStorage.removeItem(borradorKey); setFacturaIA(null); setRevisionFacturaAbierta(false); setFacturaMensaje(""); setPreciosVentaFactura({}); setMargenesFactura({}); setCodigosBarrasFactura({}); setCodigosInternosFactura({}); setVinculosFactura({}); setCompraPreparadaIA(null); }}>❌ CANCELAR / DESCARTAR</button>
             </div>
           </div>
         )}
@@ -691,14 +751,17 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
                     <td>{compra.fecha_compra}</td>
                     <td>{proveedorMap.get(compra.proveedor_id) ?? "Proveedor"}</td>
                     <td>{[compra.tipo_comprobante, compra.numero_comprobante].filter(Boolean).join(" ") || "-"}</td>
+                    <td>{compra.origen}</td>
                     <td>$ {Number(compra.total ?? 0).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
                     <td>{compra.estado}</td>
+                    <td><button type="button" className="admin-button" onClick={()=>void abrirCompra(compra)}>Abrir compra</button></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
+        {detalleCompra&&<div className="panel" style={{marginTop:16}}><div className="page-header"><h4>{detalleCompra.titulo}</h4><button type="button" className="admin-button" onClick={()=>setDetalleCompra(null)}>Cerrar</button></div><div className="table-wrapper"><table className="products-table"><thead><tr><th>Artículo</th><th>Código</th><th>Cantidad</th><th>Costo unitario</th><th>Subtotal</th></tr></thead><tbody>{detalleCompra.items.map((item,i)=><tr key={i}><td>{item.nombre}</td><td>{item.codigo}</td><td>{item.cantidad}</td><td>$ {item.costo.toLocaleString("es-AR")}</td><td>$ {(item.cantidad*item.costo).toLocaleString("es-AR")}</td></tr>)}</tbody></table></div></div>}
       </div>)}
       
     </div>
