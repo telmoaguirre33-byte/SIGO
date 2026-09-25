@@ -413,6 +413,16 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
     setRevisionFacturaAbierta(true);
     setError("");
     setCompraPreparadaIA(null);
+    if (!facturaIA.proveedor.razon_social?.trim() || /^(proveedor sin identificar|proveedor pendiente de revisión|no le[ií]do)$/i.test(facturaIA.proveedor.razon_social.trim())) {
+      setError("Completá el nombre real del proveedor en Revisar / Corregir antes de preparar esta compra.");
+      setCorreccionFacturaAbierta(true);
+      return;
+    }
+    if (!facturaIA.fecha) {
+      setError("Completá la fecha del comprobante en Revisar / Corregir antes de preparar esta compra.");
+      setCorreccionFacturaAbierta(true);
+      return;
+    }
     if (pendientesFactura.length > 0) {
       const detalle = pendientesFactura.map((pendiente) => `${pendiente.producto}: ${pendiente.motivos.join(" ")}`).join(" · ");
       setError(`NO SE PUEDE PREPARAR LA COMPRA. ${pendientesFactura.length} producto${pendientesFactura.length === 1 ? "" : "s"} pendiente${pendientesFactura.length === 1 ? "" : "s"}: ${detalle}`);
@@ -583,9 +593,9 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
               <button type="button" className="admin-button" onClick={()=>{if(precioGeneral==="")return;const m:Record<number,string>={},p:Record<number,string>={};facturaIA.items.forEach((item,i)=>{{p[i]=precioGeneral;if(item.costo_unitario>0)m[i]=String((Number(precioGeneral)/item.costo_unitario-1)*100);}});setMargenesFactura(v=>({...v,...m}));setPreciosVentaFactura(v=>({...v,...p}));setCompraPreparadaIA(null);}}>Aplicar precio</button>
             </div>
             <div className="form-grid">
-              <div className="form-group"><label>Proveedor detectado</label><div><strong>{facturaIA.proveedor.razon_social ?? "No leído"}</strong>{facturaIA.proveedor.cuit ? ` · CUIT ${facturaIA.proveedor.cuit}` : ""}</div></div>
-              <div className="form-group"><label>Comprobante</label><div>{facturaIA.tipo_comprobante ?? "Factura"} {facturaIA.numero_comprobante ?? ""}</div></div>
-              <div className="form-group"><label>Fecha</label><div>{facturaIA.fecha ?? "No leída"}</div></div>
+              <div className="form-group"><label>Proveedor detectado</label>{correccionFacturaAbierta ? <><input aria-label="Nombre del proveedor" value={facturaIA.proveedor.razon_social ?? ""} onChange={e=>{setCompraPreparadaIA(null);setFacturaIA(a=>a?({...a,proveedor:{...a.proveedor,razon_social:e.target.value}}):a);}}/><input aria-label="CUIT del proveedor (opcional)" placeholder="CUIT (opcional)" value={facturaIA.proveedor.cuit ?? ""} onChange={e=>{setCompraPreparadaIA(null);setFacturaIA(a=>a?({...a,proveedor:{...a.proveedor,cuit:e.target.value}}):a);}}/></> : <div><strong>{facturaIA.proveedor.razon_social ?? "No leído"}</strong>{facturaIA.proveedor.cuit ? ` · CUIT ${facturaIA.proveedor.cuit}` : ""}</div>}</div>
+              <div className="form-group"><label>Comprobante</label>{correccionFacturaAbierta ? <><input aria-label="Tipo de comprobante" value={facturaIA.tipo_comprobante ?? ""} onChange={e=>{setCompraPreparadaIA(null);setFacturaIA(a=>a?({...a,tipo_comprobante:e.target.value}):a);}}/><input aria-label="Número de comprobante" placeholder="Número (si figura)" value={facturaIA.numero_comprobante ?? ""} onChange={e=>{setCompraPreparadaIA(null);setFacturaIA(a=>a?({...a,numero_comprobante:e.target.value}):a);}}/></> : <div>{facturaIA.tipo_comprobante ?? "Comprobante"} {facturaIA.numero_comprobante ?? ""}</div>}</div>
+              <div className="form-group"><label>Fecha</label>{correccionFacturaAbierta ? <input aria-label="Fecha del comprobante" type="date" value={facturaIA.fecha ?? ""} onChange={e=>{setCompraPreparadaIA(null);setFacturaIA(a=>a?({...a,fecha:e.target.value}):a);}}/> : <div>{facturaIA.fecha ?? "No leída"}</div>}</div>
               <div className="form-group"><label>Confianza IA</label><div>{Math.round(facturaIA.confianza_general * 100)}%</div></div>
             </div>
             {facturaIA.advertencias.some((a)=>!a.startsWith("CRÍTICO")) && <div style={{marginTop:12}}>
