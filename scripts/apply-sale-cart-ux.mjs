@@ -141,6 +141,7 @@ replaceOnce(
           <button className="primary-button" disabled={!puedeConfirmar || confirmando} onClick={() => void confirmar()}>
             {confirmando ? "Confirmando…" : items.length > 0 ? "Confirmar venta · " + items.length + " producto" + (items.length === 1 ? "" : "s") : "Confirmar venta"}
           </button>
+          <button type="button" className="admin-button" disabled={!ultimaVentaTicket || confirmando} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir el ticket."));}}>Imprimir ticket</button>
         </div>`,
 "cart-actions",
 );
