@@ -438,8 +438,8 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
         codigoBarras: existente?.codigo_barras ?? ((codigosBarrasFactura[index] ?? item.codigo_barras ?? "").trim() || null),
         cantidad: Number(item.cantidad),
         costoUnitario: costo,
-        margenPorcentaje: existente ? margenExistente : Number(margenesFactura[index]),
-        precioVenta: existente ? precioExistente : Number(preciosVentaFactura[index]),
+        margenPorcentaje: existente && !preciosVentaFactura[index] ? margenExistente : Number(margenesFactura[index]),
+        precioVenta: existente && !preciosVentaFactura[index] ? precioExistente : Number(preciosVentaFactura[index]),
       };
     });
     const preparada: CompraPreparadaIA = {
@@ -577,10 +577,10 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
           <div style={{ marginTop: 16 }}>
             <fieldset disabled={facturaAplicando || guardadoPendienteIA || saving} style={{border:0,padding:0,minWidth:0}}>
             <div className="form-actions" style={{justifyContent:"flex-start"}}>
-              <label>Margen para todos los nuevos <input type="number" step="0.01" value={margenGeneral} onChange={e=>setMargenGeneral(e.target.value)} placeholder="%"/></label>
-              <button type="button" className="admin-button" onClick={()=>{if(margenGeneral==="")return;const m:Record<number,string>={},p:Record<number,string>={};facturaIA.items.forEach((item,i)=>{if(!productoFactura(item,i)){m[i]=margenGeneral;p[i]=String(Math.round(item.costo_unitario*(1+Number(margenGeneral)/100)*100)/100);}});setMargenesFactura(v=>({...v,...m}));setPreciosVentaFactura(v=>({...v,...p}));setCompraPreparadaIA(null);}}>Aplicar margen</button>
-              <label>Precio para todos los nuevos <input type="number" step="0.01" value={precioGeneral} onChange={e=>setPrecioGeneral(e.target.value)} placeholder="$"/></label>
-              <button type="button" className="admin-button" onClick={()=>{if(precioGeneral==="")return;const m:Record<number,string>={},p:Record<number,string>={};facturaIA.items.forEach((item,i)=>{if(!productoFactura(item,i)){p[i]=precioGeneral;if(item.costo_unitario>0)m[i]=String((Number(precioGeneral)/item.costo_unitario-1)*100);}});setMargenesFactura(v=>({...v,...m}));setPreciosVentaFactura(v=>({...v,...p}));setCompraPreparadaIA(null);}}>Aplicar precio</button>
+              <label>Margen para todos <input type="number" step="0.01" value={margenGeneral} onChange={e=>setMargenGeneral(e.target.value)} placeholder="%"/></label>
+              <button type="button" className="admin-button" onClick={()=>{if(margenGeneral==="")return;const m:Record<number,string>={},p:Record<number,string>={};facturaIA.items.forEach((item,i)=>{{m[i]=margenGeneral;p[i]=String(Math.round(item.costo_unitario*(1+Number(margenGeneral)/100)*100)/100);}});setMargenesFactura(v=>({...v,...m}));setPreciosVentaFactura(v=>({...v,...p}));setCompraPreparadaIA(null);}}>Aplicar margen</button>
+              <label>Precio para todos <input type="number" step="0.01" value={precioGeneral} onChange={e=>setPrecioGeneral(e.target.value)} placeholder="$"/></label>
+              <button type="button" className="admin-button" onClick={()=>{if(precioGeneral==="")return;const m:Record<number,string>={},p:Record<number,string>={};facturaIA.items.forEach((item,i)=>{{p[i]=precioGeneral;if(item.costo_unitario>0)m[i]=String((Number(precioGeneral)/item.costo_unitario-1)*100);}});setMargenesFactura(v=>({...v,...m}));setPreciosVentaFactura(v=>({...v,...p}));setCompraPreparadaIA(null);}}>Aplicar precio</button>
             </div>
             <div className="form-grid">
               <div className="form-group"><label>Proveedor detectado</label><div><strong>{facturaIA.proveedor.razon_social ?? "No leído"}</strong>{facturaIA.proveedor.cuit ? ` · CUIT ${facturaIA.proveedor.cuit}` : ""}</div></div>
@@ -608,8 +608,6 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
                     const precioExistente = Number(existente?.precio_venta ?? 0);
                     const costoAnterior = Number(existente?.costo_actual ?? existente?.costo_ultima_compra ?? 0);
                     const stockAnterior = Number(existente?.stock_actual ?? 0);
-                    const margen = Number(existente?.margen_porcentaje ?? (costoAnterior > 0 && precioExistente > 0 ? ((precioExistente-costoAnterior)/costoAnterior)*100 : 0));
-                    const precioSugerido = margen >= 0 ? item.costo_unitario * (1 + margen/100) : precioExistente;
                     return (
                       <tr id={`factura-item-${index}`} key={`${item.descripcion}-${index}`}>
                         <td>{correccionFacturaAbierta ? <input value={item.descripcion} onChange={(e)=>{setCompraPreparadaIA(null);setFacturaIA((actual)=>actual ? ({...actual,items:actual.items.map((x,i)=>i===index?{...x,descripcion:e.target.value}:x)}) : actual);}} aria-label={`Nombre para producto ${index + 1}`} /> : <strong>{item.descripcion}</strong>}<small style={{display:"block"}}>{existente ? `Stock: ${stockAnterior} → ${stockAnterior + item.cantidad}` : `Nuevo · ingresan ${item.cantidad} unidades`}</small></td>
@@ -626,9 +624,11 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
                         <td>{correccionFacturaAbierta ? <input type="number" min="0.001" step="0.001" value={item.cantidad} onChange={(e)=>{const cantidad=Number(e.target.value);setCompraPreparadaIA(null);setFacturaIA((actual)=>actual ? ({...actual,items:actual.items.map((x,i)=>i===index?{...x,cantidad,total_linea:cantidad*Number(x.costo_unitario)}:x)}) : actual);}} aria-label={`Cantidad para ${item.descripcion}`} /> : <strong>{item.cantidad}</strong>}<small style={{display:"block"}}>unidades vendibles</small></td>
                         <td><span style={{textDecoration:costoAnterior>0?"line-through":"none",opacity:.65}}>{costoAnterior>0?`$ ${costoAnterior.toLocaleString("es-AR",{minimumFractionDigits:2})}`:""}</span>{correccionFacturaAbierta ? <input type="number" min="0" step="0.01" value={item.costo_unitario} onChange={(e)=>{const costo=Number(e.target.value);setCompraPreparadaIA(null);setFacturaIA((actual)=>actual ? ({...actual,items:actual.items.map((x,i)=>i===index?{...x,costo_unitario:costo,total_linea:Number(x.cantidad)*costo}:x)}) : actual);const margen=Number(margenesFactura[index]);if(!existente&&costo>0&&Number.isFinite(margen))setPreciosVentaFactura((actual)=>({...actual,[index]:String(Math.round(costo*(1+margen/100)*100)/100)}));}} aria-label={`Costo unitario para ${item.descripcion}`} /> : <strong style={{display:"block"}}>→ $ {item.costo_unitario.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</strong>}<small style={{display:"block"}}>Total línea: $ {(item.total_linea ?? item.cantidad*item.costo_unitario).toLocaleString("es-AR",{minimumFractionDigits:2})}</small></td>
                         <td>
-                          {existente
-                            ? <div><span style={{textDecoration:"line-through",opacity:.65}}>{precioExistente>0?`$ ${precioExistente.toLocaleString("es-AR",{minimumFractionDigits:2})}`:"Sin precio"}</span><strong style={{display:"block",color:"#15803d"}}>→ $ {precioSugerido.toLocaleString("es-AR",{minimumFractionDigits:2})}</strong><small>Margen {margen.toLocaleString("es-AR",{maximumFractionDigits:2})}%</small></div>
-                            : <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}><input type="number" step="0.01" value={margenesFactura[index] ?? ""} onChange={(e)=>{const m=e.target.value;setCompraPreparadaIA(null);setMargenesFactura(a=>({...a,[index]:m}));const costo=Number(item.costo_unitario||0);if(costo>0&&m!=="")setPreciosVentaFactura(a=>({...a,[index]:String(Math.round(costo*(1+Number(m)/100)*100)/100)}));}} placeholder="% margen" aria-label={`Margen para ${item.descripcion}`}/><input type="number" min="0.01" step="0.01" value={preciosVentaFactura[index] ?? ""} onChange={(e)=>{const precio=e.target.value;setCompraPreparadaIA(null);setPreciosVentaFactura(a=>({...a,[index]:precio}));const costo=Number(item.costo_unitario||0);if(costo>0&&precio!=="")setMargenesFactura(a=>({...a,[index]:String(((Number(precio)-costo)/costo)*100)}));}} placeholder="Precio público" aria-label={`Precio de venta para ${item.descripcion}`}/></div>}
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                            <input type="number" step="0.01" value={margenesFactura[index] ?? ""} onChange={(e)=>{const m=e.target.value;setCompraPreparadaIA(null);setMargenesFactura(a=>({...a,[index]:m}));const costo=Number(item.costo_unitario||0);setPreciosVentaFactura(a=>({...a,[index]:costo>0&&m!==""?String(Math.round(costo*(1+Number(m)/100)*100)/100):""}));}} placeholder="% margen" aria-label={`Margen para ${item.descripcion}`}/>
+                            <input type="number" min="0.01" step="0.01" value={preciosVentaFactura[index] ?? ""} onChange={(e)=>{const precio=e.target.value;setCompraPreparadaIA(null);setPreciosVentaFactura(a=>({...a,[index]:precio}));const costo=Number(item.costo_unitario||0);setMargenesFactura(a=>({...a,[index]:costo>0&&precio!==""?String(((Number(precio)-costo)/costo)*100):""}));}} placeholder="Precio público" aria-label={`Precio de venta para ${item.descripcion}`}/>
+                          </div>
+                          {existente && <small>Precio actual: {precioExistente>0?`$ ${precioExistente.toLocaleString("es-AR",{minimumFractionDigits:2})}`:"sin precio"}. Dejá vacío para conservarlo.</small>}
                         </td>
                         <td>{Math.round(item.confianza * 100)}%</td>
                         <td>{existente ? `Existente: ${existente.nombre}` : "NUEVO · se creará recién al confirmar"}</td>
