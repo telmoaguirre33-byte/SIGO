@@ -271,16 +271,16 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
         const precio = Number(preciosVentaFactura[index]);
         const margen = Number(margenesFactura[index]);
         if (!Number.isFinite(precio) || precio <= 0) motivos.push("Falta un precio al público válido.");
+        else if (precio < costo) motivos.push("El precio al público no puede ser menor que el costo.");
         if (!Number.isFinite(margen) || margen < 0) motivos.push("Falta un margen de ganancia válido.");
       }
-      if (item.total_linea != null && Number.isFinite(Number(item.total_linea)) && cantidad > 0 && costo > 0) {
-        const calculado = cantidad * costo;
-        const diferencia = Math.abs(Number(item.total_linea) - calculado);
-        if (diferencia > Math.max(10, calculado * 0.15)) motivos.push("Cantidad × costo no coincide con el total de línea leído.");
-      }
+      const precioInformado = preciosVentaFactura[index];
+      if (existente && precioInformado !== undefined && precioInformado !== "" && Number(precioInformado) < costo) motivos.push("El precio al público no puede ser menor que el costo.");
       return motivos.length ? [{ index, producto: nombre || `Producto ${index + 1}`, motivos }] : [];
     });
   }, [facturaIA, productos, vinculosFactura, codigosBarrasFactura, codigosInternosFactura, preciosVentaFactura, margenesFactura]);
+
+  const faltantesConfirmacion = [...(!facturaIA?.proveedor.razon_social?.trim() || /^(proveedor sin identificar|proveedor pendiente de revisión|no le[ií]do)$/i.test(facturaIA.proveedor.razon_social.trim()) ? ["Completá el nombre real del proveedor."] : []), ...(!facturaIA?.fecha ? ["Completá la fecha del comprobante."] : []), ...pendientesFactura.flatMap(p => p.motivos.map(m => `${p.producto}: ${m}`))];
 
   const preciosFacturaPendientes = pendientesFactura.filter((p) => p.motivos.some((m) => m.includes("precio al público"))).length;
 
@@ -468,7 +468,13 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
         :supabase.from("compra_borradores_sigo").insert({...valores,created_by:(await supabase.auth.getUser()).data.user?.id}).select("id").single();
       const {data,error:saveError}=await q;
       if(saveError || !data?.id)throw saveError??new Error("No se pudo registrar el borrador.");
-      setBorradorServidorId(data.id);setFacturaMensaje("📋 Comprobante registrado como pendiente en el historial. No se ingresó stock.");
+      setBorradorServidorId(data.id);setFacturaMensaje("📋 Comprobante guardado como pendiente. No se ingresó stock ni se cambiaron precios. Ya podés cargar otro comprobante; este se puede completar desde Historial.");
+      localStorage.removeItem(borradorKey);
+      setFacturaIA(null);setImagenDataUrl(null);setCompraPreparadaIA(null);setRevisionFacturaAbierta(false);setCorreccionFacturaAbierta(false);
+      setPreciosVentaFactura({});setMargenesFactura({});setCodigosBarrasFactura({});setCodigosInternosFactura({});setVinculosFactura({});
+      setBorradorServidorId(null);setMensajeWhatsApp("");setMargenGeneral("");setPrecioGeneral("");
+      if(fotoRef.current)fotoRef.current.value="";if(archivoRef.current)archivoRef.current.value="";if(adjuntoRef.current)adjuntoRef.current.value="";
+      idempotencyKeyRef.current=nuevaClave();
       await cargar();
     }catch(err){setError(err instanceof Error?err.message:"No se pudo guardar pendiente.");}
     finally{setGuardandoBorradorServidor(false);}
@@ -742,26 +748,33 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
               <p><strong>Proveedor:</strong> {compraPreparadaIA.proveedorNombre}</p>
               <p><strong>Comprobante:</strong> {compraPreparadaIA.tipoComprobante ?? "Comprobante"} {compraPreparadaIA.numeroComprobante ?? ""}</p>
               <p><strong>Productos:</strong> {compraPreparadaIA.items.length} · Nuevos pendientes de creación: {compraPreparadaIA.items.filter((item)=>item.nuevo).length}</p>
-              <p style={{marginBottom:0}}>Guardá el comprobante y tus correcciones en el historial. Cuando esté completo, podés confirmar el ingreso de stock sin exigir código de barras.</p>
+              <p style={{marginBottom:0}}>Al confirmar se registrará esta compra, ingresará stock y se actualizarán los costos y los precios de venta que definiste. Después la pantalla quedará lista para otra factura.</p>
             </div>}
+            {faltantesConfirmacion.length > 0 && <div className="panel" role="alert" style={{border:"1px solid #f59e0b",background:"#fffbeb",marginTop:12}}><strong>Para ingresar stock faltan {faltantesConfirmacion.length} dato(s):</strong><ul>{faltantesConfirmacion.map((motivo,i)=><li key={i}>{motivo}</li>)}</ul><button type="button" className="admin-button" onClick={irAlPrimerPendiente}>Ir al primer producto pendiente</button></div>}
             <div className="form-actions" style={{ justifyContent: "flex-start" }}>
-              <button type="button" className="primary-button" disabled={guardandoBorradorServidor || facturaAplicando} onClick={()=>void guardarEnHistorialPendiente()}>{guardandoBorradorServidor?"Guardando…":"💾 GUARDAR COMPRA"}</button>
-              <small>Guarda siempre el comprobante y los cambios en el historial como pendiente, aunque falten datos. No ingresa stock.</small>
+              <button type="button" className="admin-button" disabled={guardandoBorradorServidor || facturaAplicando} onClick={()=>void guardarEnHistorialPendiente()}>{guardandoBorradorServidor?"Guardando pendiente…":"📋 GUARDAR PENDIENTE Y CARGAR OTRA"}</button>
+              <small>Esta opción registra el comprobante en historial, deja el stock y los precios sin cambios y limpia la pantalla. Para ingresar stock, usá el botón azul de confirmar.</small>
               <GuardarCompraIA empresaId={empresaId} idempotencyKey={idempotencyKeyRef.current}
                 factura={facturaIA} productos={productos} vinculos={vinculosFactura} barras={codigosBarrasFactura}
                 codigos={codigosInternosFactura} precios={preciosVentaFactura} margenes={margenesFactura}
-                disabled={facturaProcesando || saving} onAntesGuardar={guardarBorradorIA}
+                disabled={facturaProcesando || saving || guardandoBorradorServidor} onAntesGuardar={guardarBorradorIA}
+                faltantes={faltantesConfirmacion} onIrAlPrimerPendiente={irAlPrimerPendiente}
                 onEstado={setFacturaAplicando} onPendiente={setGuardadoPendienteIA} onError={setError}
                 onGuardada={(compraId, resultado) => {
                   localStorage.removeItem(borradorKey);
-                  if(borradorServidorId)void supabase.from("compra_borradores_sigo").update({estado:"confirmado",compra_id:compraId,updated_at:new Date().toISOString()}).eq("id",borradorServidorId).eq("empresa_id",empresaId);
+                  const claveConfirmada=idempotencyKeyRef.current;
+                  void supabase.from("compra_borradores_sigo").update({estado:"confirmado",compra_id:compraId,updated_at:new Date().toISOString()})
+                    .eq("empresa_id",empresaId).eq("estado","pendiente").contains("documento",{idempotencyKey:claveConfirmada})
+                    .then(()=>void cargar(empresaId));
                   setBorradorServidorId(null);
                   setUltimaConciliacion({compraId,resultado});
                   setFacturaIA(null);setImagenDataUrl(null);setCompraPreparadaIA(null);setRevisionFacturaAbierta(false);setCorreccionFacturaAbierta(false);
                   setPreciosVentaFactura({});setMargenesFactura({});setCodigosBarrasFactura({});setCodigosInternosFactura({});setVinculosFactura({});
                   setLineas([nuevaLinea()]);setNumero("");setOrigenCompra("manual");setFacturaAplicando(false);setGuardadoPendienteIA(false);
                   idempotencyKeyRef.current=nuevaClave();
-                  setFacturaMensaje("✅ COMPRA GUARDADA. Se registraron la compra y el ingreso de stock.");
+                  setMensajeWhatsApp("");setMargenGeneral("");setPrecioGeneral("");
+                  if(fotoRef.current)fotoRef.current.value="";if(archivoRef.current)archivoRef.current.value="";if(adjuntoRef.current)adjuntoRef.current.value="";
+                  setFacturaMensaje("✅ COMPRA CONFIRMADA. Stock ingresado y costos/precios de venta actualizados en la lista de productos. Ya podés cargar otra factura.");
                   void cargar(empresaId);
                 }} />
               <button type="button" className="admin-button" disabled={facturaAplicando || facturaProcesando || saving || guardadoPendienteIA} onClick={() => { localStorage.removeItem(borradorKey); setBorradorServidorId(null); setFacturaIA(null); setRevisionFacturaAbierta(false); setFacturaMensaje(""); setPreciosVentaFactura({}); setMargenesFactura({}); setCodigosBarrasFactura({}); setCodigosInternosFactura({}); setVinculosFactura({}); setCompraPreparadaIA(null); }}>❌ CANCELAR / DESCARTAR</button>
