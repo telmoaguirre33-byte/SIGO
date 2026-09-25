@@ -10,6 +10,7 @@ export default function ArcaLauncher() {
   const [productosPorEmpresa, setProductosPorEmpresa] = useState<Record<string, number | null>>({});
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [ventaSolicitada, setVentaSolicitada] = useState<string | null>(null);
 
   const resolverEmpresa = useCallback(async () => {
     try {
@@ -62,8 +63,22 @@ export default function ArcaLauncher() {
     setLoading(true);
     const activa = await resolverEmpresa();
     setLoading(false);
-    if (activa) setOpen(true);
+    if (activa) { setVentaSolicitada(null); setOpen(true); }
   }
+
+  useEffect(() => {
+    const abrirVenta = (event: Event) => {
+      const detalle = (event as CustomEvent<{ empresaId: string; ventaId: string }>).detail;
+      if (!detalle?.ventaId || !detalle?.empresaId) return;
+      void resolverEmpresa().then((activa) => {
+        if (activa?.empresa_id !== detalle.empresaId) return;
+        setVentaSolicitada(detalle.ventaId);
+        setOpen(true);
+      });
+    };
+    window.addEventListener("sigo:arca:venta", abrirVenta);
+    return () => window.removeEventListener("sigo:arca:venta", abrirVenta);
+  }, [resolverEmpresa]);
 
   if (!empresa) return null;
   const esVendedor = empresa.rol === "seller";
@@ -105,12 +120,14 @@ export default function ArcaLauncher() {
               <ArcaEmisionVendedor
                 key={empresa.empresa_id}
                 empresaId={empresa.empresa_id}
+                ventaInicialId={ventaSolicitada}
                 empresaNombre={empresa.empresa_nombre}
               />
             ) : (
               <ArcaFacturacion
                 key={empresa.empresa_id}
                 empresaId={empresa.empresa_id}
+                ventaInicialId={ventaSolicitada}
                 empresaNombre={empresa.empresa_nombre}
                 empresas={empresas.filter((item) => ["owner", "admin"].includes(item.rol))}
                 productosCount={productosPorEmpresa[empresa.empresa_id] ?? null}
