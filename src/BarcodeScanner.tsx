@@ -16,6 +16,7 @@ type Props = {
   onBlockedProduct?: (product: BarcodeProduct, reason: "precio" | "stock") => void;
   onQueryChange?: (query: string) => void;
   onManualQuery?: (query: string) => boolean;
+  queryResetKey?: number;
 };
 
 type BarcodeDetectorLike = {
@@ -61,6 +62,7 @@ export default function BarcodeScanner({
   onBlockedProduct,
   onQueryChange,
   onManualQuery,
+  queryResetKey,
 }: Props) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -86,6 +88,8 @@ export default function BarcodeScanner({
     const w = window as typeof window & { BarcodeDetector?: BarcodeDetectorCtor };
     return w.BarcodeDetector;
   }, []);
+
+  useEffect(() => { setCode(""); }, [queryResetKey]);
 
   function focusScanner() {
     window.setTimeout(() => inputRef.current?.focus(), 0);
@@ -455,7 +459,7 @@ export default function BarcodeScanner({
           autoComplete="off"
           autoFocus
           value={code}
-          onChange={(e) => { setCode(e.target.value); onQueryChange?.(e.target.value); }}
+          onChange={(e) => { setCode(e.target.value); setError(""); onQueryChange?.(e.target.value); }}
           onKeyDown={(e) => {
             if (isLikelyScannerSubmit(e.key)) {
               e.preventDefault();
