@@ -459,8 +459,12 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
     try{
       const documento={facturaIA,imagenDataUrl,preciosVentaFactura,margenesFactura,codigosBarrasFactura,codigosInternosFactura,vinculosFactura,idempotencyKey:idempotencyKeyRef.current};
       const valores={empresa_id:empresaId,documento,estado:"pendiente"};
-      const q=borradorServidorId
-        ?supabase.from("compra_borradores_sigo").update({documento,updated_at:new Date().toISOString()}).eq("id",borradorServidorId).eq("empresa_id",empresaId).select("id").single()
+      const {data:yaGuardado,error:lookupError}=borradorServidorId ? {data:{id:borradorServidorId},error:null} : await supabase.from("compra_borradores_sigo")
+        .select("id").eq("empresa_id",empresaId).eq("estado","pendiente").contains("documento",{idempotencyKey:idempotencyKeyRef.current}).order("created_at",{ascending:true}).limit(1).maybeSingle();
+      if(lookupError)throw lookupError;
+      const id=yaGuardado?.id;
+      const q=id
+        ?supabase.from("compra_borradores_sigo").update({documento,updated_at:new Date().toISOString()}).eq("id",id).eq("empresa_id",empresaId).select("id").single()
         :supabase.from("compra_borradores_sigo").insert({...valores,created_by:(await supabase.auth.getUser()).data.user?.id}).select("id").single();
       const {data,error:saveError}=await q;
       if(saveError || !data?.id)throw saveError??new Error("No se pudo registrar el borrador.");
