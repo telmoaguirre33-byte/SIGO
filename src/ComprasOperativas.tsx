@@ -86,7 +86,9 @@ function encontrarProducto(item: FacturaItemIA, productos: ProductoSigo[]) {
 export default function ComprasOperativas({ empresaId, vista = "todo" }: { empresaId: string; vista?: "todo" | "manual" | "ia" | "historial" }) {
   const [proveedores, setProveedores] = useState<ProveedorSigo[]>([]);
   const [compras, setCompras] = useState<CompraSigo[]>([]);
-  const [detalleCompra,setDetalleCompra]=useState<{titulo:string;items:{nombre:string;codigo:string;cantidad:number;costo:number}[]}|null>(null);
+  const [detalleCompra,setDetalleCompra]=useState<{compra:CompraSigo;titulo:string;items:{productoId:string;nombre:string;codigo:string;cantidad:number;costo:number}[]}|null>(null);
+  const [edicionCompra,setEdicionCompra]=useState<{proveedorId:string;fecha:string;tipo:string;numero:string;items:{productoId:string;cantidad:string;costo:string}[]}|null>(null);
+  const [guardandoHistorial,setGuardandoHistorial]=useState(false);
   const [mensajeWhatsApp,setMensajeWhatsApp]=useState("");
   const [margenGeneral,setMargenGeneral]=useState("");
   const [precioGeneral,setPrecioGeneral]=useState("");
@@ -397,15 +399,42 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
     finally{setFacturaProcesando(false);}
   }
 
-  async function abrirCompra(compra:CompraSigo){
+  async function abrirCompra(compra:CompraSigo,accion?:"modificar"|"anular"){
     setError("");
     const {data,error:detalleError}=await supabase.from("compra_items_sigo")
       .select("producto_id,cantidad,costo_unitario,productos(nombre,codigo_interno,codigo_barras)")
       .eq("empresa_id",empresaId).eq("compra_id",compra.id);
     if(detalleError){setError(detalleError.message);return;}
-    setDetalleCompra({titulo:`${compra.tipo_comprobante??"Compra"} ${compra.numero_comprobante??""}`,
+    setEdicionCompra(accion==="modificar"?{proveedorId:compra.proveedor_id,fecha:compra.fecha_compra,tipo:compra.tipo_comprobante??"",numero:compra.numero_comprobante??"",
+      items:(data??[]).map(fila=>({productoId:fila.producto_id,cantidad:String(fila.cantidad),costo:String(fila.costo_unitario)}))}:null);
+    setDetalleCompra({compra,titulo:`${compra.tipo_comprobante??"Compra"} ${compra.numero_comprobante??""}`,
       items:(data??[]).map(fila=>{const p=Array.isArray(fila.productos)?fila.productos[0]:fila.productos;
-        return {nombre:p?.nombre??"Producto",codigo:p?.codigo_interno||p?.codigo_barras||"—",cantidad:Number(fila.cantidad),costo:Number(fila.costo_unitario)};})});
+        return {productoId:fila.producto_id,nombre:p?.nombre??"Producto",codigo:p?.codigo_interno||p?.codigo_barras||"—",cantidad:Number(fila.cantidad),costo:Number(fila.costo_unitario)};})});
+
+  }
+
+  function iniciarEdicionCompra(){
+    if(!detalleCompra || detalleCompra.compra.estado!=="confirmada")return;
+    const c=detalleCompra.compra;
+    setEdicionCompra({proveedorId:c.proveedor_id,fecha:c.fecha_compra,tipo:c.tipo_comprobante??"",numero:c.numero_comprobante??"",
+      items:detalleCompra.items.map(x=>({productoId:x.productoId,cantidad:String(x.cantidad),costo:String(x.costo)}))});
+  }
+
+  async function cambiarCompraHistorial(accion:"modificar"|"anular"){
+    if(!detalleCompra || guardandoHistorial)return;
+    if(accion==="anular" && !window.confirm("¿Anular esta compra? SIGO descontará del stock las unidades ingresadas por ella y conservará el comprobante como anulado en el historial."))return;
+    if(accion==="modificar" && !edicionCompra)return;
+    setGuardandoHistorial(true);setError("");
+    try{
+      const items=accion==="modificar"?edicionCompra!.items.map(x=>({producto_id:x.productoId,cantidad:Number(x.cantidad),costo_unitario:Number(x.costo)})):null;
+      if(items && (items.length===0 || items.some(x=>!x.producto_id || !Number.isFinite(x.cantidad) || x.cantidad<=0 || !Number.isFinite(x.costo_unitario) || x.costo_unitario<0)))throw new Error("Revisá productos, cantidades y costos de la compra.");
+      const {error:rpcError}=await supabase.rpc("cambiar_compra_sigo",{p_empresa_id:empresaId,p_compra_id:detalleCompra.compra.id,p_accion:accion,
+        p_proveedor_id:accion==="modificar"?edicionCompra!.proveedorId:null,p_fecha:accion==="modificar"?edicionCompra!.fecha:null,
+        p_tipo:accion==="modificar"?edicionCompra!.tipo:null,p_numero:accion==="modificar"?edicionCompra!.numero:null,p_items:items});
+      if(rpcError)throw new Error(rpcError.message.includes("STOCK_INSUFFICIENT_TO_REVERSE")?"No se puede descontar el stock de esta compra: parte de la mercadería ya se vendió. Revisá el inventario antes de anularla.":rpcError.message);
+      setDetalleCompra(null);setEdicionCompra(null);await cargar();
+    }catch(err){setError(err instanceof Error?err.message:"No se pudo actualizar la compra.");}
+    finally{setGuardandoHistorial(false);}
   }
 
   function aplicarFacturaAnalizada() {
@@ -764,14 +793,23 @@ export default function ComprasOperativas({ empresaId, vista = "todo" }: { empre
                     <td>{compra.origen}</td>
                     <td>$ {Number(compra.total ?? 0).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
                     <td>{compra.estado}</td>
-                    <td><button type="button" className="admin-button" onClick={()=>void abrirCompra(compra)}>Abrir compra</button></td>
+                    <td><div className="form-actions" style={{justifyContent:"flex-start"}}><button type="button" className="admin-button" onClick={()=>void abrirCompra(compra)}>Abrir compra</button>{compra.estado==="confirmada"&&<><button type="button" className="admin-button" onClick={()=>void abrirCompra(compra,"modificar")}>Modificar</button><button type="button" className="admin-button danger-button" onClick={()=>void abrirCompra(compra,"anular")}>Eliminar / anular</button></>}</div></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-        {detalleCompra&&<div className="panel" style={{marginTop:16}}><div className="page-header"><h4>{detalleCompra.titulo}</h4><button type="button" className="admin-button" onClick={()=>setDetalleCompra(null)}>Cerrar</button></div><div className="table-wrapper"><table className="products-table"><thead><tr><th>Artículo</th><th>Código</th><th>Cantidad</th><th>Costo unitario</th><th>Subtotal</th></tr></thead><tbody>{detalleCompra.items.map((item,i)=><tr key={i}><td>{item.nombre}</td><td>{item.codigo}</td><td>{item.cantidad}</td><td>$ {item.costo.toLocaleString("es-AR")}</td><td>$ {(item.cantidad*item.costo).toLocaleString("es-AR")}</td></tr>)}</tbody></table></div></div>}
+        {detalleCompra&&<div className="panel" style={{marginTop:16}}><div className="page-header"><h4>{detalleCompra.titulo} · {detalleCompra.compra.estado}</h4><button type="button" className="admin-button" onClick={()=>{setDetalleCompra(null);setEdicionCompra(null);}}>Cerrar</button></div>
+          {edicionCompra ? <div><div className="form-grid">
+            <div className="form-group"><label>Proveedor</label><select value={edicionCompra.proveedorId} onChange={e=>setEdicionCompra(a=>a?({...a,proveedorId:e.target.value}):a)}>{proveedores.map(p=><option key={p.id} value={p.id}>{p.razon_social}</option>)}</select></div>
+            <div className="form-group"><label>Fecha</label><input type="date" value={edicionCompra.fecha} onChange={e=>setEdicionCompra(a=>a?({...a,fecha:e.target.value}):a)}/></div>
+            <div className="form-group"><label>Tipo de comprobante</label><input value={edicionCompra.tipo} onChange={e=>setEdicionCompra(a=>a?({...a,tipo:e.target.value}):a)}/></div>
+            <div className="form-group"><label>Número de comprobante</label><input value={edicionCompra.numero} onChange={e=>setEdicionCompra(a=>a?({...a,numero:e.target.value}):a)}/></div></div>
+            <div className="table-wrapper"><table className="products-table"><thead><tr><th>Artículo</th><th>Cantidad</th><th>Costo unitario</th><th>Subtotal</th><th></th></tr></thead><tbody>{edicionCompra.items.map((item,i)=><tr key={i}><td><select value={item.productoId} onChange={e=>setEdicionCompra(a=>a?({...a,items:a.items.map((x,j)=>j===i?{...x,productoId:e.target.value}:x)}):a)}><option value="">Seleccionar producto</option>{productos.map(p=><option key={p.id} value={p.id}>{p.nombre} · {p.codigo_interno??p.codigo_barras??"sin código"}</option>)}</select></td><td><input type="number" min="0.001" step="0.001" value={item.cantidad} onChange={e=>setEdicionCompra(a=>a?({...a,items:a.items.map((x,j)=>j===i?{...x,cantidad:e.target.value}:x)}):a)}/></td><td><input type="number" min="0" step="0.01" value={item.costo} onChange={e=>setEdicionCompra(a=>a?({...a,items:a.items.map((x,j)=>j===i?{...x,costo:e.target.value}:x)}):a)}/></td><td>$ {(Number(item.cantidad)*Number(item.costo)).toLocaleString("es-AR")}</td><td><button type="button" className="admin-button danger-button" onClick={()=>setEdicionCompra(a=>a?({...a,items:a.items.filter((_,j)=>j!==i)}):a)}>Quitar</button></td></tr>)}</tbody></table></div>
+            <div className="form-actions"><button type="button" className="admin-button" onClick={()=>setEdicionCompra(a=>a?({...a,items:[...a.items,{productoId:"",cantidad:"1",costo:"0"}]}):a)}>+ Agregar artículo</button><button type="button" className="primary-button" disabled={guardandoHistorial} onClick={()=>void cambiarCompraHistorial("modificar")}>{guardandoHistorial?"Guardando…":"Guardar cambios"}</button><button type="button" className="admin-button" onClick={()=>setEdicionCompra(null)}>Cancelar</button></div>
+          </div> : <><div className="table-wrapper"><table className="products-table"><thead><tr><th>Artículo</th><th>Código</th><th>Cantidad</th><th>Costo unitario</th><th>Subtotal</th></tr></thead><tbody>{detalleCompra.items.map((item,i)=><tr key={i}><td>{item.nombre}</td><td>{item.codigo}</td><td>{item.cantidad}</td><td>$ {item.costo.toLocaleString("es-AR")}</td><td>$ {(item.cantidad*item.costo).toLocaleString("es-AR")}</td></tr>)}</tbody></table></div>{detalleCompra.compra.estado==="confirmada"&&<div className="form-actions"><button type="button" className="admin-button" onClick={iniciarEdicionCompra}>Modificar</button><button type="button" className="admin-button danger-button" disabled={guardandoHistorial} onClick={()=>void cambiarCompraHistorial("anular")}>Eliminar / anular</button></div>}</>}
+        </div>}
       </div>)}
       
     </div>
