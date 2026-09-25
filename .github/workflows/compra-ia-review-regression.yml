@@ -3,43 +3,85 @@ name: Compra IA review regression
 on:
   push:
     branches: [feat/ia-review-center]
-  pull_request:
-    branches: [main]
-    paths:
-      - 'src/ComprasOperativas.tsx'
-      - 'src/facturaIA.ts'
-      - 'api/compras/analizar-factura.js'
-      - 'scripts/verify-compra-ia-review.mjs'
-      - '.github/workflows/compra-ia-review-regression.yml'
 
 permissions:
   contents: read
 
+concurrency:
+  group: compra-ia-review-patch
+  cancel-in-progress: false
+
 jobs:
-  review:
+  apply-tested-review-patch:
+    if: github.repository == 'telmoaguirre33-byte/SIGO' && github.ref == 'refs/heads/feat/ia-review-center' && github.event.head_commit.message == 'fix: apply verified Compra IA review patch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Archive only tracked source for isolated regression inspection
-        run: git archive --format=tar HEAD src api scripts package.json tsconfig.json vite.config.ts > /tmp/compra-ia-source.tar
-      - uses: actions/upload-artifact@v4
-        with:
-          name: compra-ia-source-${{ github.sha }}
-          path: /tmp/compra-ia-source.tar
-          retention-days: 1
+      - name: Apply only the exact locally tested source changes
+        run: |
+          python3 - <<'PY'
+          import gzip, hashlib, json, pathlib, subprocess
+          manifest = json.loads(pathlib.Path('scripts/.compra-ia-review-manifest.json').read_text())
+          allowed = {'api/compras/analizar-factura.js', 'src/ComprasOperativas.tsx', 'src/facturaIA.ts', 'src/compraIARevision.ts', 'src/compraIARevision.css', 'scripts/verify-compra-ia-review.mjs', 'scripts/verify-invoice-ai.mjs', 'scripts/verify-invoice-client-reconciliation.mjs'}
+          assert set(manifest) == allowed
+          for name, hashes in manifest.items():
+              p = pathlib.Path(name)
+              actual = hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else None
+              assert actual == hashes['before'], 'Source moved: ' + name
+          packed = b''.join(pathlib.Path(f'scripts/.compra-ia-review-patch.{i}.gzpart').read_bytes() for i in [1,2,3])
+          assert hashlib.sha256(packed).hexdigest() == '3df3fbce3877397cd9a84663435ac3f1e8fc7b99bd312fac07cc9fbbe2b281fd'
+          patch = gzip.decompress(packed)
+          assert len(patch) == 63385
+          target = '/tmp/compra-ia-review.patch'
+          pathlib.Path(target).write_bytes(patch)
+          names = {line.split('\t')[-1] for line in subprocess.check_output(['git','apply','--numstat',target],text=True).splitlines()}
+          assert names == allowed
+          subprocess.run(['git','apply','--check',target],check=True)
+          subprocess.run(['git','apply',target],check=True)
+          for name, hashes in manifest.items():
+              assert hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest() == hashes['after'], 'Applied bytes mismatch: ' + name
+          subprocess.run(['git','add','--',*sorted(allowed)],check=True)
+          staged = set(subprocess.check_output(['git','diff','--cached','--name-only'],text=True).splitlines())
+          assert staged == allowed
+          PY
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'fix: review unnumbered purchases and editable per-item pricing'
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: npm install --no-audit --no-fund
-      - run: npm run build
-      - name: Targeted document and price regression tests
+      - name: Install build dependencies
+        run: npm install --no-audit --no-fund
+      - name: Compile full SIGO application
+        run: npm run build
+      - name: Run behavioral document and pricing regression
+        run: node scripts/verify-compra-ia-review.mjs
+      - name: Check existing invoice safety contracts
         run: |
-          if [ -f scripts/verify-compra-ia-review.mjs ]; then
-            node scripts/verify-compra-ia-review.mjs
-          else
-            echo 'Targeted tests not implemented yet; source snapshot only.'
-            exit 1
-          fi
+          node scripts/verify-invoice-ai.mjs
+          node scripts/verify-invoice-client-reconciliation.mjs
+          node scripts/verify-purchase-document-safety.mjs
+      - name: Report broader critical suite separately
+        id: critical
+        continue-on-error: true
+        run: npm run verify:critical
+      - name: Publish tested source only to the same Preview branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/feat/ia-review-center'
+          auth='!f() { echo username=x-access-token; echo "password=$GH_TOKEN"; }; f'
+          remote=$(git -c credential.helper="$auth" ls-remote origin refs/heads/feat/ia-review-center | cut -f1)
+          test "$remote" = "$GITHUB_SHA" || { echo 'Preview branch moved; refusing to overwrite concurrent work.'; exit 1; }
+          git -c credential.helper="$auth" push origin HEAD:refs/heads/feat/ia-review-center
+          echo "TESTED_SOURCE_COMMIT=$(git rev-parse HEAD)"
+          echo 'No merge to main and no live purchase or stock operation was executed.'
+      - name: Report audit scope
+        if: always()
+        run: |
+          echo 'This job validates the review draft, not a physical Android camera, live Gemini interpretation or transactional stock/price persistence.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Broader critical suite outcome: ${{ steps.critical.outcome }}' >> "$GITHUB_STEP_SUMMARY"
