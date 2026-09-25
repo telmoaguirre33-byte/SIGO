@@ -116,6 +116,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
   const [facturaAplicando, setFacturaAplicando] = useState(false);
   const [guardadoPendienteIA, setGuardadoPendienteIA] = useState(false);
   const [facturaMensaje, setFacturaMensaje] = useState("");
+  const [errorConfirmacion, setErrorConfirmacion] = useState("");
   const [preciosVentaFactura, setPreciosVentaFactura] = useState<Record<number, string>>({});
   const [margenesFactura, setMargenesFactura] = useState<Record<number, string>>({});
   const [origenCompra, setOrigenCompra] = useState<"manual"|"ia">("manual");
@@ -474,7 +475,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
       localStorage.removeItem(borradorKey);
       setFacturaIA(null);setImagenDataUrl(null);setCompraPreparadaIA(null);setRevisionFacturaAbierta(false);setCorreccionFacturaAbierta(false);
       setPreciosVentaFactura({});setMargenesFactura({});setCodigosBarrasFactura({});setCodigosInternosFactura({});setVinculosFactura({});
-      setBorradorServidorId(null);setMensajeWhatsApp("");setMargenGeneral("");setPrecioGeneral("");
+      setBorradorServidorId(null);setErrorConfirmacion("");setMensajeWhatsApp("");setMargenGeneral("");setPrecioGeneral("");
       if(fotoRef.current)fotoRef.current.value="";if(archivoRef.current)archivoRef.current.value="";if(adjuntoRef.current)adjuntoRef.current.value="";
       idempotencyKeyRef.current=nuevaClave();
       await cargar();
@@ -762,7 +763,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
                 codigos={codigosInternosFactura} precios={preciosVentaFactura} margenes={margenesFactura}
                 disabled={facturaProcesando || saving || guardandoBorradorServidor} onAntesGuardar={guardarBorradorIA}
                 faltantes={faltantesConfirmacion} onIrAlPrimerPendiente={irAlPrimerPendiente}
-                onEstado={setFacturaAplicando} onPendiente={setGuardadoPendienteIA} onError={setError}
+                onEstado={setFacturaAplicando} onPendiente={setGuardadoPendienteIA} onError={(mensaje)=>{setError(mensaje);setErrorConfirmacion(mensaje);}}
                 onGuardada={(compraId, resultado) => {
                   localStorage.removeItem(borradorKey);
                   const claveConfirmada=idempotencyKeyRef.current;
@@ -775,11 +776,12 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
                   setPreciosVentaFactura({});setMargenesFactura({});setCodigosBarrasFactura({});setCodigosInternosFactura({});setVinculosFactura({});
                   setLineas([nuevaLinea()]);setNumero("");setOrigenCompra("manual");setFacturaAplicando(false);setGuardadoPendienteIA(false);
                   idempotencyKeyRef.current=nuevaClave();
-                  setMensajeWhatsApp("");setMargenGeneral("");setPrecioGeneral("");
+                  setErrorConfirmacion("");setMensajeWhatsApp("");setMargenGeneral("");setPrecioGeneral("");
                   if(fotoRef.current)fotoRef.current.value="";if(archivoRef.current)archivoRef.current.value="";if(adjuntoRef.current)adjuntoRef.current.value="";
                   setFacturaMensaje("✅ COMPRA CONFIRMADA. Stock ingresado y costos/precios de venta actualizados en la lista de productos. Ya podés cargar otra factura.");
                   void cargar(empresaId);
                 }} />
+              {errorConfirmacion && <p role="alert" className="form-error" style={{maxWidth:420}}>{errorConfirmacion}</p>}
               <button type="button" className="admin-button" disabled={facturaAplicando || facturaProcesando || saving || guardadoPendienteIA} onClick={() => { localStorage.removeItem(borradorKey); setBorradorServidorId(null); setFacturaIA(null); setRevisionFacturaAbierta(false); setFacturaMensaje(""); setPreciosVentaFactura({}); setMargenesFactura({}); setCodigosBarrasFactura({}); setCodigosInternosFactura({}); setVinculosFactura({}); setCompraPreparadaIA(null); }}>❌ CANCELAR / DESCARTAR</button>
             </div>
           </div>
