@@ -268,11 +268,13 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
       if (!Number.isFinite(cantidad) || cantidad <= 0) motivos.push("La cantidad debe ser mayor que cero.");
       if (!Number.isFinite(costo) || costo <= 0) motivos.push("El costo unitario debe ser mayor que cero.");
       if (!existente) {
-        const precio = Number(preciosVentaFactura[index]);
-        const margen = Number(margenesFactura[index]);
+        const margenIngresado = margenesFactura[index];
+        const margen = margenIngresado === undefined || margenIngresado === "" ? 30 : Number(margenIngresado);
+        const precioIngresado = preciosVentaFactura[index];
+        const precio = precioIngresado === undefined || precioIngresado === "" ? Math.round(costo*(1+margen/100)*100)/100 : Number(precioIngresado);
         if (!Number.isFinite(precio) || precio <= 0) motivos.push("Falta un precio al público válido.");
         else if (precio < costo) motivos.push("El precio al público no puede ser menor que el costo.");
-        if (!Number.isFinite(margen) || margen < 0) motivos.push("Falta un margen de ganancia válido.");
+        if (!Number.isFinite(margen) || margen < 0) motivos.push("El margen de ganancia debe ser cero o mayor.");
       }
       const precioInformado = preciosVentaFactura[index];
       if (existente && precioInformado !== undefined && precioInformado !== "" && Number(precioInformado) < costo) motivos.push("El precio al público no puede ser menor que el costo.");
@@ -737,6 +739,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
                 </tbody>
               </table>
             </div>
+            <p><strong>Productos nuevos:</strong> si dejás margen y precio vacíos, al confirmar se aplicará un margen del 30 % sobre el costo. Los valores que ingresaste se respetan.</p>
             {preciosFacturaPendientes > 0 && (
               <p className="form-error" role="alert" style={{ marginTop: 10 }}>
                 Falta definir precio de venta para {preciosFacturaPendientes} producto{preciosFacturaPendientes === 1 ? "" : "s"} nuevo{preciosFacturaPendientes === 1 ? "" : "s"}. SIGO no los creará sin precio.
