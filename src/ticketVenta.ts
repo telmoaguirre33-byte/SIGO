@@ -14,7 +14,7 @@ export async function guardarConfigTicket(config: ConfigTicket): Promise<void> {
   if (error) throw error;
 }
 
-export async function imprimirTicketVenta(empresaId: string, ventaId: string): Promise<void> {
+export async function imprimirTicketVenta(empresaId: string, ventaId: string, formato: "58" | "80" | "a4" = "80"): Promise<void> {
   const popup = window.open("", "_blank", "width=420,height=680");
   if (!popup) throw new Error("Habilitá las ventanas emergentes para imprimir el ticket.");
   popup.document.title = "Preparando ticket…";
@@ -27,7 +27,7 @@ export async function imprimirTicketVenta(empresaId: string, ventaId: string): P
   const doc = popup.document;
   doc.title = `Ticket de venta ${venta.numero ?? venta.id.slice(0, 8)}`;
   const style = doc.createElement("style");
-  style.textContent = "body{font:14px Arial,sans-serif;width:72mm;margin:10px auto;color:#111}h2{text-align:center;font-size:18px}p{text-align:center}table{width:100%;border-collapse:collapse}td{padding:5px 0;border-bottom:1px dashed #aaa}td:last-child{text-align:right}hr{border:0;border-top:1px dashed #555}.logo{max-width:45mm;max-height:28mm;display:block;margin:0 auto}@media print{button{display:none}body{margin:0}}";
+  style.textContent = `@page{size:${formato === "a4" ? "A4" : formato + "mm auto"};margin:${formato === "a4" ? "12mm" : "3mm"}} body{font:14px Arial,sans-serif;width:${formato === "a4" ? "180mm" : formato === "58" ? "50mm" : "72mm"};max-width:100%;margin:10px auto;color:#111}h2{text-align:center;font-size:18px}p{text-align:center}table{width:100%;border-collapse:collapse}td{padding:5px 0;border-bottom:1px dashed #aaa}td:last-child{text-align:right}hr{border:0;border-top:1px dashed #555}.logo{max-width:45mm;max-height:28mm;display:block;margin:0 auto}@media print{button{display:none}body{margin:0}}`;
   doc.head.appendChild(style);
   const add = (tag: string, content: string, parent: HTMLElement = doc.body) => { const el=doc.createElement(tag);el.textContent=content;parent.appendChild(el);return el; };
   if (config?.logo_data_url?.startsWith("data:image/")) { const logo=doc.createElement("img");logo.src=config.logo_data_url;logo.className="logo";logo.alt="Logo del comercio";doc.body.appendChild(logo); }
