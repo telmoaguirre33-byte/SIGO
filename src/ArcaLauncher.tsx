@@ -80,6 +80,20 @@ export default function ArcaLauncher() {
     return () => window.removeEventListener("sigo:arca:venta", abrirVenta);
   }, [resolverEmpresa]);
 
+  useEffect(() => {
+    if (!open || !ventaSolicitada) return;
+    const enfocarEmision = () => {
+      const card = document.querySelector<HTMLElement>(".arca-overlay .arca-emit-card");
+      if (!card) return false;
+      card.scrollIntoView({ block: "start" });
+      return true;
+    };
+    if (enfocarEmision()) return;
+    const observer = new MutationObserver(() => { if (enfocarEmision()) observer.disconnect(); });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [open, ventaSolicitada]);
+
   if (!empresa) return null;
   const esVendedor = empresa.rol === "seller";
 
