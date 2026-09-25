@@ -53,7 +53,11 @@ export function construirCompraIA(input: GuardarCompraIAInput) {
       if (!nombre) throw new Error(`Completá el nombre del producto ${index + 1}.`);
       if (!Number.isFinite(cantidad) || cantidad <= 0 || cantidad > 1_000_000) throw new Error(`Revisá la cantidad de ${nombre}.`);
       if (!Number.isFinite(costo) || costo <= 0 || costo > 1_000_000_000) throw new Error(`Revisá el costo unitario de ${nombre}.`);
-      const precio = existente && !texto(input.precios[index]) ? null : Number(input.precios[index]);
+      const margenIngresado = input.margenes[index];
+      const margen = margenIngresado === undefined || margenIngresado === "" ? 30 : Number(margenIngresado);
+      const precioIngresado = input.precios[index];
+      const precio = existente && !texto(precioIngresado) ? null : precioIngresado === undefined || precioIngresado === ""
+        ? Math.round(costo * (1 + margen / 100) * 100) / 100 : Number(precioIngresado);
       if ((!existente || precio !== null) && (!Number.isFinite(precio) || Number(precio) < costo || Number(precio) > 1_000_000_000)) throw new Error(`Definí un precio de venta válido para ${nombre}.`);
       return {
         producto_id: existente?.id ?? null,
