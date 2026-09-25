@@ -21,8 +21,9 @@ for (const token of [
   "stockActual: null",
   "Guardar precio y agregar",
   "Ingresalo desde Compras; SIGO no inventará stock desde Caja",
-  "Buscar producto",
-  'placeholder="Escribí nombre, marca, categoría o código"',
+  "onQueryChange={setBusquedaProducto}",
+  "onManualQuery={(query) =>",
+  "queryResetKey={busquedaResetKey}",
   "onBlockedProduct={marcarProductoBloqueado}",
 ]) {
   if (!sale.includes(token)) throw new Error(`Sale preparation flow missing: ${token}`);
