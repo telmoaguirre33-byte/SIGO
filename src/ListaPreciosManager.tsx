@@ -4,6 +4,7 @@ import type { ProductoSigo } from "./productos";
 import { descargarProductosExcel } from "./excelProductos";
 import EtiquetasPrecios from "./EtiquetasPrecios";
 import CarteleriaOfertas from "./CarteleriaOfertas";
+import ProductosOferta from "./ProductosOferta";
 import { calcularPrecioConMargen, redondearPrecioVenta } from "./redondeoPrecios";
 
 type Props = {
@@ -162,7 +163,7 @@ export default function ListaPreciosManager({ empresaId, productos, puedeEditar,
       <p className="barcode-help">Modo consulta · {filtrados.length.toLocaleString("es-AR")} producto{filtrados.length === 1 ? "" : "s"} visible{filtrados.length === 1 ? "" : "s"}.</p>
     </div>;
   }
-  return <div className="panel" aria-label="Lista de precios de venta">
+  return <><ProductosOferta empresaId={empresaId} productos={productos} /><div className="panel" aria-label="Lista de precios de venta">
     <div className="page-header"><div><h3>Lista de precios de venta</h3><p>Redondeá precios de venta sin agregar margen, o recalculalos desde el costo.</p></div><button className="admin-button" type="button" disabled={productos.length === 0 || aplicando} onClick={() => descargarProductosExcel(productos)}>Exportar Excel</button></div>
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}><EtiquetasPrecios productos={filtrados} /><CarteleriaOfertas productos={filtrados} /></div>
     <fieldset disabled={aplicando} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
@@ -188,5 +189,5 @@ export default function ListaPreciosManager({ empresaId, productos, puedeEditar,
       <div className="form-grid"><div className="form-group form-span-2"><label htmlFor="precio-individual-producto">Producto</label><select id="precio-individual-producto" disabled={aplicando} value={productoIndividual} onChange={(e) => { const id = e.target.value; setProductoIndividual(id); const seleccionado = productos.find((p) => p.id === id); setMargenIndividual(seleccionado?.margen_porcentaje == null ? "" : String(seleccionado.margen_porcentaje)); }}><option value="">Seleccionar…</option>{productos.map((p) => <option key={p.id} value={p.id}>{p.nombre}{p.codigo_interno ? ` · ${p.codigo_interno}` : ""}</option>)}</select></div><div className="form-group"><label htmlFor="precio-individual-margen">Margen %</label><input id="precio-individual-margen" disabled={aplicando} type="number" min="0" max="10000" step="0.01" inputMode="decimal" value={margenIndividual} onChange={(e) => setMargenIndividual(e.target.value)} /></div><div className="form-group"><label>Precio resultante</label><div className="admin-button" style={{ cursor: "default", textAlign: "left" }}>{precioIndividual == null ? "-" : dinero(precioIndividual)}</div></div></div>
       <div className="form-actions"><button className="admin-button" type="button" disabled={aplicando || !productoIndividual || precioIndividual == null} onClick={() => void aplicarIndividual()}>Aplicar excepción</button></div>
     </>}
-  </div>;
+  </div></>;
 }
