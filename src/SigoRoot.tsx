@@ -60,6 +60,7 @@ export default function SigoRoot() {
 
   const handleEmpresaChange = useCallback((empresa: EmpresaOperativa | null) => {
     setEmpresaActiva(empresa);
+    window.dispatchEvent(new CustomEvent("sigo:empresa-activa-cambiada", { detail: empresa }));
     setTenantReady(true);
     setMatrixMode(false);
     setWorkspace(empresa ? workspaceInicial(empresa.rol) : "operacion");
@@ -183,6 +184,7 @@ export default function SigoRoot() {
     const empresa = resolverEmpresaActiva(empresas, empresaId, authData.user.id);
     if (!empresa || empresa.empresa_id !== empresaId) throw new Error("SUPPORT_COMPANY_NOT_VISIBLE");
     setEmpresaActiva(empresa);
+    window.dispatchEvent(new CustomEvent("sigo:empresa-activa-cambiada", { detail: empresa }));
     setTenantState("ready");
     setMatrixMode(false);
     setWorkspace(workspaceInicial(empresa.rol));

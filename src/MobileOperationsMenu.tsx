@@ -51,8 +51,13 @@ export default function MobileOperationsMenu() {
   useEffect(() => {
     void cargarEmpresa();
     const refrescar = () => { if (document.visibilityState === "visible") void cargarEmpresa(); };
+    const cambiarEmpresa = (event: Event) => setEmpresa((event as CustomEvent<EmpresaOperativa | null>).detail);
     document.addEventListener("visibilitychange", refrescar);
-    return () => document.removeEventListener("visibilitychange", refrescar);
+    window.addEventListener("sigo:empresa-activa-cambiada", cambiarEmpresa);
+    return () => {
+      document.removeEventListener("visibilitychange", refrescar);
+      window.removeEventListener("sigo:empresa-activa-cambiada", cambiarEmpresa);
+    };
   }, [cargarEmpresa]);
 
   useEffect(() => {
