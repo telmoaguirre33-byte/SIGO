@@ -102,7 +102,12 @@ export default function ProductosOferta({ empresaId, productos }: Props) {
       setAbierta(null);
       setMensaje(`${guardadas.length} oferta${guardadas.length === 1 ? "" : "s"} guardada${guardadas.length === 1 ? "" : "s"}.`);
     } catch (err) {
-      setError(guardado ? "Las ofertas se guardaron, pero no se pudo actualizar la pantalla. Recargá SIGO antes de volver a guardar." : err instanceof Error ? err.message : "No se pudieron guardar las ofertas.");
+      const detalle = err instanceof Error ? err.message : "";
+      setError(guardado ? "Las ofertas se guardaron, pero no se pudo actualizar la pantalla. Recargá SIGO antes de volver a guardar."
+        : detalle.includes("OFFER_WRITE_FORBIDDEN") ? "Tu perfil no tiene permiso para administrar ofertas en esta empresa."
+        : detalle.includes("OFFER_DATES_OVERLAP") ? "Hay ofertas superpuestas para un mismo producto. Revisá las fechas."
+        : detalle.includes("OFFER_PRODUCT_INVALID") ? "Un producto ya no está disponible o no tiene precio válido. Actualizá la lista."
+        : detalle || "No se pudieron guardar las ofertas.");
       if (guardado) setCargaValida(false);
     } finally { setGuardando(false); }
   }

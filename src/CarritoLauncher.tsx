@@ -35,8 +35,17 @@ export default function CarritoLauncher() {
   useEffect(() => {
     void cargarEmpresa();
     const refrescar = () => { if (document.visibilityState === "visible") void cargarEmpresa(); };
+    const cambiarEmpresa = (event: Event) => {
+      const siguiente = (event as CustomEvent<EmpresaOperativa | null>).detail;
+      setEmpresa(puedeVender(siguiente) ? siguiente : null);
+      setOpen(false); // Un carrito iniciado en otra empresa nunca se reutiliza.
+    };
     document.addEventListener("visibilitychange", refrescar);
-    return () => document.removeEventListener("visibilitychange", refrescar);
+    window.addEventListener("sigo:empresa-activa-cambiada", cambiarEmpresa);
+    return () => {
+      document.removeEventListener("visibilitychange", refrescar);
+      window.removeEventListener("sigo:empresa-activa-cambiada", cambiarEmpresa);
+    };
   }, [cargarEmpresa]);
 
   useEffect(() => {
