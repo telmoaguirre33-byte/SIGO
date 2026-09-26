@@ -502,6 +502,7 @@ function Stock({ empresaId }: { empresaId: string }) {
   const [productos, setProductos] = useState<ProductoSigo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [busqueda, setBusqueda] = useState("");
   const [soloCriticos, setSoloCriticos] = useState(false);
   const [scanResult, setScanResult] = useState<BarcodeProduct | null>(null);
 
@@ -526,7 +527,12 @@ function Stock({ empresaId }: { empresaId: string }) {
   const criticos = visibles.filter((p) => p.stock_minimo != null && Number(p.stock_actual) <= Number(p.stock_minimo));
   const sinStock = visibles.filter((p) => Number(p.stock_actual) <= 0);
   const totalUnidades = visibles.reduce((total, p) => total + Number(p.stock_actual || 0), 0);
-  const filas = soloCriticos ? criticos : visibles;
+  const normalizarBusqueda = (valor: string) => valor.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es-AR").trim();
+  const termino = normalizarBusqueda(busqueda);
+  const filas = (soloCriticos ? criticos : visibles).filter((p) =>
+    !termino || [p.nombre, p.codigo_interno, p.codigo_barras, p.marca]
+      .some((valor) => valor && normalizarBusqueda(valor).includes(termino))
+  );
 
   return (
     <div className="products-page">
@@ -546,8 +552,23 @@ function Stock({ empresaId }: { empresaId: string }) {
       </div>
 
       <div className="panel">
-        <h3>Consultar producto por código</h3>
-        <BarcodeScanner empresaId={empresaId} action="consultar" onProduct={(producto) => setScanResult(producto)} />
+        <h3>Buscar stock por nombre o código</h3>
+        <BarcodeScanner
+          empresaId={empresaId}
+          action="consultar"
+          onQueryChange={(query) => { setBusqueda(query); setScanResult(null); }}
+          onManualQuery={(query) => {
+            const valor = normalizarBusqueda(query);
+            if (!valor) return false;
+            // Los códigos exactos siguen consultándose en el servidor; los nombres
+            // filtran el stock ya cargado, también al pulsar Buscar o Enter.
+            if (productos.some((p) =>
+              normalizarBusqueda(p.codigo_barras || "") === valor || normalizarBusqueda(p.codigo_interno || "") === valor
+            )) return false;
+            return productos.some((p) => normalizarBusqueda(p.nombre).includes(valor));
+          }}
+          onProduct={(producto) => { setScanResult(producto); setBusqueda(producto.codigo_barras || producto.codigo_interno || producto.nombre); }}
+        />
         {scanResult && <p><strong>{scanResult.nombre}</strong> · Stock actual: {scanResult.stock_actual ?? "restringido"} · Mínimo: {scanResult.stock_minimo ?? "sin definir"}</p>}
       </div>
 
@@ -569,7 +590,7 @@ function Stock({ empresaId }: { empresaId: string }) {
                 })}
               </tbody>
             </table>
-            {filas.length === 0 && <div className="table-empty">No hay stock visible para mostrar.</div>}
+            {filas.length === 0 && <div className="table-empty">{termino ? "No se encontraron productos con esa búsqueda." : "No hay stock visible para mostrar."}</div>}
           </div>
         )}
       </div>
