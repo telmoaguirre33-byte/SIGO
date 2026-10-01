@@ -5,6 +5,7 @@ import type { BarcodeAction, BarcodeProduct } from "./barcode";
 import VentaRapidaOperativa from "./VentaRapidaOperativa";
 import ComprasOperativas from "./ComprasOperativas";
 import StockVsInventario from "./StockVsInventario";
+import { cargarResumenOperativoSigo, type ResumenOperativoSigo } from "./informes";
 import { can } from "./permissions";
 import { listarModulosEmpresa } from "./modulosEmpresa";
 import {
@@ -131,6 +132,11 @@ function ComprasHub({ empresaId }: { empresaId: string }) {
 }
 
 function Inicio({ empresa, onProductos, onStock, onCaja }: { empresa: EmpresaOperativa; onProductos: () => void; onStock: () => void; onCaja: () => void }) {
+  const [resumen,setResumen]=useState<ResumenOperativoSigo|null>(null);
+  useEffect(()=>{ let activo=true; void cargarResumenOperativoSigo(empresa.empresa_id).then(r=>{if(activo)setResumen(r)}).catch(()=>{if(activo)setResumen(null)}); return()=>{activo=false}; },[empresa.empresa_id]);
+  const horas=(resumen?.ventasHoyPorHora||[]).filter(h=>h.hora>=7&&h.hora<=23);
+  const max=Math.max(1,...horas.map(h=>h.cantidad));
+  const dinero=(v:number)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(v);
   return (
     <div className="sigo-home">
       <div className="welcome sigo-home-hero">
@@ -142,7 +148,7 @@ function Inicio({ empresa, onProductos, onStock, onCaja }: { empresa: EmpresaOpe
         <button className="sigo-home-action" onClick={onProductos}><span>＋</span><strong>Nuevo / ver producto</strong><small>Administrar catálogo</small></button>
         <button className="sigo-home-action" onClick={onStock}><span>◇</span><strong>Ver stock</strong><small>Consultar inventario</small></button>
       </div>
-      <div className="sigo-home-info"><strong>Tu operación, más clara.</strong><span>Usá los accesos rápidos para vender, consultar stock o administrar productos. Los indicadores gerenciales están disponibles en Informes.</span></div>
+      <div className="panel"><div className="stats-grid"><div className="stat-card"><span>Total facturado hoy</span><strong>{dinero(resumen?.ventasHoyTotal||0)}</strong></div><div className="stat-card"><span>Ventas realizadas</span><strong>{resumen?.ventasHoy||0}</strong></div></div><div style={{marginTop:16}}><strong>Horas pico</strong><div style={{display:"flex",alignItems:"end",gap:5,height:92,overflowX:"auto",paddingTop:8}}>{horas.map(h=><div key={h.hora} title={`${h.hora}:00 · ${h.cantidad} ventas · ${dinero(h.total)}`} style={{minWidth:24,textAlign:"center",fontSize:10}}><div style={{height:60,display:"flex",alignItems:"end",justifyContent:"center"}}><span style={{display:"block",width:14,height:`${Math.max(3,(h.cantidad/max)*58)}px`,background:"currentColor",borderRadius:"4px 4px 0 0"}} /></div><span>{h.hora}</span></div>)}</div><small>Ventas por hora de hoy. Tocá o mantené presionada una barra para ver el detalle.</small></div></div>
     </div>
   );
 }
