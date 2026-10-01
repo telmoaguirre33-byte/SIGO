@@ -10,18 +10,21 @@ if (!source.includes(importLine)) {
   source = source.replace(importAnchor, `${importAnchor}\n${importLine}`);
 }
 
-const oldType = 'type Section = "Inicio" | "Productos" | "Ventas" | "Clientes" | "Compras" | "Stock" | "Informes";';
-const newType = 'type Section = "Inicio" | "Productos" | "Lista de precios" | "Ventas" | "Clientes" | "Compras" | "Stock" | "Informes";';
-if (!source.includes(newType)) {
-  if (!source.includes(oldType)) throw new Error("No se encontró el tipo Section esperado en SigoApp.tsx");
-  source = source.replace(oldType, newType);
+// Keep this transformation compatible with section types extended by other features
+// (for example Stock vs Inventario). Those additions may appear before this script
+// runs in the production build chain.
+const sectionTypeMatch = source.match(/^type Section = ([^\n]+);$/m);
+if (!sectionTypeMatch) throw new Error("No se encontró la declaración de Section en SigoApp.tsx");
+if (!sectionTypeMatch[1].includes('"Lista de precios"')) {
+  const updatedSectionType = `type Section = ${sectionTypeMatch[1]} | "Lista de precios";`;
+  source = source.replace(sectionTypeMatch[0], updatedSectionType);
 }
 
-const oldSections = 'const sections: Section[] = ["Inicio", "Productos", "Ventas", "Clientes", "Compras", "Stock", "Informes"];';
-const newSections = 'const sections: Section[] = ["Inicio", "Productos", "Lista de precios", "Ventas", "Clientes", "Compras", "Stock", "Informes"];';
-if (!source.includes(newSections)) {
-  if (!source.includes(oldSections)) throw new Error("No se encontró la lista de secciones esperada en SigoApp.tsx");
-  source = source.replace(oldSections, newSections);
+const sectionsMatch = source.match(/^const sections: Section\[\] = \[([^\n]*)\];$/m);
+if (!sectionsMatch) throw new Error("No se encontró la lista de secciones en SigoApp.tsx");
+if (!sectionsMatch[1].includes('"Lista de precios"')) {
+  const updatedSections = `const sections: Section[] = [${sectionsMatch[1]}, "Lista de precios"];`;
+  source = source.replace(sectionsMatch[0], updatedSections);
 }
 
 const productosRender = '          {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}';
@@ -31,11 +34,14 @@ if (!source.includes(preciosRender)) {
   source = source.replace(productosRender, `${productosRender}\n${preciosRender}`);
 }
 
-const oldPendiente = '          {section !== "Inicio" && section !== "Productos" && section !== "Stock" && section !== "Ventas" && section !== "Compras" && <Pendiente title={section} />}';
-const newPendiente = '          {section !== "Inicio" && section !== "Productos" && section !== "Lista de precios" && section !== "Stock" && section !== "Ventas" && <Pendiente title={section} />}';
-if (!source.includes(newPendiente)) {
-  if (!source.includes(oldPendiente)) throw new Error("No se encontró el fallback de secciones pendientes en SigoApp.tsx");
-  source = source.replace(oldPendiente, newPendiente);
+const pendingRenderMatch = source.match(/^([ \t]*\{section !== "Inicio"[^\n]*<Pendiente title=\{section\} \/>\})$/m);
+if (!pendingRenderMatch) throw new Error("No se encontró el fallback de secciones pendientes en SigoApp.tsx");
+if (!pendingRenderMatch[1].includes('section !== "Lista de precios"')) {
+  const updatedPendingRender = pendingRenderMatch[1].replace(
+    ' && <Pendiente title={section} />',
+    ' && section !== "Lista de precios" && <Pendiente title={section} />',
+  );
+  source = source.replace(pendingRenderMatch[1], updatedPendingRender);
 }
 
 // Si una compilación anterior insertó el administrador dentro del maestro de Productos,
