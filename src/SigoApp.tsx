@@ -130,7 +130,7 @@ function Inicio({ empresa, onProductos, onStock, onCaja }: { empresa: EmpresaOpe
     <div className="welcome">
       <div>
         <h2>SIGO · {empresa.empresa_nombre}</h2>
-        <p>Operación protegida por empresa activa. Productos y stock trabajan con aislamiento por tenant.</p>
+        <p>Ventas, productos y stock en un solo lugar. Todo listo para trabajar.</p>
       </div>
       <div className="topbar-actions">
         <button className="admin-button" onClick={onStock}>Ver stock</button>
@@ -328,7 +328,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
       <div className="page-header">
         <div>
           <h2>Productos</h2>
-          <p>Catálogo de la empresa activa. Lectura y cambios se validan en backend por tenant y permisos.</p>
+          <p>Administrá tus productos, precios y stock desde un solo lugar.</p>
         </div>
         <div className="topbar-actions product-actions">
           <button className="admin-button" onClick={() => void cargar()}>Actualizar</button>
