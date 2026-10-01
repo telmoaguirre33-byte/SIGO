@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 type FotoInventario = { id: string; nombre: string; url: string; vence: number };
-type Estado = "ok" | "falta_sigo" | "no_visto" | "revisar";
+type Estado = "ok" | "sin_stock" | "falta_sigo" | "no_visto" | "revisar";
 type Hallazgo = { id:string; codigo:string; descripcion:string; categoria:string; color:string; estado:Estado; foto?:number; x?:number; y?:number; confianza?:number };
 
 const PALETA=["#2563eb","#dc2626","#16a34a","#9333ea","#ea580c","#0891b2","#db2777","#65a30d","#4f46e5","#b45309","#0f766e","#be123c","#7c3aed","#0369a1","#15803d","#c2410c","#a21caf","#1d4ed8","#4d7c0f","#9f1239"];
@@ -35,6 +35,7 @@ export default function StockVsInventario({empresaId}:{empresaId:string}) {
   const resumen=useMemo(()=>({
     ok:hallazgos.filter(h=>h.estado==="ok").length,
     falta:hallazgos.filter(h=>h.estado==="falta_sigo").length,
+    sinStock:hallazgos.filter(h=>h.estado==="sin_stock").length,
     noVisto:hallazgos.filter(h=>h.estado==="no_visto").length,
     revisar:hallazgos.filter(h=>h.estado==="revisar").length,
   }),[hallazgos]);
@@ -68,7 +69,8 @@ export default function StockVsInventario({empresaId}:{empresaId:string}) {
     <div className="page-header"><div><h2>Stock vs Inventario</h2><p>Comparación visual por bloque. Reporte mensual · fotos disponibles durante 24 horas.</p></div><button className="admin-button" onClick={exportar} disabled={!hallazgos.length}>▣ Exportar Excel</button></div>
     <div className="stats-grid sigo-inventory-stats">
       <div className="stat-card"><span>Coinciden</span><strong>{resumen.ok}</strong></div>
-      <div className="stat-card"><span>Falta en SIGO</span><strong>{resumen.falta}</strong></div>
+      <div className="stat-card"><span>No está en SIGO</span><strong>{resumen.falta}</strong></div>
+      <div className="stat-card"><span>Sin stock</span><strong>{resumen.sinStock}</strong></div>
       <div className="stat-card"><span>No visto</span><strong>{resumen.noVisto}</strong></div>
       <div className="stat-card"><span>Revisar</span><strong>{resumen.revisar}</strong></div>
     </div>
@@ -84,7 +86,7 @@ export default function StockVsInventario({empresaId}:{empresaId:string}) {
     <div className="panel">
       <div className="page-header"><div><h3>Reporte mensual · {mes}</h3>{bloque&&<strong>Bloque analizado: {bloque}</strong>}<p>Se alimenta con las revisiones del mes. Al cambiar de mes empieza un reporte nuevo y el anterior queda como histórico.</p>{historicos.length>0&&<small>Históricos guardados: {historicos.join(" · ")}</small>}</div></div>
       <div className="table-wrapper"><table className="products-table"><thead><tr><th>Marca</th><th>Código</th><th>Descripción</th><th>Bloque</th><th>Estado</th></tr></thead><tbody>
-        {hallazgos.map((h,i)=><tr key={h.id}><td><span aria-label={`Marcador ${i+1}`} style={{display:"inline-block",width:12,height:12,borderRadius:"50%",background:h.color||PALETA[i%PALETA.length],marginRight:7}}/>{String(i+1).padStart(2,"0")}</td><td>{h.codigo||"-"}</td><td><strong>{h.descripcion}</strong></td><td>{h.categoria}</td><td>{h.estado==="falta_sigo"?"F — NO ESTÁ EN SIGO":h.estado==="no_visto"?"NO VISTO EN INVENTARIO":h.estado==="ok"?"ESTÁ EN SIGO":"REVISAR"}</td></tr>)}
+        {hallazgos.map((h,i)=><tr key={h.id}><td><span aria-label={`Marcador ${i+1}`} style={{display:"inline-block",width:12,height:12,borderRadius:"50%",background:h.color||PALETA[i%PALETA.length],marginRight:7}}/>{String(i+1).padStart(2,"0")}</td><td>{h.codigo||"-"}</td><td><strong>{h.descripcion}</strong></td><td>{h.categoria}</td><td>{h.estado==="falta_sigo"?"F — NO ESTÁ EN SIGO":h.estado==="sin_stock"?"SIN STOCK EN SIGO":h.estado==="no_visto"?"NO VISTO EN INVENTARIO":h.estado==="ok"?"ESTÁ EN SIGO":"REVISAR"}</td></tr>)}
       </tbody></table>{!hallazgos.length&&<div className="table-empty">Todavía no hay revisiones cargadas este mes.</div>}</div>
     </div>
   </div>;
