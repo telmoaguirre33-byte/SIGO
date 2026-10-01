@@ -67,6 +67,7 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
             <span>Gestión Operativa</span>
           </div>
         </div>
+        <div className="sidebar-scroll">
         <nav className="menu">
           {sections.map((item) => (
             <button key={item} className={section === item ? "menu-item active" : "menu-item"} onClick={() => setSection(item)}>
@@ -86,6 +87,7 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
               <span>Empresa activa</span>
             </div>
           </div>
+        </div>
         </div>
       </aside>}
 
