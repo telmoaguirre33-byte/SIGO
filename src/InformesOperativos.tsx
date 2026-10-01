@@ -27,6 +27,12 @@ const vacio: ResumenOperativoSigo = {
   ventas7DiasTotal: 0,
   ventas7DiasAnteriorTotal: 0,
   variacionVentas7Dias: null,
+  ventas30DiasTotal: 0,
+  ventas30DiasAnteriorTotal: 0,
+  variacionVentas30Dias: null,
+  ticketPromedio30Dias: 0,
+  compras30DiasTotal: 0,
+  balanceComercial30Dias: 0,
 };
 
 function dinero(valor: number) {
@@ -197,8 +203,11 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
             <div className="sigo-detail-title"><span>↗</span><h3>Ventas</h3></div>
             <div className="stats-grid">
               <div className="stat-card"><span>Ventas de hoy</span><strong>{resumen.ventasHoy}</strong><small>{dinero(resumen.ventasHoyTotal)}</small></div>
-              <div className="stat-card"><span>Ventas confirmadas</span><strong>{resumen.ventasCantidad}</strong><small>{dinero(resumen.ventasTotal)}</small></div>
+              <div className="stat-card"><span>Ventas últimos 30 días</span><strong>{dinero(resumen.ventas30DiasTotal)}</strong><small>{resumen.variacionVentas30Dias == null ? "Sin período comparable" : `${resumen.variacionVentas30Dias >= 0 ? "▲" : "▼"} ${Math.abs(resumen.variacionVentas30Dias).toFixed(1)}% vs. 30 días anteriores`}</small></div>
+              <div className="stat-card"><span>Ticket promedio 30 días</span><strong>{dinero(resumen.ticketPromedio30Dias)}</strong><small>Promedio por venta confirmada</small></div>
+              <div className="stat-card"><span>Ventas históricas</span><strong>{resumen.ventasCantidad}</strong><small>{dinero(resumen.ventasTotal)}</small></div>
             </div>
+            <div className="sigo-manager-chart-card"><div className="sigo-manager-chart-head"><div><strong>Evolución reciente</strong><span>Ventas confirmadas · últimos 7 días</span></div><strong>{dinero(resumen.ventas7DiasTotal)}</strong></div><GraficoVentas7Dias datos={resumen.ventasUltimos7Dias} /></div>
           </section>}
 
           {categoria === "stock" && <section id="informe-stock" className="panel sigo-report-detail">
@@ -275,6 +284,9 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
             <div className="sigo-detail-title"><span>↓</span><h3>Compras</h3></div>
             <div className="stats-grid">
               <div className="stat-card"><span>Compras confirmadas</span><strong>{resumen.comprasCantidad}</strong><small>{dinero(resumen.comprasTotal)}</small></div>
+              <div className="stat-card"><span>Compras últimos 30 días</span><strong>{dinero(resumen.compras30DiasTotal)}</strong><small>Mercadería confirmada</small></div>
+              <div className="stat-card"><span>Ventas últimos 30 días</span><strong>{dinero(resumen.ventas30DiasTotal)}</strong><small>Para comparar actividad comercial</small></div>
+              <div className="stat-card"><span>Ventas − compras</span><strong>{dinero(resumen.balanceComercial30Dias)}</strong><small>Indicador operativo, no utilidad contable</small></div>
             </div>
           </section>}
 
