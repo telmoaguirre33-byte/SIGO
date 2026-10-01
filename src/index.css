@@ -222,3 +222,24 @@ button { cursor: pointer; }
 .sigo-caja-small-actions label{font-size:12px;display:flex;align-items:center;gap:3px}
 .sigo-caja-small-actions select{width:auto;min-width:75px}
 @media(max-width:850px){.sigo-caja-grid{grid-template-columns:1fr}.sigo-caja-checkout{position:static}.sigo-caja-list{max-height:42vh}}
+
+
+/* SIGO Premium UI 2026 — capa visual, sin cambios de lógica */
+:root{--sigo-navy:#071b36;--sigo-blue:#0b6ff4;--sigo-bg:#f4f7fb;--sigo-line:#e4ebf4;--sigo-text:#10213d;--sigo-muted:#6b7b91}
+body{background:var(--sigo-bg);color:var(--sigo-text);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.app{background:var(--sigo-bg);min-height:100vh}
+.sidebar{background:linear-gradient(180deg,#071d3a 0%,#092747 100%);border-right:0;box-shadow:12px 0 36px rgba(7,27,54,.08)}
+.brand{padding:6px 6px 20px}.brand-logo{background:linear-gradient(145deg,#1585ff,#0861d8);box-shadow:0 8px 22px rgba(11,111,244,.32);border-radius:13px}.brand strong{font-size:18px;letter-spacing:.2px}.brand span{opacity:.7}
+.menu{gap:5px}.menu-item{border-radius:12px;padding:12px 13px;color:#d5e3f5;transition:background .18s ease,transform .18s ease,color .18s ease}.menu-item:hover{background:rgba(255,255,255,.08);transform:translateX(2px)}.menu-item.active{background:linear-gradient(135deg,#0b6ff4,#187ef5);box-shadow:0 9px 24px rgba(0,98,230,.27);color:#fff}.menu-icon{opacity:.72;font-size:10px}
+.main{background:var(--sigo-bg)}.topbar{background:rgba(255,255,255,.88);backdrop-filter:blur(14px);border-bottom:1px solid rgba(222,231,242,.9);box-shadow:0 3px 14px rgba(15,23,42,.025)}.topbar h1{color:#10213d;letter-spacing:-.4px}.topbar p{color:var(--sigo-muted)}
+.content{max-width:1480px;margin:0 auto;padding:28px 30px 46px}
+.welcome,.page-header,.panel{background:#fff;border:1px solid var(--sigo-line);box-shadow:0 10px 30px rgba(15,39,73,.055)}
+.welcome{border-radius:22px;padding:30px 32px;background:linear-gradient(120deg,#fff 0%,#fff 64%,#eef6ff 100%)}.welcome h2{font-size:30px;letter-spacing:-.8px;color:#10213d;margin-bottom:7px}.welcome p,.page-header p,.panel>p{color:var(--sigo-muted);line-height:1.55}
+.page-header{border-radius:20px;padding:22px 24px;margin-bottom:18px}.page-header h2{font-size:27px;letter-spacing:-.6px;color:#10213d}
+.panel{border-radius:18px;padding:22px;margin-bottom:18px}.panel h3{color:#132542;letter-spacing:-.25px}
+.primary-button,.admin-button{min-height:42px;border-radius:11px;font-weight:750;transition:transform .16s ease,box-shadow .16s ease,background .16s ease}.primary-button{background:linear-gradient(135deg,#0b6ff4,#0879f9);box-shadow:0 7px 18px rgba(11,111,244,.20)}.primary-button:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(11,111,244,.26)}.admin-button{background:#fff;border:1px solid #dce6f2;color:#24405f}.admin-button:hover{background:#f7faff;border-color:#c9d8ea}
+input,select,textarea{border:1px solid #d9e4f1!important;border-radius:11px!important;background:#fff!important;transition:border-color .15s ease,box-shadow .15s ease}input:focus,select:focus,textarea:focus{border-color:#69a9fa!important;box-shadow:0 0 0 4px rgba(11,111,244,.09)!important;outline:none}
+.table-wrapper{border:1px solid #e5edf6;border-radius:14px;overflow:auto}.products-table thead th{background:#f6f9fd;color:#53657c;font-size:12px}.products-table tbody tr{transition:background .14s ease}.products-table tbody tr:hover{background:#f8fbff}.products-table td{border-color:#edf2f7}
+.sigo-tenant-bar{background:rgba(255,255,255,.94);backdrop-filter:blur(14px);border-bottom:1px solid #e6edf5;box-shadow:0 4px 18px rgba(15,23,42,.035)}.sigo-tenant-copy strong{color:#10213d}.sigo-tenant-copy span,.sigo-tenant-copy small{color:#6d7d91}.sigo-context-actions .admin-button{border-color:transparent;background:#f4f7fb}.sigo-context-actions .primary-button{box-shadow:0 6px 16px rgba(11,111,244,.18)}
+.user-card{border-top:1px solid rgba(255,255,255,.09);padding-top:16px}.avatar{background:#1678ed;box-shadow:0 5px 14px rgba(0,0,0,.16)}
+@media(max-width:760px){.content{padding:14px 11px 30px}.sidebar{background:linear-gradient(90deg,#071d3a,#0a2b4e)}.welcome{padding:20px 18px;border-radius:18px}.welcome h2{font-size:24px}.page-header{padding:18px;border-radius:17px}.panel{padding:16px;border-radius:16px}.menu-item:hover{transform:none}.sigo-tenant-bar{background:rgba(255,255,255,.97)}}
