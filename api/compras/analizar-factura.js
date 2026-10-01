@@ -356,10 +356,41 @@ export default async function handler(req, res) {
     const prompt=`Auditor visual de inventario SIGO. Primero detectá la familia/bloque dominante de las fotos. Compará SOLO contra productos relacionados de este catálogo, nunca contra categorías ajenas. Identificá cada producto visible sin inventar marca, variante o tamaño. estado: ok si existe en catálogo y stock>0; sin_stock si existe pero stock<=0; falta_sigo si se ve con alta confianza pero no existe; revisar si hay duda. ids_catalogo_no_vistos: sólo productos del MISMO bloque que razonablemente deberían estar en esa exhibición y no aparecen, nunca todo el padrón. x/y son porcentajes 0..100 para un marcador cercano que no tape logo, marca, tamaño, código o precio. JSON exacto: {"bloque":string,"detectados":[{"descripcion":string,"codigo":string|null,"catalogo_id":string|null,"estado":"ok"|"sin_stock"|"falta_sigo"|"revisar","confianza":number,"foto":number,"x":number,"y":number}],"ids_catalogo_no_vistos":[string]}. CATÁLOGO: ${JSON.stringify(catalogo)}`;
     const apiKey=process.env.GEMINI_API_KEY;if(!apiKey)return json(res,503,{error:"AI_NOT_CONFIGURED",message:"La IA de SIGO no está configurada."});
     const model=process.env.GEMINI_INVENTORY_MODEL||process.env.GEMINI_INVOICE_MODEL||"gemini-3.8-flash";
+    const fallbackModel=process.env.GEMINI_INVENTORY_FALLBACK_MODEL||process.env.GEMINI_INVOICE_FALLBACK_MODEL||"gemini-3.1-flash-lite-preview";
     const controller=new AbortController();
     const timeout=setTimeout(()=>controller.abort(),GEMINI_TIMEOUT_MS);
-    let ai; try { ai=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",signal:controller.signal,headers:{"x-goog-api-key":apiKey,"Content-Type":"application/json"},body:JSON.stringify({contents:[{role:"user",parts:[{text:prompt},...imagenes.map((img)=>({inlineData:{mimeType:img.match(/^data:([^;]+);/)?.[1]||"image/jpeg",data:img.split(",")[1]}}))]}],generationConfig:{temperature:0,responseMimeType:"application/json",maxOutputTokens:7000}})}); } catch { return json(res,502,{error:"AI_UNAVAILABLE",message:"No se pudo conectar con la IA. Volvé a intentar en unos segundos."}); } finally { clearTimeout(timeout); }
-    if(!ai.ok)return json(res,502,{error:"AI_ERROR",message:`La IA no pudo analizar el inventario (HTTP ${ai.status}).`});
+    const fetchInventoryGemini=(modelo)=>fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`,{method:"POST",signal:controller.signal,headers:{"x-goog-api-key":apiKey,"Content-Type":"application/json"},body:JSON.stringify({contents:[{role:"user",parts:[{text:prompt},...imagenes.map((img)=>({inlineData:{mimeType:img.match(/^data:([^;]+);/)?.[1]||"image/jpeg",data:img.split(",")[1]}}))]}],generationConfig:{temperature:0,responseMimeType:"application/json",maxOutputTokens:7000}})});
+    let ai;
+    try {
+      const inicio=Date.now();
+      ai=await fetchInventoryGemini(model);
+      console.info("SIGO inventory Gemini attempt",{intento:1,status:ai.status,model,ms:Date.now()-inicio});
+      let intento=1;
+      for(const espera of [800,1800,3500]){
+        if(ai.status!==503)break;
+        await new Promise((resolve)=>setTimeout(resolve,espera));
+        intento+=1;
+        const inicioReintento=Date.now();
+        ai=await fetchInventoryGemini(model);
+        console.info("SIGO inventory Gemini attempt",{intento,status:ai.status,model,ms:Date.now()-inicioReintento});
+      }
+      if((ai.status===503||ai.status===429)&&fallbackModel&&fallbackModel!==model){
+        const inicioFallback=Date.now();
+        ai=await fetchInventoryGemini(fallbackModel);
+        console.info("SIGO inventory Gemini fallback",{status:ai.status,model:fallbackModel,ms:Date.now()-inicioFallback});
+      }
+    }catch(error){
+      if(error?.name==="AbortError")return json(res,504,{error:"AI_TIMEOUT",message:"El análisis de inventario tardó demasiado. Probá nuevamente en unos segundos."});
+      return json(res,502,{error:"AI_UNAVAILABLE",message:"No se pudo conectar con la IA. Volvé a intentar en unos segundos."});
+    }finally{clearTimeout(timeout);}
+    if(!ai.ok){
+      const detail=await ai.text().catch(()=>"");
+      console.error("SIGO inventory Gemini error",ai.status,detail.slice(0,1200));
+      if(ai.status===503)return json(res,503,{error:"AI_TEMPORARILY_UNAVAILABLE",message:"Gemini está temporalmente con alta demanda. SIGO reintentó y probó un modelo alternativo; volvé a intentar en unos segundos."});
+      if(ai.status===429)return json(res,429,{error:"AI_RATE_LIMIT",message:"Gemini alcanzó temporalmente su límite de uso. Intentá nuevamente en unos minutos."});
+      if(ai.status===404)return json(res,502,{error:"AI_MODEL_UNAVAILABLE",message:"El modelo de IA configurado no está disponible para este proyecto."});
+      return json(res,502,{error:"AI_ERROR",message:`La IA no pudo analizar el inventario (HTTP ${ai.status}).`});
+    }
     try {
       const raw=parseJsonText(getGeminiOutputText(await ai.json()));
       const porId=new Map(productos.map((p)=>[String(p.id),p]));
