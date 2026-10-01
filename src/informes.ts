@@ -31,6 +31,9 @@ export type ResumenOperativoSigo = {
   ticketPromedio30Dias: number;
   compras30DiasTotal: number;
   balanceComercial30Dias: number;
+  caja7DiasIngresos: number;
+  caja7DiasEgresos: number;
+  caja7DiasNeto: number;
 };
 
 type VentaRow = {
@@ -47,6 +50,7 @@ type CajaRow = {
   tipo?: "ingreso" | "egreso" | string | null;
   medio_pago?: string | null;
   importe?: number | string | null;
+  created_at?: string | null;
 };
 
 function numeroSeguro(valor: number | string | null | undefined): number {
@@ -98,14 +102,14 @@ async function listarComprasSigoCompletas(empresaId: string): Promise<CompraRow[
   return filas;
 }
 
-async function listarCajaHoySigo(empresaId: string, inicioHoyIso: string): Promise<CajaRow[]> {
+async function listarCajaDesdeSigo(empresaId: string, inicioHoyIso: string): Promise<CajaRow[]> {
   const pagina = 1000;
   const filas: CajaRow[] = [];
 
   for (let desde = 0; ; desde += pagina) {
     const { data, error } = await supabase
       .from("caja_movimientos_sigo")
-      .select("tipo,medio_pago,importe")
+      .select("tipo,medio_pago,importe,created_at")
       .eq("empresa_id", empresaId)
       .gte("created_at", inicioHoyIso)
       .order("created_at", { ascending: false })
@@ -131,7 +135,7 @@ export async function cargarResumenOperativoSigo(empresaId: string): Promise<Res
     listarClientesSigo(empresaId),
     listarComprasSigoCompletas(empresaId),
     listarVentasSigoCompletas(empresaId),
-    listarCajaHoySigo(empresaId, inicioHoy.toISOString()),
+    listarCajaDesdeSigo(empresaId, new Date(inicioHoy.getTime() - 6 * 86400000).toISOString()),
   ]);
 
   const modulosNoDisponibles: string[] = [];
@@ -139,7 +143,8 @@ export async function cargarResumenOperativoSigo(empresaId: string): Promise<Res
   const clientes = clientesResult.status === "fulfilled" ? clientesResult.value : [];
   const compras = comprasResult.status === "fulfilled" ? comprasResult.value : [];
   const ventas = ventasResult.status === "fulfilled" ? ventasResult.value : [];
-  const cajaHoy = cajaResult.status === "fulfilled" ? cajaResult.value : [];
+  const cajaMovimientos7 = cajaResult.status === "fulfilled" ? cajaResult.value : [];
+  const cajaHoy = cajaMovimientos7.filter((m) => m.created_at && new Date(m.created_at).getTime() >= inicioHoy.getTime());
 
   if (productosResult.status === "rejected") modulosNoDisponibles.push("Productos/Stock");
   if (clientesResult.status === "rejected") modulosNoDisponibles.push("Clientes/Cuentas corrientes");
@@ -197,6 +202,10 @@ export async function cargarResumenOperativoSigo(empresaId: string): Promise<Res
   const compras30DiasTotal = compras30.reduce((t,c)=>t+numeroSeguro(c.total),0);
   const balanceComercial30Dias = ventas30DiasTotal - compras30DiasTotal;
 
+  const caja7DiasIngresos = cajaMovimientos7.filter((m) => m.tipo === "ingreso").reduce((t,m)=>t+numeroSeguro(m.importe),0);
+  const caja7DiasEgresos = cajaMovimientos7.filter((m) => m.tipo === "egreso").reduce((t,m)=>t+numeroSeguro(m.importe),0);
+  const caja7DiasNeto = caja7DiasIngresos - caja7DiasEgresos;
+
   const cajaHoyIngresos = cajaHoy
     .filter((movimiento) => movimiento.tipo === "ingreso")
     .reduce((total, movimiento) => total + numeroSeguro(movimiento.importe), 0);
@@ -239,5 +248,8 @@ export async function cargarResumenOperativoSigo(empresaId: string): Promise<Res
     ticketPromedio30Dias,
     compras30DiasTotal,
     balanceComercial30Dias,
+    caja7DiasIngresos,
+    caja7DiasEgresos,
+    caja7DiasNeto,
   };
 }
