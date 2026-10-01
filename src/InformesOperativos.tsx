@@ -33,6 +33,9 @@ const vacio: ResumenOperativoSigo = {
   ticketPromedio30Dias: 0,
   compras30DiasTotal: 0,
   balanceComercial30Dias: 0,
+  caja7DiasIngresos: 0,
+  caja7DiasEgresos: 0,
+  caja7DiasNeto: 0,
 };
 
 function dinero(valor: number) {
@@ -293,7 +296,10 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
           {categoria === "caja" && <section id="informe-caja" className="panel sigo-report-detail">
             <div className="sigo-detail-title"><span>$</span><h3>Caja de hoy</h3></div>
             <div className="stats-grid">
-              <div className="stat-card"><span>Neto</span><strong>{dinero(resumen.cajaHoyNeto)}</strong><small>Ingresos {dinero(resumen.cajaHoyIngresos)} · Egresos {dinero(resumen.cajaHoyEgresos)}</small></div>
+              <div className="stat-card"><span>Neto hoy</span><strong>{dinero(resumen.cajaHoyNeto)}</strong><small>Ingresos {dinero(resumen.cajaHoyIngresos)} · Egresos {dinero(resumen.cajaHoyEgresos)}</small></div>
+              <div className="stat-card"><span>Ingresos · 7 días</span><strong>{dinero(resumen.caja7DiasIngresos)}</strong><small>Movimientos registrados</small></div>
+              <div className="stat-card"><span>Egresos · 7 días</span><strong>{dinero(resumen.caja7DiasEgresos)}</strong><small>Movimientos registrados</small></div>
+              <div className="stat-card"><span>Neto · 7 días</span><strong>{dinero(resumen.caja7DiasNeto)}</strong><small>Ingresos menos egresos</small></div>
               {mediosCaja.map(([medio, total]) => (
                 <div className="stat-card" key={medio}>
                   <span>{nombreMedio(medio)}</span>
