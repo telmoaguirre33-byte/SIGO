@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 type FotoInventario = { id: string; nombre: string; url: string; vence: number };
 type Estado = "ok" | "falta_sigo" | "no_visto" | "revisar";
-type Hallazgo = { id:string; codigo:string; descripcion:string; categoria:string; color:string; estado:Estado; foto?:string };
+type Hallazgo = { id:string; codigo:string; descripcion:string; categoria:string; color:string; estado:Estado; foto?:number; x?:number; y?:number; confianza?:number };
 
 const PALETA=["#2563eb","#dc2626","#16a34a","#9333ea","#ea580c","#0891b2","#db2777","#65a30d","#4f46e5","#b45309","#0f766e","#be123c","#7c3aed","#0369a1","#15803d","#c2410c","#a21caf","#1d4ed8","#4d7c0f","#9f1239"];
 const PERIODO=()=>new Date().toISOString().slice(0,7);
@@ -12,6 +12,8 @@ export default function StockVsInventario({empresaId}:{empresaId:string}) {
   const [fotos,setFotos]=useState<FotoInventario[]>([]);
   const [hallazgos,setHallazgos]=useState<Hallazgo[]>([]);
   const [mensaje,setMensaje]=useState("");
+  const [analizando,setAnalizando]=useState(false);
+  const [bloque,setBloque]=useState("");
   const mes=new Intl.DateTimeFormat("es-AR",{month:"long",year:"numeric"}).format(new Date());
   const [historicos,setHistoricos]=useState<string[]>([]);
 
@@ -46,6 +48,15 @@ export default function StockVsInventario({empresaId}:{empresaId:string}) {
     setFotos(actual=>[...actual,...nuevas]);
   }
 
+  async function analizar(){
+    if(!fotos.length||analizando)return; setAnalizando(true); setMensaje("Analizando productos y comparando con el stock de SIGO…");
+    try { const imagenes=await Promise.all(fotos.map(f=>fetch(f.url).then(r=>r.blob()).then(blob=>new Promise<string>((ok,no)=>{const rd=new FileReader();rd.onload=()=>ok(String(rd.result));rd.onerror=()=>no(rd.error);rd.readAsDataURL(blob)}))));
+      const { supabase }=await import("./supabase"); const {data}=await supabase.auth.getSession(); const token=data.session?.access_token;
+      const res=await fetch("/api/inventario/analizar",{method:"POST",headers:{"Content-Type":"application/json",...(token?{Authorization:`Bearer ${token}`}:{})},body:JSON.stringify({empresaId,imagenes})}); const out=await res.json(); if(!res.ok)throw new Error(out?.message||out?.error||"No se pudo analizar");
+      setBloque(out.bloque||""); setHallazgos((out.hallazgos||[]).map((h:Hallazgo,i:number)=>({...h,color:PALETA[i%PALETA.length]}))); setMensaje(`Bloque detectado: ${out.bloque||"a revisar"}. Comparación terminada.`);
+    } catch(e){setMensaje(e instanceof Error?e.message:"No se pudo analizar el inventario.");} finally{setAnalizando(false)}
+  }
+
   function exportar(){
     const filas=[["Código","Descripción","Categoría","Estado"],...hallazgos.map(h=>[h.codigo,h.descripcion,h.categoria,h.estado])];
     const csv=filas.map(f=>f.map(v=>`"${String(v).replaceAll('"','""')}"`).join(";")).join("\n");
@@ -65,15 +76,15 @@ export default function StockVsInventario({empresaId}:{empresaId:string}) {
       <div className="page-header"><div><h3>Nueva revisión</h3><p>Sacá una foto o subí hasta 10 fotos del mismo bloque o familia. SIGO compara sólo contra productos relacionados.</p></div><div className="topbar-actions"><label className="primary-button" style={{cursor:"pointer",fontSize:17}}>📷 Sacar foto<input hidden type="file" accept="image/*" capture="environment" onChange={e=>cargarFotos(e.target.files)}/></label><label className="admin-button" style={{cursor:"pointer"}}>＋ Agregar fotos<input hidden type="file" accept="image/*" multiple onChange={e=>cargarFotos(e.target.files)}/></label></div></div>
       {mensaje&&<p role="alert">{mensaje}</p>}
       {fotos.length>0&&<div className="sigo-inventory-photos">
-        {fotos.map((f,i)=><div key={f.id} className="sigo-inventory-photo"><img src={f.url} alt={f.nombre}/><span style={{position:"absolute",left:8,bottom:8,background:"#fff",padding:"3px 7px",borderRadius:10,fontSize:12,fontWeight:800}}>Foto {i+1}</span></div>)}
+        {fotos.map((f,i)=><div key={f.id} className="sigo-inventory-photo"><img src={f.url} alt={f.nombre}/>{hallazgos.filter(h=>h.foto===i+1).map((h,j)=><span key={h.id} title={h.descripcion} style={{position:"absolute",left:`${h.x??50}%`,top:`${h.y??50}%`,width:16,height:16,borderRadius:"50%",background:h.color,border:"2px solid white",boxShadow:"0 1px 4px #0008",transform:"translate(-50%,-50%)",zIndex:2}}><small style={{position:"absolute",left:17,top:-3,background:"#fff",borderRadius:8,padding:"1px 4px",fontSize:9,fontWeight:800}}>{String(hallazgos.indexOf(h)+1).padStart(2,"0")}</small></span>)}<span style={{position:"absolute",left:8,bottom:8,background:"#fff",padding:"3px 7px",borderRadius:10,fontSize:12,fontWeight:800}}>Foto {i+1}</span></div>)}
       </div>}
       <p style={{marginTop:14}}><strong>Marcadores:</strong> cada producto detectado tendrá color + número. El punto se ubicará en un espacio libre o fuera del envase con una línea fina; nunca sobre logo, marca, variedad, tamaño, código o precio.</p>
-      <button className="primary-button" disabled={!fotos.length} onClick={()=>setMensaje("Fotos listas. El análisis inteligente se habilitará al conectar el detector visual con el padrón de esta empresa.")}>✨ Analizar fotos</button>
+      <button className="primary-button" disabled={!fotos.length||analizando} onClick={()=>void analizar()}>{analizando?"Analizando…":"✨ Analizar fotos"}</button>
     </div>
     <div className="panel">
-      <div className="page-header"><div><h3>Reporte mensual · {mes}</h3><p>Se alimenta con las revisiones del mes. Al cambiar de mes empieza un reporte nuevo y el anterior queda como histórico.</p>{historicos.length>0&&<small>Históricos guardados: {historicos.join(" · ")}</small>}</div></div>
+      <div className="page-header"><div><h3>Reporte mensual · {mes}</h3>{bloque&&<strong>Bloque analizado: {bloque}</strong>}<p>Se alimenta con las revisiones del mes. Al cambiar de mes empieza un reporte nuevo y el anterior queda como histórico.</p>{historicos.length>0&&<small>Históricos guardados: {historicos.join(" · ")}</small>}</div></div>
       <div className="table-wrapper"><table className="products-table"><thead><tr><th>Marca</th><th>Código</th><th>Descripción</th><th>Bloque</th><th>Estado</th></tr></thead><tbody>
-        {hallazgos.map((h,i)=><tr key={h.id}><td><span aria-label={`Marcador ${i+1}`} style={{display:"inline-block",width:12,height:12,borderRadius:"50%",background:h.color||PALETA[i%PALETA.length],marginRight:7}}/>{String(i+1).padStart(2,"0")}</td><td>{h.codigo||"-"}</td><td><strong>{h.descripcion}</strong></td><td>{h.categoria}</td><td>{h.estado==="falta_sigo"?"F — FALTA EN SIGO":h.estado==="no_visto"?"NO VISTO":h.estado==="ok"?"OK":"REVISAR"}</td></tr>)}
+        {hallazgos.map((h,i)=><tr key={h.id}><td><span aria-label={`Marcador ${i+1}`} style={{display:"inline-block",width:12,height:12,borderRadius:"50%",background:h.color||PALETA[i%PALETA.length],marginRight:7}}/>{String(i+1).padStart(2,"0")}</td><td>{h.codigo||"-"}</td><td><strong>{h.descripcion}</strong></td><td>{h.categoria}</td><td>{h.estado==="falta_sigo"?"F — NO ESTÁ EN SIGO":h.estado==="no_visto"?"NO VISTO EN INVENTARIO":h.estado==="ok"?"ESTÁ EN SIGO":"REVISAR"}</td></tr>)}
       </tbody></table>{!hallazgos.length&&<div className="table-empty">Todavía no hay revisiones cargadas este mes.</div>}</div>
     </div>
   </div>;
