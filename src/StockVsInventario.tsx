@@ -97,6 +97,7 @@ export default function StockVsInventario({empresaId}:{empresaId:string}) {
   },[empresaId,hallazgos,mes]);
 
   const resumen=useMemo(()=>({
+    total:hallazgos.length,
     ok:hallazgos.filter(h=>h.estado==="ok").length,
     falta:hallazgos.filter(h=>h.estado==="falta_sigo").length,
     sinStock:hallazgos.filter(h=>h.estado==="sin_stock").length,
@@ -158,6 +159,25 @@ export default function StockVsInventario({empresaId}:{empresaId:string}) {
       </div>}
       <p style={{marginTop:14}}><strong>Marcadores:</strong> cada producto detectado tendrá color + número. El punto se ubicará en un espacio libre o fuera del envase con una línea fina; nunca sobre logo, marca, variedad, tamaño, código o precio.</p>
       <button className="primary-button" disabled={!fotos.length||analizando} onClick={()=>void analizar()}>{analizando?"Analizando…":"✨ Analizar fotos"}</button>
+    </div>
+    <div className="panel sigo-inventory-manager">
+      <div className="page-header"><div><h3>Informe gerencial</h3><p>Resumen acumulado del período para detectar diferencias entre la exhibición y SIGO.</p></div></div>
+      <div className="sigo-inventory-manager-kpis">
+        <div><span>Analizados</span><strong>{resumen.total}</strong></div>
+        <div><span>En SIGO</span><strong>{resumen.ok}</strong></div>
+        <div><span>Sin stock</span><strong>{resumen.sinStock}</strong></div>
+        <div><span>No están en SIGO</span><strong>{resumen.falta}</strong></div>
+        <div><span>No vistos</span><strong>{resumen.noVisto}</strong></div>
+        <div><span>Revisar</span><strong>{resumen.revisar}</strong></div>
+      </div>
+      <div className="sigo-inventory-manager-chart" aria-label="Gráfico gerencial Stock vs Inventario">
+        {[
+          ["En SIGO",resumen.ok],["Sin stock",resumen.sinStock],["No están",resumen.falta],["No vistos",resumen.noVisto],["Revisar",resumen.revisar]
+        ].map(([nombre,valor])=><div className="sigo-inventory-manager-bar" key={String(nombre)} title={`${nombre}: ${valor}`}>
+          <div><span style={{height:`${Math.max(Number(valor)>0?8:2,(Number(valor)/Math.max(1,resumen.total))*100)}%`}} /></div>
+          <strong>{valor}</strong><small>{nombre}</small>
+        </div>)}
+      </div>
     </div>
     <div className="panel">
       <div className="page-header"><div><h3>Reporte mensual · {mes}</h3>{bloque&&<strong>Bloque analizado: {bloque}</strong>}<p>Se alimenta con las revisiones del mes. Al cambiar de mes empieza un reporte nuevo y el anterior queda como histórico.</p>{historicos.length>0&&<small>Históricos guardados: {historicos.join(" · ")}</small>}</div></div>
