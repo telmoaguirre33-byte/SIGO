@@ -18,6 +18,9 @@ const vacio: ResumenOperativoSigo = {
   ventasTotal: 0,
   ventasHoy: 0,
   ventasHoyTotal: 0,
+  ventasHoyPorHora: [],
+  ventasPorHora30Dias: [],
+  ventasPorDiaSemana30Dias: [],
   cajaHoyIngresos: 0,
   cajaHoyEgresos: 0,
   cajaHoyNeto: 0,
@@ -60,6 +63,10 @@ function GraficoVentas7Dias({ datos }: { datos: Array<{ fecha: string; total: nu
     </div>)}
   </div>;
 }
+
+
+function GraficoPicos({datos,etiqueta}:{datos:Array<{hora:number;total:number;cantidad:number}>;etiqueta:string}) { const max=Math.max(1,...datos.map(d=>d.cantidad)); return <div className="sigo-manager-chart-card"><div className="sigo-manager-chart-head"><div><strong>{etiqueta}</strong><span>Operaciones confirmadas por hora</span></div></div><div style={{display:"flex",alignItems:"end",gap:5,height:115,overflowX:"auto"}}>{datos.filter(d=>d.hora>=7&&d.hora<=23).map(d=><div key={d.hora} title={`${d.hora}:00 · ${d.cantidad} ventas · ${dinero(d.total)}`} style={{minWidth:28,textAlign:"center",fontSize:10}}><div style={{height:78,display:"flex",alignItems:"end",justifyContent:"center"}}><span style={{display:"block",width:16,height:`${Math.max(3,(d.cantidad/max)*74)}px`,background:"currentColor",borderRadius:"4px 4px 0 0"}}/></div><strong>{d.hora}</strong></div>)}</div></div>; }
+function GraficoDias({datos}:{datos:Array<{dia:string;total:number;cantidad:number}>}) { const max=Math.max(1,...datos.map(d=>d.total)); return <div className="sigo-manager-chart-card"><div className="sigo-manager-chart-head"><div><strong>Días de mayor venta</strong><span>Acumulado de los últimos 30 días</span></div></div><div style={{display:"flex",alignItems:"end",gap:12,height:130}}>{datos.map(d=><div key={d.dia} title={`${d.dia} · ${d.cantidad} ventas · ${dinero(d.total)}`} style={{flex:1,textAlign:"center",fontSize:11}}><div style={{height:82,display:"flex",alignItems:"end",justifyContent:"center"}}><span style={{display:"block",width:"55%",height:`${Math.max(3,(d.total/max)*78)}px`,background:"currentColor",borderRadius:"5px 5px 0 0"}}/></div><strong>{d.dia}</strong></div>)}</div></div>; }
 
 function nombreMedio(medio: string) {
   const nombres: Record<string, string> = {
@@ -321,7 +328,7 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
               <div className="stat-card"><span>Caja neta hoy</span><strong>{dinero(resumen.cajaHoyNeto)}</strong><small>Ingresos menos egresos</small></div>
               <div className="stat-card"><span>Cuentas por cobrar</span><strong>{dinero(resumen.saldoClientes)}</strong><small>{resumen.clientesConDeuda} clientes con deuda</small></div>
             </div>
-            <div className="sigo-manager-chart-card"><div className="sigo-manager-chart-head"><div><strong>Evolución de ventas</strong><span>Últimos 7 días</span></div><strong>{dinero(resumen.ventas7DiasTotal)}</strong></div><GraficoVentas7Dias datos={resumen.ventasUltimos7Dias} /></div>
+            <div className="sigo-manager-chart-card"><div className="sigo-manager-chart-head"><div><strong>Evolución de ventas</strong><span>Últimos 7 días</span></div><strong>{dinero(resumen.ventas7DiasTotal)}</strong></div><GraficoVentas7Dias datos={resumen.ventasUltimos7Dias} /></div><GraficoPicos datos={resumen.ventasPorHora30Dias} etiqueta="Horas pico · acumulado 30 días" /><GraficoDias datos={resumen.ventasPorDiaSemana30Dias} />
             {salud && (
               <div className="sigo-health-inline" role={salud.estado === "operativo" ? undefined : "alert"}>
                 <strong>{etiquetaSalud(salud)}</strong>
