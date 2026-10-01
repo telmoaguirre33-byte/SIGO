@@ -102,7 +102,11 @@ export default function MobileOperationsMenu() {
   function irOperacion(seccion: string) {
     cerrar();
     clickPorTexto(".sigo-context-actions button", "Operación");
-    window.setTimeout(() => clickPorTexto(".sigo-operation-only .sidebar .menu > button", seccion), 80);
+    // Most sections live in the sidebar's primary menu. Stock vs Inventario is
+    // rendered in the sidebar footer, so searching only the primary menu made
+    // the mobile drawer item appear clickable but leave the current page unchanged.
+    const selectores = ".sigo-operation-only .sidebar .menu > button, .sigo-operation-only .sidebar .sidebar-bottom .menu-item";
+    window.setTimeout(() => clickPorTexto(selectores, seccion), 80);
   }
 
   function irWorkspace(nombre: string) {
