@@ -58,7 +58,7 @@ export default function StockVsInventario({empresaId}:{empresaId:string}) {
       <div className="stat-card"><span>Revisar</span><strong>{resumen.revisar}</strong></div>
     </div>
     <div className="panel">
-      <div className="page-header"><div><h3>Nueva revisión</h3><p>Subí hasta 10 fotos del mismo bloque o familia de productos. SIGO no debe comparar contra todo el padrón.</p></div><label className="primary-button" style={{cursor:"pointer"}}>＋ Agregar fotos<input hidden type="file" accept="image/*" multiple capture="environment" onChange={e=>cargarFotos(e.target.files)}/></label></div>
+      <div className="page-header"><div><h3>Nueva revisión</h3><p>Sacá una foto o subí hasta 10 fotos del mismo bloque o familia. SIGO compara sólo contra productos relacionados.</p></div><div className="topbar-actions"><label className="primary-button" style={{cursor:"pointer",fontSize:17}}>📷 Sacar foto<input hidden type="file" accept="image/*" capture="environment" onChange={e=>cargarFotos(e.target.files)}/></label><label className="admin-button" style={{cursor:"pointer"}}>＋ Agregar fotos<input hidden type="file" accept="image/*" multiple onChange={e=>cargarFotos(e.target.files)}/></label></div></div>
       {mensaje&&<p role="alert">{mensaje}</p>}
       {fotos.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:12}}>
         {fotos.map((f,i)=><div key={f.id} style={{position:"relative"}}><img src={f.url} alt={f.nombre} style={{width:"100%",aspectRatio:"1/1",objectFit:"cover",borderRadius:12}}/><span style={{position:"absolute",left:8,bottom:8,background:"#fff",padding:"3px 7px",borderRadius:10,fontSize:12,fontWeight:800}}>Foto {i+1}</span></div>)}
