@@ -248,3 +248,15 @@ input,select,textarea{border:1px solid #d9e4f1!important;border-radius:11px!impo
 .sigo-home{display:grid;gap:18px}.sigo-home-hero{min-height:168px;align-items:center}.sigo-home-eyebrow{display:inline-block;margin-bottom:8px;font-size:11px;font-weight:900;letter-spacing:.12em;color:#0b6ff4}.sigo-home-badge{min-width:190px;padding:14px 16px;border-radius:14px;background:rgba(255,255,255,.72);border:1px solid #dce9f8;display:grid;gap:3px}.sigo-home-badge span{font-size:12px;color:#718096}
 .sigo-home-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.sigo-home-action{min-height:108px;padding:18px;text-align:left;border:1px solid #e1eaf5;border-radius:17px;background:#fff;color:#17304e;box-shadow:0 8px 24px rgba(15,39,73,.045);display:grid;grid-template-columns:38px 1fr;grid-template-rows:auto auto;column-gap:11px;align-items:center;transition:.18s ease}.sigo-home-action:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(15,39,73,.08)}.sigo-home-action>span{grid-row:1/3;width:38px;height:38px;display:grid;place-items:center;border-radius:11px;background:#eef6ff;color:#0b6ff4;font-size:22px}.sigo-home-action strong{font-size:15px}.sigo-home-action small{color:#78879a}.sigo-home-action.primary{background:linear-gradient(135deg,#0b6ff4,#187ef5);color:#fff;border-color:transparent}.sigo-home-action.primary>span{background:rgba(255,255,255,.16);color:#fff}.sigo-home-action.primary small{color:#dcecff}.sigo-home-info{padding:18px 20px;border:1px solid #e5edf6;border-radius:16px;background:#fff;display:grid;gap:5px}.sigo-home-info span{color:#6b7b91;font-size:13px;line-height:1.5}
 @media(max-width:760px){.sigo-home{gap:12px}.sigo-home-hero{min-height:0}.sigo-home-badge{display:none}.sigo-home-actions{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.sigo-home-action{min-height:94px;padding:11px 8px;text-align:center;display:flex;flex-direction:column;justify-content:center;gap:5px}.sigo-home-action>span{width:34px;height:34px;flex:0 0 34px}.sigo-home-action strong{font-size:12px;line-height:1.15}.sigo-home-action small{display:none}.sigo-home-info{padding:14px}.sigo-home-hero h2{font-size:25px}}
+
+/* SIGO 2.0 — navegación más limpia */
+@media(min-width:761px){
+.sidebar{width:238px;padding:22px 14px}.main{min-width:0}.menu-item{min-height:45px}.menu-item span:last-child{font-weight:650}
+.sigo-tenant-bar{min-height:68px;padding:10px 22px}.sigo-tenant-copy span{font-size:11px}.sigo-context-actions{gap:6px}.sigo-context-actions button{min-height:38px;padding:8px 12px}
+}
+@media(max-width:760px){
+.sigo-tenant-bar{gap:6px}.sigo-tenant-copy span{display:none}.sigo-tenant-copy small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sigo-context-actions{order:3}.sigo-context-actions button{min-height:34px;padding:7px 10px}
+.sidebar{top:0;padding:6px 8px}.menu-item{padding:8px 11px;font-size:12px}
+.topbar{min-height:54px;padding:9px 12px}.topbar p{font-size:11px}.topbar h1{font-size:18px}
+}
