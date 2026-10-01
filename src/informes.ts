@@ -25,6 +25,12 @@ export type ResumenOperativoSigo = {
   ventas7DiasTotal: number;
   ventas7DiasAnteriorTotal: number;
   variacionVentas7Dias: number | null;
+  ventas30DiasTotal: number;
+  ventas30DiasAnteriorTotal: number;
+  variacionVentas30Dias: number | null;
+  ticketPromedio30Dias: number;
+  compras30DiasTotal: number;
+  balanceComercial30Dias: number;
 };
 
 type VentaRow = {
@@ -179,6 +185,18 @@ export async function cargarResumenOperativoSigo(empresaId: string): Promise<Res
   const ventas7DiasAnteriorTotal = ventas.filter((venta) => venta.created_at && new Date(venta.created_at).getTime() >= inicioAnterior.getTime() && new Date(venta.created_at).getTime() < inicio7.getTime()).reduce((total, venta) => total + numeroSeguro(venta.total), 0);
   const variacionVentas7Dias = ventas7DiasAnteriorTotal > 0 ? ((ventas7DiasTotal - ventas7DiasAnteriorTotal) / ventas7DiasAnteriorTotal) * 100 : null;
 
+  const inicio30 = new Date(inicioHoy); inicio30.setDate(inicio30.getDate() - 29);
+  const inicio30Anterior = new Date(inicio30); inicio30Anterior.setDate(inicio30Anterior.getDate() - 30);
+  const ventas30 = ventas.filter((v) => v.created_at && new Date(v.created_at).getTime() >= inicio30.getTime());
+  const ventas30Anterior = ventas.filter((v) => v.created_at && new Date(v.created_at).getTime() >= inicio30Anterior.getTime() && new Date(v.created_at).getTime() < inicio30.getTime());
+  const compras30 = compras.filter((c) => c.created_at && new Date(c.created_at).getTime() >= inicio30.getTime());
+  const ventas30DiasTotal = ventas30.reduce((t,v)=>t+numeroSeguro(v.total),0);
+  const ventas30DiasAnteriorTotal = ventas30Anterior.reduce((t,v)=>t+numeroSeguro(v.total),0);
+  const variacionVentas30Dias = ventas30DiasAnteriorTotal > 0 ? ((ventas30DiasTotal-ventas30DiasAnteriorTotal)/ventas30DiasAnteriorTotal)*100 : null;
+  const ticketPromedio30Dias = ventas30.length > 0 ? ventas30DiasTotal / ventas30.length : 0;
+  const compras30DiasTotal = compras30.reduce((t,c)=>t+numeroSeguro(c.total),0);
+  const balanceComercial30Dias = ventas30DiasTotal - compras30DiasTotal;
+
   const cajaHoyIngresos = cajaHoy
     .filter((movimiento) => movimiento.tipo === "ingreso")
     .reduce((total, movimiento) => total + numeroSeguro(movimiento.importe), 0);
@@ -215,5 +233,11 @@ export async function cargarResumenOperativoSigo(empresaId: string): Promise<Res
     ventas7DiasTotal,
     ventas7DiasAnteriorTotal,
     variacionVentas7Dias,
+    ventas30DiasTotal,
+    ventas30DiasAnteriorTotal,
+    variacionVentas30Dias,
+    ticketPromedio30Dias,
+    compras30DiasTotal,
+    balanceComercial30Dias,
   };
 }
