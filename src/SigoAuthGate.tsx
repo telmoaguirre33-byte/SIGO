@@ -5,6 +5,10 @@ import { supabase } from "./supabase";
 import "./auth.css";
 
 type Props = { children: ReactNode };
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
 type AuthMode = "login" | "register" | "register_member" | "subscription" | "recovery";
 
 const SIGO_PRODUCTION_URL = "https://comercial-lilac.vercel.app/";
@@ -56,6 +60,9 @@ export default function SigoAuthGate({ children }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [mode, setMode] = useState<AuthMode>("login");
   const [puedeReenviarActivacion, setPuedeReenviarActivacion] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [mostrarAyudaInstalacion, setMostrarAyudaInstalacion] = useState(false);
+  const [mensajeInstalacion, setMensajeInstalacion] = useState("");
   const requestInFlight = useRef(false);
 
   useEffect(() => {
@@ -83,6 +90,49 @@ export default function SigoAuthGate({ children }: Props) {
       listener.subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    const capturarInstalacion = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+    const instalacionCompletada = () => {
+      setInstallPrompt(null);
+      setMostrarAyudaInstalacion(false);
+      setMensajeInstalacion("SIGO se instaló correctamente en este dispositivo.");
+    };
+
+    window.addEventListener("beforeinstallprompt", capturarInstalacion);
+    window.addEventListener("appinstalled", instalacionCompletada);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", capturarInstalacion);
+      window.removeEventListener("appinstalled", instalacionCompletada);
+    };
+  }, []);
+
+  async function instalarAplicacion() {
+    setMensajeInstalacion("");
+    if (!installPrompt) {
+      setMostrarAyudaInstalacion((visible) => !visible);
+      return;
+    }
+
+    try {
+      const prompt = installPrompt;
+      await prompt.prompt();
+      const { outcome } = await prompt.userChoice;
+      setInstallPrompt(null);
+      if (outcome === "accepted") {
+        setMostrarAyudaInstalacion(false);
+        setMensajeInstalacion("SIGO se instaló. Ya podés abrirlo desde tus aplicaciones.");
+      } else {
+        setMostrarAyudaInstalacion(true);
+      }
+    } catch {
+      setInstallPrompt(null);
+      setMostrarAyudaInstalacion(true);
+    }
+  }
 
   function limpiarMensajes() {
     setError("");
@@ -375,7 +425,28 @@ export default function SigoAuthGate({ children }: Props) {
         <div className="sigo-auth-brand">
           <div className="sigo-auth-brand-mark" aria-hidden="true">SG</div>
           <div className="sigo-auth-brand-copy"><strong>SIGO</strong><span>Sistema Inteligente de Gestión Operativa</span></div>
+          {mode === "login" ? (
+            <button
+              className="sigo-install-app-button"
+              type="button"
+              onClick={() => void instalarAplicacion()}
+              aria-expanded={mostrarAyudaInstalacion}
+              aria-controls="sigo-install-help"
+            >
+              <span aria-hidden="true">↓</span>
+              Descargar la app
+            </button>
+          ) : null}
         </div>
+        {mode === "login" && mostrarAyudaInstalacion ? (
+          <div className="sigo-install-help" id="sigo-install-help" role="status">
+            <strong>Instalá SIGO en este dispositivo</strong>
+            <span>Chrome o Edge: menú ⋮ → “Instalar SIGO” o “Aplicaciones”. Android: menú ⋮ → “Instalar app”. iPhone/iPad: Compartir → “Añadir a pantalla de inicio”.</span>
+          </div>
+        ) : null}
+        {mode === "login" && mensajeInstalacion ? (
+          <p className="sigo-install-status" role="status">{mensajeInstalacion}</p>
+        ) : null}
 
         {mode === "recovery" ? (
           <>

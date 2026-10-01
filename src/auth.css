@@ -300,3 +300,87 @@
     padding: 16px;
   }
 }
+
+.sigo-install-app-button {
+  min-height: 34px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 7px 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+
+.sigo-install-app-button:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  transform: translateY(-1px);
+}
+
+.sigo-install-app-button:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, .28);
+  outline-offset: 2px;
+}
+
+.sigo-install-app-button > span {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.sigo-install-help {
+  display: grid;
+  gap: 4px;
+  margin: -14px 0 20px 63px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.sigo-install-help strong {
+  color: #1e293b;
+  font-size: 12px;
+}
+
+.sigo-install-status {
+  margin: -14px 0 20px 63px;
+  color: #166534;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+@media (max-width: 560px) {
+  .sigo-auth-brand {
+    gap: 9px;
+  }
+
+  .sigo-auth-brand-copy {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .sigo-install-app-button {
+    gap: 4px;
+    padding: 7px 8px;
+    font-size: 10px;
+  }
+
+  .sigo-install-help,
+  .sigo-install-status {
+    margin: -28px 0 22px;
+  }
+}
