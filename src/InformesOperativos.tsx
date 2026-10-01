@@ -23,6 +23,10 @@ const vacio: ResumenOperativoSigo = {
   cajaHoyNeto: 0,
   cajaHoyPorMedio: {},
   modulosNoDisponibles: [],
+  ventasUltimos7Dias: [],
+  ventas7DiasTotal: 0,
+  ventas7DiasAnteriorTotal: 0,
+  variacionVentas7Dias: null,
 };
 
 function dinero(valor: number) {
@@ -34,6 +38,18 @@ function numero(valor: number, decimales = 0) {
     minimumFractionDigits: decimales,
     maximumFractionDigits: decimales,
   }).format(valor);
+}
+
+function GraficoVentas7Dias({ datos }: { datos: Array<{ fecha: string; total: number; cantidad: number }> }) {
+  const maximo = Math.max(1, ...datos.map((item) => item.total));
+  return <div className="sigo-trend-chart" aria-label="Ventas de los últimos 7 días">
+    {datos.map((item) => <div className="sigo-trend-column" key={item.fecha} title={dinero(item.total)}>
+      <div className="sigo-trend-value">{item.total > 0 ? dinero(item.total) : "—"}</div>
+      <div className="sigo-trend-track"><div className="sigo-trend-bar" style={{height: `${Math.max(item.total > 0 ? 8 : 2, (item.total / maximo) * 100)}%`}} /></div>
+      <strong>{new Date(item.fecha + "T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"})}</strong>
+      <small>{item.cantidad} vta.</small>
+    </div>)}
+  </div>;
 }
 
 function nombreMedio(medio: string) {
@@ -278,7 +294,14 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
 
           {categoria === "gerencial" && <section id="informe-resumen" className="panel sigo-report-detail">
             <div className="sigo-detail-title"><span>▥</span><h3>Resumen gerencial</h3></div>
-            <p>SIGO consolida ventas confirmadas, caja, compras, stock y cuentas corrientes sin mezclar empresas.</p>
+            <p>Una vista rápida de la evolución real del negocio.</p>
+            <div className="stats-grid sigo-manager-kpis">
+              <div className="stat-card"><span>Ventas últimos 7 días</span><strong>{dinero(resumen.ventas7DiasTotal)}</strong><small>{resumen.variacionVentas7Dias == null ? "Sin período anterior comparable" : `${resumen.variacionVentas7Dias >= 0 ? "▲" : "▼"} ${Math.abs(resumen.variacionVentas7Dias).toFixed(1)}% vs. 7 días anteriores`}</small></div>
+              <div className="stat-card"><span>Ventas de hoy</span><strong>{dinero(resumen.ventasHoyTotal)}</strong><small>{resumen.ventasHoy} operaciones</small></div>
+              <div className="stat-card"><span>Caja neta hoy</span><strong>{dinero(resumen.cajaHoyNeto)}</strong><small>Ingresos menos egresos</small></div>
+              <div className="stat-card"><span>Cuentas por cobrar</span><strong>{dinero(resumen.saldoClientes)}</strong><small>{resumen.clientesConDeuda} clientes con deuda</small></div>
+            </div>
+            <div className="sigo-manager-chart-card"><div className="sigo-manager-chart-head"><div><strong>Evolución de ventas</strong><span>Últimos 7 días</span></div><strong>{dinero(resumen.ventas7DiasTotal)}</strong></div><GraficoVentas7Dias datos={resumen.ventasUltimos7Dias} /></div>
             {salud && (
               <div className="sigo-health-inline" role={salud.estado === "operativo" ? undefined : "alert"}>
                 <strong>{etiquetaSalud(salud)}</strong>
