@@ -82,6 +82,36 @@ function confianza(value) {
   return Math.max(0, Math.min(1, numero));
 }
 
+function textoNormalizado(value) {
+  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function productoDelBloque(producto, bloque, detectados) {
+  const contenido = textoNormalizado([
+    producto.nombre,
+    producto.categoria,
+    producto.marca,
+  ].filter(Boolean).join(" "));
+  const familia = textoNormalizado(bloque);
+  const familias = [
+    { patron: /bebid|gaseos|refresc|drink|cola/, terminos: ["bebida","gaseosa","agua","cerveza","jugo","energizante","soda","tonica","coca","cola","fanta","sprite","schweppes","monster","power","cepita","vino","sidra","lata"] },
+    { patron: /librer|papeler|escolar/, terminos: ["cuaderno","lapiz","lapicera","papel","carpeta","goma","regla","marcador","resaltador","cartuchera","tinta","toner"] },
+    { patron: /limpieza|higiene/, terminos: ["detergente","lavandina","jabon","limpiador","desinfectante","papel higienico","shampoo","acondicionador"] },
+    { patron: /almacen|comestible|alimento/, terminos: ["fideo","arroz","harina","azucar","aceite","galletita","yerba","cafe","leche","conserva","salsa","snack"] },
+  ];
+  const familiaConocida = familias.find(item => item.patron.test(familia));
+  if (familiaConocida) return familiaConocida.terminos.some(termino => contenido.includes(termino));
+  const palabrasVisibles = (detectados || [])
+    .flatMap(item => textoNormalizado(item.descripcion).split(/[^a-z0-9]+/))
+    .filter(palabra => palabra.length >= 4 && !["pack","latas","unidad","unidades","botella","botellas","tamaño","sabor"].includes(palabra));
+  if (palabrasVisibles.some(palabra => contenido.includes(palabra))) return true;
+  if (!familiaConocida && producto.categoria && familia) {
+    const palabrasFamilia = familia.split(/[^a-z0-9]+/).filter(palabra => palabra.length >= 4);
+    return palabrasFamilia.some(palabra => contenido.includes(palabra));
+  }
+  return false;
+}
+
 function normalizarMoneda(value) {
   const moneda = textoSeguro(value, 12);
   if (!moneda) return null;
@@ -302,7 +332,7 @@ async function validarUsuarioYPermiso(req, empresaId) {
       Authorization: auth,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ p_empresa_id: empresaId, p_permiso: "purchases.write" }),
+      body: JSON.stringify({ p_empresa_id: empresaId, p_permiso: "stock.read" }),
   });
   if (!permisoResponse.ok) return false;
   const permitido = await permisoResponse.json().catch(() => false);
@@ -316,6 +346,7 @@ export default async function handler(req, res) {
     const empresaId = String(req.body?.empresaId || "").trim();
     const imagenes = Array.isArray(req.body?.imagenes) ? req.body.imagenes.slice(0,10) : [];
     if (!empresaId || !imagenes.length || imagenes.some((x)=>typeof x!=="string" || !ALLOWED_IMAGE.test(x) || x.length>MAX_DATA_URL_LENGTH)) return json(res,400,{error:"INVALID_INVENTORY_INPUT",message:"Revisá las fotos del inventario."});
+    if (imagenes.reduce((total,img)=>total+img.length,0)>4_000_000) return json(res,413,{error:"INVENTORY_IMAGES_TOO_LARGE",message:"Las fotos superan el límite de tamaño. Volvé a intentarlo con menos fotos."});
     try { if (!(await validarUsuarioYPermiso(req, empresaId))) return json(res,403,{error:"FORBIDDEN"}); } catch { return json(res,403,{error:"FORBIDDEN"}); }
     const supabaseUrl=process.env.SUPABASE_URL||process.env.VITE_SUPABASE_URL, anonKey=process.env.SUPABASE_ANON_KEY||process.env.VITE_SUPABASE_ANON_KEY||process.env.VITE_SUPABASE_PUBLISHABLE_KEY, auth=String(req.headers.authorization||"");
     const pr=await fetch(`${supabaseUrl}/rest/v1/productos?empresa_id=eq.${encodeURIComponent(empresaId)}&select=id,nombre,codigo_interno,codigo_barras,categoria,marca,stock_actual&limit=5000`,{headers:{apikey:anonKey,Authorization:auth}});
@@ -325,9 +356,43 @@ export default async function handler(req, res) {
     const prompt=`Auditor visual de inventario SIGO. Primero detectá la familia/bloque dominante de las fotos. Compará SOLO contra productos relacionados de este catálogo, nunca contra categorías ajenas. Identificá cada producto visible sin inventar marca, variante o tamaño. estado: ok si existe en catálogo y stock>0; sin_stock si existe pero stock<=0; falta_sigo si se ve con alta confianza pero no existe; revisar si hay duda. ids_catalogo_no_vistos: sólo productos del MISMO bloque que razonablemente deberían estar en esa exhibición y no aparecen, nunca todo el padrón. x/y son porcentajes 0..100 para un marcador cercano que no tape logo, marca, tamaño, código o precio. JSON exacto: {"bloque":string,"detectados":[{"descripcion":string,"codigo":string|null,"catalogo_id":string|null,"estado":"ok"|"sin_stock"|"falta_sigo"|"revisar","confianza":number,"foto":number,"x":number,"y":number}],"ids_catalogo_no_vistos":[string]}. CATÁLOGO: ${JSON.stringify(catalogo)}`;
     const apiKey=process.env.GEMINI_API_KEY;if(!apiKey)return json(res,503,{error:"AI_NOT_CONFIGURED",message:"La IA de SIGO no está configurada."});
     const model=process.env.GEMINI_INVENTORY_MODEL||process.env.GEMINI_INVOICE_MODEL||"gemini-3.8-flash";
-    let ai; try { ai=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":apiKey,"Content-Type":"application/json"},body:JSON.stringify({contents:[{role:"user",parts:[{text:prompt},...imagenes.map((img)=>({inlineData:{mimeType:img.match(/^data:([^;]+);/)?.[1]||"image/jpeg",data:img.split(",")[1]}}))]}],generationConfig:{temperature:0,responseMimeType:"application/json",maxOutputTokens:7000}})}); } catch { return json(res,502,{error:"AI_UNAVAILABLE",message:"No se pudo conectar con la IA."}); }
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),GEMINI_TIMEOUT_MS);
+    let ai; try { ai=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",signal:controller.signal,headers:{"x-goog-api-key":apiKey,"Content-Type":"application/json"},body:JSON.stringify({contents:[{role:"user",parts:[{text:prompt},...imagenes.map((img)=>({inlineData:{mimeType:img.match(/^data:([^;]+);/)?.[1]||"image/jpeg",data:img.split(",")[1]}}))]}],generationConfig:{temperature:0,responseMimeType:"application/json",maxOutputTokens:7000}})}); } catch { return json(res,502,{error:"AI_UNAVAILABLE",message:"No se pudo conectar con la IA. Volvé a intentar en unos segundos."}); } finally { clearTimeout(timeout); }
     if(!ai.ok)return json(res,502,{error:"AI_ERROR",message:`La IA no pudo analizar el inventario (HTTP ${ai.status}).`});
-    try { const raw=parseJsonText(getGeminiOutputText(await ai.json())); const porId=new Map(productos.map((p)=>[p.id,p])); const detectados=(raw.detectados||[]).slice(0,200).map((d,i)=>({id:`v-${i}`,descripcion:textoSeguro(d.descripcion,160)||"Producto a revisar",codigo:textoSeguro(d.codigo,80)||"",categoria:textoSeguro(raw.bloque,100)||"",estado:["ok","sin_stock","falta_sigo"].includes(d.estado)?d.estado:"revisar",confianza:confianza(d.confianza),foto:Math.max(1,Math.min(imagenes.length,Number(d.foto)||1)),x:Math.max(0,Math.min(100,Number(d.x)||50)),y:Math.max(0,Math.min(100,Number(d.y)||50))})); const noVistos=(raw.ids_catalogo_no_vistos||[]).map((id)=>porId.get(id)).filter(Boolean).slice(0,100).map((p,i)=>({id:`n-${i}`,descripcion:p.nombre,codigo:p.codigo_barras||p.codigo_interno||"",categoria:p.categoria||textoSeguro(raw.bloque,100)||"",estado:"no_visto",confianza:1,foto:0,x:0,y:0})); return json(res,200,{bloque:textoSeguro(raw.bloque,100)||"Bloque a revisar",hallazgos:[...detectados,...noVistos]}); } catch(e){console.error("SIGO inventory parse error",e);return json(res,502,{error:"AI_INVALID_OUTPUT",message:"La IA respondió pero el análisis de inventario no fue válido."});}
+    try {
+      const raw=parseJsonText(getGeminiOutputText(await ai.json()));
+      const porId=new Map(productos.map((p)=>[String(p.id),p]));
+      const visibles=(Array.isArray(raw.detectados)?raw.detectados:[]).slice(0,200);
+      const detectados=visibles.map((d,i)=>{
+        const producto=porId.get(String(d.catalogo_id||""));
+        const confianzaProducto=confianza(d.confianza);
+        const relacionado=producto&&productoDelBloque(producto,raw.bloque,visibles);
+        if(producto&&!relacionado)return null;
+        const estado=relacionado
+          ? Number(producto.stock_actual||0)>0?"ok":"sin_stock"
+          : d.estado==="falta_sigo"&&confianzaProducto>=0.8?"falta_sigo"
+          : "revisar";
+        return {
+          id:`v-${i}`,
+          descripcion:relacionado?textoSeguro(producto.nombre,160):textoSeguro(d.descripcion,160)||"Producto a revisar",
+          codigo:relacionado?textoSeguro(producto.codigo_barras||producto.codigo_interno,80)||"":textoSeguro(d.codigo,80)||"",
+          categoria:textoSeguro(producto?.categoria,100)||textoSeguro(raw.bloque,100)||"",
+          stock_actual:relacionado?Number(producto.stock_actual||0):null,
+          estado,
+          confianza:confianzaProducto,
+          foto:Math.max(1,Math.min(imagenes.length,Number(d.foto)||1)),
+          x:Math.max(0,Math.min(100,Number(d.x)||50)),
+          y:Math.max(0,Math.min(100,Number(d.y)||50)),
+        };
+      }).filter(Boolean);
+      const noVistos=(Array.isArray(raw.ids_catalogo_no_vistos)?raw.ids_catalogo_no_vistos:[])
+        .map((id)=>porId.get(String(id)))
+        .filter((p)=>p&&productoDelBloque(p,raw.bloque,visibles))
+        .slice(0,100)
+        .map((p,i)=>({id:`n-${i}`,descripcion:p.nombre,codigo:p.codigo_barras||p.codigo_interno||"",categoria:p.categoria||textoSeguro(raw.bloque,100)||"",stock_actual:Number(p.stock_actual||0),estado:"no_visto",confianza:1,foto:0,x:0,y:0}));
+      return json(res,200,{bloque:textoSeguro(raw.bloque,100)||"Bloque a revisar",hallazgos:[...detectados,...noVistos]});
+    } catch(e){console.error("SIGO inventory parse error",e);return json(res,502,{error:"AI_INVALID_OUTPUT",message:"La IA respondió pero el análisis de inventario no fue válido."});}
   }
 
   const empresaId = String(req.body?.empresaId || "").trim();
