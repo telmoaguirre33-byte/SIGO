@@ -52,9 +52,9 @@ export default function StockVsInventario({empresaId}:{empresaId:string}) {
     if(!fotos.length||analizando)return; setAnalizando(true); setMensaje("Analizando productos y comparando con el stock de SIGO…");
     try { const imagenes=await Promise.all(fotos.map(f=>fetch(f.url).then(r=>r.blob()).then(blob=>new Promise<string>((ok,no)=>{const rd=new FileReader();rd.onload=()=>ok(String(rd.result));rd.onerror=()=>no(rd.error);rd.readAsDataURL(blob)}))));
       const { supabase }=await import("./supabase"); const {data}=await supabase.auth.getSession(); const token=data.session?.access_token;
-      const res=await fetch("/api/inventario/analizar",{method:"POST",headers:{"Content-Type":"application/json",...(token?{Authorization:`Bearer ${token}`}:{})},body:JSON.stringify({empresaId,imagenes})}); const out=await res.json(); if(!res.ok)throw new Error(out?.message||out?.error||"No se pudo analizar");
+      const res=await fetch("/api/inventario/analizar",{method:"POST",headers:{"Content-Type":"application/json",...(token?{Authorization:`Bearer ${token}`}:{})},body:JSON.stringify({empresaId,imagenes})}); const texto=await res.text(); let out:any={}; try{out=texto?JSON.parse(texto):{}}catch{out={message:texto}} if(!res.ok)throw new Error(out?.message||`No se pudo analizar (HTTP ${res.status}).`);
       setBloque(out.bloque||""); setHallazgos((out.hallazgos||[]).map((h:Hallazgo,i:number)=>({...h,color:PALETA[i%PALETA.length]}))); setMensaje(`Bloque detectado: ${out.bloque||"a revisar"}. Comparación terminada.`);
-    } catch(e){setMensaje(e instanceof Error?e.message:"No se pudo analizar el inventario.");} finally{setAnalizando(false)}
+    } catch(e){const m=e instanceof Error?e.message:"No se pudo analizar el inventario."; setMensaje(m==="Failed to fetch"?"No se pudo conectar con el analizador de inventario. Actualizá SIGO y volvé a intentar; si continúa, el servicio de análisis no está publicado.":m);} finally{setAnalizando(false)}
   }
 
   function exportar(){
