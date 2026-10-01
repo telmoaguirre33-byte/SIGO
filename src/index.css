@@ -273,3 +273,6 @@ input,select,textarea{border:1px solid #d9e4f1!important;border-radius:11px!impo
 
 /* Desktop sidebar: scroll independiente cuando el menú supera la pantalla */
 @media(min-width:761px){.sidebar{overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.28) transparent}.sidebar .menu{flex:0 0 auto}.sidebar-bottom{margin-top:18px;padding-bottom:10px}.sidebar::-webkit-scrollbar{width:6px}.sidebar::-webkit-scrollbar-track{background:transparent}.sidebar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.25);border-radius:999px}}
+
+/* Desktop sidebar v2: asegurar acceso al final del menú bajo tenant bar */
+@media(min-width:761px){.app:not(.purchases-hub-only){align-items:start}.app:not(.purchases-hub-only)>.sidebar{position:sticky;top:64px;height:calc(100dvh - 64px);min-height:0;max-height:calc(100dvh - 64px);overflow-y:scroll!important;overflow-x:hidden;padding-bottom:96px!important;-webkit-overflow-scrolling:touch}.app:not(.purchases-hub-only)>.sidebar .menu{display:grid;flex:none;min-height:max-content}.app:not(.purchases-hub-only)>.sidebar .sidebar-bottom{flex:none;margin-top:18px;padding-bottom:40px}}
