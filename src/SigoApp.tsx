@@ -127,16 +127,17 @@ function ComprasHub({ empresaId }: { empresaId: string }) {
 
 function Inicio({ empresa, onProductos, onStock, onCaja }: { empresa: EmpresaOperativa; onProductos: () => void; onStock: () => void; onCaja: () => void }) {
   return (
-    <div className="welcome">
-      <div>
-        <h2>SIGO · {empresa.empresa_nombre}</h2>
-        <p>Ventas, productos y stock en un solo lugar. Todo listo para trabajar.</p>
+    <div className="sigo-home">
+      <div className="welcome sigo-home-hero">
+        <div><span className="sigo-home-eyebrow">SIGO GESTIÓN</span><h2>¡Hola! · {empresa.empresa_nombre}</h2><p>Todo tu negocio, en un solo lugar.</p></div>
+        <div className="sigo-home-badge"><strong>Empresa activa</strong><span>{empresa.empresa_nombre}</span></div>
       </div>
-      <div className="topbar-actions">
-        <button className="admin-button" onClick={onStock}>Ver stock</button>
-        <button className="primary-button" onClick={onCaja}>CAJA</button>
-        <button className="primary-button" onClick={onProductos}>Abrir productos</button>
+      <div className="sigo-home-actions" aria-label="Accesos rápidos">
+        <button className="sigo-home-action primary" onClick={onCaja}><span>▣</span><strong>CAJA</strong><small>Nueva venta</small></button>
+        <button className="sigo-home-action" onClick={onProductos}><span>＋</span><strong>Nuevo / ver producto</strong><small>Administrar catálogo</small></button>
+        <button className="sigo-home-action" onClick={onStock}><span>◇</span><strong>Ver stock</strong><small>Consultar inventario</small></button>
       </div>
+      <div className="sigo-home-info"><strong>Tu operación, más clara.</strong><span>Usá los accesos rápidos para vender, consultar stock o administrar productos. Los indicadores gerenciales están disponibles en Informes.</span></div>
     </div>
   );
 }
