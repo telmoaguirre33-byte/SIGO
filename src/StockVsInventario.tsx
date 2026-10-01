@@ -55,7 +55,7 @@ export default function StockVsInventario({empresaId}:{empresaId:string}) {
 
   return <div className="products-page">
     <div className="page-header"><div><h2>Stock vs Inventario</h2><p>Comparación visual por bloque. Reporte mensual · fotos disponibles durante 24 horas.</p></div><button className="admin-button" onClick={exportar} disabled={!hallazgos.length}>▣ Exportar Excel</button></div>
-    <div className="stats-grid">
+    <div className="stats-grid sigo-inventory-stats">
       <div className="stat-card"><span>Coinciden</span><strong>{resumen.ok}</strong></div>
       <div className="stat-card"><span>Falta en SIGO</span><strong>{resumen.falta}</strong></div>
       <div className="stat-card"><span>No visto</span><strong>{resumen.noVisto}</strong></div>
@@ -64,8 +64,8 @@ export default function StockVsInventario({empresaId}:{empresaId:string}) {
     <div className="panel">
       <div className="page-header"><div><h3>Nueva revisión</h3><p>Sacá una foto o subí hasta 10 fotos del mismo bloque o familia. SIGO compara sólo contra productos relacionados.</p></div><div className="topbar-actions"><label className="primary-button" style={{cursor:"pointer",fontSize:17}}>📷 Sacar foto<input hidden type="file" accept="image/*" capture="environment" onChange={e=>cargarFotos(e.target.files)}/></label><label className="admin-button" style={{cursor:"pointer"}}>＋ Agregar fotos<input hidden type="file" accept="image/*" multiple onChange={e=>cargarFotos(e.target.files)}/></label></div></div>
       {mensaje&&<p role="alert">{mensaje}</p>}
-      {fotos.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:12}}>
-        {fotos.map((f,i)=><div key={f.id} style={{position:"relative"}}><img src={f.url} alt={f.nombre} style={{width:"100%",aspectRatio:"1/1",objectFit:"cover",borderRadius:12}}/><span style={{position:"absolute",left:8,bottom:8,background:"#fff",padding:"3px 7px",borderRadius:10,fontSize:12,fontWeight:800}}>Foto {i+1}</span></div>)}
+      {fotos.length>0&&<div className="sigo-inventory-photos">
+        {fotos.map((f,i)=><div key={f.id} className="sigo-inventory-photo"><img src={f.url} alt={f.nombre}/><span style={{position:"absolute",left:8,bottom:8,background:"#fff",padding:"3px 7px",borderRadius:10,fontSize:12,fontWeight:800}}>Foto {i+1}</span></div>)}
       </div>}
       <p style={{marginTop:14}}><strong>Marcadores:</strong> cada producto detectado tendrá color + número. El punto se ubicará en un espacio libre o fuera del envase con una línea fina; nunca sobre logo, marca, variedad, tamaño, código o precio.</p>
       <button className="primary-button" disabled={!fotos.length} onClick={()=>setMensaje("Fotos listas. El análisis inteligente se habilitará al conectar el detector visual con el padrón de esta empresa.")}>✨ Analizar fotos</button>
