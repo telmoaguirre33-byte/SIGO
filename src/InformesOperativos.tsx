@@ -280,6 +280,8 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
             <div className="stats-grid">
               <div className="stat-card"><span>Clientes</span><strong>{resumen.clientes}</strong><small>{resumen.clientesConDeuda} con deuda</small></div>
               <div className="stat-card"><span>Saldo a cobrar</span><strong>{dinero(resumen.saldoClientes)}</strong><small>Sólo saldos deudores</small></div>
+              <div className="stat-card"><span>Clientes al día</span><strong>{Math.max(0, resumen.clientes - resumen.clientesConDeuda)}</strong><small>Sin saldo deudor registrado</small></div>
+              <div className="stat-card"><span>Deuda promedio</span><strong>{dinero(resumen.clientesConDeuda > 0 ? resumen.saldoClientes / resumen.clientesConDeuda : 0)}</strong><small>Por cliente con deuda</small></div>
             </div>
           </section>}
 
