@@ -4,6 +4,7 @@ import BarcodeScanner from "./BarcodeScanner";
 import type { BarcodeAction, BarcodeProduct } from "./barcode";
 import VentaRapidaOperativa from "./VentaRapidaOperativa";
 import ComprasOperativas from "./ComprasOperativas";
+import StockVsInventario from "./StockVsInventario";
 import { can } from "./permissions";
 import { listarModulosEmpresa } from "./modulosEmpresa";
 import {
@@ -13,7 +14,7 @@ import {
   type ProductoSigo,
 } from "./productos";
 
-type Section = "Inicio" | "Productos" | "Ventas" | "Clientes" | "Compras" | "Stock" | "Informes";
+type Section = "Inicio" | "Productos" | "Ventas" | "Clientes" | "Compras" | "Stock" | "Informes" | "Stock vs Inventario";
 
 const sections: Section[] = ["Inicio", "Productos", "Ventas", "Clientes", "Compras", "Stock", "Informes"];
 
@@ -74,6 +75,9 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
           ))}
         </nav>
         <div className="sidebar-bottom">
+          <button className={section === "Stock vs Inventario" ? "menu-item active" : "menu-item"} onClick={() => setSection("Stock vs Inventario")} style={{width:"100%",marginBottom:12}}>
+            <span className="menu-icon">SI</span><span>Stock vs Inventario</span>
+          </button>
           <div className="user-card">
             <div className="avatar">A</div>
             <div>
@@ -95,9 +99,10 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
           {section === "Inicio" && <Inicio empresa={empresa} onProductos={() => setSection("Productos")} onStock={() => setSection("Stock")} onCaja={() => window.dispatchEvent(new CustomEvent("sigo:abrir-caja"))} />}
           {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
           {section === "Stock" && <Stock empresaId={empresa.empresa_id} />}
+          {section === "Stock vs Inventario" && <StockVsInventario empresaId={empresa.empresa_id} />}
           {section === "Ventas" && <VentaRapidaOperativa empresaId={empresa.empresa_id} puedeEditarProductos={puedeEditarProductos} />}
           {section === "Compras" && <ComprasHub empresaId={empresa.empresa_id} />}
-          {section !== "Inicio" && section !== "Productos" && section !== "Stock" && section !== "Ventas" && section !== "Compras" && <Pendiente title={section} />}
+          {section !== "Inicio" && section !== "Productos" && section !== "Stock" && section !== "Ventas" && section !== "Compras" && section !== "Stock vs Inventario" && <Pendiente title={section} />}
         </section>
       </main>
     </div>
