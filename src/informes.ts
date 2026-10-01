@@ -21,6 +21,10 @@ export type ResumenOperativoSigo = {
   cajaHoyNeto: number;
   cajaHoyPorMedio: Record<string, number>;
   modulosNoDisponibles: string[];
+  ventasUltimos7Dias: Array<{ fecha: string; total: number; cantidad: number }>;
+  ventas7DiasTotal: number;
+  ventas7DiasAnteriorTotal: number;
+  variacionVentas7Dias: number | null;
 };
 
 type VentaRow = {
@@ -155,6 +159,26 @@ export async function cargarResumenOperativoSigo(empresaId: string): Promise<Res
   const ventasDeHoy = ventas.filter((venta) => venta.created_at && new Date(venta.created_at).getTime() >= inicioHoy.getTime());
   const ventasHoyTotal = ventasDeHoy.reduce((total, venta) => total + numeroSeguro(venta.total), 0);
 
+  const inicio7 = new Date(inicioHoy);
+  inicio7.setDate(inicio7.getDate() - 6);
+  const inicioAnterior = new Date(inicio7);
+  inicioAnterior.setDate(inicioAnterior.getDate() - 7);
+  const ventasUltimos7Dias = Array.from({ length: 7 }, (_, indice) => {
+    const dia = new Date(inicio7);
+    dia.setDate(dia.getDate() + indice);
+    const siguiente = new Date(dia);
+    siguiente.setDate(siguiente.getDate() + 1);
+    const delDia = ventas.filter((venta) => {
+      if (!venta.created_at) return false;
+      const fecha = new Date(venta.created_at).getTime();
+      return fecha >= dia.getTime() && fecha < siguiente.getTime();
+    });
+    return { fecha: dia.toISOString().slice(0, 10), total: delDia.reduce((total, venta) => total + numeroSeguro(venta.total), 0), cantidad: delDia.length };
+  });
+  const ventas7DiasTotal = ventasUltimos7Dias.reduce((total, dia) => total + dia.total, 0);
+  const ventas7DiasAnteriorTotal = ventas.filter((venta) => venta.created_at && new Date(venta.created_at).getTime() >= inicioAnterior.getTime() && new Date(venta.created_at).getTime() < inicio7.getTime()).reduce((total, venta) => total + numeroSeguro(venta.total), 0);
+  const variacionVentas7Dias = ventas7DiasAnteriorTotal > 0 ? ((ventas7DiasTotal - ventas7DiasAnteriorTotal) / ventas7DiasAnteriorTotal) * 100 : null;
+
   const cajaHoyIngresos = cajaHoy
     .filter((movimiento) => movimiento.tipo === "ingreso")
     .reduce((total, movimiento) => total + numeroSeguro(movimiento.importe), 0);
@@ -187,5 +211,9 @@ export async function cargarResumenOperativoSigo(empresaId: string): Promise<Res
     cajaHoyNeto: cajaHoyIngresos - cajaHoyEgresos,
     cajaHoyPorMedio,
     modulosNoDisponibles,
+    ventasUltimos7Dias,
+    ventas7DiasTotal,
+    ventas7DiasAnteriorTotal,
+    variacionVentas7Dias,
   };
 }
