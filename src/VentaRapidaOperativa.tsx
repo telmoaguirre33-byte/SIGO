@@ -53,6 +53,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   const [ultimaVentaTicket, setUltimaVentaTicket] = useState<string | null>(null);
   const [advertencia, setAdvertencia] = useState("");
   const [descuentoPct,setDescuentoPct]=useState(0);
+  const [sugerenciaActiva,setSugerenciaActiva]=useState(0);
   const [descuentoAbierto,setDescuentoAbierto]=useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState(nuevaClaveVenta);
   const empresaActivaRef = useRef(empresaId);
@@ -349,7 +350,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   }
 
   const unidades = items.reduce((n,item)=>n+item.cantidad,0);
-  useEffect(()=>{ const key=(e:KeyboardEvent)=>{ if(e.key==="F1"){e.preventDefault();vaciar()} if(e.key==="F2"){e.preventDefault();buscarRef.current?.focus()} if(e.key==="F6"){e.preventDefault();setDescuentoAbierto(v=>!v)} if(e.key==="F9"){e.preventDefault();void confirmar()} if(e.key==="F10"){e.preventDefault();void confirmar()} if(e.key==="F12"&&ultimaVentaTicket){e.preventDefault();void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(()=>{})} }; window.addEventListener("keydown",key); return()=>window.removeEventListener("keydown",key); });
+  useEffect(()=>{ const key=(e:KeyboardEvent)=>{ if((e.key==="ArrowDown"||e.key==="ArrowUp")&&productosEncontrados.length){e.preventDefault();setSugerenciaActiva(i=>e.key==="ArrowDown"?Math.min(productosEncontrados.length-1,i+1):Math.max(0,i-1));return} if(e.key==="Enter"&&busquedaProducto.trim()&&productosEncontrados[sugerenciaActiva]){e.preventDefault();seleccionarProductoManual(productosEncontrados[sugerenciaActiva]);return} if(e.key==="F1"){e.preventDefault();vaciar()} if(e.key==="F2"){e.preventDefault();buscarRef.current?.focus()} if(e.key==="F6"){e.preventDefault();setDescuentoAbierto(v=>!v)} if(e.key==="F9"){e.preventDefault();void confirmar()} if(e.key==="F10"){e.preventDefault();void confirmar()} if(e.key==="F12"&&ultimaVentaTicket){e.preventDefault();void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(()=>{})} }; window.addEventListener("keydown",key); return()=>window.removeEventListener("keydown",key); });
 
   return (
     <div className="sigo-pos">
@@ -363,9 +364,9 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       </div>
       {descuentoAbierto&&<div className="sigo-pos-discount"><strong>Descuento</strong>{[0,5,10,15,20].map(n=><button type="button" className={descuentoPct===n?"active":""} onClick={()=>{setDescuentoPct(n);setDescuentoAbierto(false)}} key={n}>{n}%</button>)}<label>Otro % <input type="number" min="0" max="100" value={descuentoPct} onChange={e=>setDescuentoPct(Math.max(0,Math.min(100,Number(e.target.value)||0)))}/></label></div>}
       <div className="sigo-pos-scan">
-        <BarcodeScanner empresaId={empresaId} action="vender" onProduct={agregar} onBlockedProduct={marcarProductoBloqueado}/>
+        <BarcodeScanner empresaId={empresaId} action="vender" onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(q)=>{setBusquedaProducto(q);setSugerenciaActiva(0)}} onManualQuery={(q)=>{setBusquedaProducto(q);setSugerenciaActiva(0);return true}}/>
         
-        {productosEncontrados.length>0&&<div className="sigo-pos-results">{productosEncontrados.map(p=><button type="button" key={p.id} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} · Stock {p.stock_actual??0}</span></button>)}</div>}
+        {busquedaProducto.trim()&&productosEncontrados.length>0&&<div className="sigo-pos-results">{productosEncontrados.map((p,i)=><button type="button" className={i===sugerenciaActiva?"active":""} key={p.id} onMouseEnter={()=>setSugerenciaActiva(i)} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} · Stock {p.stock_actual??0}</span></button>)}</div>}{busquedaProducto.trim()&&productosEncontrados.length===0&&!catalogoError&&<div className="sigo-pos-results"><div className="table-empty">No encontré productos. Probá con nombre, marca, código interno o EAN.</div></div>}
       </div>
       {productoBloqueado&&<div className="form-error"><strong>{productoBloqueado.producto.nombre}</strong> · {productoBloqueado.razon==="stock"?"Sin stock disponible.":"Sin precio válido."}</div>}
       {error&&<p className="form-error" role="alert">{error}</p>}{exito&&<p role="status"><strong>{exito}</strong></p>}{advertencia&&<p className="form-error">{advertencia}</p>}
