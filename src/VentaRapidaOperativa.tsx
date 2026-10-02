@@ -52,6 +52,8 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   const [exito, setExito] = useState("");
   const [ultimaVentaTicket, setUltimaVentaTicket] = useState<string | null>(null);
   const [advertencia, setAdvertencia] = useState("");
+  const [descuentoPct,setDescuentoPct]=useState(0);
+  const [descuentoAbierto,setDescuentoAbierto]=useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState(nuevaClaveVenta);
   const empresaActivaRef = useRef(empresaId);
   const buscarRef = useRef<HTMLInputElement | null>(null);
@@ -267,13 +269,13 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     setProductoBloqueado(null);
     setPrecioRapido("");
     setBusquedaProducto("");
+    setDescuentoPct(0); setDescuentoAbierto(false);
     setIdempotencyKey(nuevaClaveVenta());
+    window.setTimeout(()=>buscarRef.current?.focus(),0);
   }
 
-  const total = useMemo(
-    () => items.reduce((suma, item) => suma + Number(item.producto.precio_venta ?? 0) * item.cantidad, 0),
-    [items],
-  );
+  const subtotal = useMemo(() => items.reduce((suma,item)=>suma+Number(item.producto.precio_venta??0)*item.cantidad,0),[items]);
+  const total = useMemo(()=>Math.max(0,subtotal*(1-descuentoPct/100)),[subtotal,descuentoPct]);
 
   const superaLimite = medioPago === "cuenta_corriente"
     && clienteSeleccionado?.limite_credito != null
@@ -347,7 +349,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   }
 
   const unidades = items.reduce((n,item)=>n+item.cantidad,0);
-  useEffect(()=>{ const key=(e:KeyboardEvent)=>{ if(e.key==="F2"){e.preventDefault();buscarRef.current?.focus()} if(e.key==="F9"){e.preventDefault();void confirmar()} if(e.key==="F10"){e.preventDefault();void confirmar()} if(e.key==="F12"&&ultimaVentaTicket){e.preventDefault();void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(()=>{})} }; window.addEventListener("keydown",key); return()=>window.removeEventListener("keydown",key); });
+  useEffect(()=>{ const key=(e:KeyboardEvent)=>{ if(e.key==="F1"){e.preventDefault();vaciar()} if(e.key==="F2"){e.preventDefault();buscarRef.current?.focus()} if(e.key==="F6"){e.preventDefault();setDescuentoAbierto(v=>!v)} if(e.key==="F9"){e.preventDefault();void confirmar()} if(e.key==="F10"){e.preventDefault();void confirmar()} if(e.key==="F12"&&ultimaVentaTicket){e.preventDefault();void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(()=>{})} }; window.addEventListener("keydown",key); return()=>window.removeEventListener("keydown",key); });
 
   return (
     <div className="sigo-pos">
@@ -357,11 +359,12 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         <button type="button" onClick={()=>buscarRef.current?.focus()}>⌕ <strong>BUSCAR PRODUCTO</strong><small>F2</small></button>
         <button type="button" onClick={()=>document.querySelector<HTMLElement>(".barcode-camera-button")?.click()}>📷 <strong>CÁMARA</strong><small>F3</small></button>
         <button type="button" onClick={()=>document.getElementById("sigo-pos-cliente")?.focus()}>👤 <strong>CLIENTE</strong><small>F8</small></button>
-        <button type="button" disabled>◇ <strong>DESCUENTO</strong><small>F6 · próximo</small></button>
+        <button type="button" onClick={()=>setDescuentoAbierto(v=>!v)}>◇ <strong>DESCUENTO</strong><small>F6 · {descuentoPct}%</small></button>
       </div>
+      {descuentoAbierto&&<div className="sigo-pos-discount"><strong>Descuento</strong>{[0,5,10,15,20].map(n=><button type="button" className={descuentoPct===n?"active":""} onClick={()=>{setDescuentoPct(n);setDescuentoAbierto(false)}} key={n}>{n}%</button>)}<label>Otro % <input type="number" min="0" max="100" value={descuentoPct} onChange={e=>setDescuentoPct(Math.max(0,Math.min(100,Number(e.target.value)||0)))}/></label></div>}
       <div className="sigo-pos-scan">
         <BarcodeScanner empresaId={empresaId} action="vender" onProduct={agregar} onBlockedProduct={marcarProductoBloqueado}/>
-        <div className="sigo-pos-search"><input ref={buscarRef} type="search" placeholder="Escaneá un código, escribí el producto o buscá…" value={busquedaProducto} onChange={e=>setBusquedaProducto(e.target.value)} disabled={confirmando}/></div>
+        
         {productosEncontrados.length>0&&<div className="sigo-pos-results">{productosEncontrados.map(p=><button type="button" key={p.id} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} · Stock {p.stock_actual??0}</span></button>)}</div>}
       </div>
       {productoBloqueado&&<div className="form-error"><strong>{productoBloqueado.producto.nombre}</strong> · {productoBloqueado.razon==="stock"?"Sin stock disponible.":"Sin precio válido."}</div>}
@@ -372,7 +375,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
           <div className="sigo-pos-payments">{(["efectivo","debito","credito","transferencia","mercado_pago","cuenta_corriente"] as MedioPagoSigo[]).map(m=><button type="button" className={medioPago===m?"active":""} onClick={()=>setMedioPago(m)} key={m}>{etiquetaMedio(m)}</button>)}</div>
         </section>
         <aside className="sigo-pos-summary">
-          <div className="sigo-pos-total"><span>TOTAL</span><strong>$ {total.toLocaleString("es-AR")}</strong><p>Productos <b>{items.length}</b> · Unidades <b>{unidades}</b></p></div>
+          <div className="sigo-pos-total"><span>TOTAL</span><strong>$ {total.toLocaleString("es-AR")}</strong>{descuentoPct>0&&<small>Subtotal $ {subtotal.toLocaleString("es-AR")} · Descuento {descuentoPct}%</small>}<p>Productos <b>{items.length}</b> · Unidades <b>{unidades}</b></p></div>
           <label><span>Cliente</span><select id="sigo-pos-cliente" value={clienteId} onChange={e=>setClienteId(e.target.value)}><option value="">Consumidor final / sin cliente</option>{clientes.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>
           <button className="sigo-pos-action cobrar" disabled={!puedeConfirmar||confirmando} onClick={()=>void confirmar()}>💳 COBRAR <kbd>F9</kbd></button>
           <button className="sigo-pos-action ticket" disabled={!puedeConfirmar||confirmando} onClick={()=>void confirmar()}>🖨 COBRAR + TICKET <kbd>F10</kbd></button>
