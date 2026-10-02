@@ -92,12 +92,12 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
       </aside>}
 
       <main className="main" style={purchasesOnly ? {width:"100%",maxWidth:"100%",margin:0} : undefined}>
-        <header className="topbar">
+        {section !== "Ventas" && <header className="topbar">
           <div>
             <h1>{section === "Compras" ? "Compras / Proveedores" : section}</h1>
             <p>{empresa.empresa_nombre} · SIGO</p>
           </div>
-        </header>
+        </header>}
         <section className="content">
           {section === "Inicio" && <Inicio empresa={empresa} onProductos={() => setSection("Productos")} onStock={() => setSection("Stock")} onCaja={() => window.dispatchEvent(new CustomEvent("sigo:abrir-caja"))} />}
           {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
