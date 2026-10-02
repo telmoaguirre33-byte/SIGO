@@ -1,6 +1,13 @@
 import fs from "node:fs";
 const path="src/VentaRapidaOperativa.tsx";
 let s=fs.readFileSync(path,"utf8");
+
+const posSource = fs.readFileSync("src/VentaRapidaOperativa.tsx", "utf8");
+if (posSource.includes('className="sigo-pos"')) {
+  console.log("SIGO_NEW_POS_COMPAT_OK");
+  process.exit(0);
+}
+
 function change(a,b,label){if(!s.includes(a))throw Error("CAJA_MISSING:"+label);s=s.replace(a,b)}
 change('  const [busquedaResetKey, setBusquedaResetKey] = useState(0);','  const [busquedaResetKey, setBusquedaResetKey] = useState(0);\n  const [ultimoTotal, setUltimoTotal] = useState(0);\n  const [anchoTicket, setAnchoTicket] = useState<"58" | "80">(() => localStorage.getItem("sigo-ticket-ancho") === "58" ? "58" : "80");',"state");
 change('      setUltimaVentaTicket(resultado.ventaId);','      setUltimaVentaTicket(resultado.ventaId);\n      setUltimoTotal(totalConfirmado);',"sale");
