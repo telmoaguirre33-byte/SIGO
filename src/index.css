@@ -311,3 +311,4 @@ input,select,textarea{border:1px solid #d9e4f1!important;border-radius:11px!impo
 .sigo-pos-results button.active,.sigo-pos-results button[aria-selected="true"]{background:#dbeafe!important;outline:2px solid #1677e8!important;outline-offset:-2px}.sigo-pos-results button.active strong{color:#0b4fb3}.sigo-pos-results button:focus-visible{outline:2px solid #1677e8}
 
 html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}.products-page{overflow:visible}\n
+.product-search-suggestions{display:grid;max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:6px;background:#fff}.product-search-suggestions button{display:grid;text-align:left;padding:8px 10px;border:0;border-bottom:1px solid var(--line);background:#fff}.product-search-suggestions button span{font-size:10px;color:var(--muted)}.product-search-suggestions button.active,.product-search-suggestions button:hover{background:#dbeafe}
