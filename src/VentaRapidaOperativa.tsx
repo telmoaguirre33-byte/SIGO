@@ -54,6 +54,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   const [advertencia, setAdvertencia] = useState("");
   const [idempotencyKey, setIdempotencyKey] = useState(nuevaClaveVenta);
   const empresaActivaRef = useRef(empresaId);
+  const buscarRef = useRef<HTMLInputElement | null>(null);
 
   async function cargarVentasRecientes(targetEmpresaId = empresaId) {
     setVentasError("");
@@ -346,7 +347,6 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   }
 
   const unidades = items.reduce((n,item)=>n+item.cantidad,0);
-  const buscarRef = useRef<HTMLInputElement | null>(null);
   useEffect(()=>{ const key=(e:KeyboardEvent)=>{ if(e.key==="F2"){e.preventDefault();buscarRef.current?.focus()} if(e.key==="F9"){e.preventDefault();void confirmar()} if(e.key==="F10"){e.preventDefault();void confirmar()} if(e.key==="F12"&&ultimaVentaTicket){e.preventDefault();void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(()=>{})} }; window.addEventListener("keydown",key); return()=>window.removeEventListener("keydown",key); });
 
   return (
