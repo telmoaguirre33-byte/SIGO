@@ -199,7 +199,13 @@ export default function BarcodeScanner({
   }
 
   async function resolveCode(raw: string, source: ScanSource = "manual") {
-    if (source === "manual" && onManualQuery?.(raw)) return;
+    // Enter/Tab de pistola o teclado cierra siempre la lectura actual antes de resolverla.
+    // Evita que una segunda lectura se concatene aunque el callback de búsqueda manual la intercepte.
+    if (source === "manual") {
+      setCode("");
+      onQueryChange?.("");
+      if (onManualQuery?.(raw)) { focusScanner(); return; }
+    }
     const normalized = normalizeBarcode(raw);
     if (!normalized) return;
     const empresaOperacion = empresaId;
@@ -224,7 +230,7 @@ export default function BarcodeScanner({
     // Liberamos el campo en el mismo instante en que la pistola/manual envía Enter/Tab.
     // Así una segunda lectura rápida no se concatena con el código anterior mientras
     // la primera consulta todavía está viajando a Supabase.
-    setCode("");
+    if (source !== "manual") setCode("");
 
     if (inFlightRef.current) {
       if (queuedScansRef.current.length >= MAX_PENDING_SCANS) {
