@@ -312,3 +312,6 @@ input,select,textarea{border:1px solid #d9e4f1!important;border-radius:11px!impo
 
 html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}.products-page{overflow:visible}\n
 .product-search-suggestions{display:grid;max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:6px;background:#fff}.product-search-suggestions button{display:grid;text-align:left;padding:8px 10px;border:0;border-bottom:1px solid var(--line);background:#fff}.product-search-suggestions button span{font-size:10px;color:var(--muted)}.product-search-suggestions button.active,.product-search-suggestions button:hover{background:#dbeafe}
+
+/* Productos: sugerencias flotantes, sin empujar la página */
+.product-search-panel{position:relative;z-index:30}.product-search-panel .product-search-suggestions{position:absolute;z-index:100;left:18px;right:18px;top:calc(100% - 12px);max-height:260px;overflow-y:auto;overscroll-behavior:contain;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 14px 34px rgba(15,23,42,.18);margin:0}.product-search-panel .product-search-suggestions button{min-height:44px}.product-search-panel .product-search-suggestions button.active{background:#dbeafe!important;outline:2px solid #1677e8;outline-offset:-2px}
