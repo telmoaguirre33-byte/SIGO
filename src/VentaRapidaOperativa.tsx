@@ -345,199 +345,40 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     }
   }
 
+  const unidades = items.reduce((n,item)=>n+item.cantidad,0);
+  const buscarRef = useRef<HTMLInputElement | null>(null);
+  useEffect(()=>{ const key=(e:KeyboardEvent)=>{ if(e.key==="F2"){e.preventDefault();buscarRef.current?.focus()} if(e.key==="F9"){e.preventDefault();void confirmar()} if(e.key==="F10"){e.preventDefault();void confirmar()} if(e.key==="F12"&&ultimaVentaTicket){e.preventDefault();void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(()=>{})} }; window.addEventListener("keydown",key); return()=>window.removeEventListener("keydown",key); });
+
   return (
-    <div className="products-page">
-      <div className="page-header">
-        <div>
-          <h2>Venta rápida</h2>
-          <p>Pistola USB/Bluetooth, ingreso manual o cámara celular. Confirmación transaccional con descuento de stock, caja y cuenta corriente por cliente.</p>
-        </div>
-        <button className="admin-button" disabled={items.length === 0 || confirmando} onClick={vaciar}>Vaciar</button>
+    <div className="sigo-pos">
+      <header className="sigo-pos-title"><div><strong>🛒 CAJA - VENTA</strong><span>Escaneá, buscá o agregá productos. Todo en una sola pantalla.</span></div><button className="admin-button" disabled={!items.length||confirmando} onClick={vaciar}>Vaciar</button></header>
+      <div className="sigo-pos-toolbar">
+        <button type="button" onClick={vaciar}>▣ <strong>NUEVA VENTA</strong><small>F1</small></button>
+        <button type="button" onClick={()=>buscarRef.current?.focus()}>⌕ <strong>BUSCAR PRODUCTO</strong><small>F2</small></button>
+        <button type="button" onClick={()=>document.querySelector<HTMLElement>(".barcode-camera-button")?.click()}>📷 <strong>CÁMARA</strong><small>F3</small></button>
+        <button type="button" onClick={()=>document.getElementById("sigo-pos-cliente")?.focus()}>👤 <strong>CLIENTE</strong><small>F8</small></button>
+        <button type="button" disabled>◇ <strong>DESCUENTO</strong><small>F6 · próximo</small></button>
       </div>
-
-      <div className="panel">
-        <h3>Escanear producto</h3>
-        <BarcodeScanner
-          empresaId={empresaId}
-          action="vender"
-          onProduct={agregar}
-          onBlockedProduct={marcarProductoBloqueado}
-        />
-
-        <div className="form-group" style={{ marginTop: 16 }}>
-          <label htmlFor="venta-buscar-producto">O buscar por nombre, código o marca</label>
-          <input
-            id="venta-buscar-producto"
-            type="search"
-            placeholder="Ej.: resma A4, tinta Epson o código interno"
-            value={busquedaProducto}
-            onChange={(event) => setBusquedaProducto(event.target.value)}
-            disabled={confirmando}
-          />
-        </div>
-        {catalogoError ? <p className="form-error" role="alert">Catálogo: {catalogoError}</p> : null}
-        {productosEncontrados.length > 0 ? (
-          <div className="table-wrapper" style={{ marginTop: 10 }}>
-            <table className="products-table">
-              <thead><tr><th>Producto</th><th>Precio</th><th>Stock</th><th></th></tr></thead>
-              <tbody>
-                {productosEncontrados.map((producto) => (
-                  <tr key={producto.id}>
-                    <td><strong>{producto.nombre}</strong><small>{producto.codigo_interno || producto.codigo_barras || "Sin código"}</small></td>
-                    <td>{Number(producto.precio_venta || 0) > 0 ? `$ ${Number(producto.precio_venta).toLocaleString("es-AR")}` : "Sin precio"}</td>
-                    <td>{producto.stock_actual ?? "No disponible"}</td>
-                    <td><button type="button" className="admin-button" onClick={() => seleccionarProductoManual(producto)}>Elegir</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
-        {busquedaProducto.trim().length >= 2 && productosEncontrados.length === 0 && !catalogoError ? (
-          <p className="barcode-help">No se encontraron productos con esa búsqueda en la empresa activa.</p>
-        ) : null}
-
-        {productoBloqueado ? (
-          <div className="arca-security-note" style={{ marginTop: 14 }}>
-            <strong>{productoBloqueado.producto.nombre}</strong>
-            {productoBloqueado.razon === "precio" ? (
-              puedeEditarProductos ? (
-                <>
-                  <span>El producto tiene stock, pero no tiene precio válido. Podés prepararlo acá y SIGO lo agregará al carrito después de verificar el guardado.</span>
-                  <div className="form-actions">
-                    <input
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      inputMode="decimal"
-                      placeholder="Precio de venta"
-                      value={precioRapido}
-                      onChange={(event) => setPrecioRapido(event.target.value)}
-                      disabled={guardandoPrecio}
-                      aria-label="Precio de venta del producto bloqueado"
-                    />
-                    <button type="button" className="primary-button" onClick={() => void guardarPrecioRapido()} disabled={guardandoPrecio}>
-                      {guardandoPrecio ? "Guardando y verificando…" : "Guardar precio y agregar"}
-                    </button>
-                  </div>
-                </>
-              ) : <span>Pedile a un propietario o administrador que configure el precio de venta.</span>
-            ) : (
-              <span>El producto no tiene stock disponible. Ingresalo desde Compras; SIGO no inventará stock desde Caja.</span>
-            )}
-          </div>
-        ) : null}
+      <div className="sigo-pos-scan">
+        <BarcodeScanner empresaId={empresaId} action="vender" onProduct={agregar} onBlockedProduct={marcarProductoBloqueado}/>
+        <div className="sigo-pos-search"><input ref={buscarRef} type="search" placeholder="Escaneá un código, escribí el producto o buscá…" value={busquedaProducto} onChange={e=>setBusquedaProducto(e.target.value)} disabled={confirmando}/></div>
+        {productosEncontrados.length>0&&<div className="sigo-pos-results">{productosEncontrados.map(p=><button type="button" key={p.id} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} · Stock {p.stock_actual??0}</span></button>)}</div>}
       </div>
-
-      <div className="panel">
-        <div className="page-header">
-          <div><h3>Carrito</h3><p>El precio final, stock, cliente y límite de crédito se vuelven a validar en backend al confirmar.</p></div>
-          <div className="topbar-actions" style={{ alignItems: "end" }}>
-            <label className="form-group" style={{ minWidth: 210 }}>
-              <span>Cliente</span>
-              <select value={clienteId} disabled={confirmando} onChange={(e) => setClienteId(e.target.value)}>
-                <option value="">Consumidor final / sin cliente</option>
-                {clientes.map((cliente) => (
-                  <option key={cliente.id} value={cliente.id}>
-                    {cliente.nombre} · saldo $ {Number(cliente.saldo_actual || 0).toLocaleString("es-AR")}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="form-group" style={{ minWidth: 190 }}>
-              <span>Medio de pago</span>
-              <select value={medioPago} disabled={confirmando} onChange={(e) => setMedioPago(e.target.value as MedioPagoSigo)}>
-                <option value="efectivo">Efectivo</option>
-                <option value="debito">Débito</option>
-                <option value="credito">Crédito</option>
-                <option value="transferencia">Transferencia</option>
-                <option value="mercado_pago">Mercado Pago</option>
-                <option value="cuenta_corriente">Cuenta corriente</option>
-                <option value="otro">Otro</option>
-              </select>
-            </label>
-          </div>
-        </div>
-
-        {clientesError && <p className="form-error" role="alert">Clientes: {clientesError}</p>}
-        {medioPago === "cuenta_corriente" && !clienteId && (
-          <p className="form-error" role="alert">Seleccioná un cliente para vender en cuenta corriente.</p>
-        )}
-        {medioPago === "cuenta_corriente" && clienteSeleccionado && (
-          <p style={{ marginTop: 0, opacity: 0.78 }}>
-            {clienteSeleccionado.nombre} · saldo actual $ {Number(clienteSeleccionado.saldo_actual || 0).toLocaleString("es-AR")}
-            {clienteSeleccionado.limite_credito == null ? " · sin límite configurado" : ` · límite $ ${Number(clienteSeleccionado.limite_credito).toLocaleString("es-AR")}`}
-          </p>
-        )}
-        {superaLimite && <p className="form-error" role="alert">La operación supera el límite de crédito configurado para el cliente.</p>}
-
-        <div className="table-wrapper">
-          <table className="products-table">
-            <thead><tr><th>Producto</th><th>Cantidad</th><th>Precio</th><th>Subtotal</th><th>Stock</th></tr></thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.producto.id}>
-                  <td><strong>{item.producto.nombre}</strong></td>
-                  <td>
-                    <div className="row-actions">
-                      <button className="admin-button" disabled={confirmando} onClick={() => cambiarCantidad(item.producto.id, -1)}>−</button>
-                      <strong>{item.cantidad}</strong>
-                      <button className="admin-button" disabled={confirmando} onClick={() => cambiarCantidad(item.producto.id, 1)}>+</button>
-                    </div>
-                  </td>
-                  <td>$ {Number(item.producto.precio_venta).toLocaleString("es-AR")}</td>
-                  <td>$ {(Number(item.producto.precio_venta) * item.cantidad).toLocaleString("es-AR")}</td>
-                  <td>{item.producto.stock_actual}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {items.length === 0 && <div className="table-empty">Escaneá un producto para iniciar la venta.</div>}
-        </div>
-
-        {error && <p className="form-error" role="alert">{error}</p>}
-        {exito && <p role="status"><strong>{exito}</strong></p>}
-        {advertencia && <p className="form-error" role="alert"><strong>{advertencia}</strong></p>}
-
-        <div className="form-actions">
-          <strong>Total: $ {total.toLocaleString("es-AR")}</strong>
-          <button className="primary-button" disabled={!puedeConfirmar || confirmando} onClick={() => void confirmar()}>
-            {confirmando ? "Confirmando…" : "Confirmar venta"}
-          </button>
-          <button type="button" className="admin-button" disabled={!ultimaVentaTicket || confirmando} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir el ticket."));}}>Imprimir ticket</button>
-        </div>
-      </div>
-
-      <div className="panel">
-        <div className="page-header">
-          <div>
-            <h3>Últimas ventas y conciliación</h3>
-            <p>Control inmediato de que cada venta tenga su ingreso de Caja o su deuda en Cuenta Corriente.</p>
-          </div>
-          <button className="admin-button" disabled={confirmando} onClick={() => void cargarVentasRecientes()}>Actualizar</button>
-        </div>
-        {ventasError && <p className="form-error" role="alert">Ventas: {ventasError}</p>}
-        <div className="table-wrapper">
-          <table className="products-table">
-            <thead><tr><th>Venta</th><th>Hora</th><th>Medio</th><th>Total</th><th>Conciliación</th></tr></thead>
-            <tbody>
-              {ventasRecientes.map((venta) => (
-                <tr key={venta.id}>
-                  <td><strong>{venta.numero ? `#${venta.numero}` : venta.id.slice(0, 8).toUpperCase()}</strong></td>
-                  <td>{new Date(venta.createdAt).toLocaleString("es-AR")}</td>
-                  <td>{etiquetaMedio(venta.medioPago)}</td>
-                  <td>$ {venta.total.toLocaleString("es-AR")}</td>
-                  <td>
-                    <strong>
-                      {venta.integridad === "ok" ? "OK" : venta.integridad === "revisar" ? "REVISAR" : "NO VERIFICADO"}
-                    </strong>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {ventasRecientes.length === 0 && !ventasError && <div className="table-empty">Todavía no hay ventas recientes para esta empresa.</div>}
-        </div>
+      {productoBloqueado&&<div className="form-error"><strong>{productoBloqueado.producto.nombre}</strong> · {productoBloqueado.razon==="stock"?"Sin stock disponible.":"Sin precio válido."}</div>}
+      {error&&<p className="form-error" role="alert">{error}</p>}{exito&&<p role="status"><strong>{exito}</strong></p>}{advertencia&&<p className="form-error">{advertencia}</p>}
+      <div className="sigo-pos-grid">
+        <section className="sigo-pos-cart">
+          <div className="table-wrapper"><table className="products-table"><thead><tr><th>#</th><th>Producto</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th></th></tr></thead><tbody>{items.map((item,i)=><tr key={item.producto.id}><td>{i+1}</td><td><strong>{item.producto.nombre}</strong><small>{item.producto.codigo_interno||item.producto.codigo_barras||""}</small></td><td><div className="sigo-pos-qty"><button onClick={()=>cambiarCantidad(item.producto.id,-1)}>−</button><strong>{item.cantidad}</strong><button onClick={()=>cambiarCantidad(item.producto.id,1)}>+</button></div></td><td>$ {Number(item.producto.precio_venta).toLocaleString("es-AR")}</td><td><strong>$ {(Number(item.producto.precio_venta)*item.cantidad).toLocaleString("es-AR")}</strong></td><td><button className="sigo-pos-remove" onClick={()=>setItems(a=>a.filter(x=>x.producto.id!==item.producto.id))}>🗑</button></td></tr>)}</tbody></table>{!items.length&&<div className="table-empty">Escaneá o buscá un producto para iniciar la venta.</div>}</div>
+          <div className="sigo-pos-payments">{(["efectivo","debito","credito","transferencia","mercado_pago","cuenta_corriente"] as MedioPagoSigo[]).map(m=><button type="button" className={medioPago===m?"active":""} onClick={()=>setMedioPago(m)} key={m}>{etiquetaMedio(m)}</button>)}</div>
+        </section>
+        <aside className="sigo-pos-summary">
+          <div className="sigo-pos-total"><span>TOTAL</span><strong>$ {total.toLocaleString("es-AR")}</strong><p>Productos <b>{items.length}</b> · Unidades <b>{unidades}</b></p></div>
+          <label><span>Cliente</span><select id="sigo-pos-cliente" value={clienteId} onChange={e=>setClienteId(e.target.value)}><option value="">Consumidor final / sin cliente</option>{clientes.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>
+          <button className="sigo-pos-action cobrar" disabled={!puedeConfirmar||confirmando} onClick={()=>void confirmar()}>💳 COBRAR <kbd>F9</kbd></button>
+          <button className="sigo-pos-action ticket" disabled={!puedeConfirmar||confirmando} onClick={()=>void confirmar()}>🖨 COBRAR + TICKET <kbd>F10</kbd></button>
+          <button className="sigo-pos-action fiscal" type="button" onClick={()=>document.querySelector<HTMLElement>(".arca-launcher")?.click()}>▤ FACTURA FISCAL <kbd>F11</kbd></button>
+          <button className="sigo-pos-action reprint" disabled={!ultimaVentaTicket||confirmando} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir el ticket."));}}>🖨 REIMPRIMIR ÚLTIMO <kbd>F12</kbd></button>
+        </aside>
       </div>
     </div>
   );
