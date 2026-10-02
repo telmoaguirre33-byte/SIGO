@@ -171,6 +171,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
   const [scanResult, setScanResult] = useState<BarcodeProduct | null>(null);
   const [eanHabilitado, setEanHabilitado] = useState(false);
   const [eanCodigo, setEanCodigo] = useState("");
+  const [productoSugerido,setProductoSugerido]=useState(0);
 
   async function cargar() {
     setLoading(true);
@@ -399,6 +400,12 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
             return productos.some((p) => [p.nombre, p.marca, p.categoria].filter(Boolean).join(" ").toLowerCase().includes(q));
           }}
         />
+        {search.trim() && (
+          <div className="product-search-suggestions">
+            {filtrados.slice(0,12).map((p,i)=><button type="button" key={p.id} className={i===productoSugerido?"active":""} onClick={()=>{setSearch(p.nombre);setScanResult(p);if(puedeEditar&&scanAction==="editar")abrirEdicion(p)}}><strong>{p.nombre}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} · Stock {p.stock_actual??0}</span></button>)}
+            {filtrados.length===0&&<div className="table-empty">No se encontraron productos.</div>}
+          </div>
+        )}
         {scanResult && (
           <p><strong>Encontrado:</strong> {scanResult.nombre} · Stock {scanResult.stock_actual ?? "restringido"} · Precio {scanResult.precio_venta == null ? "restringido" : `$ ${Number(scanResult.precio_venta).toLocaleString("es-AR")}`}</p>
         )}
