@@ -2,6 +2,13 @@ import fs from "node:fs";
 
 const path = "src/VentaRapidaOperativa.tsx";
 let source = fs.readFileSync(path, "utf8");
+
+const posSource = fs.readFileSync("src/VentaRapidaOperativa.tsx", "utf8");
+if (posSource.includes('className="sigo-pos"')) {
+  console.log("SIGO_NEW_POS_COMPAT_OK");
+  process.exit(0);
+}
+
 if (source.includes("// SIGO_OFERTAS_CAJA")) {
   console.log("SIGO_OFERTAS_CAJA_OK");
   process.exit(0);
