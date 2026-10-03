@@ -127,6 +127,55 @@ async function listarCajaDesdeSigo(empresaId: string, inicioHoyIso: string): Pro
   return filas;
 }
 
+export type ResumenVentasPeriodoSigo = {
+  desde: string;
+  hasta: string;
+  cantidad: number;
+  total: number;
+  ticketPromedio: number;
+  dias: Array<{ fecha: string; total: number; cantidad: number }>;
+};
+
+export async function cargarVentasPeriodoSigo(empresaId: string, desde: string, hasta: string): Promise<ResumenVentasPeriodoSigo> {
+  if (!empresaId) throw new Error("Seleccioná una empresa activa.");
+  if (!desde || !hasta) throw new Error("Elegí las fechas Desde y Hasta.");
+  if (desde > hasta) throw new Error("La fecha Desde no puede ser posterior a Hasta.");
+
+  const inicio = new Date(desde + "T00:00:00");
+  const finExclusivo = new Date(hasta + "T00:00:00");
+  finExclusivo.setDate(finExclusivo.getDate() + 1);
+
+  const { data, error } = await supabase
+    .from("ventas_sigo")
+    .select("total,created_at")
+    .eq("empresa_id", empresaId)
+    .eq("estado", "confirmada")
+    .gte("created_at", inicio.toISOString())
+    .lt("created_at", finExclusivo.toISOString())
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+
+  const ventas = (data ?? []) as VentaRow[];
+  const dias: Array<{ fecha: string; total: number; cantidad: number }> = [];
+  const cursor = new Date(inicio);
+  while (cursor < finExclusivo) {
+    const siguiente = new Date(cursor); siguiente.setDate(siguiente.getDate() + 1);
+    const delDia = ventas.filter(v => {
+      if (!v.created_at) return false;
+      const t = new Date(v.created_at).getTime();
+      return t >= cursor.getTime() && t < siguiente.getTime();
+    });
+    dias.push({
+      fecha: cursor.toISOString().slice(0,10),
+      total: delDia.reduce((t,v)=>t+numeroSeguro(v.total),0),
+      cantidad: delDia.length,
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  const total = ventas.reduce((t,v)=>t+numeroSeguro(v.total),0);
+  return { desde, hasta, cantidad: ventas.length, total, ticketPromedio: ventas.length ? total / ventas.length : 0, dias };
+}
+
 export async function cargarResumenOperativoSigo(empresaId: string): Promise<ResumenOperativoSigo> {
   if (!empresaId) throw new Error("Seleccioná una empresa activa.");
 
