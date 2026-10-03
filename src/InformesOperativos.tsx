@@ -184,20 +184,27 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
         <button className="admin-button" onClick={() => void cargar(empresaId)}>Actualizar</button>
       </div>
 
-      {!categoria && <section className="sigo-report-catalog" aria-label="Categorías de informes">
-        {catalogo.map((item) => (
-          <button
-            key={item.titulo}
-            type="button"
-            className="sigo-report-card"
-            onClick={() => { setCategoria(item.categoria); if (item.categoria === "stock") setVistaStock("menu"); }}
-          >
-            <span className="sigo-report-icon" aria-hidden="true">{item.icono}</span>
-            <strong>{item.titulo}</strong>
-            <span>{item.texto}</span>
-          </button>
-        ))}
-      </section>}
+      {!categoria && <>
+        <section className="sigo-report-summary" aria-label="Indicadores principales">
+          <div><span>Ventas hoy</span><strong>{resumen.ventasHoy}</strong></div>
+          <div><span>Facturación hoy</span><strong>{dinero(resumen.ventasHoyTotal)}</strong></div>
+          <div><span>Stock crítico</span><strong>{resumen.productosCriticos}</strong></div>
+        </section>
+        <section className="sigo-report-list" aria-label="Categorías de informes">
+          {catalogo.map((item) => (
+            <button
+              key={item.titulo}
+              type="button"
+              className="sigo-report-list-row"
+              onClick={() => { setCategoria(item.categoria); if (item.categoria === "stock") setVistaStock("menu"); }}
+            >
+              <span className="sigo-report-list-icon" aria-hidden="true">{item.icono}</span>
+              <span className="sigo-report-list-copy"><strong>{item.titulo}</strong><small>{item.texto}</small></span>
+              <span className="sigo-report-list-action">Ver informe →</span>
+            </button>
+          ))}
+        </section>
+      </>}
       {categoria && <div style={{marginBottom:16}}><button className="admin-button" onClick={() => { setCategoria(null); setVistaStock("menu"); }}>← Informes</button></div>}
 
       {error && (
