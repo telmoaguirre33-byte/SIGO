@@ -41,7 +41,7 @@ for (const required of [
   "!Number.isFinite(precio) || precio <= 0",
   "resultado.totalVerificado ?? total",
   "Math.abs(resultado.totalVerificado - total) > DINERO_TOLERANCIA",
-  "Total verificado $",
+  "const totalConfirmado = resultado.totalVerificado ?? total",
   "SIGO registró el total vigente del backend",
 ]) {
   if (!sale.includes(required)) throw new Error(`Sale verified-total safeguard missing: ${required}`);

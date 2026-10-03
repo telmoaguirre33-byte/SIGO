@@ -11,7 +11,10 @@ function save(path, value) {
 }
 
 function replaceOnce(text, from, to, label) {
-  if (!text.includes(from)) throw new Error(`ARCA bridge patch missing token: ${label}`);
+  if (text.includes(to)) return text;
+  if (!text.includes(from)) {
+    throw new Error(`ARCA bridge patch missing token: ${label}`);
+  }
   return text.replace(from, to);
 }
 

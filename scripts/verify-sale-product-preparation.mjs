@@ -16,15 +16,12 @@ for (const token of [
 for (const token of [
   "listarProductosSigo(empresaId)",
   "isLegacyDuplicateProduct(producto)",
-  "guardarProductoSigo({",
-  "precioVenta: precio",
-  "stockActual: null",
-  "Guardar precio y agregar",
-  "Ingresalo desde Compras; SIGO no inventará stock desde Caja",
-  "onQueryChange={setBusquedaProducto}",
-  "onManualQuery={(query) =>",
-  "queryResetKey={busquedaResetKey}",
-  "onBlockedProduct={marcarProductoBloqueado}",
+  'onBlockedProduct={marcarProductoBloqueado}',
+  'onQueryChange={(q)=>{setBusquedaProducto(q);setSugerenciaActiva(0)}}',
+  'onManualQuery={(q)=>{setBusquedaProducto(q);setSugerenciaActiva(0);return true}}',
+  'No encontré productos. Probá con nombre, marca, código interno o EAN.',
+  'definí un precio de venta mayor a cero antes de vender',
+  'sin stock disponible',
 ]) {
   if (!sale.includes(token)) throw new Error(`Sale preparation flow missing: ${token}`);
 }

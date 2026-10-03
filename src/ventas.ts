@@ -104,6 +104,7 @@ function mensajeVenta(error: unknown): string {
   if (raw.includes("IDEMPOTENCY_KEY_INVALID")) return "No se pudo generar una clave segura para confirmar la venta. Volvé a iniciar el carrito.";
   if (raw.includes("SALE_TOO_MANY_ITEMS")) return "La venta tiene demasiados renglones para una sola operación. Dividila en más de una venta.";
   if (raw.includes("SALE_ITEM_INVALID") || raw.includes("SALE_QUANTITY_INVALID")) return "Hay un producto o una cantidad inválida en el carrito. Revisá la venta antes de confirmar.";
+  if (raw.includes("SALE_DISCOUNT_INVALID")) return "El descuento debe estar entre 0% y 99,99%.";
   if (raw.includes("PAYMENT_METHOD_INVALID")) return "Seleccioná un medio de pago válido.";
   if (raw.includes("ACCOUNT_CURRENT_REQUIRES_CLIENT")) return "Cuenta corriente requiere seleccionar un cliente.";
   if (raw.includes("CLIENT_NOT_FOUND")) return "El cliente seleccionado ya no está disponible en esta empresa.";
@@ -387,6 +388,7 @@ export async function confirmarVentaSigo(input: {
   items: VentaItemSigoInput[];
   medioPago: MedioPagoSigo;
   clienteId?: string | null;
+  descuentoPct?: number;
   idempotencyKey?: string;
 }): Promise<{
   ventaId: string;
@@ -422,6 +424,7 @@ export async function confirmarVentaSigo(input: {
     p_medio_pago: input.medioPago,
     p_idempotency_key: idempotencyKey,
     p_cliente_id: clienteId,
+    p_descuento_pct: input.descuentoPct ?? 0,
   });
 
   if (error) throw new Error(mensajeVenta(error));

@@ -334,9 +334,6 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
 /* Sidebar desktop fija e independiente del contenido */
 @media(min-width:901px){.sidebar{position:sticky!important;top:46px!important;height:calc(100dvh - 46px)!important;max-height:calc(100dvh - 46px)!important;align-self:flex-start!important;overflow:hidden!important}.sidebar nav,.sidebar .sidebar-nav{height:auto!important;max-height:100%!important;overflow-y:auto!important;overscroll-behavior:contain!important;scrollbar-width:thin}.sidebar nav button,.sidebar nav a,.sidebar .sidebar-nav button,.sidebar .sidebar-nav a,.sidebar .nav-item{min-height:34px!important;height:34px!important;padding-top:1px!important;padding-bottom:1px!important;margin:0!important}.sidebar nav,.sidebar .sidebar-nav{gap:1px!important}.sidebar nav button span,.sidebar nav a span,.sidebar .sidebar-nav button span,.sidebar .sidebar-nav a span,.sidebar .nav-item span{font-size:inherit!important;line-height:1.05!important}.sidebar .nav-icon,.sidebar .sidebar-icon{width:27px!important;height:27px!important;min-width:27px!important}.sidebar .active,.sidebar [aria-current="page"]{height:34px!important;min-height:34px!important}}
 
-/* Inicio mobile: KPI y Horas pico completamente visibles */
-@media(max-width:900px){body{overflow-y:auto!important}.home-page,.sigo-home,.home-content{height:auto!important;min-height:0!important;overflow:visible!important;padding-bottom:110px!important}.home-hero,.sigo-home-hero{padding:18px 20px!important;min-height:0!important}.home-actions,.sigo-home-actions{margin:10px 0!important;gap:8px!important}.home-actions>*,.sigo-home-actions>*{min-height:108px!important;height:auto!important;padding:10px 8px!important}.home-kpis,.sigo-home-kpis{display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important;overflow:visible!important}.home-kpis .peak-hours,.sigo-home-kpis .peak-hours,.peak-hours-card{grid-column:1/-1!important;min-height:190px!important;height:auto!important;overflow:visible!important;padding-bottom:18px!important}.peak-hours-card canvas,.peak-hours-card svg{max-height:130px!important}.bottom-nav{position:fixed!important;bottom:0!important}}
-
 /* Desktop: sidebar realmente fija; solo el contenido central desplaza */
 @media(min-width:901px){.app{grid-template-columns:250px minmax(0,1fr)!important}.app>.sidebar{position:fixed!important;left:0!important;top:46px!important;bottom:0!important;width:250px!important;height:auto!important;max-height:none!important;z-index:80!important;overflow:hidden!important}.app>.main{grid-column:2!important;margin-left:0!important;min-width:0!important}.app>.sidebar .menu{flex:1 1 auto!important;min-height:0!important;overflow-y:auto!important;overflow-x:hidden!important;overscroll-behavior:contain!important}.products-page-fixed{overflow:hidden!important}.products-page-fixed .products-list-panel{overflow:hidden!important}.products-page-fixed .products-list-scroll{overflow-y:auto!important;overflow-x:auto!important;overscroll-behavior:contain!important}}
 
@@ -357,14 +354,92 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
 
 .sigo-pos-success-inline{display:inline-block!important;margin:2px 0!important;padding:2px 7px!important;font-size:11px!important;line-height:1.2!important;font-weight:600!important;border-radius:6px!important;background:#ecfdf3!important;color:#166534!important;border:1px solid #bbf7d0!important;width:auto!important;max-width:max-content!important}
 
-/* Informes mobile: tarjetas compactas + scroll vertical completo */
-@media(max-width:900px){html,body,#root{height:auto!important;min-height:100%!important;overflow-x:hidden!important;overflow-y:auto!important}.app,.main,.main-content,.workspace-content{height:auto!important;min-height:100dvh!important;max-height:none!important;overflow:visible!important}.reports-page,.reports-catalog,.sigo-reports,.informes-page{height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;padding-bottom:130px!important}.sigo-reports-grid,.reports-grid,.reports-catalog-grid{display:grid!important;grid-template-columns:1fr 1fr!important;gap:9px!important}.sigo-report-card,.sigo-income-launch-card,.report-card{min-height:125px!important;height:auto!important;padding:12px 10px!important;border-radius:18px!important}.sigo-report-card .sigo-report-icon,.sigo-report-icon{width:44px!important;height:44px!important;min-width:44px!important;font-size:22px!important;margin:0 auto 7px!important}.sigo-report-card strong,.report-card strong{font-size:18px!important;line-height:1.1!important}.sigo-report-card p,.report-card p{font-size:12px!important;line-height:1.25!important;margin:5px 0 0!important}.sigo-income-launch-card.highlighted{min-height:135px!important}.mobile-bottom-nav,.bottom-nav{position:fixed!important;bottom:0!important;z-index:150!important}}
-
-/* Mobile Informes: el contenido debe desplazarse hasta Gerencial */
-@media(max-width:900px){body{position:static!important;height:auto!important;min-height:100dvh!important;overflow-y:auto!important;touch-action:pan-y!important}.app{position:static!important;height:auto!important;min-height:100dvh!important;max-height:none!important;overflow:visible!important}.app>.main{position:static!important;height:auto!important;min-height:100dvh!important;max-height:none!important;overflow:visible!important;touch-action:pan-y!important}.main-content,.workspace-content,.reports-page,.reports-catalog,.sigo-reports,.informes-page{position:static!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;touch-action:pan-y!important;-webkit-overflow-scrolling:touch!important}.reports-page,.reports-catalog,.sigo-reports,.informes-page{padding-bottom:180px!important}.sigo-reports-grid,.reports-grid,.reports-catalog-grid{height:auto!important;max-height:none!important;overflow:visible!important}}
-
-/* Informes mobile: tarjetas 50% mas compactas */
-@media(max-width:900px){.sigo-reports-grid,.reports-grid,.reports-catalog-grid{grid-template-columns:1fr 1fr!important;gap:7px!important}.sigo-report-card,.sigo-income-launch-card,.report-card{min-height:72px!important;height:auto!important;padding:7px 6px!important;border-radius:13px!important}.sigo-income-launch-card.highlighted{min-height:78px!important}.sigo-report-card .sigo-report-icon,.sigo-report-icon{width:30px!important;height:30px!important;min-width:30px!important;font-size:16px!important;margin:0 auto 4px!important}.sigo-report-card strong,.report-card strong{font-size:14px!important;line-height:1.05!important}.sigo-report-card p,.report-card p{font-size:10px!important;line-height:1.15!important;margin:3px 0 0!important}}
-
-/* Mobile global: scroll táctil real con un dedo en todos los módulos */
-@media(max-width:900px){html{height:100%!important;overflow:hidden!important}body,#root{height:100%!important;min-height:0!important;overflow:hidden!important;touch-action:auto!important}.app{height:100dvh!important;min-height:0!important;max-height:100dvh!important;overflow:hidden!important;touch-action:auto!important}.app>.main{height:100%!important;min-height:0!important;max-height:100%!important;overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch!important;overscroll-behavior-y:contain!important;touch-action:pan-y!important}.main-content,.workspace-content,.users-page,.usuarios-page,.reports-page,.reports-catalog,.sigo-reports,.informes-page{height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;touch-action:pan-y!important}.app>.main input,.app>.main select,.app>.main textarea,.app>.main button{touch-action:manipulation!important}.app>.main{padding-bottom:150px!important}}
+/* Mobile layout: one document scroll for every workspace and report. */
+@media (max-width: 900px) {
+  html, body, #root, .sigo-root {
+    width: 100%;
+    height: auto !important;
+    min-height: 100%;
+    max-height: none !important;
+    overflow-x: clip !important;
+    overflow-y: visible !important;
+  }
+  body { min-height: 100dvh; touch-action: pan-y; }
+  .app, .app > .main, .sigo-operation-only, .main, .content {
+    position: static !important;
+    display: block;
+    width: 100%;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    touch-action: pan-y;
+  }
+  .app { padding-top: 0 !important; }
+  .content { padding-bottom: calc(118px + env(safe-area-inset-bottom)) !important; }
+  .products-page-fixed, .products-page-fixed .products-list-panel {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  .products-page-fixed .products-list-scroll {
+    max-height: min(52dvh, 430px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sigo-home { gap: 8px !important; padding-bottom: 0 !important; }
+  .sigo-home-hero { min-height: 0 !important; padding: 13px 14px !important; }
+  .sigo-home-hero h2 { font-size: 21px !important; }
+  .sigo-home-actions { gap: 7px !important; margin: 6px 0 !important; }
+  .sigo-home-action { min-height: 68px !important; height: auto !important; padding: 8px 6px !important; }
+  .sigo-home-actions .sigo-home-action > span { width: 28px !important; height: 28px !important; flex-basis: 28px !important; }
+  .sigo-home-action strong { font-size: 11px !important; line-height: 1.15; }
+  .sigo-home-daily { grid-template-columns: 1fr !important; gap: 8px !important; padding: 10px !important; }
+  .sigo-home-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 7px !important; }
+  .sigo-home-kpi { min-height: 60px !important; padding: 8px 9px !important; }
+  .sigo-home-kpi strong { font-size: 18px !important; }
+  .sigo-home-peak-chart { height: 68px !important; }
+  .sigo-home-peak-column > div { height: 46px !important; }
+  .sigo-inventory-stats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .sigo-reports, .reports-page, .reports-catalog, .informes-page {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding-bottom: calc(118px + env(safe-area-inset-bottom)) !important;
+    touch-action: pan-y;
+  }
+  .sigo-reports-grid, .reports-grid, .reports-catalog-grid, .sigo-report-catalog {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 7px !important;
+  }
+  .sigo-report-card, .sigo-income-launch-card, .report-card {
+    min-height: 76px !important;
+    height: auto !important;
+    padding: 8px 7px !important;
+    border-radius: 12px !important;
+    gap: 4px !important;
+  }
+  .sigo-report-card .sigo-report-icon, .sigo-report-icon {
+    width: 30px !important;
+    height: 30px !important;
+    min-width: 30px !important;
+    font-size: 16px !important;
+    margin: 0 auto 2px !important;
+  }
+  .sigo-report-card strong, .report-card strong { font-size: 13px !important; line-height: 1.12 !important; }
+  .sigo-report-card p, .report-card p { font-size: 10px !important; line-height: 1.2 !important; margin: 2px 0 0 !important; }
+  .sigo-income-launch-card.highlighted { min-height: 82px !important; }
+  .users-page, .usuarios-page { height: auto !important; min-height: 0 !important; overflow: visible !important; touch-action: pan-y; }
+  .sigo-operation-only .sidebar { touch-action: pan-x; }
+  .sigo-operation-only .sidebar .menu { touch-action: pan-x; }
+  .sigo-operation-only .sidebar .menu-item { touch-action: manipulation; }
+  .sigo-context-actions { max-width: 100%; }
+  .sigo-context-actions button { white-space: nowrap; }
+  .app input, .app select, .app textarea, .app button { touch-action: manipulation; }
+}

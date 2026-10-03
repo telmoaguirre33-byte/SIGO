@@ -7,7 +7,13 @@ const from = `  const habilitados = puntosArca\n    .filter((item) => item.bloqu
 
 const to = `  const activos = puntosArca.filter((item) => {\n    const baja = String(item.fechaBaja || "").replace(/\\D/g, "");\n    const dadoDeBaja = /^\\d{8}$/.test(baja) && Number(baja) >= 19000101;\n    return item.bloqueado !== "S" && !dadoDeBaja;\n  });\n  const caeDeclarados = activos.filter((item) => item.emisionTipo === "CAE" || item.emisionTipo.startsWith("CAE -"));\n  const habilitados = [...new Set(caeDeclarados.map((item) => item.numero))];`;
 
-if (!s.includes(from)) throw new Error("ARCA PV normalize patch missing token");
+if (!s.includes(from)) {
+  if (s.includes(to)) {
+    console.log("SIGO_ARCA_PV_NORMALIZE_ALREADY_APPLIED");
+    process.exit(0);
+  }
+  throw new Error("ARCA PV normalize patch missing token");
+}
 s = s.replace(from, to);
 fs.writeFileSync(path, s, "utf8");
 console.log("SIGO_ARCA_PV_NORMALIZE_OK");

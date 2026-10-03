@@ -4,7 +4,10 @@ const path = "api/arca/wsaa.js";
 let s = fs.readFileSync(path, "utf8");
 
 function replaceOnce(from, to, label) {
-  if (!s.includes(from)) throw new Error(`ARCA PV sync v2 missing token: ${label}`);
+  if (!s.includes(from)) {
+    if (s.includes(to)) return;
+    throw new Error(`ARCA PV sync v2 missing token: ${label}`);
+  }
   s = s.replace(from, to);
 }
 

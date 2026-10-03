@@ -314,7 +314,7 @@ function normalizarFacturaIA(raw) {
   };
 }
 
-async function validarUsuarioYPermiso(req, empresaId) {
+async function validarUsuarioYPermiso(req, empresaId, permiso = "stock.read") {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
   const auth = String(req.headers.authorization || "");
@@ -332,7 +332,7 @@ async function validarUsuarioYPermiso(req, empresaId) {
       Authorization: auth,
       "Content-Type": "application/json",
     },
-      body: JSON.stringify({ p_empresa_id: empresaId, p_permiso: "stock.read" }),
+      body: JSON.stringify({ p_empresa_id: empresaId, p_permiso: permiso }),
   });
   if (!permisoResponse.ok) return false;
   const permitido = await permisoResponse.json().catch(() => false);
@@ -347,7 +347,7 @@ export default async function handler(req, res) {
     const imagenes = Array.isArray(req.body?.imagenes) ? req.body.imagenes.slice(0,10) : [];
     if (!empresaId || !imagenes.length || imagenes.some((x)=>typeof x!=="string" || !ALLOWED_IMAGE.test(x) || x.length>MAX_DATA_URL_LENGTH)) return json(res,400,{error:"INVALID_INVENTORY_INPUT",message:"Revisá las fotos del inventario."});
     if (imagenes.reduce((total,img)=>total+img.length,0)>4_000_000) return json(res,413,{error:"INVENTORY_IMAGES_TOO_LARGE",message:"Las fotos superan el límite de tamaño. Volvé a intentarlo con menos fotos."});
-    try { if (!(await validarUsuarioYPermiso(req, empresaId))) return json(res,403,{error:"FORBIDDEN"}); } catch { return json(res,403,{error:"FORBIDDEN"}); }
+    try { if (!(await validarUsuarioYPermiso(req, empresaId, "stock.read"))) return json(res,403,{error:"FORBIDDEN"}); } catch { return json(res,403,{error:"FORBIDDEN"}); }
     const supabaseUrl=process.env.SUPABASE_URL||process.env.VITE_SUPABASE_URL, anonKey=process.env.SUPABASE_ANON_KEY||process.env.VITE_SUPABASE_ANON_KEY||process.env.VITE_SUPABASE_PUBLISHABLE_KEY, auth=String(req.headers.authorization||"");
     const imagenPrompt=`Auditor visual de SIGO. Hacé un BARRIDO VISUAL COMPLETO e independiente del catálogo: mirá toda la superficie de cada foto, dividila mentalmente en una cuadrícula de 3×3 y recorré cada fila de izquierda a derecha, desde arriba hacia abajo. Registrá cada tipo de producto/frente distinto que sea razonablemente identificable; no te limites a los más grandes o fáciles, no omitas productos visibles y no inventes etiquetas ocultas. Para cada producto transcribí marca, variedad y presentación sólo hasta donde se lean; si faltan datos o la foto no da seguridad, incluilo con menor confianza para REVISAR. Un producto con varias unidades iguales cuenta una sola vez; variantes o tamaños distintos son productos distintos. Primero definí el bloque dominante. x/y son porcentajes 0..100: elegí espacio libre cercano que no tape marca, logo, variedad, tamaño, código ni precio; si no hay espacio, preferí un borde libre. Respondé sólo JSON válido: {"bloque":string,"visuales":[{"descripcion":string,"marca":string|null,"variedad":string|null,"presentacion":string|null,"confianza":number,"foto":number,"x":number,"y":number}]}. Incluí todas las detecciones hasta un máximo de 200, ordenadas por foto, fila y columna.`;
     const apiKey=process.env.GEMINI_API_KEY;if(!apiKey)return json(res,503,{error:"AI_NOT_CONFIGURED",message:"La IA de SIGO no está configurada."});
@@ -475,7 +475,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    if (!(await validarUsuarioYPermiso(req, empresaId))) return json(res, 403, { error: "FORBIDDEN" });
+    if (!(await validarUsuarioYPermiso(req, empresaId, "purchases.write"))) return json(res, 403, { error: "FORBIDDEN" });
   } catch {
     return json(res, 403, { error: "FORBIDDEN" });
   }

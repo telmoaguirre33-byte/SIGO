@@ -19,7 +19,24 @@ requireText('src/BarcodeScanner.tsx', [
 requireText('src/VentaRapidaOperativa.tsx', [
   '!Number.isFinite(precio) || precio <= 0',
   'precio > 0',
-  'Total verificado $',
+  'resultado.totalVerificado',
+  'total vigente del backend',
+  'descuentoPct,',
+  'precioUnitarioVenta(item,ofertas,descuentoPct)',
+  'No se puede cobrar hasta comprobar los precios de oferta',
+]);
+
+requireText('src/ventas.ts', [
+  'p_descuento_pct: input.descuentoPct ?? 0',
+  'SALE_DISCOUNT_INVALID',
+]);
+
+requireText('supabase/migrations/20261003020716_pos_manual_discount_atomic_v2.sql', [
+  'drop function if exists public.confirmar_venta_sigo_v2(uuid, jsonb, text, text, uuid);',
+  'p_descuento_pct numeric default 0',
+  "v_request_fingerprint_legacy := md5(v_request_payload);",
+  "v_precio_unitario := round(v_precio_unitario * (1 - p_descuento_pct / 100), 2);",
+  'p_descuento_pct = 0 and v_existente_fingerprint = v_request_fingerprint_legacy',
 ]);
 
 requireText('src/productos.ts', [

@@ -4,6 +4,7 @@ import { imprimirTicketVenta } from "./ticketVenta";
 import { isLegacyDuplicateProduct, type BarcodeProduct } from "./barcode";
 import { listarClientesSigo, type ClienteSigo } from "./clientes";
 import { guardarProductoSigo, listarProductosSigo, type ProductoSigo } from "./productos";
+import { listarOfertasProductos, ofertaVigente, precioConOferta, type OfertaProducto } from "./ofertasProductos";
 import {
   confirmarVentaSigo,
   listarVentasRecientesSigo,
@@ -33,9 +34,19 @@ function etiquetaMedio(medio: MedioPagoSigo) {
   return etiquetas[medio];
 }
 
+function precioUnitarioVenta(item: ItemVenta, ofertas: OfertaProducto[], descuentoPct: number) {
+  const oferta = ofertaVigente(ofertas, item.producto.id);
+  const base = oferta
+    ? precioConOferta(Number(item.producto.precio_venta ?? 0), Number(oferta.descuento_porcentaje))
+    : Number(item.producto.precio_venta ?? 0);
+  return descuentoPct > 0 ? precioConOferta(base, descuentoPct) : base;
+}
+
 export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos = false }: { empresaId: string; puedeEditarProductos?: boolean }) {
   const [items, setItems] = useState<ItemVenta[]>([]);
   const [catalogo, setCatalogo] = useState<ProductoSigo[]>([]);
+  const [ofertas, setOfertas] = useState<OfertaProducto[]>([]);
+  const [ofertasError, setOfertasError] = useState("");
   const [busquedaProducto, setBusquedaProducto] = useState("");
   const [catalogoError, setCatalogoError] = useState("");
   const [productoBloqueado, setProductoBloqueado] = useState<{ producto: BarcodeProduct; razon: "precio" | "stock" } | null>(null);
@@ -76,6 +87,8 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     empresaActivaRef.current = empresaId;
     setItems([]);
     setCatalogo([]);
+    setOfertas([]);
+    setOfertasError("");
     setBusquedaProducto("");
     setCatalogoError("");
     setProductoBloqueado(null);
@@ -93,9 +106,10 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     setIdempotencyKey(nuevaClaveVenta());
 
     async function cargar() {
-      const [clientesResultado, catalogoResultado] = await Promise.allSettled([
+      const [clientesResultado, catalogoResultado, ofertasResultado] = await Promise.allSettled([
         listarClientesSigo(empresaId),
         listarProductosSigo(empresaId),
+        listarOfertasProductos(empresaId),
       ]);
       if (!cancelled && empresaActivaRef.current === empresaId) {
         if (clientesResultado.status === "fulfilled") setClientes(clientesResultado.value);
@@ -107,6 +121,11 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         else {
           setCatalogo([]);
           setCatalogoError(catalogoResultado.reason instanceof Error ? catalogoResultado.reason.message : "No se pudo cargar el catálogo para búsqueda manual.");
+        }
+        if (ofertasResultado.status === "fulfilled") setOfertas(ofertasResultado.value);
+        else {
+          setOfertas([]);
+          setOfertasError(ofertasResultado.reason instanceof Error ? ofertasResultado.reason.message : "No se pudieron verificar las ofertas vigentes.");
         }
       }
       if (!cancelled && empresaActivaRef.current === empresaId) await cargarVentasRecientes(empresaId);
@@ -275,14 +294,21 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     window.setTimeout(()=>buscarRef.current?.focus(),0);
   }
 
-  const subtotal = useMemo(() => items.reduce((suma,item)=>suma+Number(item.producto.precio_venta??0)*item.cantidad,0),[items]);
-  const total = useMemo(()=>Math.max(0,subtotal*(1-descuentoPct/100)),[subtotal,descuentoPct]);
+  const subtotal = useMemo(() => items.reduce((suma,item)=>{
+    const unitario=precioUnitarioVenta(item,ofertas,0);
+    return suma+Math.round((unitario*item.cantidad+Number.EPSILON)*100)/100;
+  },0),[items,ofertas]);
+  const total = useMemo(()=>Math.max(0,items.reduce((suma,item)=>{
+    const precioFinal=precioUnitarioVenta(item,ofertas,descuentoPct);
+    return suma+Math.round((precioFinal*item.cantidad+Number.EPSILON)*100)/100;
+  },0)),[items,ofertas,descuentoPct]);
 
   const superaLimite = medioPago === "cuenta_corriente"
     && clienteSeleccionado?.limite_credito != null
     && Number(clienteSeleccionado.saldo_actual || 0) + total > Number(clienteSeleccionado.limite_credito);
 
   const puedeConfirmar = items.length > 0
+    && !ofertasError
     && (medioPago !== "cuenta_corriente" || Boolean(clienteId))
     && !superaLimite
     && items.every((item) => {
@@ -308,6 +334,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         empresaId: empresaConfirmacion,
         medioPago,
         clienteId: clienteId || null,
+        descuentoPct,
         idempotencyKey,
         items: items.map((item) => ({ productoId: item.producto.id, cantidad: item.cantidad })),
       });
@@ -367,17 +394,17 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         <button type="button" onClick={()=>document.getElementById("sigo-pos-cliente")?.focus()}>👤 <strong>CLIENTE</strong><small>F8</small></button>
         <button type="button" onClick={()=>setDescuentoAbierto(v=>!v)}>◇ <strong>DESCUENTO</strong><small>F6 · {descuentoPct}%</small></button>
       </div>
-      {descuentoAbierto&&<div className="sigo-pos-discount"><strong>Descuento</strong>{[0,5,10,15,20].map(n=><button type="button" className={descuentoPct===n?"active":""} onClick={()=>{setDescuentoPct(n);setDescuentoAbierto(false)}} key={n}>{n}%</button>)}<label>Otro % <input type="number" min="0" max="100" value={descuentoPct} onChange={e=>setDescuentoPct(Math.max(0,Math.min(100,Number(e.target.value)||0)))}/></label></div>}
+      {descuentoAbierto&&<div className="sigo-pos-discount"><strong>Descuento</strong>{[0,5,10,15,20].map(n=><button type="button" className={descuentoPct===n?"active":""} onClick={()=>{setDescuentoPct(n);setDescuentoAbierto(false)}} key={n}>{n}%</button>)}<label>Otro % <input type="number" min="0" max="99.99" step="0.01" value={descuentoPct} onChange={e=>setDescuentoPct(Math.max(0,Math.min(99.99,Number(e.target.value)||0)))}/></label></div>}
       <div className="sigo-pos-scan">
         <BarcodeScanner empresaId={empresaId} action="vender" onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(q)=>{setBusquedaProducto(q);setSugerenciaActiva(0)}} onManualQuery={(q)=>{setBusquedaProducto(q);setSugerenciaActiva(0);return true}}/>
         
         {busquedaProducto.trim()&&productosEncontrados.length>0&&<div className="sigo-pos-results">{productosEncontrados.map((p,i)=><button type="button" data-pos-suggestion={i} aria-selected={i===sugerenciaActiva} className={i===sugerenciaActiva?"active":""} key={p.id} onMouseEnter={()=>setSugerenciaActiva(i)} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} · Stock {p.stock_actual??0}</span></button>)}</div>}{busquedaProducto.trim()&&productosEncontrados.length===0&&!catalogoError&&<div className="sigo-pos-results"><div className="table-empty">No encontré productos. Probá con nombre, marca, código interno o EAN.</div></div>}
       </div>
       {productoBloqueado&&<div className="form-error"><strong>{productoBloqueado.producto.nombre}</strong> · {productoBloqueado.razon==="stock"?"Sin stock disponible.":"Sin precio válido."}</div>}
-      {error&&<p className="form-error" role="alert">{error}</p>}{exito&&<span className="sigo-pos-success-inline" role="status">{exito}</span>}{advertencia&&<p className="form-error">{advertencia}</p>}
+      {error&&<p className="form-error" role="alert">{error}</p>}{ofertasError&&<p className="form-error" role="alert">No se puede cobrar hasta comprobar los precios de oferta: {ofertasError}</p>}{exito&&<span className="sigo-pos-success-inline" role="status">{exito}</span>}{advertencia&&<p className="form-error">{advertencia}</p>}
       <div className="sigo-pos-grid">
         <section className="sigo-pos-cart">
-          <div className="table-wrapper"><table className="products-table"><thead><tr><th>#</th><th>Producto</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th></th></tr></thead><tbody>{items.map((item,i)=><tr key={item.producto.id}><td>{i+1}</td><td><strong>{item.producto.nombre}</strong><small>{item.producto.codigo_interno||item.producto.codigo_barras||""}</small></td><td><div className="sigo-pos-qty"><button onClick={()=>cambiarCantidad(item.producto.id,-1)}>−</button><strong>{item.cantidad}</strong><button onClick={()=>cambiarCantidad(item.producto.id,1)}>+</button></div></td><td>$ {Number(item.producto.precio_venta).toLocaleString("es-AR")}</td><td><strong>$ {(Number(item.producto.precio_venta)*item.cantidad).toLocaleString("es-AR")}</strong></td><td><button className="sigo-pos-remove" onClick={()=>setItems(a=>a.filter(x=>x.producto.id!==item.producto.id))}>🗑</button></td></tr>)}</tbody></table>{!items.length&&<div className="table-empty">Escaneá o buscá un producto para iniciar la venta.</div>}</div>
+          <div className="table-wrapper"><table className="products-table"><thead><tr><th>#</th><th>Producto</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th></th></tr></thead><tbody>{items.map((item,i)=>{const precio=precioUnitarioVenta(item,ofertas,descuentoPct);return <tr key={item.producto.id}><td>{i+1}</td><td><strong>{item.producto.nombre}</strong><small>{item.producto.codigo_interno||item.producto.codigo_barras||""}</small></td><td><div className="sigo-pos-qty"><button onClick={()=>cambiarCantidad(item.producto.id,-1)}>−</button><strong>{item.cantidad}</strong><button onClick={()=>cambiarCantidad(item.producto.id,1)}>+</button></div></td><td>$ {precio.toLocaleString("es-AR")}</td><td><strong>$ {(Math.round((precio*item.cantidad+Number.EPSILON)*100)/100).toLocaleString("es-AR")}</strong></td><td><button className="sigo-pos-remove" onClick={()=>setItems(a=>a.filter(x=>x.producto.id!==item.producto.id))}>🗑</button></td></tr>})}</tbody></table>{!items.length&&<div className="table-empty">Escaneá o buscá un producto para iniciar la venta.</div>}</div>
           <div className="sigo-pos-payments">{(["efectivo","debito","credito","transferencia","mercado_pago","cuenta_corriente"] as MedioPagoSigo[]).map(m=><button type="button" className={medioPago===m?"active":""} onClick={()=>setMedioPago(m)} key={m}>{etiquetaMedio(m)}</button>)}</div>
         </section>
         <aside className="sigo-pos-summary">
