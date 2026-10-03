@@ -29,3 +29,18 @@
   .ofertas-acciones { flex-direction: column; }
   .ofertas-acciones button { width: 100%; }
 }
+
+/* Lista de precios: oferta compacta en una sola línea en escritorio */
+@media (min-width: 1181px) {
+  .productos-oferta { margin-bottom: 10px; padding: 12px 14px !important; }
+  .productos-oferta .page-header { margin-bottom: 8px; padding: 0 !important; min-height: 0 !important; }
+  .productos-oferta .page-header h3 { font-size: 18px; margin: 0 0 2px; }
+  .productos-oferta .page-header p { font-size: 12px; margin: 0; }
+  .ofertas-filas { gap: 6px; }
+  .oferta-fila { grid-template-columns:minmax(220px,2fr) 130px 130px 105px 120px 64px; gap:7px; padding:7px 9px; border-radius:8px; }
+  .oferta-numero { grid-column:1/-1; font-size:11px; line-height:1; }
+  .oferta-fila .form-group label { font-size:11px; margin-bottom:2px; }
+  .oferta-fila input, .oferta-fila output { min-height:32px !important; height:32px; padding:5px 8px !important; font-size:12px; border-radius:7px; }
+  .ofertas-acciones { margin-top:7px; }
+  .ofertas-acciones button { min-height:32px !important; padding:5px 10px !important; font-size:12px; }
+}
