@@ -230,13 +230,13 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
         <>
           {categoria === "ventas" && <section id="informe-ventas" className="panel sigo-report-detail">
             <div className="sigo-detail-title"><span>↗</span><h3>Ventas</h3></div>
-            <div className="stats-grid">
+            <div className="stats-grid sigo-sales-stats-rows">
               <div className="stat-card"><span>Ventas de hoy</span><strong>{resumen.ventasHoy}</strong><small>{dinero(resumen.ventasHoyTotal)}</small></div>
               <div className="stat-card"><span>Ventas últimos 30 días</span><strong>{dinero(resumen.ventas30DiasTotal)}</strong><small>{resumen.variacionVentas30Dias == null ? "Sin período comparable" : `${resumen.variacionVentas30Dias >= 0 ? "▲" : "▼"} ${Math.abs(resumen.variacionVentas30Dias).toFixed(1)}% vs. 30 días anteriores`}</small></div>
               <div className="stat-card"><span>Ticket promedio 30 días</span><strong>{dinero(resumen.ticketPromedio30Dias)}</strong><small>Promedio por venta confirmada</small></div>
               <div className="stat-card"><span>Ventas históricas</span><strong>{resumen.ventasCantidad}</strong><small>{dinero(resumen.ventasTotal)}</small></div>
             </div>
-            <div className="sigo-manager-chart-card"><div className="sigo-manager-chart-head"><div><strong>Evolución reciente</strong><span>Ventas confirmadas · últimos 7 días</span></div><strong>{dinero(resumen.ventas7DiasTotal)}</strong></div><GraficoVentas7Dias datos={resumen.ventasUltimos7Dias} /></div>
+            <div className="sigo-manager-chart-card sigo-sales-chart-compact"><div className="sigo-manager-chart-head"><div><strong>Evolución reciente</strong><span>Ventas confirmadas · últimos 7 días</span></div><strong>{dinero(resumen.ventas7DiasTotal)}</strong></div><GraficoVentas7Dias datos={resumen.ventasUltimos7Dias} /></div>
           </section>}
 
           {categoria === "stock" && <section id="informe-stock" className="panel sigo-report-detail">
