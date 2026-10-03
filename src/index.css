@@ -700,3 +700,73 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
  .sigo-clientes-report .sigo-clientes-rows .stat-card{grid-template-columns:1fr auto!important;min-height:40px!important;padding:6px 8px!important}
  .sigo-clientes-report .sigo-clientes-rows .stat-card small{grid-column:1/-1!important}
 }
+
+/* Desktop header: reservar una columna real para la identidad SIGO.
+   Evita que logo/empresa/rol invadan navegación o el título de Informes. */
+@media (min-width: 901px){
+  .sigo-tenant-bar{
+    display:grid!important;
+    grid-template-columns:280px minmax(0,1fr) auto!important;
+    align-items:center!important;
+    column-gap:18px!important;
+    min-height:72px!important;
+    padding:8px 18px!important;
+  }
+  .sigo-tenant-copy{
+    display:grid!important;
+    grid-template-columns:auto minmax(0,1fr)!important;
+    grid-template-rows:auto auto!important;
+    align-items:center!important;
+    column-gap:10px!important;
+    row-gap:1px!important;
+    width:280px!important;
+    min-width:280px!important;
+    max-width:280px!important;
+    overflow:hidden!important;
+  }
+  .sigo-tenant-copy strong{
+    grid-column:1!important;
+    grid-row:1 / span 2!important;
+    align-self:center!important;
+    white-space:nowrap!important;
+  }
+  .sigo-tenant-copy span{
+    grid-column:2!important;
+    grid-row:1!important;
+    min-width:0!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+  }
+  .sigo-tenant-copy small{
+    grid-column:2!important;
+    grid-row:2!important;
+    min-width:0!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+  }
+  .sigo-context-actions{
+    grid-column:2!important;
+    min-width:0!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:flex-start!important;
+    flex-wrap:nowrap!important;
+    overflow:hidden!important;
+  }
+  .sigo-tenant-bar>div:last-child,
+  .sigo-tenant-bar>.sigo-return-company{
+    grid-column:3!important;
+    min-width:0!important;
+  }
+  .sigo-reports-page{
+    clear:both!important;
+    width:100%!important;
+    min-width:0!important;
+  }
+  .sigo-reports-page>.sigo-reports-heading{
+    margin-top:0!important;
+    padding-left:0!important;
+  }
+}
