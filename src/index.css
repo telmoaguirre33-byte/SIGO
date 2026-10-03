@@ -443,3 +443,19 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
   .sigo-context-actions button { white-space: nowrap; }
   .app input, .app select, .app textarea, .app button { touch-action: manipulation; }
 }
+
+
+/* Devoluciones: editor operativo compacto */
+.sigo-return-compact-editor{display:flex;align-items:flex-end;gap:10px;flex-wrap:nowrap;margin-top:10px}
+.sigo-return-compact-items{display:flex;gap:8px;flex:1;min-width:0;overflow-x:auto}
+.sigo-return-compact-item{display:flex;align-items:center;gap:8px;min-width:230px;padding:7px 9px;border:1px solid #e3e9f2;border-radius:10px;background:#fff}
+.sigo-return-compact-item>span{display:flex;flex-direction:column;min-width:0;flex:1}
+.sigo-return-compact-item strong{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sigo-return-compact-item small{font-size:10px;color:#6b778b}
+.sigo-return-compact-item .sigo-return-qty{width:58px;height:34px;padding:5px 7px}
+.sigo-return-compact-reason{display:flex;flex-direction:column;gap:3px;min-width:230px;flex:0 1 320px}
+.sigo-return-compact-reason span,.sigo-return-compact-total span{font-size:11px;color:#667085}
+.sigo-return-compact-reason input{height:36px;padding:6px 9px;border:1px solid #dbe3ee;border-radius:9px}
+.sigo-return-compact-total{display:flex;flex-direction:column;min-width:90px}
+.sigo-return-compact-editor button{min-height:36px;padding:7px 12px;white-space:nowrap}
+@media(max-width:760px){.sigo-return-compact-editor{flex-wrap:wrap}.sigo-return-compact-items{flex-basis:100%}.sigo-return-compact-reason{flex:1 1 180px;min-width:160px}.sigo-return-compact-editor button{flex:1 1 auto}}
