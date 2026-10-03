@@ -317,7 +317,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       return Number.isFinite(precio)
         && precio > 0
         && Number.isFinite(stock)
-        && stock >= 0
+        && stock > 0
         && item.cantidad > 0
         && item.cantidad <= stock;
     });
@@ -398,7 +398,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       <div className="sigo-pos-scan">
         <BarcodeScanner empresaId={empresaId} action="vender" onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(q)=>{setBusquedaProducto(q);setSugerenciaActiva(0)}} onManualQuery={(q)=>{setBusquedaProducto(q);setSugerenciaActiva(0);return true}}/>
         
-        {busquedaProducto.trim()&&productosEncontrados.length>0&&<div className="sigo-pos-results">{productosEncontrados.map((p,i)=><button type="button" data-pos-suggestion={i} aria-selected={i===sugerenciaActiva} className={i===sugerenciaActiva?"active":""} key={p.id} onMouseEnter={()=>setSugerenciaActiva(i)} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} · Stock {p.stock_actual??0}</span></button>)}</div>}{busquedaProducto.trim()&&productosEncontrados.length===0&&!catalogoError&&<div className="sigo-pos-results"><div className="table-empty">No encontré productos. Probá con nombre, marca, código interno o EAN.</div></div>}
+        {busquedaProducto.trim()&&productosEncontrados.length>0&&<div className="sigo-pos-results">{productosEncontrados.map((p,i)=><button type="button" data-pos-suggestion={i} aria-selected={i===sugerenciaActiva} className={i===sugerenciaActiva?"active":""} key={p.id} onMouseEnter={()=>setSugerenciaActiva(i)} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}{Number(p.stock_actual??0)<=0?" · SIN STOCK":""}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} · Stock {p.stock_actual??0}</span></button>)}</div>}{busquedaProducto.trim()&&productosEncontrados.length===0&&!catalogoError&&<div className="sigo-pos-results"><div className="table-empty">No encontré productos. Probá con nombre, marca, código interno o EAN.</div></div>}
       </div>
       {productoBloqueado&&<div className="form-error"><strong>{productoBloqueado.producto.nombre}</strong> · {productoBloqueado.razon==="stock"?"Sin stock disponible.":"Sin precio válido."}</div>}
       {error&&<p className="form-error" role="alert">{error}</p>}{ofertasError&&<p className="form-error" role="alert">No se puede cobrar hasta comprobar los precios de oferta: {ofertasError}</p>}{exito&&<span className="sigo-pos-success-inline" role="status">{exito}</span>}{advertencia&&<p className="form-error">{advertencia}</p>}
