@@ -120,7 +120,7 @@ function ComprasHub({ empresaId }: { empresaId: string }) {
       <ComprasOperativas empresaId={empresaId} vista={modo} onCambiarVista={setModo} />
     </div>;
   }
-  return <div className="products-page">
+  return <div className="products-page products-page-fixed">
     <div className="panel">
       <h2>Compras / Proveedores</h2>
       <p>Elegí cómo querés trabajar. En celular cada opción abre una pantalla simple y separada.</p>
@@ -415,8 +415,8 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
       {loading && <div className="panel"><p>Cargando productos…</p></div>}
       {!loading && error && <div className="panel"><h3>No se pudieron cargar los productos</h3><p>{error}</p></div>}
       {!loading && !error && (
-        <div className="panel">
-          <div className="table-wrapper">
+        <div className="panel products-list-panel">
+          <div className="table-wrapper products-list-scroll">
             <table className="products-table">
               <thead><tr><th>Producto</th><th>Código</th><th>Código de barras</th><th>Precio</th><th>Stock</th><th>Acciones</th></tr></thead>
               <tbody>
