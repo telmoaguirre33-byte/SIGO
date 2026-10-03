@@ -814,3 +814,35 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
     clear:both!important;
   }
 }
+
+/* Fix definitivo desktop: la cabecera fija mide 72px; el contenido empieza debajo.
+   Evita que "Informes / ¿Qué querés analizar?" quede oculto por SIGO. */
+@media (min-width:901px){
+  .tenant-bar,.sigo-tenant-bar{
+    height:72px!important;
+    min-height:72px!important;
+    max-height:72px!important;
+  }
+  .app{
+    padding-top:72px!important;
+  }
+  .app>.sidebar{
+    top:72px!important;
+    height:calc(100dvh - 72px)!important;
+    max-height:calc(100dvh - 72px)!important;
+  }
+  .app>.main{
+    height:calc(100dvh - 72px)!important;
+    min-height:0!important;
+    padding-top:0!important;
+  }
+  .sigo-reports-page{
+    padding-top:12px!important;
+  }
+  .sigo-reports-page>.sigo-reports-heading{
+    position:relative!important;
+    z-index:1!important;
+    margin:0 0 12px!important;
+    padding:0!important;
+  }
+}
