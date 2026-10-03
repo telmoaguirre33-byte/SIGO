@@ -230,11 +230,11 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
           {categoria === "stock" && <section id="informe-stock" className="panel sigo-report-detail">
             <div className="sigo-detail-title"><span>◫</span><h3>Stock</h3></div>
             {vistaStock !== "menu" && <button className="admin-button" style={{marginBottom:14}} onClick={() => setVistaStock("menu")}>← Stock</button>}
-            {vistaStock === "menu" && <div className="sigo-report-catalog">
-              <button className="sigo-report-card" onClick={() => setVistaStock("ranking")}><span className="sigo-report-icon">🏆</span><strong>Ranking de productos</strong><span>Más vendidos · Top 5 a Top 50</span></button>
-              <button className="sigo-report-card" onClick={() => setVistaStock("quiebre")}><span className="sigo-report-icon">⚠️</span><strong>Riesgo de quiebre</strong><span>Cobertura y reposición sugerida</span></button>
-              <button className="sigo-report-card" onClick={() => setVistaStock("actual")}><span className="sigo-report-icon">📦</span><strong>Stock actual</strong><span>Existencias, críticos y sin stock</span></button>
-              <button className="sigo-report-card" onClick={() => setVistaStock("rotacion")}><span className="sigo-report-icon">📉</span><strong>Rotación</strong><span>Movimiento y cobertura de productos</span></button>
+            {vistaStock === "menu" && <div className="sigo-stock-menu-row">
+              <button onClick={() => setVistaStock("ranking")}><span>🏆</span><strong>Ranking</strong><small>Más vendidos</small></button>
+              <button onClick={() => setVistaStock("quiebre")}><span>⚠️</span><strong>Riesgo de quiebre</strong><small>Cobertura</small></button>
+              <button onClick={() => setVistaStock("actual")}><span>📦</span><strong>Stock actual</strong><small>Existencias</small></button>
+              <button onClick={() => setVistaStock("rotacion")}><span>📉</span><strong>Rotación</strong><small>Movimiento</small></button>
             </div>}
             {vistaStock === "ranking" && <RankingProductosStock empresaId={empresaId} />}
             {(vistaStock === "actual" || vistaStock === "quiebre" || vistaStock === "rotacion") && <div className="stats-grid">
