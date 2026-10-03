@@ -511,3 +511,11 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
   #informe-resumen .sigo-trend-track{height:82px!important}
   #informe-resumen .sigo-manager-chart-head{margin-bottom:4px!important}
 }
+
+/* Informes > Stock: cuatro accesos en una sola fila compacta */
+.sigo-stock-menu-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;width:100%}
+.sigo-stock-menu-row button{display:grid;grid-template-columns:30px minmax(0,1fr);grid-template-rows:auto auto;column-gap:8px;align-items:center;min-height:58px;padding:7px 10px;border:1px solid #e3e9f2;border-radius:10px;background:#fff;text-align:left;color:#172b4d;cursor:pointer}
+.sigo-stock-menu-row button:hover{background:#f6f9fd;border-color:#cbd9eb}
+.sigo-stock-menu-row button>span{grid-row:1/3;display:grid;place-items:center;width:30px;height:30px;border-radius:8px;background:#eef5ff;font-size:16px}
+.sigo-stock-menu-row button strong{font-size:13px;line-height:1.1}.sigo-stock-menu-row button small{font-size:10px;color:#6b778b;line-height:1.1}
+@media(max-width:760px){.sigo-stock-menu-row{grid-template-columns:1fr 1fr}.sigo-stock-menu-row button{min-height:52px}}
