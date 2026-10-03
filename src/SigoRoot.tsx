@@ -272,9 +272,7 @@ export default function SigoRoot() {
   return (
     <div className="sigo-root">
       <style>{`
-        .sigo-operation-only .sidebar .menu > button:nth-child(4),
-        .sigo-operation-only .sidebar .menu > button:nth-child(5),
-        .sigo-operation-only .sidebar .menu > button:nth-child(7) { display: none; }
+        .sigo-operation-only .sidebar .menu > button:nth-child(6) { display: none; }
         .sigo-role-seller .sidebar .menu > button:nth-child(2),
         .sigo-role-seller .sidebar .menu > button:nth-child(6),
         .sigo-role-seller .welcome .topbar-actions { display: none; }
