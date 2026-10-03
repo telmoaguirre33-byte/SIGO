@@ -296,7 +296,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         && item.cantidad <= stock;
     });
 
-  async function confirmar() {
+  async function confirmar(imprimirDespues = false) {
     if (!puedeConfirmar || confirmando) return;
     const empresaConfirmacion = empresaId;
     setConfirmando(true);
@@ -331,9 +331,13 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         );
       }
 
-      setExito(`Venta confirmada · ${resultado.ventaId.slice(0, 8).toUpperCase()} · Total verificado $ ${totalConfirmado.toLocaleString("es-AR")}`);
+      setExito("");
       setUltimaVentaTicket(resultado.ventaId);
       setAdvertencia(advertencias.join(" "));
+      if (imprimirDespues) {
+        try { await imprimirTicketVenta(empresaConfirmacion, resultado.ventaId); }
+        catch (printErr) { setError(printErr instanceof Error ? printErr.message : "La venta se confirmó, pero no se pudo abrir la impresión del ticket."); }
+      }
       setItems([]);
       setClienteId("");
       setMedioPago("efectivo");
@@ -350,7 +354,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   }
 
   const unidades = items.reduce((n,item)=>n+item.cantidad,0);
-  useEffect(()=>{ const key=(e:KeyboardEvent)=>{ if((e.key==="ArrowDown"||e.key==="ArrowUp")&&productosEncontrados.length){e.preventDefault();setSugerenciaActiva(i=>{const n=e.key==="ArrowDown"?Math.min(productosEncontrados.length-1,i+1):Math.max(0,i-1);window.setTimeout(()=>document.querySelector<HTMLElement>(`[data-pos-suggestion="${n}"]`)?.scrollIntoView({block:"nearest"}),0);return n});return} if(e.key==="Escape"&&busquedaProducto.trim()){e.preventDefault();setBusquedaProducto("");setSugerenciaActiva(0);return} if(e.key==="Enter"&&busquedaProducto.trim()&&productosEncontrados[sugerenciaActiva]){e.preventDefault();seleccionarProductoManual(productosEncontrados[sugerenciaActiva]);return} if(e.key==="F1"){e.preventDefault();vaciar()} if(e.key==="F2"){e.preventDefault();buscarRef.current?.focus()} if(e.key==="F6"){e.preventDefault();setDescuentoAbierto(v=>!v)} if(e.key==="F9"){e.preventDefault();void confirmar()} if(e.key==="F10"){e.preventDefault();void confirmar()} if(e.key==="F12"&&ultimaVentaTicket){e.preventDefault();void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(()=>{})} }; window.addEventListener("keydown",key); return()=>window.removeEventListener("keydown",key); });
+  useEffect(()=>{ const key=(e:KeyboardEvent)=>{ if((e.key==="ArrowDown"||e.key==="ArrowUp")&&productosEncontrados.length){e.preventDefault();setSugerenciaActiva(i=>{const n=e.key==="ArrowDown"?Math.min(productosEncontrados.length-1,i+1):Math.max(0,i-1);window.setTimeout(()=>document.querySelector<HTMLElement>(`[data-pos-suggestion="${n}"]`)?.scrollIntoView({block:"nearest"}),0);return n});return} if(e.key==="Escape"&&busquedaProducto.trim()){e.preventDefault();setBusquedaProducto("");setSugerenciaActiva(0);return} if(e.key==="Enter"&&busquedaProducto.trim()&&productosEncontrados[sugerenciaActiva]){e.preventDefault();seleccionarProductoManual(productosEncontrados[sugerenciaActiva]);return} if(e.key==="F1"){e.preventDefault();vaciar()} if(e.key==="F2"){e.preventDefault();buscarRef.current?.focus()} if(e.key==="F6"){e.preventDefault();setDescuentoAbierto(v=>!v)} if(e.key==="F9"){e.preventDefault();void confirmar()} if(e.key==="F10"){e.preventDefault();void confirmar(true)} if(e.key==="F12"&&ultimaVentaTicket){e.preventDefault();void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(()=>{})} }; window.addEventListener("keydown",key); return()=>window.removeEventListener("keydown",key); });
 
   return (
     <div className="sigo-pos">
@@ -379,7 +383,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
           <div className="sigo-pos-total"><span>TOTAL</span><strong>$ {total.toLocaleString("es-AR")}</strong>{descuentoPct>0&&<small>Subtotal $ {subtotal.toLocaleString("es-AR")} · Descuento {descuentoPct}%</small>}<p>Productos <b>{items.length}</b> · Unidades <b>{unidades}</b></p></div>
           <label><span>Cliente</span><select id="sigo-pos-cliente" value={clienteId} onChange={e=>setClienteId(e.target.value)}><option value="">Consumidor final / sin cliente</option>{clientes.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>
           <button className="sigo-pos-action cobrar" disabled={!puedeConfirmar||confirmando} onClick={()=>void confirmar()}>💳 COBRAR <kbd>F9</kbd></button>
-          <button className="sigo-pos-action ticket" disabled={!puedeConfirmar||confirmando} onClick={()=>void confirmar()}>🖨 COBRAR + TICKET <kbd>F10</kbd></button>
+          <button className="sigo-pos-action ticket" disabled={!puedeConfirmar||confirmando} onClick={()=>void confirmar(true)}>🖨 COBRAR + TICKET <kbd>F10</kbd></button>
           <button className="sigo-pos-action fiscal" type="button" onClick={()=>document.querySelector<HTMLElement>(".arca-launcher")?.click()}>▤ FACTURA FISCAL <kbd>F11</kbd></button>
           <button className="sigo-pos-action reprint" disabled={!ultimaVentaTicket||confirmando} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir el ticket."));}}>🖨 REIMPRIMIR <kbd>F12</kbd></button>
           <div className="sigo-pos-mini-actions"><button type="button" disabled={!ultimaVentaTicket} onClick={()=>{const m=encodeURIComponent("Ticket SIGO · Total $ "+total.toLocaleString("es-AR"));window.open("https://wa.me/?text="+m,"_blank","noopener,noreferrer")}}>WhatsApp</button><button type="button" disabled={!ultimaVentaTicket} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket,"a4").catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir A4."));}}>A4</button><button type="button" disabled={!ultimaVentaTicket} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir el ticket."));}}>Ticket 58/80</button><button type="button" onClick={()=>document.querySelector<HTMLElement>(".arca-launcher")?.click()}>ARCA</button></div>
