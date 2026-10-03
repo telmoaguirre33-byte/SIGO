@@ -188,7 +188,7 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
 
   return (
     <div className="products-page sigo-reports-page">
-      <div className="page-header sigo-reports-heading">
+      <div className="sigo-reports-heading">
         <div>
           <h2>Informes</h2>
           <p>{categoria ? "Elegí el informe que querés consultar." : "¿Qué querés analizar?"}</p>
