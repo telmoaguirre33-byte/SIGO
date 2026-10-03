@@ -88,7 +88,7 @@ export default function DevolucionesLauncher() {
             </div>
           </div>
           <main className="sigo-cart-content">
-            <DevolucionesOperativas key={empresa.empresa_id} empresaId={empresa.empresa_id} />
+            <DevolucionesOperativas key={empresa.empresa_id} empresaId={empresa.empresa_id} onVolver={() => setOpen(false)} />
           </main>
         </div>
       )}
