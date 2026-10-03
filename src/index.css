@@ -962,3 +962,30 @@ section:has(> .productos-oferta),
 main:has(> .productos-oferta){
   padding-top:0!important;
 }
+
+/* Stock vs Inventario: resumen compacto en una sola fila. */
+@media(min-width:901px){
+  .sigo-inventory-stats{
+    display:grid!important;
+    grid-template-columns:repeat(5,minmax(0,1fr))!important;
+    gap:0!important;
+    margin:8px 0 12px!important;
+    border:1px solid #e5e7eb!important;
+    border-radius:10px!important;
+    overflow:hidden!important;
+    background:#fff!important;
+  }
+  .sigo-inventory-stats .stat-card{
+    min-height:0!important;
+    height:auto!important;
+    margin:0!important;
+    padding:8px 12px!important;
+    border:0!important;
+    border-right:1px solid #e5e7eb!important;
+    border-radius:0!important;
+    box-shadow:none!important;
+  }
+  .sigo-inventory-stats .stat-card:last-child{border-right:0!important;}
+  .sigo-inventory-stats .stat-card span{font-size:11px!important;line-height:1.1!important;}
+  .sigo-inventory-stats .stat-card strong{font-size:20px!important;line-height:1.1!important;margin-top:2px!important;}
+}
