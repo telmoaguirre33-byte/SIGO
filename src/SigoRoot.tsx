@@ -25,7 +25,7 @@ import {
 const WORKSPACE_LABELS: Record<SigoWorkspace, string> = {
   operacion: "Operación",
   usuarios: "Usuarios",
-  clientes: "Clientes / Ctas. corrientes",
+  clientes: "CTA. CTES.",
   compras: "Compras / Proveedores",
   informes: "Informes",
   portal: "Portal Cliente",
