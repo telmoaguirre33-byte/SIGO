@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { verificarSaludOperativaSigo, type SaludOperativaSigo } from "./health";
 import { cargarResumenOperativoSigo,
-  cargarVentasPeriodoSigo, type ResumenOperativoSigo } from "./informes";
+  cargarVentasPeriodoSigo, cargarComprasPeriodoSigo,
+  type ResumenOperativoSigo, type ResumenVentasPeriodoSigo, type ResumenComprasPeriodoSigo } from "./informes";
 import { cargarRiesgoStockSigo, type ResumenRiesgoStockSigo, type EstadoRiesgoStockSigo } from "./stockRiesgo";
 import RankingProductosStock from "./RankingProductosStock";
 
@@ -91,7 +92,7 @@ function agruparEvolucionVentas(datos: Array<{ fecha: string; total: number; can
 
 
 function GraficoPicos({datos,etiqueta}:{datos:Array<{hora:number;total:number;cantidad:number}>;etiqueta:string}) { const max=Math.max(1,...datos.map(d=>d.cantidad)); return <div className="sigo-manager-chart-card"><div className="sigo-manager-chart-head"><div><strong>{etiqueta}</strong><span>Operaciones confirmadas por hora</span></div></div><div style={{display:"flex",alignItems:"end",gap:5,height:115,overflowX:"auto"}}>{datos.filter(d=>d.hora>=7&&d.hora<=23).map(d=><div key={d.hora} title={`${d.hora}:00 · ${d.cantidad} ventas · ${dinero(d.total)}`} style={{minWidth:28,textAlign:"center",fontSize:10}}><div style={{height:78,display:"flex",alignItems:"end",justifyContent:"center"}}><span style={{display:"block",width:16,height:`${Math.max(3,(d.cantidad/max)*74)}px`,background:"currentColor",borderRadius:"4px 4px 0 0"}}/></div><strong>{d.hora}</strong></div>)}</div></div>; }
-function GraficoDias({datos}:{datos:Array<{dia:string;total:number;cantidad:number}>}) { const max=Math.max(1,...datos.map(d=>d.total)); return <div className="sigo-manager-chart-card"><div className="sigo-manager-chart-head"><div><strong>Días de mayor venta</strong><span>Acumulado de los últimos 30 días</span></div></div><div style={{display:"flex",alignItems:"end",gap:12,height:130}}>{datos.map(d=><div key={d.dia} title={`${d.dia} · ${d.cantidad} ventas · ${dinero(d.total)}`} style={{flex:1,textAlign:"center",fontSize:11}}><div style={{height:82,display:"flex",alignItems:"end",justifyContent:"center"}}><span style={{display:"block",width:"55%",height:`${Math.max(3,(d.total/max)*78)}px`,background:"currentColor",borderRadius:"5px 5px 0 0"}}/></div><strong>{d.dia}</strong></div>)}</div></div>; }
+function GraficoDias({datos, etiqueta="Días de mayor venta"}:{datos:Array<{dia:string;total:number;cantidad:number}>;etiqueta?:string}) { const max=Math.max(1,...datos.map(d=>d.total)); return <div className="sigo-manager-chart-card"><div className="sigo-manager-chart-head"><div><strong>{etiqueta}</strong><span>Ventas confirmadas del período elegido</span></div></div><div style={{display:"flex",alignItems:"end",gap:12,height:130}}>{datos.map(d=><div key={d.dia} title={`${d.dia} · ${d.cantidad} ventas · ${dinero(d.total)}`} style={{flex:1,textAlign:"center",fontSize:11}}><div style={{height:82,display:"flex",alignItems:"end",justifyContent:"center"}}><span style={{display:"block",width:"55%",height:`${Math.max(3,(d.total/max)*78)}px`,background:"currentColor",borderRadius:"5px 5px 0 0"}}/></div><strong>{d.dia}</strong></div>)}</div></div>; }
 
 function nombreMedio(medio: string) {
   const nombres: Record<string, string> = {
@@ -126,6 +127,20 @@ function etiquetaRiesgo(estado: EstadoRiesgoStockSigo) {
 
 type CategoriaInforme = "ventas" | "stock" | "caja" | "compras" | "clientes" | "gerencial";
 type VistaStock = "menu" | "ranking" | "quiebre" | "actual" | "rotacion";
+type PeriodoGerencial = "hoy" | "2" | "3" | "7" | "15" | "30" | "3m" | "personalizado";
+
+function fechaLocalIso(fecha: Date) {
+  return `${fecha.getFullYear().toString().padStart(4, "0")}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
+}
+
+function rangoGerencial(periodo: Exclude<PeriodoGerencial, "personalizado">) {
+  const fin = new Date();
+  fin.setHours(0, 0, 0, 0);
+  const inicio = new Date(fin);
+  if (periodo === "3m") inicio.setMonth(inicio.getMonth() - 3);
+  else inicio.setDate(inicio.getDate() - (periodo === "hoy" ? 0 : Number(periodo) - 1));
+  return { desde: fechaLocalIso(inicio), hasta: fechaLocalIso(fin) };
+}
 
 function exportarRankingExcel(filas: Array<{ nombre: string; cantidad: number; total: number }>, criterio: "unidades" | "facturacion") {
   const encabezados = ["Posición", "Producto", "Unidades vendidas", "Facturación", "Criterio"];
@@ -152,9 +167,17 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
   const desde30Iso = (() => { const d = new Date(); d.setDate(d.getDate() - 29); return d.toISOString().slice(0, 10); })();
   const [comprasDesde, setComprasDesde] = useState(desde30Iso);
   const [comprasHasta, setComprasHasta] = useState(hoyIso);
+  const [comprasPeriodo, setComprasPeriodo] = useState<ResumenComprasPeriodoSigo | null>(null);
+  const [comprasPeriodoError, setComprasPeriodoError] = useState("");
   const [ventasDesde, setVentasDesde] = useState(desde30Iso);
   const [ventasHasta, setVentasHasta] = useState(hoyIso);
-  const [ventasPeriodo, setVentasPeriodo] = useState<{dias:Array<{fecha:string;total:number;cantidad:number}>;cantidad:number;total:number;ticketPromedio:number}|null>(null);
+  const [ventasPeriodo, setVentasPeriodo] = useState<ResumenVentasPeriodoSigo | null>(null);
+  const [gerencialPeriodo, setGerencialPeriodo] = useState<PeriodoGerencial>("7");
+  const rangoInicialGerencial = rangoGerencial("7");
+  const [gerencialDesde, setGerencialDesde] = useState(rangoInicialGerencial.desde);
+  const [gerencialHasta, setGerencialHasta] = useState(rangoInicialGerencial.hasta);
+  const [ventasGerenciales, setVentasGerenciales] = useState<ResumenVentasPeriodoSigo | null>(null);
+  const [ventasGerencialesError, setVentasGerencialesError] = useState("");
   const empresaActivaRef = useRef(empresaId);
   const cargaRef = useRef(0);
 
@@ -193,9 +216,30 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
 
   useEffect(() => {
     let activo = true;
+    setVentasPeriodo(null);
     void cargarVentasPeriodoSigo(empresaId, ventasDesde, ventasHasta).then(v => { if (activo) setVentasPeriodo(v); }).catch(() => { if (activo) setVentasPeriodo(null); });
     return () => { activo = false; };
   }, [empresaId, ventasDesde, ventasHasta]);
+
+  useEffect(() => {
+    let activo = true;
+    setComprasPeriodo(null);
+    setComprasPeriodoError("");
+    void cargarComprasPeriodoSigo(empresaId, comprasDesde, comprasHasta)
+      .then((valor) => { if (activo) setComprasPeriodo(valor); })
+      .catch((err: unknown) => { if (activo) { setComprasPeriodo(null); setComprasPeriodoError(err instanceof Error ? err.message : "No se pudieron consultar las compras del período."); } });
+    return () => { activo = false; };
+  }, [empresaId, comprasDesde, comprasHasta]);
+
+  useEffect(() => {
+    let activo = true;
+    setVentasGerenciales(null);
+    setVentasGerencialesError("");
+    void cargarVentasPeriodoSigo(empresaId, gerencialDesde, gerencialHasta)
+      .then((valor) => { if (activo) setVentasGerenciales(valor); })
+      .catch((err: unknown) => { if (activo) { setVentasGerenciales(null); setVentasGerencialesError(err instanceof Error ? err.message : "No se pudieron consultar las ventas del período."); } });
+    return () => { activo = false; };
+  }, [empresaId, gerencialDesde, gerencialHasta]);
 
   useEffect(() => {
     empresaActivaRef.current = empresaId;
@@ -224,6 +268,15 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
     { icono: "▥", titulo: "Gerencial", texto: "Resumen completo del negocio.", categoria: "gerencial" },
   ];
   const evolucionVentas = agruparEvolucionVentas(ventasPeriodo?.dias ?? [], ventasDesde, ventasHasta);
+  const evolucionGerencial = agruparEvolucionVentas(ventasGerenciales?.dias ?? [], gerencialDesde, gerencialHasta);
+
+  function elegirPeriodoGerencial(periodo: PeriodoGerencial) {
+    setGerencialPeriodo(periodo);
+    if (periodo === "personalizado") return;
+    const rango = rangoGerencial(periodo);
+    setGerencialDesde(rango.desde);
+    setGerencialHasta(rango.hasta);
+  }
 
   return (
     <div className="products-page sigo-reports-page">
@@ -364,11 +417,11 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
               <label>Hasta <input type="date" value={comprasHasta} min={comprasDesde} max={hoyIso} onChange={(e) => setComprasHasta(e.target.value)} /></label>
               <small>Seleccioná de cuándo a cuándo para analizar la facturación de compras.</small>
             </div>
+            {comprasPeriodoError ? <p className="form-error" role="alert">{comprasPeriodoError}</p> : null}
             <div className="stats-grid sigo-compras-rows">
-              <div className="stat-card"><span>Compras confirmadas</span><strong>{resumen.comprasCantidad}</strong><small>{dinero(resumen.comprasTotal)}</small></div>
-              <div className="stat-card"><span>Compras últimos 30 días</span><strong>{dinero(resumen.compras30DiasTotal)}</strong><small>Mercadería confirmada</small></div>
-              <div className="stat-card"><span>Ventas últimos 30 días</span><strong>{dinero(resumen.ventas30DiasTotal)}</strong><small>Para comparar actividad comercial</small></div>
-              <div className="stat-card"><span>Ventas − compras</span><strong>{dinero(resumen.balanceComercial30Dias)}</strong><small>Indicador operativo, no utilidad contable</small></div>
+              <div className="stat-card"><span>Compras confirmadas · período</span><strong>{comprasPeriodo?.comprasCantidad ?? 0}</strong><small>Importe comprado: {dinero(comprasPeriodo?.comprasTotal ?? 0)}</small></div>
+              <div className="stat-card"><span>Ventas confirmadas · período</span><strong>{comprasPeriodo?.ventasCantidad ?? 0}</strong><small>Facturación: {dinero(comprasPeriodo?.ventasTotal ?? 0)}</small></div>
+              <div className="stat-card"><span>Ventas − compras</span><strong>{dinero(comprasPeriodo?.balanceComercial ?? 0)}</strong><small>Período {comprasDesde} → {comprasHasta}; indicador operativo</small></div>
             </div>
           </section>}
 
@@ -394,16 +447,23 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
             <p>Una vista rápida de la evolución real del negocio.</p>
             <div className="sigo-compras-periodo sigo-ventas-periodo">
               <strong>Período de análisis</strong>
-              <label>Desde <input type="date" value={ventasDesde} max={ventasHasta} onChange={(e) => setVentasDesde(e.target.value)} /></label>
-              <label>Hasta <input type="date" value={ventasHasta} min={ventasDesde} max={hoyIso} onChange={(e) => setVentasHasta(e.target.value)} /></label>
+              {([["hoy","Hoy"],["2","2 días"],["3","3 días"],["7","7 días"],["15","15 días"],["30","30 días"],["3m","3 meses"],["personalizado","Personalizado"]] as Array<[PeriodoGerencial,string]>).map(([valor,etiqueta])=><button type="button" key={valor} className={gerencialPeriodo===valor?"primary-button":"admin-button"} onClick={()=>elegirPeriodoGerencial(valor)}>{etiqueta}</button>)}
+              {gerencialPeriodo==="personalizado" ? <>
+                <label>Desde <input type="date" value={gerencialDesde} max={gerencialHasta} onChange={(e) => setGerencialDesde(e.target.value)} /></label>
+                <label>Hasta <input type="date" value={gerencialHasta} min={gerencialDesde} max={hoyIso} onChange={(e) => setGerencialHasta(e.target.value)} /></label>
+              </> : null}
+              <small>{gerencialDesde} → {gerencialHasta}</small>
             </div>
+            {ventasGerencialesError ? <p className="form-error" role="alert">{ventasGerencialesError}</p> : null}
             <div className="stats-grid sigo-manager-kpis">
-              <div className="stat-card"><span>Ventas últimos 7 días</span><strong>{dinero(resumen.ventas7DiasTotal)}</strong><small>{resumen.variacionVentas7Dias == null ? "Sin período anterior comparable" : `${resumen.variacionVentas7Dias >= 0 ? "▲" : "▼"} ${Math.abs(resumen.variacionVentas7Dias).toFixed(1)}% vs. 7 días anteriores`}</small></div>
-              <div className="stat-card"><span>Ventas de hoy</span><strong>{dinero(resumen.ventasHoyTotal)}</strong><small>{resumen.ventasHoy} operaciones</small></div>
-              <div className="stat-card"><span>Caja neta hoy</span><strong>{dinero(resumen.cajaHoyNeto)}</strong><small>Ingresos menos egresos</small></div>
-              <div className="stat-card"><span>Cuentas por cobrar</span><strong>{dinero(resumen.saldoClientes)}</strong><small>{resumen.clientesConDeuda} clientes con deuda</small></div>
+              <div className="stat-card"><span>Facturación del período</span><strong>{dinero(ventasGerenciales?.total ?? 0)}</strong><small>{ventasGerenciales?.cantidad ?? 0} ventas confirmadas</small></div>
+              <div className="stat-card"><span>Ventas confirmadas</span><strong>{ventasGerenciales?.cantidad ?? 0}</strong><small>Período {gerencialDesde} → {gerencialHasta}</small></div>
+              <div className="stat-card"><span>Ticket promedio</span><strong>{dinero(ventasGerenciales?.ticketPromedio ?? 0)}</strong><small>Del período elegido</small></div>
+              <div className="stat-card"><span>Días analizados</span><strong>{ventasGerenciales?.dias.length ?? 0}</strong><small>Incluye días sin ventas</small></div>
             </div>
-            <div className="sigo-manager-chart-card"><div className="sigo-manager-chart-head"><div><strong>Evolución de ventas</strong><span>Últimos 7 días</span></div><strong>{dinero(resumen.ventas7DiasTotal)}</strong></div><GraficoVentas7Dias datos={resumen.ventasUltimos7Dias} /></div><GraficoPicos datos={resumen.ventasPorHora30Dias} etiqueta="Horas pico · acumulado 30 días" /><GraficoDias datos={resumen.ventasPorDiaSemana30Dias} />
+            <div className="sigo-manager-chart-card"><div className="sigo-manager-chart-head"><div><strong>Evolución de ventas del período</strong><span>{gerencialDesde} → {gerencialHasta}</span></div><strong>{dinero(ventasGerenciales?.total ?? 0)}</strong></div><GraficoVentas7Dias datos={evolucionGerencial} /></div>
+            <GraficoPicos datos={ventasGerenciales?.porHora ?? []} etiqueta="Horas pico · período seleccionado" />
+            <GraficoDias datos={ventasGerenciales?.porDiaSemana ?? []} etiqueta="Días de la semana · período seleccionado" />
             {salud && (
               <div className="sigo-health-inline" role={salud.estado === "operativo" ? undefined : "alert"}>
                 <strong>{etiquetaSalud(salud)}</strong>

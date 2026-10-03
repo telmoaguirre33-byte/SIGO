@@ -134,7 +134,49 @@ export type ResumenVentasPeriodoSigo = {
   total: number;
   ticketPromedio: number;
   dias: Array<{ fecha: string; total: number; cantidad: number }>;
+  porHora: Array<{ hora: number; total: number; cantidad: number }>;
+  porDiaSemana: Array<{ dia: string; total: number; cantidad: number }>;
 };
+
+export type ResumenComprasPeriodoSigo = {
+  desde: string;
+  hasta: string;
+  comprasCantidad: number;
+  comprasTotal: number;
+  ventasCantidad: number;
+  ventasTotal: number;
+  balanceComercial: number;
+};
+
+export async function cargarComprasPeriodoSigo(empresaId: string, desde: string, hasta: string): Promise<ResumenComprasPeriodoSigo> {
+  if (!empresaId) throw new Error("Seleccioná una empresa activa.");
+  if (!desde || !hasta) throw new Error("Elegí las fechas Desde y Hasta.");
+  if (desde > hasta) throw new Error("La fecha Desde no puede ser posterior a Hasta.");
+  const inicio = new Date(`${desde}T00:00:00`);
+  const finExclusivo = new Date(`${hasta}T00:00:00`);
+  if (Number.isNaN(inicio.getTime()) || Number.isNaN(finExclusivo.getTime())) throw new Error("Elegí un período válido.");
+  finExclusivo.setDate(finExclusivo.getDate() + 1);
+
+  async function listar(tabla: "compras_sigo" | "ventas_sigo") {
+    const filas: VentaRow[] = [];
+    for (let offset = 0; ; offset += 1000) {
+      let consulta = supabase.from(tabla).select("total,created_at").eq("empresa_id", empresaId).eq("estado", "confirmada")
+        .gte("created_at", inicio.toISOString()).lt("created_at", finExclusivo.toISOString())
+        .order("created_at", { ascending: true }).range(offset, offset + 999);
+      const { data, error } = await consulta;
+      if (error) throw error;
+      const lote = (data ?? []) as VentaRow[];
+      filas.push(...lote);
+      if (lote.length < 1000) break;
+    }
+    return filas;
+  }
+
+  const [compras, ventas] = await Promise.all([listar("compras_sigo"), listar("ventas_sigo")]);
+  const comprasTotal = compras.reduce((total, fila) => total + numeroSeguro(fila.total), 0);
+  const ventasTotal = ventas.reduce((total, fila) => total + numeroSeguro(fila.total), 0);
+  return { desde, hasta, comprasCantidad: compras.length, comprasTotal, ventasCantidad: ventas.length, ventasTotal, balanceComercial: ventasTotal - comprasTotal };
+}
 
 export async function cargarVentasPeriodoSigo(empresaId: string, desde: string, hasta: string): Promise<ResumenVentasPeriodoSigo> {
   if (!empresaId) throw new Error("Seleccioná una empresa activa.");
@@ -174,13 +216,22 @@ export async function cargarVentasPeriodoSigo(empresaId: string, desde: string, 
     fecha.getDate().toString().padStart(2, "0"),
   ].join("-");
   const porDia = new Map<string, { total: number; cantidad: number }>();
+  const porHora = Array.from({ length: 24 }, (_, hora) => ({ hora, total: 0, cantidad: 0 }));
+  const nombresDias = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+  const porDiaSemana = nombresDias.map((dia) => ({ dia, total: 0, cantidad: 0 }));
   for (const venta of ventas) {
     if (!venta.created_at) continue;
-    const fecha = fechaLocal(new Date(venta.created_at));
+    const fechaVenta = new Date(venta.created_at);
+    const fecha = fechaLocal(fechaVenta);
     const actual = porDia.get(fecha) ?? { total: 0, cantidad: 0 };
-    actual.total += numeroSeguro(venta.total);
+    const totalVenta = numeroSeguro(venta.total);
+    actual.total += totalVenta;
     actual.cantidad += 1;
     porDia.set(fecha, actual);
+    porHora[fechaVenta.getHours()].total += totalVenta;
+    porHora[fechaVenta.getHours()].cantidad += 1;
+    porDiaSemana[fechaVenta.getDay()].total += totalVenta;
+    porDiaSemana[fechaVenta.getDay()].cantidad += 1;
   }
 
   const dias: Array<{ fecha: string; total: number; cantidad: number }> = [];
@@ -192,7 +243,7 @@ export async function cargarVentasPeriodoSigo(empresaId: string, desde: string, 
     cursor.setDate(cursor.getDate() + 1);
   }
   const total = ventas.reduce((t,v)=>t+numeroSeguro(v.total),0);
-  return { desde, hasta, cantidad: ventas.length, total, ticketPromedio: ventas.length ? total / ventas.length : 0, dias };
+  return { desde, hasta, cantidad: ventas.length, total, ticketPromedio: ventas.length ? total / ventas.length : 0, dias, porHora, porDiaSemana };
 }
 
 export async function cargarResumenOperativoSigo(empresaId: string): Promise<ResumenOperativoSigo> {
