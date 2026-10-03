@@ -182,17 +182,19 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
           <div><h3>Ventas disponibles</h3><p>Elegí una venta confirmada para devolver productos o anularla por completo.</p></div>
         </div>
         {loading ? <p>Cargando ventas…</p> : (
-          <div className="sigo-return-sales-grid">
+          <div className="sigo-return-sales-list">
+            <div className="sigo-return-sales-head"><span>Venta</span><span>Fecha / hora</span><span>Total</span><span></span></div>
             {ventas.map((venta) => (
               <button
                 type="button"
                 key={venta.id}
-                className={`sigo-return-sale-card${seleccionada?.id === venta.id ? " active" : ""}`}
+                className={`sigo-return-sale-row${seleccionada?.id === venta.id ? " active" : ""}`}
                 onClick={() => void elegir(venta)}
               >
                 <strong>{etiquetaVenta(venta)}</strong>
                 <span>{new Date(venta.createdAt).toLocaleString("es-AR")}</span>
                 <b>{dinero(venta.total)}</b>
+                <span>{seleccionada?.id === venta.id ? "Seleccionada" : "Seleccionar"}</span>
               </button>
             ))}
             {ventas.length === 0 && <div className="table-empty">No hay ventas confirmadas disponibles para devolución.</div>}
