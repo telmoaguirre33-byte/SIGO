@@ -143,64 +143,56 @@ export async function cargarVentasPeriodoSigo(empresaId: string, desde: string, 
 
   const inicio = new Date(desde + "T00:00:00");
   const finExclusivo = new Date(hasta + "T00:00:00");
+  if (Number.isNaN(inicio.getTime()) || Number.isNaN(finExclusivo.getTime())) {
+    throw new Error("Elegí un período válido.");
+  }
   finExclusivo.setDate(finExclusivo.getDate() + 1);
 
-  const { data, error } = await supabase
-    .from("ventas_sigo")
-    .select("total,created_at")
-    .eq("empresa_id", empresaId)
-    .eq("estado", "confirmada")
-    .gte("created_at", inicio.toISOString())
-    .lt("created_at", finExclusivo.toISOString())
-    .order("created_at", { ascending: true });
-  if (error) throw error;
+  // Paginar dentro del período evita que el límite por defecto de PostgREST
+  // recorte el gráfico o los KPI cuando hay más de mil ventas.
+  const pagina = 1000;
+  const ventas: VentaRow[] = [];
+  for (let desdeFila = 0; ; desdeFila += pagina) {
+    const { data, error } = await supabase
+      .from("ventas_sigo")
+      .select("total,created_at")
+      .eq("empresa_id", empresaId)
+      .eq("estado", "confirmada")
+      .gte("created_at", inicio.toISOString())
+      .lt("created_at", finExclusivo.toISOString())
+      .order("created_at", { ascending: true })
+      .range(desdeFila, desdeFila + pagina - 1);
+    if (error) throw error;
+    const lote = (data ?? []) as VentaRow[];
+    ventas.push(...lote);
+    if (lote.length < pagina) break;
+  }
 
-  const ventas = (data ?? []) as VentaRow[];
+  const fechaLocal = (fecha: Date) => [
+    fecha.getFullYear().toString().padStart(4, "0"),
+    (fecha.getMonth() + 1).toString().padStart(2, "0"),
+    fecha.getDate().toString().padStart(2, "0"),
+  ].join("-");
+  const porDia = new Map<string, { total: number; cantidad: number }>();
+  for (const venta of ventas) {
+    if (!venta.created_at) continue;
+    const fecha = fechaLocal(new Date(venta.created_at));
+    const actual = porDia.get(fecha) ?? { total: 0, cantidad: 0 };
+    actual.total += numeroSeguro(venta.total);
+    actual.cantidad += 1;
+    porDia.set(fecha, actual);
+  }
+
   const dias: Array<{ fecha: string; total: number; cantidad: number }> = [];
   const cursor = new Date(inicio);
   while (cursor < finExclusivo) {
-    const siguiente = new Date(cursor); siguiente.setDate(siguiente.getDate() + 1);
-    const delDia = ventas.filter(v => {
-      if (!v.created_at) return false;
-      const t = new Date(v.created_at).getTime();
-      return t >= cursor.getTime() && t < siguiente.getTime();
-    });
-    dias.push({
-      fecha: cursor.toISOString().slice(0,10),
-      total: delDia.reduce((t,v)=>t+numeroSeguro(v.total),0),
-      cantidad: delDia.length,
-    });
+    const fecha = fechaLocal(cursor);
+    const valor = porDia.get(fecha) ?? { total: 0, cantidad: 0 };
+    dias.push({ fecha, ...valor });
     cursor.setDate(cursor.getDate() + 1);
   }
   const total = ventas.reduce((t,v)=>t+numeroSeguro(v.total),0);
   return { desde, hasta, cantidad: ventas.length, total, ticketPromedio: ventas.length ? total / ventas.length : 0, dias };
-}
-
-
-export async function cargarVentasPeriodoSigo(empresaId: string, desde: string, hasta: string) {
-  if (!empresaId) throw new Error("Seleccioná una empresa activa.");
-  const ventas = await listarVentasSigoCompletas(empresaId);
-  const inicio = new Date(`${desde}T00:00:00`);
-  const fin = new Date(`${hasta}T23:59:59.999`);
-  const filtradas = ventas.filter((v) => {
-    if (!v.created_at) return false;
-    const t = new Date(v.created_at).getTime();
-    return t >= inicio.getTime() && t <= fin.getTime();
-  });
-  const dias: Array<{fecha:string;total:number;cantidad:number}> = [];
-  const cursor = new Date(inicio);
-  while (cursor.getTime() <= fin.getTime()) {
-    const diaInicio = new Date(cursor); diaInicio.setHours(0,0,0,0);
-    const diaFin = new Date(cursor); diaFin.setHours(23,59,59,999);
-    const delDia = filtradas.filter(v => {
-      const t = v.created_at ? new Date(v.created_at).getTime() : 0;
-      return t >= diaInicio.getTime() && t <= diaFin.getTime();
-    });
-    dias.push({fecha: diaInicio.toISOString().slice(0,10), total: delDia.reduce((s,v)=>s+numeroSeguro(v.total),0), cantidad: delDia.length});
-    cursor.setDate(cursor.getDate()+1);
-  }
-  const total = filtradas.reduce((s,v)=>s+numeroSeguro(v.total),0);
-  return { dias, cantidad: filtradas.length, total, ticketPromedio: filtradas.length ? total/filtradas.length : 0 };
 }
 
 export async function cargarResumenOperativoSigo(empresaId: string): Promise<ResumenOperativoSigo> {

@@ -47,7 +47,7 @@ for (const required of ["registrarDevolucionSigo", "anularVentaSigo", "listarVen
   if (!api.includes(required)) throw new Error(`Returns API safeguard missing: ${required}`);
 }
 
-for (const required of ["Procesar devolución", "Anular venta completa", "Motivo *", "Historial reciente", "cantidadDisponible"]) {
+for (const required of ["Devolver", "Anular venta", "Motivo de devolución / anulación", "Historial reciente", "cantidadDisponible"]) {
   if (!ui.includes(required)) throw new Error(`Returns UI safeguard missing: ${required}`);
 }
 

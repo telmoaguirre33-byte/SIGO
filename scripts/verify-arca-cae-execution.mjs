@@ -4,6 +4,8 @@ const api = fs.readFileSync("api/arca/cae.js", "utf8");
 const ui = fs.readFileSync("src/ArcaCaeEmission.tsx", "utf8");
 const apiV2 = fs.readFileSync("api/arca/cae-v2.js", "utf8");
 const uiPatchV2 = fs.readFileSync("scripts/apply-arca-cae-v2-ui.mjs", "utf8");
+const autoTicketCore = fs.readFileSync("scripts/apply-arca-auto-ticket-core.mjs", "utf8");
+const autoTicketUi = fs.readFileSync("scripts/apply-arca-auto-ticket-ui.mjs", "utf8");
 
 for (const token of [
   '"FECompUltimoAutorizado"',
@@ -41,7 +43,6 @@ for (const token of [
   'alreadyIssued: true',
   'reconciled: true',
   'leerTicketWsaa',
-  'ARCA_TICKET_AUTO_REFRESH_REQUIRES_ADMIN',
   'ARCA_SALE_RESERVED_WITH_OTHER_FISCAL_IDENTITY',
   'ARCA_PRODUCT_FISCAL_DATA_REQUIRED',
   'ARCA_INVOICE_A_CLIENT_REQUIRED',
@@ -50,6 +51,10 @@ for (const token of [
   'Cache-Control',
 ]) {
   if (!apiV2.includes(token)) throw new Error(`ARCA CAE v2 safeguard missing: ${token}`);
+}
+
+if (!autoTicketCore.includes('ARCA_TICKET_AUTO_REFRESH_REQUIRES_ADMIN')) {
+  throw new Error('ARCA CAE v2 build patch must keep automatic ticket renewal restricted to authorized administrators');
 }
 
 for (const token of ['fetch("/api/arca/cae-v2"', 'SIGO_ARCA_CAE_V2_UI_OK']) {
@@ -73,16 +78,22 @@ for (const forbidden of ['private-key.pem', 'certificate.pem']) {
 }
 
 for (const token of [
-  '/api/arca/cae-v2',
   'habilitado',
-  'Emitir factura',
-  'Probar factura en homologación',
+  'Emitir CAE real',
+  'Probar CAE en homologación',
   'window.confirm',
   'EMITIR_CAE_PRODUCCION',
   'SOLICITAR_CAE_HOMOLOGACION',
   'Bloqueado hasta validar WSAA + WSFEv1',
 ]) {
   if (!ui.includes(token)) throw new Error(`ARCA CAE UI safeguard missing: ${token}`);
+}
+
+if (!uiPatchV2.includes('fetch("/api/arca/cae-v2", {')) {
+  throw new Error("ARCA CAE UI build patch must route emission through the v2 API");
+}
+if (!autoTicketUi.includes('ARCA_TICKET_AUTO_REFRESH_REQUIRES_ADMIN')) {
+  throw new Error("ARCA CAE UI build patch must explain the administrator-only ticket renewal path");
 }
 
 console.log("SIGO_ARCA_CAE_EXECUTION_GUARDS_OK");
