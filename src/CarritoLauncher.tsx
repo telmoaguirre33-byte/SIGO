@@ -85,7 +85,7 @@ export default function CarritoLauncher() {
   const boton = host?.kind === "sidebar" ? (
     <button className="menu-item sigo-cart-menu-item" type="button" onClick={() => setOpen(true)} aria-haspopup="dialog">
       <span className="menu-icon" aria-hidden="true">🛒</span>
-      <span>Carrito</span>
+      <span>CAJA - VENTA</span>
     </button>
   ) : (
     <button className="admin-button sigo-cart-context-button" type="button" onClick={() => setOpen(true)} aria-haspopup="dialog">
