@@ -331,7 +331,8 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         );
       }
 
-      setExito("");
+      setExito("Venta confirmada");
+      window.setTimeout(() => setExito(""), 2200);
       setUltimaVentaTicket(resultado.ventaId);
       setAdvertencia(advertencias.join(" "));
       if (imprimirDespues) {
@@ -373,7 +374,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         {busquedaProducto.trim()&&productosEncontrados.length>0&&<div className="sigo-pos-results">{productosEncontrados.map((p,i)=><button type="button" data-pos-suggestion={i} aria-selected={i===sugerenciaActiva} className={i===sugerenciaActiva?"active":""} key={p.id} onMouseEnter={()=>setSugerenciaActiva(i)} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} · Stock {p.stock_actual??0}</span></button>)}</div>}{busquedaProducto.trim()&&productosEncontrados.length===0&&!catalogoError&&<div className="sigo-pos-results"><div className="table-empty">No encontré productos. Probá con nombre, marca, código interno o EAN.</div></div>}
       </div>
       {productoBloqueado&&<div className="form-error"><strong>{productoBloqueado.producto.nombre}</strong> · {productoBloqueado.razon==="stock"?"Sin stock disponible.":"Sin precio válido."}</div>}
-      {error&&<p className="form-error" role="alert">{error}</p>}{exito&&<p role="status"><strong>{exito}</strong></p>}{advertencia&&<p className="form-error">{advertencia}</p>}
+      {error&&<p className="form-error" role="alert">{error}</p>}{exito&&<span className="sigo-pos-success-inline" role="status">{exito}</span>}{advertencia&&<p className="form-error">{advertencia}</p>}
       <div className="sigo-pos-grid">
         <section className="sigo-pos-cart">
           <div className="table-wrapper"><table className="products-table"><thead><tr><th>#</th><th>Producto</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th></th></tr></thead><tbody>{items.map((item,i)=><tr key={item.producto.id}><td>{i+1}</td><td><strong>{item.producto.nombre}</strong><small>{item.producto.codigo_interno||item.producto.codigo_barras||""}</small></td><td><div className="sigo-pos-qty"><button onClick={()=>cambiarCantidad(item.producto.id,-1)}>−</button><strong>{item.cantidad}</strong><button onClick={()=>cambiarCantidad(item.producto.id,1)}>+</button></div></td><td>$ {Number(item.producto.precio_venta).toLocaleString("es-AR")}</td><td><strong>$ {(Number(item.producto.precio_venta)*item.cantidad).toLocaleString("es-AR")}</strong></td><td><button className="sigo-pos-remove" onClick={()=>setItems(a=>a.filter(x=>x.producto.id!==item.producto.id))}>🗑</button></td></tr>)}</tbody></table>{!items.length&&<div className="table-empty">Escaneá o buscá un producto para iniciar la venta.</div>}</div>
