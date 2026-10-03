@@ -469,3 +469,21 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
 .sigo-return-sale-row b{color:#1264b0}
 .sigo-return-sale-row span:last-child{text-align:right;font-size:12px;font-weight:700;color:#4b6584}
 @media(max-width:760px){.sigo-return-sales-head{display:none}.sigo-return-sale-row{grid-template-columns:72px 1fr 90px;padding:8px 10px;gap:8px}.sigo-return-sale-row span:last-child{display:none}}
+
+/* Productos desktop: separar la cabecera del contenido para evitar superposiciones */
+@media(min-width:901px){
+  .products-page>.page-header:first-child{
+    position:relative!important;
+    z-index:2!important;
+    margin-top:0!important;
+    margin-bottom:14px!important;
+    padding-top:10px!important;
+    padding-bottom:10px!important;
+    min-height:58px!important;
+    background:#fff!important;
+  }
+  .products-page>.page-header:first-child+.panel,
+  .products-page>.page-header:first-child~.panel:first-of-type{
+    margin-top:0!important;
+  }
+}
