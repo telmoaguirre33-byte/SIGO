@@ -18,7 +18,7 @@ function etiquetaVenta(venta: VentaDevolvibleSigo) {
   return venta.numero ? `#${venta.numero}` : venta.id.slice(0, 8).toUpperCase();
 }
 
-export default function DevolucionesOperativas({ empresaId }: { empresaId: string }) {
+export default function DevolucionesOperativas({ empresaId, onVolver }: { empresaId: string; onVolver?: () => void }) {
   const [ventas, setVentas] = useState<VentaDevolvibleSigo[]>([]);
   const [seleccionada, setSeleccionada] = useState<VentaDevolvibleSigo | null>(null);
   const [items, setItems] = useState<ItemVentaDevolvibleSigo[]>([]);
@@ -161,6 +161,7 @@ export default function DevolucionesOperativas({ empresaId }: { empresaId: strin
   return (
     <div className="sigo-returns-page">
       <div className="page-header">
+        <div className="sigo-returns-header-actions">{onVolver ? <button className="admin-button" type="button" onClick={onVolver}>← Volver</button> : null}</div>
         <div>
           <h2>Devoluciones y anulaciones</h2>
           <p>Revertí una venta sin borrar historial: SIGO restituye stock y registra la contrapartida de caja o cuenta corriente.</p>
