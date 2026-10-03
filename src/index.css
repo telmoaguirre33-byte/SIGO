@@ -60,6 +60,16 @@ button { cursor: pointer; }
 
 .main { min-width: 0; }
 .topbar { height: 82px; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 0 30px; background: rgba(255,255,255,.88); border-bottom: 1px solid var(--line); backdrop-filter: blur(12px); position: sticky; top: 64px; z-index: 10; }
+/* Los títulos internos de estas pantallas deben desplazarse con su contenido.
+   La navegación global de SIGO conserva su propio comportamiento fijo. */
+.main:has(.products-page-fixed) > .topbar,
+.main:has(.stock-page-compact) > .topbar,
+.main:has(.productos-oferta) > .topbar,
+.main:has(.sigo-inventory-stats) > .topbar {
+  position: static;
+  top: auto;
+  z-index: auto;
+}
 .topbar h1 { margin: 0; font-size: 22px; }
 .topbar p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
 .topbar-actions { display: flex; gap: 8px; }
