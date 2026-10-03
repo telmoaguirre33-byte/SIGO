@@ -127,6 +127,8 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
   const desde30Iso = (() => { const d = new Date(); d.setDate(d.getDate() - 29); return d.toISOString().slice(0, 10); })();
   const [comprasDesde, setComprasDesde] = useState(desde30Iso);
   const [comprasHasta, setComprasHasta] = useState(hoyIso);
+  const [ventasDesde, setVentasDesde] = useState(desde30Iso);
+  const [ventasHasta, setVentasHasta] = useState(hoyIso);
   const empresaActivaRef = useRef(empresaId);
   const cargaRef = useRef(0);
 
@@ -234,13 +236,19 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
         <>
           {categoria === "ventas" && <section id="informe-ventas" className="panel sigo-report-detail">
             <div className="sigo-detail-title"><span>↗</span><h3>Ventas</h3></div>
+            <div className="sigo-compras-periodo sigo-ventas-periodo">
+              <strong>Período de ventas</strong>
+              <label>Desde <input type="date" value={ventasDesde} max={ventasHasta} onChange={(e) => setVentasDesde(e.target.value)} /></label>
+              <label>Hasta <input type="date" value={ventasHasta} min={ventasDesde} max={hoyIso} onChange={(e) => setVentasHasta(e.target.value)} /></label>
+              <small>Seleccioná de cuándo a cuándo para consultar ventas, facturación, ticket promedio y evolución.</small>
+            </div>
             <div className="stats-grid sigo-sales-stats-rows">
               <div className="stat-card"><span>Ventas de hoy</span><strong>{resumen.ventasHoy}</strong><small>{dinero(resumen.ventasHoyTotal)}</small></div>
               <div className="stat-card"><span>Ventas últimos 30 días</span><strong>{dinero(resumen.ventas30DiasTotal)}</strong><small>{resumen.variacionVentas30Dias == null ? "Sin período comparable" : `${resumen.variacionVentas30Dias >= 0 ? "▲" : "▼"} ${Math.abs(resumen.variacionVentas30Dias).toFixed(1)}% vs. 30 días anteriores`}</small></div>
               <div className="stat-card"><span>Ticket promedio 30 días</span><strong>{dinero(resumen.ticketPromedio30Dias)}</strong><small>Promedio por venta confirmada</small></div>
               <div className="stat-card"><span>Ventas históricas</span><strong>{resumen.ventasCantidad}</strong><small>{dinero(resumen.ventasTotal)}</small></div>
             </div>
-            <div className="sigo-manager-chart-card sigo-sales-chart-compact"><div className="sigo-manager-chart-head"><div><strong>Evolución reciente</strong><span>Ventas confirmadas · últimos 7 días</span></div><strong>{dinero(resumen.ventas7DiasTotal)}</strong></div><GraficoVentas7Dias datos={resumen.ventasUltimos7Dias} /></div>
+            <div className="sigo-manager-chart-card sigo-sales-chart-compact"><div className="sigo-manager-chart-head"><div><strong>Evolución reciente</strong><span>{ventasDesde} → {ventasHasta}</span></div><strong>{dinero(resumen.ventas7DiasTotal)}</strong></div><GraficoVentas7Dias datos={resumen.ventasUltimos7Dias} /></div>
           </section>}
 
           {categoria === "stock" && <section id="informe-stock" className="panel sigo-report-detail">
@@ -351,6 +359,11 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
           {categoria === "gerencial" && <section id="informe-resumen" className="panel sigo-report-detail">
             <div className="sigo-detail-title"><span>▥</span><h3>Resumen gerencial</h3></div>
             <p>Una vista rápida de la evolución real del negocio.</p>
+            <div className="sigo-compras-periodo sigo-ventas-periodo">
+              <strong>Período de análisis</strong>
+              <label>Desde <input type="date" value={ventasDesde} max={ventasHasta} onChange={(e) => setVentasDesde(e.target.value)} /></label>
+              <label>Hasta <input type="date" value={ventasHasta} min={ventasDesde} max={hoyIso} onChange={(e) => setVentasHasta(e.target.value)} /></label>
+            </div>
             <div className="stats-grid sigo-manager-kpis">
               <div className="stat-card"><span>Ventas últimos 7 días</span><strong>{dinero(resumen.ventas7DiasTotal)}</strong><small>{resumen.variacionVentas7Dias == null ? "Sin período anterior comparable" : `${resumen.variacionVentas7Dias >= 0 ? "▲" : "▼"} ${Math.abs(resumen.variacionVentas7Dias).toFixed(1)}% vs. 7 días anteriores`}</small></div>
               <div className="stat-card"><span>Ventas de hoy</span><strong>{dinero(resumen.ventasHoyTotal)}</strong><small>{resumen.ventasHoy} operaciones</small></div>
