@@ -557,7 +557,7 @@ function Stock({ empresaId }: { empresaId: string }) {
   );
 
   return (
-    <div className="products-page">
+    <div className="products-page stock-page-compact">
       <div className="page-header">
         <div>
           <h2>Stock</h2>
