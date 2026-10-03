@@ -528,3 +528,17 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
 .sigo-stock-stats-rows .stat-card strong{font-size:17px!important;line-height:1.1!important;color:#172b4d!important}
 .sigo-stock-stats-rows .stat-card small{font-size:11px!important;color:#667085!important}
 @media(max-width:760px){.sigo-stock-stats-rows .stat-card{grid-template-columns:1fr auto!important;min-height:44px!important}.sigo-stock-stats-rows .stat-card small{grid-column:1/-1}}
+
+/* Informes desktop: evitar que la marca SIGO/cabecera global tape el título Informes */
+@media(min-width:901px){
+  .sigo-reports-page>.sigo-reports-heading{
+    position:relative!important;
+    z-index:1!important;
+    clear:both!important;
+    margin-top:18px!important;
+    padding-top:12px!important;
+    min-height:64px!important;
+    background:#fff!important;
+  }
+  .sigo-reports-page>.sigo-reports-heading h2{margin-top:0!important}
+}
