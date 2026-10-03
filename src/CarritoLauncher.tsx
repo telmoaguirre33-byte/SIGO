@@ -89,12 +89,7 @@ export default function CarritoLauncher() {
 
   if (!empresa) return null;
 
-  const boton = host?.kind === "sidebar" ? (
-    <button className="menu-item sigo-cart-menu-item" type="button" onClick={() => { setEmbedded(false); setOpen(true); }} aria-haspopup="dialog">
-      <span className="menu-icon" aria-hidden="true">🛒</span>
-      <span>CAJA - VENTA</span>
-    </button>
-  ) : (
+  const boton = host?.kind === "sidebar" ? null : (
     <button className="admin-button sigo-cart-context-button" type="button" onClick={() => setOpen(true)} aria-haspopup="dialog">
       🛒 Carrito
     </button>
@@ -102,7 +97,7 @@ export default function CarritoLauncher() {
 
   return (
     <>
-      {host ? createPortal(boton, host.element) : null}
+      {host && boton ? createPortal(boton, host.element) : null}
       {open && !embedded && (
         <div className="sigo-cart-overlay" role="dialog" aria-modal="true" aria-label="Carrito de ventas">
           <div className="sigo-cart-topbar">
