@@ -1,8 +1,8 @@
 import { supabase } from "./supabase";
 
-export type RankingProductoSigo = { productoId: string; nombre: string; unidades: number; importe: number };
+export type RankingProductoSigo = { productoId: string; codigo: string; ean: string; nombre: string; categoria: string; marca: string; unidades: number; importe: number; stock: number };
 type VentaRow = { id?: string | null };
-type ItemRow = { producto_id?: string | null; cantidad?: number | string | null; subtotal?: number | string | null; productos?: { nombre?: string | null } | Array<{ nombre?: string | null }> | null };
+type ItemRow = { producto_id?: string | null; cantidad?: number | string | null; subtotal?: number | string | null; productos?: { nombre?: string | null; codigo_interno?: string | null; codigo_barras?: string | null; categoria?: string | null; marca?: string | null; stock_actual?: number | string | null } | Array<{ nombre?: string | null; codigo_interno?: string | null; codigo_barras?: string | null; categoria?: string | null; marca?: string | null; stock_actual?: number | string | null }> | null };
 
 export async function cargarRankingProductosSigo(empresaId: string, desde: string, hasta: string): Promise<RankingProductoSigo[]> {
   if (!empresaId) throw new Error("Seleccioná una empresa activa.");
@@ -24,13 +24,13 @@ export async function cargarRankingProductosSigo(empresaId: string, desde: strin
   const acumulado = new Map<string, RankingProductoSigo>();
   for (let i = 0; i < ventas.length; i += 200) {
     const { data, error } = await supabase.from("venta_items_sigo")
-      .select("producto_id,cantidad,subtotal,productos(nombre)").eq("empresa_id", empresaId).in("venta_id", ventas.slice(i, i + 200));
+      .select("producto_id,cantidad,subtotal,productos(nombre,codigo_interno,codigo_barras,categoria,marca,stock_actual)").eq("empresa_id", empresaId).in("venta_id", ventas.slice(i, i + 200));
     if (error) throw error;
     for (const item of (data ?? []) as ItemRow[]) {
       const id = String(item.producto_id ?? "");
       if (!id) continue;
       const rel = Array.isArray(item.productos) ? item.productos[0] : item.productos;
-      const actual = acumulado.get(id) ?? { productoId: id, nombre: String(rel?.nombre ?? "Producto sin nombre"), unidades: 0, importe: 0 };
+      const actual = acumulado.get(id) ?? { productoId: id, codigo: String(rel?.codigo_interno ?? ""), ean: String(rel?.codigo_barras ?? ""), nombre: String(rel?.nombre ?? "Producto sin nombre"), categoria: String(rel?.categoria ?? ""), marca: String(rel?.marca ?? ""), unidades: 0, importe: 0, stock: Number(rel?.stock_actual ?? 0) || 0 };
       actual.unidades += Number(item.cantidad ?? 0) || 0;
       actual.importe += Number(item.subtotal ?? 0) || 0;
       acumulado.set(id, actual);

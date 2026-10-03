@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { cargarRankingProductosSigo, type RankingProductoSigo } from "./rankingProductos";
+import { descargarTablaExcel } from "./excelProductos";
 
 type Periodo = "7" | "15" | "mes" | "personalizado";
 type Orden = "unidades" | "importe";
@@ -29,6 +30,7 @@ export default function RankingProductosStock({empresaId}:{empresaId:string}) {
       <label>Mostrar <select value={top} onChange={e=>setTop(Number(e.target.value))}>{[5,10,15,20,25,30,50].map(n=><option key={n} value={n}>Top {n}</option>)}</select></label>
       <button className={orden==="unidades"?"primary-button":"admin-button"} onClick={()=>setOrden("unidades")}>Unidades</button>
       <button className={orden==="importe"?"primary-button":"admin-button"} onClick={()=>setOrden("importe")}>Facturación</button>
+      <button type="button" className="admin-button" onClick={()=>descargarTablaExcel("Ranking", ["Posición","Código","EAN","Producto","Categoría","Marca","Unidades vendidas","Facturación","Stock actual"], ranking.map((p,i)=>[i+1,p.codigo,p.ean,p.nombre,p.categoria,p.marca,p.unidades,p.importe,p.stock]), `SIGO-ranking-productos-${desde}-${hasta}.xlsx`)}>▣ EXPORTAR A EXCEL</button>
     </div>
     {loading?<p>Cargando ranking…</p>:error?<p role="alert">{error}</p>:ranking.length===0?<p>Sin ventas confirmadas en el período.</p>:<div style={{display:"grid",gap:12}}>
       {ranking.map((p,i)=><div key={p.productoId}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><strong>{i+1}. {p.nombre}</strong><span>{orden==="unidades"?`${p.unidades.toLocaleString("es-AR")} u.`:dinero(p.importe)}</span></div><div style={{height:12,background:"#e5e7eb",borderRadius:8,overflow:"hidden",marginTop:6}}><div style={{height:"100%",width:`${Math.max(3,(p[orden]/max)*100)}%`,background:"#2563eb"}}/></div><small>{p.unidades.toLocaleString("es-AR")} unidades · {dinero(p.importe)}</small></div>)}

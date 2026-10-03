@@ -79,8 +79,8 @@ for (const forbidden of ['private-key.pem', 'certificate.pem']) {
 
 for (const token of [
   'habilitado',
-  'Emitir CAE real',
-  'Probar CAE en homologación',
+  'Emitir factura',
+  'Probar factura en homologación',
   'window.confirm',
   'EMITIR_CAE_PRODUCCION',
   'SOLICITAR_CAE_HOMOLOGACION',
