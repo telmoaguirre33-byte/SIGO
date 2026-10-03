@@ -1045,3 +1045,29 @@ main:has(> .productos-oferta){
     font-size:13px!important;
   }
 }
+
+/* Operación: las cabeceras internas NO son barras fijas. Deben desplazarse con el contenido. */
+.products-page > .page-header,
+.stock-page-compact > .page-header,
+.products-page > .panel > .page-header,
+.stock-page-compact > .panel > .page-header,
+.product-tools,
+.products-table thead{
+  position:static!important;
+  top:auto!important;
+  inset:auto!important;
+  z-index:auto!important;
+  transform:none!important;
+}
+.products-page > .page-header,
+.stock-page-compact > .page-header{
+  background:transparent!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+}
+.products-page > .page-header::before,
+.products-page > .page-header::after,
+.stock-page-compact > .page-header::before,
+.stock-page-compact > .page-header::after{
+  display:none!important;
+}
