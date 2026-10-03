@@ -499,3 +499,15 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
 .sigo-report-list-copy{display:flex;flex-direction:column;gap:2px;min-width:0}.sigo-report-list-copy strong{font-size:14px}.sigo-report-list-copy small{font-size:11px;color:#6b778b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sigo-report-list-action{justify-self:end;font-size:12px;font-weight:700;color:#1769c2}
 @media(max-width:760px){.sigo-report-summary{grid-template-columns:1fr}.sigo-report-summary>div{padding:8px 10px}.sigo-report-list-row{grid-template-columns:36px minmax(0,1fr);min-height:52px;padding:7px 10px}.sigo-report-list-action{grid-column:2;justify-self:start;font-size:11px}.sigo-report-list-copy small{white-space:normal}}
+
+/* Gerencial desktop: KPIs en una fila y gráficos 50% más compactos */
+@media(min-width:901px){
+  #informe-resumen .sigo-manager-kpis{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:10px!important}
+  #informe-resumen .sigo-manager-kpis .stat-card{min-height:72px!important;padding:10px 12px!important}
+  #informe-resumen .sigo-manager-kpis .stat-card strong{font-size:20px!important}
+  #informe-resumen .sigo-manager-kpis .stat-card small{font-size:10px!important}
+  #informe-resumen .sigo-manager-chart-card{padding:10px 14px!important;margin-top:10px!important;min-height:0!important}
+  #informe-resumen .sigo-trend-chart{height:145px!important;min-height:145px!important}
+  #informe-resumen .sigo-trend-track{height:82px!important}
+  #informe-resumen .sigo-manager-chart-head{margin-bottom:4px!important}
+}
