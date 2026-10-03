@@ -542,3 +542,9 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
   }
   .sigo-reports-page>.sigo-reports-heading h2{margin-top:0!important}
 }
+
+/* Lista de precios: productos como renglones compactos */
+.sigo-price-list-compact .products-table th{padding:6px 10px!important;font-size:11px!important}
+.sigo-price-list-compact .products-table td{padding:6px 10px!important;height:auto!important;min-height:0!important;font-size:12px!important;vertical-align:middle!important}
+.sigo-price-list-compact .products-table td strong{font-size:13px!important;line-height:1.15!important}
+.sigo-price-list-compact .products-table td small{font-size:10px!important;line-height:1.1!important;margin-top:1px!important}
