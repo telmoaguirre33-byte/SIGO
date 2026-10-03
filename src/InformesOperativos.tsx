@@ -53,16 +53,40 @@ function numero(valor: number, decimales = 0) {
   }).format(valor);
 }
 
-function GraficoVentas7Dias({ datos }: { datos: Array<{ fecha: string; total: number; cantidad: number }> }) {
+function GraficoVentas7Dias({ datos }: { datos: Array<{ fecha: string; total: number; cantidad: number; etiqueta?: string }> }) {
   const maximo = Math.max(1, ...datos.map((item) => item.total));
-  return <div className="sigo-trend-chart" aria-label="Ventas de los últimos 7 días">
+  return <div className="sigo-trend-chart" aria-label="Evolución de ventas del período seleccionado">
     {datos.map((item) => <div className="sigo-trend-column" key={item.fecha} title={dinero(item.total)}>
       <div className="sigo-trend-value">{item.total > 0 ? dinero(item.total) : "—"}</div>
       <div className="sigo-trend-track"><div className="sigo-trend-bar" style={{height: `${Math.max(item.total > 0 ? 8 : 2, (item.total / maximo) * 100)}%`}} /></div>
-      <strong>{new Date(item.fecha + "T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"})}</strong>
+      <strong>{item.etiqueta ?? new Date(item.fecha + "T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"})}</strong>
       <small>{item.cantidad} vta.</small>
     </div>)}
   </div>;
+}
+
+function agruparEvolucionVentas(datos: Array<{ fecha: string; total: number; cantidad: number }>, desde: string, hasta: string) {
+  const inicio = new Date(`${desde}T12:00:00`);
+  const fin = new Date(`${hasta}T12:00:00`);
+  const dias = Math.max(1, Math.floor((fin.getTime() - inicio.getTime()) / 86_400_000) + 1);
+  const modo = dias > 180 ? "mes" : dias > 31 ? "semana" : "dia";
+  const grupos = new Map<string, { fecha: string; total: number; cantidad: number; etiqueta: string }>();
+  for (const dato of datos) {
+    const fecha = new Date(`${dato.fecha}T12:00:00`);
+    if (modo === "semana") fecha.setDate(fecha.getDate() - ((fecha.getDay() + 6) % 7));
+    if (modo === "mes") fecha.setDate(1);
+    const clave = [fecha.getFullYear().toString().padStart(4, "0"), String(fecha.getMonth() + 1).padStart(2, "0"), String(fecha.getDate()).padStart(2, "0")].join("-");
+    const etiqueta = modo === "mes"
+      ? fecha.toLocaleDateString("es-AR", { month: "short", year: "2-digit" })
+      : modo === "semana"
+        ? `Sem. ${fecha.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" })}`
+        : fecha.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" });
+    const actual = grupos.get(clave) ?? { fecha: clave, total: 0, cantidad: 0, etiqueta };
+    actual.total += dato.total;
+    actual.cantidad += dato.cantidad;
+    grupos.set(clave, actual);
+  }
+  return Array.from(grupos.values());
 }
 
 
@@ -199,6 +223,7 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
     { icono: "👥", titulo: "Clientes", texto: "Cuenta corriente y cobranzas.", categoria: "clientes" },
     { icono: "▥", titulo: "Gerencial", texto: "Resumen completo del negocio.", categoria: "gerencial" },
   ];
+  const evolucionVentas = agruparEvolucionVentas(ventasPeriodo?.dias ?? [], ventasDesde, ventasHasta);
 
   return (
     <div className="products-page sigo-reports-page">
@@ -256,7 +281,7 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
               <div className="stat-card"><span>Ticket promedio del período</span><strong>{dinero(ventasPeriodo?.ticketPromedio ?? 0)}</strong><small>Promedio por venta confirmada</small></div>
               <div className="stat-card"><span>Días analizados</span><strong>{ventasPeriodo?.dias.length ?? 0}</strong><small>Período seleccionado</small></div>
             </div>
-            <div className="sigo-manager-chart-card sigo-sales-chart-compact"><div className="sigo-manager-chart-head"><div><strong>Evolución reciente</strong><span>{ventasDesde} → {ventasHasta}</span></div><strong>{dinero(ventasPeriodo?.total ?? 0)}</strong></div><GraficoVentas7Dias datos={ventasPeriodo?.dias ?? []} /></div>
+            <div className="sigo-manager-chart-card sigo-sales-chart-compact"><div className="sigo-manager-chart-head"><div><strong>Evolución del período</strong><span>{ventasDesde} → {ventasHasta}</span></div><strong>{dinero(ventasPeriodo?.total ?? 0)}</strong></div><GraficoVentas7Dias datos={evolucionVentas} /></div>
           </section>}
 
           {categoria === "stock" && <section id="informe-stock" className="panel sigo-report-detail">
