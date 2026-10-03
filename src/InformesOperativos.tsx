@@ -102,6 +102,18 @@ function etiquetaRiesgo(estado: EstadoRiesgoStockSigo) {
 type CategoriaInforme = "ventas" | "stock" | "caja" | "compras" | "clientes" | "gerencial";
 type VistaStock = "menu" | "ranking" | "quiebre" | "actual" | "rotacion";
 
+function exportarRankingExcel(filas: Array<{ nombre: string; cantidad: number; total: number }>, criterio: "unidades" | "facturacion") {
+  const encabezados = ["Posición", "Producto", "Unidades vendidas", "Facturación", "Criterio"];
+  const esc = (v: unknown) => `"${String(v ?? "").replaceAll('"', '""')}"`;
+  const lineas = [encabezados.map(esc).join(";"), ...filas.map((fila, i) => [i + 1, fila.nombre, fila.cantidad, fila.total, criterio === "facturacion" ? "Facturación" : "Unidades"].map(esc).join(";"))];
+  const blob = new Blob(["\ufeff" + lineas.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const enlace = document.createElement("a");
+  enlace.href = URL.createObjectURL(blob);
+  enlace.download = `SIGO-ranking-productos-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(enlace); enlace.click(); enlace.remove();
+  setTimeout(() => URL.revokeObjectURL(enlace.href), 1500);
+}
+
 export default function InformesOperativos({ empresaId }: { empresaId: string }) {
   const [resumen, setResumen] = useState<ResumenOperativoSigo>(vacio);
   const [salud, setSalud] = useState<SaludOperativaSigo | null>(null);
