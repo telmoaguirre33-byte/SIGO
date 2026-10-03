@@ -321,9 +321,9 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
             </div>
           </section>}
 
-          {categoria === "caja" && <section id="informe-caja" className="panel sigo-report-detail">
+          {categoria === "caja" && <section id="informe-caja" className="panel sigo-report-detail sigo-caja-report">
             <div className="sigo-detail-title"><span>$</span><h3>Caja de hoy</h3></div>
-            <div className="stats-grid">
+            <div className="stats-grid sigo-caja-rows">
               <div className="stat-card"><span>Neto hoy</span><strong>{dinero(resumen.cajaHoyNeto)}</strong><small>Ingresos {dinero(resumen.cajaHoyIngresos)} · Egresos {dinero(resumen.cajaHoyEgresos)}</small></div>
               <div className="stat-card"><span>Ingresos · 7 días</span><strong>{dinero(resumen.caja7DiasIngresos)}</strong><small>Movimientos registrados</small></div>
               <div className="stat-card"><span>Egresos · 7 días</span><strong>{dinero(resumen.caja7DiasEgresos)}</strong><small>Movimientos registrados</small></div>
