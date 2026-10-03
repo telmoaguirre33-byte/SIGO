@@ -14,7 +14,7 @@ export async function guardarConfigTicket(config: ConfigTicket): Promise<void> {
   if (error) throw error;
 }
 
-export async function imprimirTicketVenta(empresaId: string, ventaId: string, formato: "58" | "80" | "a4" = "80"): Promise<void> {
+export async function imprimirTicketVenta(empresaId: string, ventaId: string, formato: "58" | "80" | "a4" = "80", imprimirDirecto = false): Promise<void> {
   const [{ data: venta, error: ventaError }, { data: items, error: itemsError }, config] = await Promise.all([
     supabase.from("ventas_sigo").select("id,numero,created_at,total,estado").eq("empresa_id",empresaId).eq("id",ventaId).single(),
     supabase.from("venta_items_sigo").select("cantidad,precio_unitario,subtotal,productos(nombre)").eq("empresa_id",empresaId).eq("venta_id",ventaId),
@@ -58,11 +58,7 @@ export async function imprimirTicketVenta(empresaId: string, ventaId: string, fo
   for(const item of items??[]) {const fila=doc.createElement("tr");const producto=Array.isArray(item.productos)?item.productos[0]:item.productos;add("td",`${item.cantidad} × ${producto?.nombre??"Artículo"}`,fila);add("td",`$ ${Number(item.subtotal).toLocaleString("es-AR",{minimumFractionDigits:2})}`,fila);tabla.appendChild(fila);}
   add("hr",""); add("h2",`Total $ ${Number(venta.total).toLocaleString("es-AR",{minimumFractionDigits:2})}`);
   add("p","COMPROBANTE NO FISCAL · No válido como factura.");
-  const boton=add("button","Imprimir"); boton.onclick=()=>printWindow?.print();
-  doc.close();
-  if (popup) {
-    popup.focus();
-  } else {
+  if (!imprimirDirecto) { const boton=add("button","Imprimir"); boton.onclick=()=>printWindow?.print(); }\n  doc.close();\n  if (popup) {\n    popup.focus();\n    if (imprimirDirecto) window.setTimeout(() => printWindow?.print(), 250);\n  } else {
     window.setTimeout(() => {
       printWindow?.focus();
       printWindow?.print();
