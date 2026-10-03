@@ -459,3 +459,13 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
 .sigo-return-compact-total{display:flex;flex-direction:column;min-width:90px}
 .sigo-return-compact-editor button{min-height:36px;padding:7px 12px;white-space:nowrap}
 @media(max-width:760px){.sigo-return-compact-editor{flex-wrap:wrap}.sigo-return-compact-items{flex-basis:100%}.sigo-return-compact-reason{flex:1 1 180px;min-width:160px}.sigo-return-compact-editor button{flex:1 1 auto}}
+
+/* Devoluciones: ventas disponibles en listado compacto, una venta por línea */
+.sigo-return-sales-list{display:flex;flex-direction:column;width:100%;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#fff}
+.sigo-return-sales-head,.sigo-return-sale-row{display:grid;grid-template-columns:minmax(90px,.7fr) minmax(170px,1.4fr) minmax(100px,.7fr) 110px;align-items:center;gap:12px;padding:9px 14px}
+.sigo-return-sales-head{font-size:11px;font-weight:700;color:#667085;background:#f7f9fc;text-transform:uppercase}
+.sigo-return-sale-row{width:100%;border:0;border-top:1px solid #edf1f6;background:#fff;text-align:left;cursor:pointer;font:inherit;color:inherit}
+.sigo-return-sale-row:hover,.sigo-return-sale-row.active{background:#eef6ff}
+.sigo-return-sale-row b{color:#1264b0}
+.sigo-return-sale-row span:last-child{text-align:right;font-size:12px;font-weight:700;color:#4b6584}
+@media(max-width:760px){.sigo-return-sales-head{display:none}.sigo-return-sale-row{grid-template-columns:72px 1fr 90px;padding:8px 10px;gap:8px}.sigo-return-sale-row span:last-child{display:none}}
