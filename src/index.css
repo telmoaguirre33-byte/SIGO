@@ -680,3 +680,23 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
 .sigo-compras-rows .stat-card span{font-size:12px!important;font-weight:700!important}
 .sigo-compras-rows .stat-card small{font-size:11px!important}
 @media(max-width:760px){.sigo-compras-periodo{align-items:stretch}.sigo-compras-periodo label{justify-content:space-between}.sigo-compras-rows .stat-card{grid-template-columns:1fr auto!important}.sigo-compras-rows .stat-card small{grid-column:1/-1!important}}
+
+/* Informes > Cuenta corriente: indicadores en renglones compactos */
+.sigo-clientes-report .sigo-clientes-rows{
+  display:flex!important;flex-direction:column!important;gap:0!important;margin-top:8px!important;
+  border:1px solid #e4e9f1!important;border-radius:10px!important;overflow:hidden!important;background:#fff!important;
+}
+.sigo-clientes-report .sigo-clientes-rows .stat-card{
+  display:grid!important;grid-template-columns:minmax(180px,1.2fr) minmax(140px,.7fr) minmax(240px,1.4fr)!important;
+  align-items:center!important;gap:12px!important;min-height:42px!important;width:100%!important;
+  margin:0!important;padding:6px 12px!important;border:0!important;border-bottom:1px solid #edf1f5!important;
+  border-radius:0!important;box-shadow:none!important;background:#fff!important;
+}
+.sigo-clientes-report .sigo-clientes-rows .stat-card:last-child{border-bottom:0!important}
+.sigo-clientes-report .sigo-clientes-rows .stat-card span{font-size:12px!important;font-weight:700!important}
+.sigo-clientes-report .sigo-clientes-rows .stat-card strong{font-size:17px!important;line-height:1.1!important;margin:0!important}
+.sigo-clientes-report .sigo-clientes-rows .stat-card small{font-size:11px!important;line-height:1.15!important}
+@media(max-width:760px){
+ .sigo-clientes-report .sigo-clientes-rows .stat-card{grid-template-columns:1fr auto!important;min-height:40px!important;padding:6px 8px!important}
+ .sigo-clientes-report .sigo-clientes-rows .stat-card small{grid-column:1/-1!important}
+}
