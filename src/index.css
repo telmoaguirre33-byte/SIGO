@@ -989,3 +989,59 @@ main:has(> .productos-oferta){
   .sigo-inventory-stats .stat-card span{font-size:11px!important;line-height:1.1!important;}
   .sigo-inventory-stats .stat-card strong{font-size:20px!important;line-height:1.1!important;margin-top:2px!important;}
 }
+
+/* Stock vs Inventario: Nueva revisión compacta, aprox. 50% menos alta y en línea. */
+@media(min-width:901px){
+  .sigo-inventory-stats + .panel{
+    padding:10px 14px!important;
+    margin-top:8px!important;
+    min-height:0!important;
+  }
+  .sigo-inventory-stats + .panel>.page-header{
+    display:flex!important;
+    align-items:center!important;
+    justify-content:space-between!important;
+    gap:14px!important;
+    min-height:0!important;
+    padding:0!important;
+    margin:0!important;
+  }
+  .sigo-inventory-stats + .panel>.page-header>div:first-child{
+    display:flex!important;
+    align-items:center!important;
+    gap:12px!important;
+    min-width:0!important;
+  }
+  .sigo-inventory-stats + .panel>.page-header h3{
+    margin:0!important;
+    white-space:nowrap!important;
+    font-size:16px!important;
+  }
+  .sigo-inventory-stats + .panel>.page-header p{
+    margin:0!important;
+    font-size:12px!important;
+    line-height:1.2!important;
+  }
+  .sigo-inventory-stats + .panel>.page-header .topbar-actions{
+    display:flex!important;
+    flex-wrap:nowrap!important;
+    gap:6px!important;
+  }
+  .sigo-inventory-stats + .panel>.page-header .primary-button,
+  .sigo-inventory-stats + .panel>.page-header .admin-button{
+    min-height:34px!important;
+    padding:6px 10px!important;
+    font-size:13px!important;
+    white-space:nowrap!important;
+  }
+  .sigo-inventory-stats + .panel>p[style]{
+    margin:7px 0!important;
+    font-size:11px!important;
+    line-height:1.2!important;
+  }
+  .sigo-inventory-stats + .panel>.primary-button{
+    min-height:34px!important;
+    padding:6px 12px!important;
+    font-size:13px!important;
+  }
+}
