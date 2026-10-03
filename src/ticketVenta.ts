@@ -58,7 +58,12 @@ export async function imprimirTicketVenta(empresaId: string, ventaId: string, fo
   for(const item of items??[]) {const fila=doc.createElement("tr");const producto=Array.isArray(item.productos)?item.productos[0]:item.productos;add("td",`${item.cantidad} × ${producto?.nombre??"Artículo"}`,fila);add("td",`$ ${Number(item.subtotal).toLocaleString("es-AR",{minimumFractionDigits:2})}`,fila);tabla.appendChild(fila);}
   add("hr",""); add("h2",`Total $ ${Number(venta.total).toLocaleString("es-AR",{minimumFractionDigits:2})}`);
   add("p","COMPROBANTE NO FISCAL · No válido como factura.");
-  if (!imprimirDirecto) { const boton=add("button","Imprimir"); boton.onclick=()=>printWindow?.print(); }\n  doc.close();\n  if (popup) {\n    popup.focus();\n    if (imprimirDirecto) window.setTimeout(() => printWindow?.print(), 250);\n  } else {
+  if (!imprimirDirecto) { const boton=add("button","Imprimir"); boton.onclick=()=>printWindow?.print(); }
+  doc.close();
+  if (popup) {
+    popup.focus();
+    if (imprimirDirecto) window.setTimeout(() => printWindow?.print(), 250);
+  } else {
     window.setTimeout(() => {
       printWindow?.focus();
       printWindow?.print();
