@@ -557,3 +557,40 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
 .products-page:has(.productos-oferta){
   padding-top:0!important;
 }
+
+/* Informes > Ventas e ingresos: métricas en una sola fila y gráfico compacto. */
+.sigo-sales-stats-rows{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:8px!important;
+  margin-bottom:12px!important;
+}
+.sigo-sales-stats-rows .stat-card{
+  min-height:0!important;
+  padding:10px 12px!important;
+  border-radius:10px!important;
+}
+.sigo-sales-stats-rows .stat-card strong{
+  font-size:clamp(18px,1.8vw,26px)!important;
+  line-height:1.05!important;
+  margin:3px 0!important;
+}
+.sigo-sales-stats-rows .stat-card span,
+.sigo-sales-stats-rows .stat-card small{
+  font-size:12px!important;
+  line-height:1.2!important;
+}
+.sigo-sales-chart-compact{
+  padding:12px 14px!important;
+  margin-top:8px!important;
+  min-height:0!important;
+}
+.sigo-sales-chart-compact .sigo-manager-chart-head{margin-bottom:4px!important;}
+.sigo-sales-chart-compact .sigo-manager-bars{
+  height:190px!important;
+  min-height:190px!important;
+}
+@media(max-width:760px){
+  .sigo-sales-stats-rows{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
+  .sigo-sales-chart-compact .sigo-manager-bars{height:160px!important;min-height:160px!important;}
+}
