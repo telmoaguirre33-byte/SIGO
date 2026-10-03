@@ -487,3 +487,15 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
     margin-top:0!important;
   }
 }
+
+/* Informes: panel gerencial compacto aprobado */
+.sigo-report-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 0 12px}
+.sigo-report-summary>div{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border:1px solid #e3e9f2;border-radius:10px;background:#fff}
+.sigo-report-summary span{font-size:12px;color:#667085}.sigo-report-summary strong{font-size:18px;color:#172b4d}
+.sigo-report-list{display:flex;flex-direction:column;border:1px solid #e3e9f2;border-radius:12px;overflow:hidden;background:#fff}
+.sigo-report-list-row{display:grid;grid-template-columns:42px minmax(0,1fr) 120px;align-items:center;gap:12px;width:100%;min-height:58px;padding:8px 14px;border:0;border-bottom:1px solid #edf1f6;background:#fff;text-align:left;color:#172b4d;cursor:pointer}
+.sigo-report-list-row:last-child{border-bottom:0}.sigo-report-list-row:hover{background:#f6f9fd}
+.sigo-report-list-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:9px;background:#eef5ff;font-size:17px;font-weight:800;color:#1769c2}
+.sigo-report-list-copy{display:flex;flex-direction:column;gap:2px;min-width:0}.sigo-report-list-copy strong{font-size:14px}.sigo-report-list-copy small{font-size:11px;color:#6b778b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sigo-report-list-action{justify-self:end;font-size:12px;font-weight:700;color:#1769c2}
+@media(max-width:760px){.sigo-report-summary{grid-template-columns:1fr}.sigo-report-summary>div{padding:8px 10px}.sigo-report-list-row{grid-template-columns:36px minmax(0,1fr);min-height:52px;padding:7px 10px}.sigo-report-list-action{grid-column:2;justify-self:start;font-size:11px}.sigo-report-list-copy small{white-space:normal}}
