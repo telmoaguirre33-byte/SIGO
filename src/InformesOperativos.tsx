@@ -123,6 +123,10 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
   const [error, setError] = useState("");
   const [categoria, setCategoria] = useState<CategoriaInforme | null>(null);
   const [vistaStock, setVistaStock] = useState<VistaStock>("menu");
+  const hoyIso = new Date().toISOString().slice(0, 10);
+  const desde30Iso = (() => { const d = new Date(); d.setDate(d.getDate() - 29); return d.toISOString().slice(0, 10); })();
+  const [comprasDesde, setComprasDesde] = useState(desde30Iso);
+  const [comprasHasta, setComprasHasta] = useState(hoyIso);
   const empresaActivaRef = useRef(empresaId);
   const cargaRef = useRef(0);
 
@@ -311,9 +315,15 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
             </div>
           </section>}
 
-          {categoria === "compras" && <section id="informe-compras" className="panel sigo-report-detail">
+          {categoria === "compras" && <section id="informe-compras" className="panel sigo-report-detail sigo-compras-report">
             <div className="sigo-detail-title"><span>↓</span><h3>Compras</h3></div>
-            <div className="stats-grid">
+            <div className="sigo-compras-periodo">
+              <strong>Período de compras</strong>
+              <label>Desde <input type="date" value={comprasDesde} max={comprasHasta} onChange={(e) => setComprasDesde(e.target.value)} /></label>
+              <label>Hasta <input type="date" value={comprasHasta} min={comprasDesde} max={hoyIso} onChange={(e) => setComprasHasta(e.target.value)} /></label>
+              <small>Seleccioná de cuándo a cuándo para analizar la facturación de compras.</small>
+            </div>
+            <div className="stats-grid sigo-compras-rows">
               <div className="stat-card"><span>Compras confirmadas</span><strong>{resumen.comprasCantidad}</strong><small>{dinero(resumen.comprasTotal)}</small></div>
               <div className="stat-card"><span>Compras últimos 30 días</span><strong>{dinero(resumen.compras30DiasTotal)}</strong><small>Mercadería confirmada</small></div>
               <div className="stat-card"><span>Ventas últimos 30 días</span><strong>{dinero(resumen.ventas30DiasTotal)}</strong><small>Para comparar actividad comercial</small></div>
