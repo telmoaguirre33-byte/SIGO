@@ -176,6 +176,33 @@ export async function cargarVentasPeriodoSigo(empresaId: string, desde: string, 
   return { desde, hasta, cantidad: ventas.length, total, ticketPromedio: ventas.length ? total / ventas.length : 0, dias };
 }
 
+
+export async function cargarVentasPeriodoSigo(empresaId: string, desde: string, hasta: string) {
+  if (!empresaId) throw new Error("Seleccioná una empresa activa.");
+  const ventas = await listarVentasSigoCompletas(empresaId);
+  const inicio = new Date(`${desde}T00:00:00`);
+  const fin = new Date(`${hasta}T23:59:59.999`);
+  const filtradas = ventas.filter((v) => {
+    if (!v.created_at) return false;
+    const t = new Date(v.created_at).getTime();
+    return t >= inicio.getTime() && t <= fin.getTime();
+  });
+  const dias: Array<{fecha:string;total:number;cantidad:number}> = [];
+  const cursor = new Date(inicio);
+  while (cursor.getTime() <= fin.getTime()) {
+    const diaInicio = new Date(cursor); diaInicio.setHours(0,0,0,0);
+    const diaFin = new Date(cursor); diaFin.setHours(23,59,59,999);
+    const delDia = filtradas.filter(v => {
+      const t = v.created_at ? new Date(v.created_at).getTime() : 0;
+      return t >= diaInicio.getTime() && t <= diaFin.getTime();
+    });
+    dias.push({fecha: diaInicio.toISOString().slice(0,10), total: delDia.reduce((s,v)=>s+numeroSeguro(v.total),0), cantidad: delDia.length});
+    cursor.setDate(cursor.getDate()+1);
+  }
+  const total = filtradas.reduce((s,v)=>s+numeroSeguro(v.total),0);
+  return { dias, cantidad: filtradas.length, total, ticketPromedio: filtradas.length ? total/filtradas.length : 0 };
+}
+
 export async function cargarResumenOperativoSigo(empresaId: string): Promise<ResumenOperativoSigo> {
   if (!empresaId) throw new Error("Seleccioná una empresa activa.");
 
