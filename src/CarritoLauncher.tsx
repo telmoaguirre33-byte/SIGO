@@ -18,6 +18,7 @@ type Host = { element: HTMLElement; kind: "sidebar" | "context" } | null;
 export default function CarritoLauncher() {
   const [empresa, setEmpresa] = useState<EmpresaOperativa | null>(null);
   const [open, setOpen] = useState(false);
+  const [embedded, setEmbedded] = useState(false);
   const [host, setHost] = useState<Host>(null);
 
   const cargarEmpresa = useCallback(async () => {
@@ -69,7 +70,13 @@ export default function CarritoLauncher() {
   }, []);
 
   useEffect(() => {
-    const abrirCaja = () => { if (empresa) setOpen(true); };
+    const abrirCaja = () => {
+      if (!empresa) return;
+      const ventas = document.querySelector<HTMLButtonElement>('.sidebar .menu-item[data-view="Ventas"], .sidebar button[data-view="Ventas"]');
+      if (ventas) { ventas.click(); return; }
+      setEmbedded(true);
+      setOpen(true);
+    };
     window.addEventListener("sigo:abrir-caja", abrirCaja);
     return () => window.removeEventListener("sigo:abrir-caja", abrirCaja);
   }, [empresa]);
@@ -83,7 +90,7 @@ export default function CarritoLauncher() {
   if (!empresa) return null;
 
   const boton = host?.kind === "sidebar" ? (
-    <button className="menu-item sigo-cart-menu-item" type="button" onClick={() => setOpen(true)} aria-haspopup="dialog">
+    <button className="menu-item sigo-cart-menu-item" type="button" onClick={() => { setEmbedded(false); setOpen(true); }} aria-haspopup="dialog">
       <span className="menu-icon" aria-hidden="true">🛒</span>
       <span>CAJA - VENTA</span>
     </button>
@@ -96,7 +103,7 @@ export default function CarritoLauncher() {
   return (
     <>
       {host ? createPortal(boton, host.element) : null}
-      {open && (
+      {open && !embedded && (
         <div className="sigo-cart-overlay" role="dialog" aria-modal="true" aria-label="Carrito de ventas">
           <div className="sigo-cart-topbar">
             <button className="admin-button" type="button" onClick={cerrar}>← Cerrar / cancelar</button>
