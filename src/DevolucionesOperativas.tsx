@@ -209,47 +209,22 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
             </div>
           </div>
 
-          <div className="table-wrapper">
-            <table className="products-table">
-              <thead><tr><th>Producto</th><th>Vendido</th><th>Devuelto</th><th>Disponible</th><th>Devolver ahora</th></tr></thead>
-              <tbody>
-                {items.map((item) => (
-                  <tr key={item.ventaItemId}>
-                    <td><strong>{item.producto}</strong><small>{item.codigo ?? "Sin código"}</small></td>
-                    <td>{item.cantidadVendida}</td>
-                    <td>{item.cantidadDevuelta}</td>
-                    <td>{item.cantidadDisponible}</td>
-                    <td>
-                      <input
-                        className="sigo-return-qty"
-                        type="number"
-                        min="0"
-                        max={item.cantidadDisponible}
-                        step="1"
-                        disabled={procesando || item.cantidadDisponible <= 0}
-                        value={cantidades[item.ventaItemId] ?? ""}
-                        onChange={(event) => setCantidades((actual) => ({ ...actual, [item.ventaItemId]: event.target.value }))}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <label className="form-group sigo-return-reason">
-            <span>Motivo *</span>
-            <input value={motivo} disabled={procesando} placeholder="Ej.: cliente cambió de opinión / producto equivocado" onChange={(event) => setMotivo(event.target.value)} />
-          </label>
-
-          <div className="sigo-return-actions">
-            <div><span>Devolución seleccionada</span><strong>{dinero(totalParcial)}</strong></div>
-            <button className="admin-button" type="button" disabled={procesando || seleccionParcial.length === 0} onClick={() => void devolverParcial()}>
-              {procesando ? "Procesando…" : "Procesar devolución"}
-            </button>
-            <button className="danger-button" type="button" disabled={procesando} onClick={() => void anularCompleta()}>
-              {procesando ? "Procesando…" : "Anular venta completa"}
-            </button>
+          <div className="sigo-return-compact-editor">
+            <div className="sigo-return-compact-items">
+              {items.map((item) => (
+                <label key={item.ventaItemId} className="sigo-return-compact-item">
+                  <span><strong>{item.producto}</strong><small>Disponible: {item.cantidadDisponible}</small></span>
+                  <input className="sigo-return-qty" type="number" min="0" max={item.cantidadDisponible} step="1" disabled={procesando || item.cantidadDisponible <= 0} value={cantidades[item.ventaItemId] ?? ""} placeholder="Cant." onChange={(event) => setCantidades((actual) => ({ ...actual, [item.ventaItemId]: event.target.value }))} />
+                </label>
+              ))}
+            </div>
+            <label className="sigo-return-compact-reason">
+              <span>Motivo</span>
+              <input value={motivo} disabled={procesando} placeholder="Motivo de devolución / anulación" onChange={(event) => setMotivo(event.target.value)} />
+            </label>
+            <div className="sigo-return-compact-total"><span>Devolución</span><strong>{dinero(totalParcial)}</strong></div>
+            <button className="admin-button" type="button" disabled={procesando || seleccionParcial.length === 0} onClick={() => void devolverParcial()}>{procesando ? "Procesando…" : "Devolver"}</button>
+            <button className="danger-button" type="button" disabled={procesando} onClick={() => void anularCompleta()}>{procesando ? "Procesando…" : "Anular venta"}</button>
           </div>
         </section>
       )}
