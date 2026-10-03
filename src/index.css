@@ -944,3 +944,21 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
     margin-top:0!important;
   }
 }
+
+/* Lista de precios: quitar definitivamente la franja/cabecera redundante que precede Ofertas. */
+div:has(> .productos-oferta) > .page-header:first-child,
+section:has(> .productos-oferta) > .page-header:first-child,
+main:has(> .productos-oferta) > .page-header:first-child{
+  display:none!important;
+  height:0!important;
+  min-height:0!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  overflow:hidden!important;
+}
+div:has(> .productos-oferta),
+section:has(> .productos-oferta),
+main:has(> .productos-oferta){
+  padding-top:0!important;
+}
