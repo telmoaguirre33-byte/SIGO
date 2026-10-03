@@ -12,8 +12,8 @@ assert.throws(() => patchInformesNavigation("unexpected source", rootBefore), /T
 const reportRender = '<InformesOperativos key={empresaActiva.empresa_id} empresaId={empresaActiva.empresa_id} />';
 assert.equal(patched.root.split(reportRender).length, 2, "keep one existing reports screen");
 assert.ok(patched.root.includes('onAbrirInformes={workspacePermitido(empresaActiva.rol, "informes") ? () => abrirWorkspace("informes") : undefined}'));
-const purchasesRender = '<SigoApp key={`compras-${empresaActiva.empresa_id}`} empresa={empresaActiva} initialSection="Compras" purchasesOnly />';
-assert.ok(patched.root.includes(purchasesRender), "purchase workspace must remain unchanged");
+// Compras/Proveedores ahora vive dentro de Operación y debe permanecer accesible desde la barra lateral.
+assert.ok(!patched.root.includes('initialSection="Compras" purchasesOnly'), "purchase workspace is no longer a detached screen");
 
 const compilerOptions = { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX };
 const compiledApp = ts.transpileModule(patched.app, { compilerOptions, fileName: "SigoApp.tsx" }).outputText;
@@ -62,7 +62,7 @@ for (const [label, section] of [["Productos", "Productos"], ["Compras / Proveedo
 }
 assert.equal(reportCalls, 1, "other menu items do not open reports");
 assert.equal(menuButton(SigoApp({ empresa }), "Informes"), undefined, "no reports shortcut without permission callback");
-assert.equal(menuButton(SigoApp({ empresa, purchasesOnly: true, initialSection: "Compras", onAbrirInformes: () => {} }), "Informes"), undefined, "purchase-only view has no new navigation");
+assert.ok(menuButton(tree, "Compras / Proveedores"), "purchases remains available in the operation sidebar");
 
 // Exercise the existing parent permission guard rather than replacing it.
 const ast = ts.createSourceFile("SigoRoot.tsx", patched.root, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -82,4 +82,4 @@ for (const [tenant, allowed, expected] of [[empresa, true, [false, "informes"]],
   navigate("informes");
   assert.deepEqual(writes, expected, "retain tenant and role guards");
 }
-console.log("SIGO_INFORMES_NAVIGATION_TESTS_OK: shared destination, permissions, idempotency and untouched purchase navigation; no database calls");
+console.log("SIGO_INFORMES_NAVIGATION_TESTS_OK: shared destination, permissions, idempotency and purchases integrated in operation sidebar; no database calls");
