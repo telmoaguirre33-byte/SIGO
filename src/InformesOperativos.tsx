@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { verificarSaludOperativaSigo, type SaludOperativaSigo } from "./health";
-import { cargarResumenOperativoSigo, type ResumenOperativoSigo } from "./informes";
+import { cargarResumenOperativoSigo,
+  cargarVentasPeriodoSigo, type ResumenOperativoSigo } from "./informes";
 import { cargarRiesgoStockSigo, type ResumenRiesgoStockSigo, type EstadoRiesgoStockSigo } from "./stockRiesgo";
 import RankingProductosStock from "./RankingProductosStock";
 
@@ -129,6 +130,7 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
   const [comprasHasta, setComprasHasta] = useState(hoyIso);
   const [ventasDesde, setVentasDesde] = useState(desde30Iso);
   const [ventasHasta, setVentasHasta] = useState(hoyIso);
+  const [ventasPeriodo, setVentasPeriodo] = useState<{dias:Array<{fecha:string;total:number;cantidad:number}>;cantidad:number;total:number;ticketPromedio:number}|null>(null);
   const empresaActivaRef = useRef(empresaId);
   const cargaRef = useRef(0);
 
@@ -164,6 +166,12 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
       if (empresaActivaRef.current === targetEmpresaId && cargaRef.current === cargaId) setLoading(false);
     }
   }
+
+  useEffect(() => {
+    let activo = true;
+    void cargarVentasPeriodoSigo(empresaId, ventasDesde, ventasHasta).then(v => { if (activo) setVentasPeriodo(v); }).catch(() => { if (activo) setVentasPeriodo(null); });
+    return () => { activo = false; };
+  }, [empresaId, ventasDesde, ventasHasta]);
 
   useEffect(() => {
     empresaActivaRef.current = empresaId;
@@ -243,12 +251,12 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
               <small>Seleccioná de cuándo a cuándo para consultar ventas, facturación, ticket promedio y evolución.</small>
             </div>
             <div className="stats-grid sigo-sales-stats-rows">
-              <div className="stat-card"><span>Ventas de hoy</span><strong>{resumen.ventasHoy}</strong><small>{dinero(resumen.ventasHoyTotal)}</small></div>
-              <div className="stat-card"><span>Ventas últimos 30 días</span><strong>{dinero(resumen.ventas30DiasTotal)}</strong><small>{resumen.variacionVentas30Dias == null ? "Sin período comparable" : `${resumen.variacionVentas30Dias >= 0 ? "▲" : "▼"} ${Math.abs(resumen.variacionVentas30Dias).toFixed(1)}% vs. 30 días anteriores`}</small></div>
-              <div className="stat-card"><span>Ticket promedio 30 días</span><strong>{dinero(resumen.ticketPromedio30Dias)}</strong><small>Promedio por venta confirmada</small></div>
-              <div className="stat-card"><span>Ventas históricas</span><strong>{resumen.ventasCantidad}</strong><small>{dinero(resumen.ventasTotal)}</small></div>
+              <div className="stat-card"><span>Ventas del período</span><strong>{ventasPeriodo?.cantidad ?? 0}</strong><small>{dinero(ventasPeriodo?.total ?? 0)}</small></div>
+              <div className="stat-card"><span>Facturación del período</span><strong>{dinero(ventasPeriodo?.total ?? 0)}</strong><small>{ventasDesde} → {ventasHasta}</small></div>
+              <div className="stat-card"><span>Ticket promedio del período</span><strong>{dinero(ventasPeriodo?.ticketPromedio ?? 0)}</strong><small>Promedio por venta confirmada</small></div>
+              <div className="stat-card"><span>Días analizados</span><strong>{ventasPeriodo?.dias.length ?? 0}</strong><small>Período seleccionado</small></div>
             </div>
-            <div className="sigo-manager-chart-card sigo-sales-chart-compact"><div className="sigo-manager-chart-head"><div><strong>Evolución reciente</strong><span>{ventasDesde} → {ventasHasta}</span></div><strong>{dinero(resumen.ventas7DiasTotal)}</strong></div><GraficoVentas7Dias datos={resumen.ventasUltimos7Dias} /></div>
+            <div className="sigo-manager-chart-card sigo-sales-chart-compact"><div className="sigo-manager-chart-head"><div><strong>Evolución reciente</strong><span>{ventasDesde} → {ventasHasta}</span></div><strong>{dinero(ventasPeriodo?.total ?? 0)}</strong></div><GraficoVentas7Dias datos={ventasPeriodo?.dias ?? []} /></div>
           </section>}
 
           {categoria === "stock" && <section id="informe-stock" className="panel sigo-report-detail">
