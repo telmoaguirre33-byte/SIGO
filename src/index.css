@@ -846,3 +846,42 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
     padding:0!important;
   }
 }
+
+/* Configuración modal: barra Volver siempre visible. */
+.sigo-settings-overlay{
+  position:fixed!important;
+  inset:0!important;
+  z-index:100000!important;
+  background:#f6f8fb!important;
+  display:flex!important;
+  flex-direction:column!important;
+  overflow:hidden!important;
+}
+.sigo-settings-topbar{
+  position:sticky!important;
+  top:0!important;
+  z-index:100001!important;
+  min-height:64px!important;
+  flex:0 0 64px!important;
+  display:flex!important;
+  align-items:center!important;
+  gap:14px!important;
+  padding:10px 18px!important;
+  background:#fff!important;
+  border-bottom:1px solid #dbe3ee!important;
+}
+.sigo-settings-topbar .admin-button{
+  display:inline-flex!important;
+  visibility:visible!important;
+  opacity:1!important;
+}
+.sigo-settings-topbar>div{
+  display:flex!important;
+  flex-direction:column!important;
+}
+.sigo-settings-content{
+  flex:1 1 auto!important;
+  min-height:0!important;
+  overflow:auto!important;
+  padding:18px!important;
+}
