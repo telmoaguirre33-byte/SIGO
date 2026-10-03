@@ -885,3 +885,31 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
   overflow:auto!important;
   padding:18px!important;
 }
+
+/* Desktop definitivo: separar cabecera global del contenido de Informes. */
+@media (min-width:901px){
+  .sigo-reports-page{
+    box-sizing:border-box!important;
+    position:relative!important;
+    padding-top:32px!important;
+    margin-top:0!important;
+  }
+  .sigo-reports-page>.sigo-reports-heading{
+    position:relative!important;
+    top:auto!important;
+    margin:0 0 18px!important;
+    padding:8px 0 12px!important;
+    min-height:70px!important;
+    background:#fff!important;
+    z-index:2!important;
+  }
+  .sigo-reports-page>.sigo-report-summary,
+  .sigo-reports-page>.sigo-report-list,
+  .sigo-reports-page>.panel{
+    position:relative!important;
+    z-index:1!important;
+  }
+  .sigo-reports-page>.sigo-report-summary{
+    margin-top:0!important;
+  }
+}
