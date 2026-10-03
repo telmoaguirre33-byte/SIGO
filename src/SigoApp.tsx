@@ -17,7 +17,7 @@ import {
 
 type Section = "Inicio" | "Productos" | "Ventas" | "Clientes" | "Compras" | "Stock" | "Informes" | "Stock vs Inventario";
 
-const sections: Section[] = ["Inicio", "Productos", "Ventas", "Clientes", "Compras", "Stock", "Informes"];
+const sections: Section[] = ["Inicio", "Productos", "Ventas", "Stock", "Compras", "Informes"];
 
 type ProductoForm = {
   nombre: string;
