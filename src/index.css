@@ -613,3 +613,21 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
 }
 .sigo-reports-page>.sigo-reports-heading h2{margin:0!important;font-size:22px!important;line-height:1.1!important}
 .sigo-reports-page>.sigo-reports-heading p{margin:3px 0 0!important}
+
+/* Informes > Ventas: Evolución reciente 50% más compacta */
+.sigo-sales-chart-compact{
+  padding:7px 10px!important;
+}
+.sigo-sales-chart-compact .sigo-manager-chart-head{
+  margin-bottom:0!important;
+}
+.sigo-sales-chart-compact .sigo-manager-bars{
+  height:95px!important;
+  min-height:95px!important;
+}
+@media(max-width:760px){
+  .sigo-sales-chart-compact .sigo-manager-bars{
+    height:80px!important;
+    min-height:80px!important;
+  }
+}
