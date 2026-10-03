@@ -594,3 +594,22 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
   .sigo-sales-stats-rows{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
   .sigo-sales-chart-compact .sigo-manager-bars{height:160px!important;min-height:160px!important;}
 }
+
+/* Informes: cabecera propia, fuera del sistema sticky/global para que nunca se superponga con SIGO. */
+.sigo-reports-page>.sigo-reports-heading{
+  position:static!important;
+  inset:auto!important;
+  z-index:auto!important;
+  display:flex!important;
+  align-items:flex-end!important;
+  justify-content:space-between!important;
+  gap:12px!important;
+  margin:0 0 10px!important;
+  padding:8px 10px 10px!important;
+  min-height:0!important;
+  background:#fff!important;
+  border-bottom:1px solid #e8edf4!important;
+  box-shadow:none!important;
+}
+.sigo-reports-page>.sigo-reports-heading h2{margin:0!important;font-size:22px!important;line-height:1.1!important}
+.sigo-reports-page>.sigo-reports-heading p{margin:3px 0 0!important}
