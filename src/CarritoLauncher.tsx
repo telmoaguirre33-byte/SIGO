@@ -89,11 +89,9 @@ export default function CarritoLauncher() {
 
   if (!empresa) return null;
 
-  const boton = host?.kind === "sidebar" ? null : (
-    <button className="admin-button sigo-cart-context-button" type="button" onClick={() => setOpen(true)} aria-haspopup="dialog">
-      🛒 Carrito
-    </button>
-  );
+  // La venta ya se abre desde Operación > Ventas. Evitamos un acceso duplicado
+  // en la cabecera/contexto que además podía abrir una vista sin navegación.
+  const boton = null;
 
   return (
     <>
