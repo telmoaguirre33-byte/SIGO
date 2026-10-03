@@ -548,3 +548,12 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
 .sigo-price-list-compact .products-table td{padding:6px 10px!important;height:auto!important;min-height:0!important;font-size:12px!important;vertical-align:middle!important}
 .sigo-price-list-compact .products-table td strong{font-size:13px!important;line-height:1.15!important}
 .sigo-price-list-compact .products-table td small{font-size:10px!important;line-height:1.1!important;margin-top:1px!important}
+
+/* Lista de precios: eliminar la cabecera duplicada "Lista de precios de venta".
+   La pantalla conserva únicamente la cabecera propia de Lista de precios. */
+.products-page:has(.productos-oferta) > .page-header:first-child{
+  display:none!important;
+}
+.products-page:has(.productos-oferta){
+  padding-top:0!important;
+}
