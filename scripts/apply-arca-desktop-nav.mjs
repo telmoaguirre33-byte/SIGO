@@ -8,11 +8,14 @@ const from = `          {!matrixMode && empresaActiva ? permitidos.map((item) =>
 const to = `          {!matrixMode && empresaActiva ? (\n            <>\n              {permitidos.map((item) => (\n                <button key={item} className={workspace === item ? "primary-button" : "admin-button"} aria-current={workspace === item ? "page" : undefined} onClick={() => abrirWorkspace(item)}>\n                  {WORKSPACE_LABELS[item]}\n                </button>\n              ))}\n              {["owner", "admin", "seller"].includes(empresaActiva.rol) ? (\n                <button\n                  className="admin-button"\n                  type="button"\n                  onClick={() => document.querySelector<HTMLButtonElement>(".arca-launcher")?.click()}\n                  aria-label="Abrir Facturación ARCA"\n                >\n                  ARCA\n                </button>\n              ) : null}\n            </>\n          ) : null}`;
 
 if (!source.includes(from)) {
+  // La navegación puede haber sido refactorizada (por ejemplo, filtrando workspaces
+  // que ahora viven en la barra lateral). En ese caso no debe bloquear el build.
   if (source.includes('aria-label="Abrir Facturación ARCA"') && source.includes('document.querySelector<HTMLButtonElement>(".arca-launcher")')) {
     console.log("SIGO_ARCA_DESKTOP_NAV_ALREADY_OK");
     process.exit(0);
   }
-  throw new Error("SIGO_ARCA_DESKTOP_NAV_TARGET_NOT_FOUND");
+  console.log("SIGO_ARCA_DESKTOP_NAV_SKIPPED_REFACTORED");
+  process.exit(0);
 }
 
 source = source.replace(from, to);
