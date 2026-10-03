@@ -17,13 +17,28 @@ for (const token of [
   "listarProductosSigo(empresaId)",
   "isLegacyDuplicateProduct(producto)",
   'onBlockedProduct={marcarProductoBloqueado}',
-  'onQueryChange={(q)=>{setBusquedaProducto(q);setSugerenciaActiva(0)}}',
-  'onManualQuery={(q)=>{setBusquedaProducto(q);setSugerenciaActiva(0);return true}}',
+  "onProductSearchKeyDown={manejarTeclaBusquedaProducto}",
+  "productosEncontradosRef.current = productosEncontrados",
+  "productoSeleccionadoIdRef.current = productoSeleccionadoVisibleId",
+  "resultados.find((fila) => fila.id === productoSeleccionadoIdRef.current)",
+  "if (producto) seleccionarProductoManual(producto)",
+  'data-product-id={p.id}',
+  'aria-selected={p.id===productoSeleccionadoVisibleId}',
   'No encontré productos. Probá con nombre, marca, código interno o EAN.',
   'definí un precio de venta mayor a cero antes de vender',
   'sin stock disponible',
 ]) {
   if (!sale.includes(token)) throw new Error(`Sale preparation flow missing: ${token}`);
+}
+
+if (sale.includes("sugerenciaActiva") || sale.includes("productosEncontrados[sugerenciaActiva]")) {
+  throw new Error("Product selection must use the selected product ID, not a potentially stale result index");
+}
+
+const selectionHandler = scanner.indexOf("onProductSearchKeyDown?.(e.key)");
+const scannerSubmit = scanner.indexOf('void resolveCode(code, "manual")', selectionHandler);
+if (selectionHandler < 0 || scannerSubmit < 0 || selectionHandler > scannerSubmit) {
+  throw new Error("Product selection keys must be handled before Enter can be interpreted as a barcode submission");
 }
 
 for (const token of ["normalizarBusqueda", "puntajeBusquedaProducto", "tokens.every", ".slice(0, 20)", "SIGO_SALE_SEARCH_UX_OK"]) {

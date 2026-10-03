@@ -16,6 +16,7 @@ type Props = {
   onBlockedProduct?: (product: BarcodeProduct, reason: "precio" | "stock") => void;
   onQueryChange?: (query: string) => void;
   onManualQuery?: (query: string) => boolean;
+  onProductSearchKeyDown?: (key: string) => boolean;
   queryResetKey?: number;
 };
 
@@ -62,6 +63,7 @@ export default function BarcodeScanner({
   onBlockedProduct,
   onQueryChange,
   onManualQuery,
+  onProductSearchKeyDown,
   queryResetKey,
 }: Props) {
   const [code, setCode] = useState("");
@@ -467,6 +469,11 @@ export default function BarcodeScanner({
           value={code}
           onChange={(e) => { setCode(e.target.value); setError(""); onQueryChange?.(e.target.value); }}
           onKeyDown={(e) => {
+            if (onProductSearchKeyDown?.(e.key)) {
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+            }
             if (isLikelyScannerSubmit(e.key)) {
               e.preventDefault();
               void resolveCode(code, "manual");

@@ -64,12 +64,13 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   const [ultimaVentaTicket, setUltimaVentaTicket] = useState<string | null>(null);
   const [advertencia, setAdvertencia] = useState("");
   const [descuentoPct,setDescuentoPct]=useState(0);
-  const [sugerenciaActiva,setSugerenciaActiva]=useState(0);
-  const sugerenciaActivaRef=useRef(0);
+  const [productoSeleccionadoId,setProductoSeleccionadoId]=useState<string|null>(null);
   const [descuentoAbierto,setDescuentoAbierto]=useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState(nuevaClaveVenta);
   const empresaActivaRef = useRef(empresaId);
   const buscarRef = useRef<HTMLInputElement | null>(null);
+  const productosEncontradosRef = useRef<ProductoSigo[]>([]);
+  const productoSeleccionadoIdRef = useRef<string|null>(null);
 
   async function cargarVentasRecientes(targetEmpresaId = empresaId) {
     setVentasError("");
@@ -154,6 +155,12 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       .slice(0, 12);
   }, [busquedaProducto, catalogo]);
 
+  productosEncontradosRef.current = productosEncontrados;
+  const productoSeleccionadoVisibleId = productosEncontrados.some((producto) => producto.id === productoSeleccionadoId)
+    ? productoSeleccionadoId
+    : productosEncontrados[0]?.id ?? null;
+  productoSeleccionadoIdRef.current = productoSeleccionadoVisibleId;
+
   function marcarProductoBloqueado(producto: BarcodeProduct, razon: "precio" | "stock") {
     setProductoBloqueado({ producto, razon });
     setPrecioRapido(producto.precio_venta && Number(producto.precio_venta) > 0 ? String(producto.precio_venta) : "");
@@ -182,7 +189,41 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     }
     setProductoBloqueado(null);
     setBusquedaProducto("");
+    setProductoSeleccionadoId(null);
     agregar(producto);
+  }
+
+  function manejarTeclaBusquedaProducto(key: string) {
+    const resultados = productosEncontradosRef.current;
+    const consultaActiva = Boolean(busquedaProducto.trim());
+    if ((key === "ArrowDown" || key === "ArrowUp") && consultaActiva && resultados.length > 0) {
+      const indiceActual = resultados.findIndex((producto) => producto.id === productoSeleccionadoIdRef.current);
+      const indiceBase = indiceActual < 0 ? 0 : indiceActual;
+      const siguiente = key === "ArrowDown"
+        ? Math.min(resultados.length - 1, indiceBase + 1)
+        : Math.max(0, indiceBase - 1);
+      const producto = resultados[siguiente];
+      productoSeleccionadoIdRef.current = producto.id;
+      setProductoSeleccionadoId(producto.id);
+      window.setTimeout(() => {
+        Array.from(document.querySelectorAll<HTMLElement>("[data-pos-suggestion]"))
+          .find((fila) => fila.dataset.productId === producto.id)
+          ?.scrollIntoView({ block: "nearest" });
+      }, 0);
+      return true;
+    }
+    if (key === "Escape" && consultaActiva) {
+      setBusquedaProducto("");
+      productoSeleccionadoIdRef.current = null;
+      setProductoSeleccionadoId(null);
+      return true;
+    }
+    if (key === "Enter" && consultaActiva) {
+      const producto = resultados.find((fila) => fila.id === productoSeleccionadoIdRef.current);
+      if (producto) seleccionarProductoManual(producto);
+      return true;
+    }
+    return false;
   }
 
   async function guardarPrecioRapido() {
@@ -383,7 +424,30 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   }
 
   const unidades = items.reduce((n,item)=>n+item.cantidad,0);
-  useEffect(()=>{ const key=(e:KeyboardEvent)=>{ if((e.key==="ArrowDown"||e.key==="ArrowUp")&&productosEncontrados.length){e.preventDefault();setSugerenciaActiva(i=>{const n=e.key==="ArrowDown"?Math.min(productosEncontrados.length-1,i+1):Math.max(0,i-1);sugerenciaActivaRef.current=n;window.setTimeout(()=>document.querySelector<HTMLElement>(`[data-pos-suggestion="${n}"]`)?.scrollIntoView({block:"nearest"}),0);return n});return} if(e.key==="Escape"&&busquedaProducto.trim()){e.preventDefault();setBusquedaProducto("");setSugerenciaActiva(0);sugerenciaActivaRef.current=0;return} if(e.key==="Enter"&&busquedaProducto.trim()&&productosEncontrados[sugerenciaActivaRef.current]){e.preventDefault();seleccionarProductoManual(productosEncontrados[sugerenciaActivaRef.current]);return} if(e.key==="F1"){e.preventDefault();vaciar()} if(e.key==="F2"){e.preventDefault();buscarRef.current?.focus()} if(e.key==="F6"){e.preventDefault();setDescuentoAbierto(v=>!v)} if(e.key==="F9"){e.preventDefault();void confirmar()} if(e.key==="F10"){e.preventDefault();void confirmar(true)} if(e.key==="F11"){e.preventDefault();e.stopPropagation();if(ultimaVentaTicket)window.dispatchEvent(new CustomEvent("sigo:arca:venta",{detail:{empresaId,ventaId:ultimaVentaTicket}}));else setError("Primero confirmá la venta para emitir la factura fiscal.")} if(e.key==="F12"){e.preventDefault();e.stopPropagation();if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket,"80",true).catch(err=>setError(err instanceof Error?err.message:"No se pudo reimprimir el ticket."))} }; window.addEventListener("keydown",key); return()=>window.removeEventListener("keydown",key); });
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      if (!["F1", "F2", "F6", "F9", "F10", "F11", "F12"].includes(event.key)) return;
+      event.preventDefault();
+      if (event.key === "F1") vaciar();
+      if (event.key === "F2") buscarRef.current?.focus();
+      if (event.key === "F6") setDescuentoAbierto((value) => !value);
+      if (event.key === "F9") void confirmar();
+      if (event.key === "F10") void confirmar(true);
+      if (event.key === "F11") {
+        event.stopPropagation();
+        if (ultimaVentaTicket) window.dispatchEvent(new CustomEvent("sigo:arca:venta", { detail: { empresaId, ventaId: ultimaVentaTicket } }));
+        else setError("Primero confirmá la venta para emitir la factura fiscal.");
+      }
+      if (event.key === "F12") {
+        event.stopPropagation();
+        if (ultimaVentaTicket) void imprimirTicketVenta(empresaId, ultimaVentaTicket, "80", true)
+          .catch((err) => setError(err instanceof Error ? err.message : "No se pudo reimprimir el ticket."));
+      }
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  });
 
   return (
     <div className="sigo-pos">
@@ -397,9 +461,9 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       </div>
       {descuentoAbierto&&<div className="sigo-pos-discount"><strong>Descuento</strong>{[0,5,10,15,20].map(n=><button type="button" className={descuentoPct===n?"active":""} onClick={()=>{setDescuentoPct(n);setDescuentoAbierto(false)}} key={n}>{n}%</button>)}<label>Otro % <input type="number" min="0" max="99.99" step="0.01" value={descuentoPct} onChange={e=>setDescuentoPct(Math.max(0,Math.min(99.99,Number(e.target.value)||0)))}/></label></div>}
       <div className="sigo-pos-scan">
-        <BarcodeScanner empresaId={empresaId} action="vender" onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(q)=>{setBusquedaProducto(q);setSugerenciaActiva(0);sugerenciaActivaRef.current=0}} onManualQuery={(q)=>{setBusquedaProducto(q);setSugerenciaActiva(0);sugerenciaActivaRef.current=0;return true}}/>
+        <BarcodeScanner empresaId={empresaId} action="vender" onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null)}} onManualQuery={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null);return true}} onProductSearchKeyDown={manejarTeclaBusquedaProducto}/>
         
-        {busquedaProducto.trim()&&productosEncontrados.length>0&&<div className="sigo-pos-results">{productosEncontrados.map((p,i)=><button type="button" data-pos-suggestion={i} aria-selected={i===sugerenciaActiva} className={i===sugerenciaActiva?"active":""} key={p.id} onMouseEnter={()=>{setSugerenciaActiva(i);sugerenciaActivaRef.current=i}} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}{Number(p.stock_actual??0)<=0?" · SIN STOCK":""}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} · Stock {p.stock_actual??0}</span></button>)}</div>}{busquedaProducto.trim()&&productosEncontrados.length===0&&!catalogoError&&<div className="sigo-pos-results"><div className="table-empty">No encontré productos. Probá con nombre, marca, código interno o EAN.</div></div>}
+        {busquedaProducto.trim()&&productosEncontrados.length>0&&<div className="sigo-pos-results">{productosEncontrados.map((p)=><button type="button" data-pos-suggestion="" data-product-id={p.id} aria-selected={p.id===productoSeleccionadoVisibleId} className={p.id===productoSeleccionadoVisibleId?"active":""} key={p.id} onMouseEnter={()=>{productoSeleccionadoIdRef.current=p.id;setProductoSeleccionadoId(p.id)}} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}{Number(p.stock_actual??0)<=0?" · SIN STOCK":""}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} · Stock {p.stock_actual??0}</span></button>)}</div>}{busquedaProducto.trim()&&productosEncontrados.length===0&&!catalogoError&&<div className="sigo-pos-results"><div className="table-empty">No encontré productos. Probá con nombre, marca, código interno o EAN.</div></div>}
       </div>
       {productoBloqueado&&<div className="form-error"><strong>{productoBloqueado.producto.nombre}</strong> · {productoBloqueado.razon==="stock"?"Sin stock disponible.":"Sin precio válido."}</div>}
       {error&&<p className="form-error" role="alert">{error}</p>}{ofertasError&&<p className="form-error" role="alert">No se puede cobrar hasta comprobar los precios de oferta: {ofertasError}</p>}{exito&&<span className="sigo-pos-success-inline" role="status">{exito}</span>}{advertencia&&<p className="form-error">{advertencia}</p>}
