@@ -61,3 +61,49 @@
 .sigo-trend-value{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sigo-trend-track{height:100%;display:flex;align-items:flex-end;justify-content:center;border-bottom:1px solid #dbe5f0;background:linear-gradient(180deg,rgba(245,249,254,.3),rgba(245,249,254,.8));border-radius:8px 8px 0 0}.sigo-trend-bar{width:min(54px,65%);min-height:2px;border-radius:8px 8px 2px 2px;background:linear-gradient(180deg,#2587ff,#0b6ff4);box-shadow:0 5px 14px rgba(11,111,244,.18);transition:height .25s ease}.sigo-trend-column strong{font-size:11px;color:#40546d}.sigo-trend-column small{font-size:10px;color:#8a98aa}
 @media(max-width:900px){.sigo-manager-kpis{grid-template-columns:1fr 1fr}.sigo-trend-chart{gap:5px;height:220px}.sigo-trend-value{display:none}.sigo-manager-chart-card{padding:14px}}
 @media(max-width:480px){.sigo-manager-kpis{grid-template-columns:1fr 1fr}.sigo-manager-kpis .stat-card{padding:13px}.sigo-manager-kpis .stat-card strong{font-size:19px}.sigo-trend-chart{height:190px}.sigo-trend-column small{display:none}}
+
+/* Evolución reciente: columnas verticales claras para cualquier cantidad de fechas. */
+.sigo-sales-chart-compact .sigo-trend-chart{
+  display:flex!important;
+  align-items:stretch!important;
+  gap:8px!important;
+  height:210px!important;
+  min-height:210px!important;
+  overflow-x:auto!important;
+  overflow-y:hidden!important;
+  padding:12px 4px 2px!important;
+}
+.sigo-sales-chart-compact .sigo-trend-column{
+  flex:1 0 46px!important;
+  min-width:46px!important;
+  max-width:78px!important;
+  height:100%!important;
+  display:grid!important;
+  grid-template-rows:24px minmax(110px,1fr) 18px 16px!important;
+  gap:3px!important;
+  align-items:end!important;
+}
+.sigo-sales-chart-compact .sigo-trend-track{
+  width:100%!important;
+  height:100%!important;
+  min-height:110px!important;
+  display:flex!important;
+  align-items:flex-end!important;
+  justify-content:center!important;
+  background:transparent!important;
+  border-bottom:1px solid #dbe5f0!important;
+}
+.sigo-sales-chart-compact .sigo-trend-bar{
+  display:block!important;
+  width:70%!important;
+  max-width:52px!important;
+  min-height:2px!important;
+  border-radius:6px 6px 0 0!important;
+}
+.sigo-sales-chart-compact .sigo-trend-value,
+.sigo-sales-chart-compact .sigo-trend-column strong,
+.sigo-sales-chart-compact .sigo-trend-column small{
+  display:block!important;
+  text-align:center!important;
+  white-space:nowrap!important;
+}
