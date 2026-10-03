@@ -770,3 +770,47 @@ html,body,#root{min-height:100%;overflow-y:auto}.main,.content{overflow:visible}
     padding-left:0!important;
   }
 }
+
+/* Productos desktop: impedir que la cabecera de acciones invada el bloque de búsqueda. */
+@media (min-width:901px){
+  .products-page{
+    display:flex!important;
+    flex-direction:column!important;
+    gap:12px!important;
+  }
+  .products-page>.page-header:first-child{
+    position:relative!important;
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) auto!important;
+    grid-template-rows:auto auto!important;
+    align-items:center!important;
+    gap:4px 18px!important;
+    min-height:82px!important;
+    height:auto!important;
+    padding:12px 16px!important;
+    margin:0!important;
+    overflow:visible!important;
+  }
+  .products-page>.page-header:first-child>div:first-child{
+    grid-column:1!important;
+    grid-row:1 / span 2!important;
+    min-width:0!important;
+  }
+  .products-page>.page-header:first-child>.header-actions,
+  .products-page>.page-header:first-child>div:last-child:not(:first-child){
+    grid-column:2!important;
+    grid-row:1 / span 2!important;
+    align-self:center!important;
+    position:static!important;
+    transform:none!important;
+    margin:0!important;
+    white-space:nowrap!important;
+  }
+  .products-page>.page-header:first-child + .panel,
+  .products-page>.page-header:first-child ~ .panel:first-of-type{
+    position:relative!important;
+    z-index:1!important;
+    margin-top:0!important;
+    clear:both!important;
+  }
+}
