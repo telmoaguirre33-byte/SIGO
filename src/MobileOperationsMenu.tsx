@@ -165,12 +165,6 @@ export default function MobileOperationsMenu() {
           <span aria-hidden="true">☰</span>
           <strong>Menú</strong>
         </button>
-        {puedeVender && (
-          <button className="sigo-mobile-cart-trigger" type="button" onClick={abrirCarrito} aria-label="Abrir carrito y nueva venta">
-            <span aria-hidden="true">🛒</span>
-            <strong>Carrito</strong>
-          </button>
-        )}
       </div>
 
       {abierto && (
