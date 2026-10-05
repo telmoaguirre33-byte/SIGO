@@ -107,3 +107,17 @@
   text-align:center!important;
   white-space:nowrap!important;
 }
+
+/* Informes: cabecera sin superposiciones y navegación visible. */
+.sigo-reports-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;position:relative;z-index:0;padding-top:6px}
+.sigo-reports-title-row{display:flex;align-items:flex-start;gap:12px;min-width:0}
+.sigo-reports-title-row>div{min-width:0}
+.sigo-reports-heading h2{margin:0 0 4px;line-height:1.15}
+.sigo-reports-heading p{margin:0;line-height:1.35}
+.sigo-reports-back,.sigo-reports-refresh{flex:0 0 auto}
+@media(max-width:760px){
+ .sigo-reports-heading{padding-top:72px;align-items:flex-start}
+ .sigo-reports-title-row{flex-direction:column;gap:10px}
+ .sigo-reports-heading h2{font-size:26px;line-height:1.1}
+ .sigo-reports-refresh{margin-top:0}
+}
