@@ -16,7 +16,7 @@ const PENDING_EMPRESA_METADATA_KEY = "sigo_empresa_nombre";
 const ONBOARDING_MODE_METADATA_KEY = "sigo_onboarding_mode";
 const OWNER_ONBOARDING_MODE = "owner";
 const STAFF_ONBOARDING_MODE = "member";
-const SIGO_TRIAL_DAYS = 15;
+const SIGO_TRIAL_DAYS = 30;
 const SIGO_TRIAL_MS = SIGO_TRIAL_DAYS * 24 * 60 * 60 * 1000;
 const SIGO_TRIAL_POLICY_EFFECTIVE_AT = Date.parse("2026-09-20T17:00:00.000Z");
 const MERCADOPAGO_SUBSCRIPTION_URL = String(import.meta.env.VITE_MERCADOPAGO_SUBSCRIPTION_URL ?? "").trim();
@@ -390,7 +390,7 @@ export default function SigoAuthGate({ children }: Props) {
             <div className="sigo-auth-brand-mark" aria-hidden="true">SG</div>
             <div className="sigo-auth-brand-copy"><strong>SIGO</strong><span>Sistema Inteligente de Gestión Operativa</span></div>
           </div>
-          <h1 id="sigo-trial-expired-title">Finalizó tu prueba de 15 días</h1>
+          <h1 id="sigo-trial-expired-title">Finalizó tu prueba de 30 días</h1>
           <p className="sigo-auth-subtitle">Tus datos siguen guardados. Activá la suscripción para continuar usando SIGO.</p>
           {error ? <div className="sigo-auth-error" role="alert">{error}</div> : null}
           <button className="sigo-auth-submit sigo-mercadopago-button" type="button" onClick={abrirMercadoPago}>Activar con Mercado Pago</button>
