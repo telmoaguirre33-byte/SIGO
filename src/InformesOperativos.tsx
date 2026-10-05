@@ -324,11 +324,14 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
   return (
     <div className="products-page sigo-reports-page">
       <div className="sigo-reports-heading">
-        <div>
+        <div className="sigo-reports-title-row">
+          <button className="admin-button sigo-reports-back" type="button" onClick={() => { if (categoria) { setCategoria(null); setVistaStock("menu"); } else { window.history.back(); } }}>← Volver</button>
+          <div>
           <h2>Informes</h2>
           <p>{categoria ? "Elegí el informe que querés consultar." : "¿Qué querés analizar?"}</p>
+          </div>
         </div>
-        <button className="admin-button" onClick={() => void cargar(empresaId)}>Actualizar</button>
+        <button className="admin-button sigo-reports-refresh" onClick={() => void cargar(empresaId)}>Actualizar</button>
       </div>
 
       {!categoria && <>
