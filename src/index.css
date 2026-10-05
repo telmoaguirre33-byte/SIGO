@@ -1158,10 +1158,18 @@ main:has(> .productos-oferta){
  table.products-table.compra-items-table{width:100%!important;max-width:100%!important;min-width:0!important}
 }
 
-/* Compras: segunda reducción solicitada (40% adicional) y sin scroll. */
-@media(min-width:901px){
- .table-wrapper.compra-items-wrapper{width:36%!important;max-width:36%!important;min-width:0!important;overflow:hidden!important;margin:0!important}
- table.products-table.compra-items-table{width:100%!important;min-width:0!important;max-width:100%!important;table-layout:fixed!important}
- .compra-items-table th,.compra-items-table td{padding:3px 2px!important;font-size:9px!important}
- .compra-items-table select,.compra-items-table input{height:28px!important;min-height:28px!important;padding:2px 4px!important;font-size:10px!important}
+/* Compras: grilla manual al ancho útil de la página, sin scroll horizontal. */
+@media(min-width:761px){
+ .table-wrapper.compra-items-wrapper{width:100%!important;max-width:100%!important;min-width:0!important;overflow:hidden!important;margin:10px 0 0!important}
+ table.products-table.compra-items-table{display:table!important;width:100%!important;max-width:100%!important;min-width:0!important;table-layout:fixed!important}
+ .compra-items-table th,.compra-items-table td{padding:5px 5px!important;font-size:10px!important;white-space:normal!important;overflow:visible!important}
+ .compra-items-table select,.compra-items-table input{box-sizing:border-box;width:100%!important;max-width:100%!important;min-width:0!important;height:32px!important;min-height:32px!important;padding:4px 6px!important;font-size:11px!important}
+ .compra-items-table th:nth-child(1),.compra-items-table td:nth-child(1){width:34%!important}
+ .compra-items-table th:nth-child(2),.compra-items-table td:nth-child(2){width:10%!important}
+ .compra-items-table th:nth-child(3),.compra-items-table td:nth-child(3){width:13%!important}
+ .compra-items-table th:nth-child(4),.compra-items-table td:nth-child(4){width:8%!important}
+ .compra-items-table th:nth-child(5),.compra-items-table td:nth-child(5){width:14%!important}
+ .compra-items-table th:nth-child(6),.compra-items-table td:nth-child(6){width:13%!important}
+ .compra-items-table th:nth-child(7),.compra-items-table td:nth-child(7){width:8%!important}
+ .compra-items-table .admin-button{height:32px!important;min-height:32px!important;padding:4px 6px!important;font-size:10px!important}
 }
