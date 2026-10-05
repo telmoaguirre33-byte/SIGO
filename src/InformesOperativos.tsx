@@ -178,6 +178,8 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
   const [gerencialHasta, setGerencialHasta] = useState(rangoInicialGerencial.hasta);
   const [ventasGerenciales, setVentasGerenciales] = useState<ResumenVentasPeriodoSigo | null>(null);
   const [ventasGerencialesError, setVentasGerencialesError] = useState("");
+  const [comprasGerenciales, setComprasGerenciales] = useState<ResumenComprasPeriodoSigo | null>(null);
+  const [gastosGerenciales, setGastosGerenciales] = useState({ luz: 0, agua: 0, empleados: 0, internet: 0, otros: 0 });
   const empresaActivaRef = useRef(empresaId);
   const cargaRef = useRef(0);
 
@@ -242,6 +244,15 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
   }, [empresaId, gerencialDesde, gerencialHasta]);
 
   useEffect(() => {
+    let activo = true;
+    setComprasGerenciales(null);
+    void cargarComprasPeriodoSigo(empresaId, gerencialDesde, gerencialHasta)
+      .then((valor) => { if (activo) setComprasGerenciales(valor); })
+      .catch(() => { if (activo) setComprasGerenciales(null); });
+    return () => { activo = false; };
+  }, [empresaId, gerencialDesde, gerencialHasta]);
+
+  useEffect(() => {
     empresaActivaRef.current = empresaId;
     cargaRef.current += 1;
     setResumen(vacio);
@@ -269,6 +280,38 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
   ];
   const evolucionVentas = agruparEvolucionVentas(ventasPeriodo?.dias ?? [], ventasDesde, ventasHasta);
   const evolucionGerencial = agruparEvolucionVentas(ventasGerenciales?.dias ?? [], gerencialDesde, gerencialHasta);
+  const gastosTotalGerencial = Object.values(gastosGerenciales).reduce((t, v) => t + Number(v || 0), 0);
+  const facturacionGerencial = ventasGerenciales?.total ?? 0;
+  const comprasTotalGerencial = comprasGerenciales?.comprasTotal ?? 0;
+  // Hasta contar con costo vendido por ítem, se muestra como resultado comercial estimado y no como margen contable.
+  const margenEstimadoGerencial = facturacionGerencial - comprasTotalGerencial;
+  const gananciaNetaGerencial = margenEstimadoGerencial - gastosTotalGerencial;
+  const rentabilidadGerencial = facturacionGerencial > 0 ? (gananciaNetaGerencial / facturacionGerencial) * 100 : 0;
+
+  function exportarGerencialExcel() {
+    const esc = (v: unknown) => `"${String(v ?? "").replaceAll('"', '""')}"`;
+    const filas = [
+      ["SIGO Gestión - Informe gerencial"],
+      ["Desde", gerencialDesde, "Hasta", gerencialHasta],
+      ["Facturación", facturacionGerencial],
+      ["Compras", comprasTotalGerencial],
+      ["Resultado comercial estimado", margenEstimadoGerencial],
+      ["Gastos", gastosTotalGerencial],
+      ["Ganancia neta estimada", gananciaNetaGerencial],
+      ["Rentabilidad estimada %", rentabilidadGerencial.toFixed(2)],
+      [],
+      ["Gastos cargados"],
+      ["Luz", gastosGerenciales.luz], ["Agua", gastosGerenciales.agua], ["Empleados", gastosGerenciales.empleados],
+      ["Internet", gastosGerenciales.internet], ["Otros", gastosGerenciales.otros],
+      [],
+      ["Fecha", "Facturación", "Ventas"],
+      ...(ventasGerenciales?.dias ?? []).map(d => [d.fecha, d.total, d.cantidad]),
+    ];
+    const blob = new Blob(["\\ufeff" + filas.map(f => f.map(esc).join(";")).join("\\r\\n")], { type: "text/csv;charset=utf-8" });
+    const enlace = document.createElement("a"); enlace.href = URL.createObjectURL(blob);
+    enlace.download = `SIGO-informe-gerencial-${gerencialDesde}-a-${gerencialHasta}.csv`;
+    document.body.appendChild(enlace); enlace.click(); enlace.remove(); setTimeout(() => URL.revokeObjectURL(enlace.href), 1500);
+  }
 
   function elegirPeriodoGerencial(periodo: PeriodoGerencial) {
     setGerencialPeriodo(periodo);
@@ -289,6 +332,31 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
       </div>
 
       {!categoria && <>
+        <section className="panel" aria-label="Resumen gerencial" style={{marginBottom:16}}>
+          <div className="sigo-detail-title"><span>▥</span><h3>Resultado gerencial</h3></div>
+          <div className="sigo-compras-periodo sigo-ventas-periodo">
+            <strong>Período</strong>
+            <label>Desde <input type="date" value={gerencialDesde} max={gerencialHasta} onChange={(e) => { setGerencialPeriodo("personalizado"); setGerencialDesde(e.target.value); }} /></label>
+            <label>Hasta <input type="date" value={gerencialHasta} min={gerencialDesde} max={hoyIso} onChange={(e) => { setGerencialPeriodo("personalizado"); setGerencialHasta(e.target.value); }} /></label>
+            <button className="admin-button" type="button" onClick={exportarGerencialExcel}>Exportar Excel</button>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(6,minmax(130px,1fr))",gap:8,margin:"12px 0"}}>
+            <div className="stat-card"><span>Facturado</span><strong>{dinero(facturacionGerencial)}</strong></div>
+            <div className="stat-card"><span>Resultado comercial</span><strong>{dinero(margenEstimadoGerencial)}</strong><small>Ventas − compras</small></div>
+            <div className="stat-card"><span>Compras</span><strong>{dinero(comprasTotalGerencial)}</strong></div>
+            <div className="stat-card"><span>Gastos</span><strong>{dinero(gastosTotalGerencial)}</strong></div>
+            <div className="stat-card"><span>Ganancia neta estimada</span><strong>{dinero(gananciaNetaGerencial)}</strong></div>
+            <div className="stat-card"><span>Rentabilidad</span><strong>{numero(rentabilidadGerencial,1)}%</strong></div>
+          </div>
+          <div className="sigo-manager-chart-card"><div className="sigo-manager-chart-head"><div><strong>Evolución del período</strong><span>Facturación por fecha · {gerencialDesde} → {gerencialHasta}</span></div></div><GraficoVentas7Dias datos={evolucionGerencial} /></div>
+          <details style={{marginTop:12}}>
+            <summary style={{cursor:"pointer",fontWeight:700}}>Gastos opcionales para calcular lo que realmente queda</summary>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(120px,1fr))",gap:10,marginTop:12}}>
+              {(["luz","agua","empleados","internet","otros"] as const).map((clave)=><label key={clave} className="form-group"><span style={{textTransform:"capitalize"}}>{clave}</span><input type="number" min="0" value={gastosGerenciales[clave]} onChange={(e)=>setGastosGerenciales(g=>({...g,[clave]:Number(e.target.value)}))}/></label>)}
+            </div>
+            <small>Estos gastos se usan sólo para estimar la ganancia neta del período mostrado.</small>
+          </details>
+        </section>
         <section className="sigo-report-summary" aria-label="Indicadores principales">
           <div><span>Ventas hoy</span><strong>{resumen.ventasHoy}</strong></div>
           <div><span>Facturación hoy</span><strong>{dinero(resumen.ventasHoyTotal)}</strong></div>
