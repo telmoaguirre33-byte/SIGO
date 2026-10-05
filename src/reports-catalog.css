@@ -178,3 +178,9 @@
 .sigo-gerencial-expenses .form-group{gap:3px}
 .sigo-gerencial-expenses .form-group>span{font-size:11px}
 .sigo-gerencial-expenses .sigo-money-input input{padding-top:6px!important;padding-bottom:6px!important}
+
+.sigo-expense-label{display:flex;align-items:center;gap:7px;font-weight:700;color:#334155}
+.sigo-expense-label>b{display:grid;place-items:center;width:25px;height:25px;border-radius:8px;background:#f0f6ff;font-size:16px;line-height:1}
+.sigo-expense-field{min-width:0}
+.sigo-gerencial-expenses>div{grid-template-columns:repeat(6,minmax(105px,1fr))!important}
+@media(max-width:760px){.sigo-gerencial-expenses>div{grid-template-columns:repeat(2,minmax(135px,1fr))!important}.sigo-expense-label>b{width:28px;height:28px;font-size:17px}}
