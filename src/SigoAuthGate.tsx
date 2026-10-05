@@ -92,6 +92,16 @@ export default function SigoAuthGate({ children }: Props) {
   }, []);
 
   useEffect(() => {
+    const abrirSuscripcionDesdePanel = () => {
+      setError("");
+      setSuccess("");
+      setMode("subscription");
+    };
+    window.addEventListener("sigo:subscription", abrirSuscripcionDesdePanel);
+    return () => window.removeEventListener("sigo:subscription", abrirSuscripcionDesdePanel);
+  }, []);
+
+  useEffect(() => {
     const capturarInstalacion = (event: Event) => {
       event.preventDefault();
       setInstallPrompt(event as BeforeInstallPromptEvent);
