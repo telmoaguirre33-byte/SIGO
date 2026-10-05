@@ -429,7 +429,7 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
 
       {!error && (
         <>
-          {categoria === "ventas" && <section id="informe-ventas" className="panel sigo-report-detail">
+          {categoria === "ventas" && <section id="informe-ventas" className="panel sigo-report-detail">\n            <div className="sigo-report-catalog" aria-label="Ventas por día y productos vendidos" />
             <div className="sigo-detail-title"><span>↗</span><h3>Ventas</h3></div>
             <div className="sigo-compras-periodo sigo-ventas-periodo">
               <strong>Período de ventas</strong>
