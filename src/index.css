@@ -1081,3 +1081,24 @@ main:has(> .productos-oferta){
 .stock-page-compact > .page-header::after{
   display:none!important;
 }
+
+/* Compras: grilla manual compacta, sin desplazamiento horizontal en escritorio. */
+.compra-items-wrapper{overflow-x:visible}
+.compra-items-table{width:100%;min-width:0;table-layout:fixed}
+.compra-items-table th,.compra-items-table td{padding:7px 6px;vertical-align:middle}
+.compra-items-table th:nth-child(1),.compra-items-table td:nth-child(1){width:34%}
+.compra-items-table th:nth-child(2),.compra-items-table td:nth-child(2){width:10%}
+.compra-items-table th:nth-child(3),.compra-items-table td:nth-child(3){width:13%}
+.compra-items-table th:nth-child(4),.compra-items-table td:nth-child(4){width:8%}
+.compra-items-table th:nth-child(5),.compra-items-table td:nth-child(5){width:14%}
+.compra-items-table th:nth-child(6),.compra-items-table td:nth-child(6){width:13%}
+.compra-items-table th:nth-child(7),.compra-items-table td:nth-child(7){width:8%}
+.compra-items-table select,.compra-items-table input{width:100%;min-width:0;padding:8px 7px;font-size:14px}
+.compra-items-table .admin-button{padding:7px 8px;font-size:12px}
+@media(max-width:760px){
+ .compra-items-wrapper{overflow-x:visible}
+ .compra-items-table,.compra-items-table tbody,.compra-items-table tr,.compra-items-table td{display:block;width:100%}
+ .compra-items-table thead{display:none}
+ .compra-items-table tr{padding:10px 0;border-bottom:1px solid var(--border,#e5e7eb)}
+ .compra-items-table td{padding:5px 0}
+}
