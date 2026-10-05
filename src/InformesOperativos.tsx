@@ -185,7 +185,7 @@ function exportarRankingExcel(filas: Array<{ nombre: string; cantidad: number; t
   setTimeout(() => URL.revokeObjectURL(enlace.href), 1500);
 }
 
-export default function InformesOperativos({ empresaId }: { empresaId: string }) {
+export default function InformesOperativos({ empresaId, onVolver }: { empresaId: string; onVolver?: () => void }) {
   const [resumen, setResumen] = useState<ResumenOperativoSigo>(vacio);
   const [salud, setSalud] = useState<SaludOperativaSigo | null>(null);
   const [riesgoStock, setRiesgoStock] = useState<ResumenRiesgoStockSigo | null>(null);
@@ -356,7 +356,7 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
     <div className="products-page sigo-reports-page">
       <div className="sigo-reports-heading">
         <div className="sigo-reports-title-row">
-          <button className="admin-button sigo-reports-back" type="button" onClick={() => { if (categoria) { setCategoria(null); setVistaStock("menu"); } else { window.history.back(); } }}>← Volver</button>
+          <button className="admin-button sigo-reports-back" type="button" onClick={() => { if (categoria) { setCategoria(null); setVistaStock("menu"); } else if (onVolver) { onVolver(); } else { window.history.back(); } }}>← Volver</button>
           <div>
           <h2>Informes</h2>
           <p>{categoria ? "Elegí el informe que querés consultar." : "¿Qué querés analizar?"}</p>
