@@ -314,9 +314,14 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
     setSaving(true); setError("");
     try {
       const id=await guardarProductoSigo({empresaId,nombre,codigoBarras:nuevoProductoManual.codigo.trim()||null,costoActual:costo,costoUltimaCompra:costo,precioVenta:precio,margenPorcentaje:margen,stockActual:0});
-      await cargar();
+      // El alta del producto y su incorporación a ESTA compra no deben depender de
+      // recargar historial/borradores. Si esa recarga falla, el producto ya fue creado
+      // y debe quedar visible en la factura para evitar altas duplicadas.
       setLineas((actual)=>actual.length===1&&!actual[0].producto_id?[{...actual[0],producto_id:id,cantidad,costo_unitario:costo,margen_porcentaje:margen,precio_venta:precio}]:[...actual,{key:nuevaClave(),producto_id:id,cantidad,costo_unitario:costo,margen_porcentaje:margen,precio_venta:precio}]);
-      setNuevoProductoManual({nombre:"",codigo:"",cantidad:"1",costo:"",margen:"",precio:""}); setAltaManualAbierta(false); setBusquedaManual("");
+      setNuevoProductoManual({nombre:"",codigo:"",cantidad:"1",costo:"",margen:"",precio:""});
+      setAltaManualAbierta(false);
+      setBusquedaManual("");
+      try { await cargar(); } catch { /* el producto ya quedó agregado a la compra */ }
     } catch(err){setError(err instanceof Error?err.message:"No se pudo crear el producto.");} finally {setSaving(false);}
   }
 
