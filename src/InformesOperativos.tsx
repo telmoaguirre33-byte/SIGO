@@ -70,7 +70,7 @@ function agruparEvolucionVentas(datos: Array<{ fecha: string; total: number; can
   const inicio = new Date(`${desde}T12:00:00`);
   const fin = new Date(`${hasta}T12:00:00`);
   const dias = Math.max(1, Math.floor((fin.getTime() - inicio.getTime()) / 86_400_000) + 1);
-  const modo = dias > 180 ? "mes" : dias > 31 ? "semana" : "dia";
+  const modo = dias > 75 ? "mes" : dias > 15 ? "semana" : "dia";
   const grupos = new Map<string, { fecha: string; total: number; cantidad: number; etiqueta: string }>();
   for (const dato of datos) {
     const fecha = new Date(`${dato.fecha}T12:00:00`);
