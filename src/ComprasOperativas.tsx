@@ -817,7 +817,9 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
           </div>
         </div>
 
-        <div className="table-wrapper compra-items-wrapper" style={{ marginTop: 10 }}>\n          <table className="products-table compra-items-table">\n            <thead><tr><th>Producto</th><th>Cant.</th><th>Costo</th><th>%</th><th>Precio</th><th>Subtotal</th><th></th></tr></thead>
+        <div className="table-wrapper compra-items-wrapper" style={{ marginTop: 10 }}>
+          <table className="products-table compra-items-table">
+            <thead><tr><th>Producto</th><th>Cant.</th><th>Costo</th><th>%</th><th>Precio</th><th>Subtotal</th><th></th></tr></thead>
             <tbody>
               {lineas.map((l) => (
                 <tr key={l.key}>
