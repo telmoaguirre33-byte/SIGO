@@ -378,7 +378,7 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
           <details style={{marginTop:12}}>
             <summary style={{cursor:"pointer",fontWeight:700}}>Gastos opcionales para calcular lo que realmente queda</summary>
             <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(120px,1fr))",gap:10,marginTop:12}}>
-              {(["luz","agua","empleados","internet","otros"] as const).map((clave)=><label key={clave} className="form-group"><span style={{textTransform:"capitalize"}}>{clave}</span><input type="number" min="0" value={gastosGerenciales[clave]} onChange={(e)=>setGastosGerenciales(g=>({...g,[clave]:Number(e.target.value)}))}/></label>)}
+              {(["luz","agua","empleados","internet","otros"] as const).map((clave)=><label key={clave} className="form-group"><span style={{textTransform:"capitalize"}}>{clave}</span><div className="sigo-money-input"><span>$</span><input type="number" min="0" placeholder="0" value={gastosGerenciales[clave] || ""} onChange={(e)=>setGastosGerenciales(g=>({...g,[clave]:e.target.value === "" ? 0 : Number(e.target.value)}))}/></div></label>)}
             </div>
             <small>Estos gastos se usan sólo para estimar la ganancia neta del período mostrado.</small>
           </details>
