@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import ArcaPreflight from "./ArcaPreflight";
+import { guardarConfigTicket, leerConfigTicket } from "./ticketVenta";
 import ModulosControlPanel from "./ModulosControlPanel";
 import type { EmpresaOperativa } from "./tenant";
 import { etiquetaRol } from "./workspacePermissions";
@@ -63,5 +65,3 @@ export default function ConfiguracionOperativa({ empresa }: { empresa: EmpresaOp
     </div>
   );
 }
-import { useEffect, useState } from "react";
-import { guardarConfigTicket, leerConfigTicket } from "./ticketVenta";
