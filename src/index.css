@@ -1157,3 +1157,11 @@ main:has(> .productos-oferta){
  .compra-items-wrapper{width:60%!important;max-width:60%!important;margin-left:0!important;margin-right:auto!important}
  table.products-table.compra-items-table{width:100%!important;max-width:100%!important;min-width:0!important}
 }
+
+/* Compras: segunda reducción solicitada (40% adicional) y sin scroll. */
+@media(min-width:901px){
+ .table-wrapper.compra-items-wrapper{width:36%!important;max-width:36%!important;min-width:0!important;overflow:hidden!important;margin:0!important}
+ table.products-table.compra-items-table{width:100%!important;min-width:0!important;max-width:100%!important;table-layout:fixed!important}
+ .compra-items-table th,.compra-items-table td{padding:3px 2px!important;font-size:9px!important}
+ .compra-items-table select,.compra-items-table input{height:28px!important;min-height:28px!important;padding:2px 4px!important;font-size:10px!important}
+}
