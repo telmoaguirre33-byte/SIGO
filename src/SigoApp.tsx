@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { EmpresaOperativa } from "./tenant";
+import { supabase } from "./supabase";
 import BarcodeScanner from "./BarcodeScanner";
 import type { BarcodeAction, BarcodeProduct } from "./barcode";
 import VentaRapidaOperativa from "./VentaRapidaOperativa";
@@ -135,6 +136,8 @@ function ComprasHub({ empresaId }: { empresaId: string }) {
 
 function Inicio({ empresa, onProductos, onStock, onCaja }: { empresa: EmpresaOperativa; onProductos: () => void; onStock: () => void; onCaja: () => void }) {
   const [resumen,setResumen]=useState<ResumenOperativoSigo|null>(null);
+  const [trialDaysLeft,setTrialDaysLeft]=useState<number|null>(null);
+  useEffect(()=>{ let activo=true; void supabase.auth.getUser().then(({data})=>{if(!activo)return; const user=data.user; if(!user){setTrialDaysLeft(null);return;} const metadata=user.user_metadata??{}; const startRaw=String(metadata.sigo_trial_started_at??user.created_at??""); const start=Date.parse(startRaw); if(!Number.isFinite(start)){setTrialDaysLeft(null);return;} const elapsed=Math.floor((Date.now()-start)/(24*60*60*1000)); setTrialDaysLeft(Math.max(0,30-elapsed));}); return()=>{activo=false}; },[]);
   useEffect(()=>{ let activo=true; void cargarResumenOperativoSigo(empresa.empresa_id).then(r=>{if(activo)setResumen(r)}).catch(()=>{if(activo)setResumen(null)}); return()=>{activo=false}; },[empresa.empresa_id]);
   const horas=(resumen?.ventasHoyPorHora||[]).filter(h=>h.hora>=7&&h.hora<=23);
   const max=Math.max(1,...horas.map(h=>h.cantidad));
@@ -145,6 +148,12 @@ function Inicio({ empresa, onProductos, onStock, onCaja }: { empresa: EmpresaOpe
         <div><span className="sigo-home-eyebrow">SIGO GESTIÓN</span><h2>¡Hola! · {empresa.empresa_nombre}</h2><p>Todo tu negocio, en un solo lugar.</p></div>
         <div className="sigo-home-badge"><strong>Empresa activa</strong><span>{empresa.empresa_nombre}</span></div>
       </div>
+      {trialDaysLeft !== null && trialDaysLeft <= 10 && trialDaysLeft > 0 ? (
+        <div className="panel" style={{marginBottom:16,display:"flex",gap:14,alignItems:"center",justifyContent:"space-between",flexWrap:"wrap"}}>
+          <div><strong>Te quedan {trialDaysLeft} {trialDaysLeft === 1 ? "día" : "días"} gratis</strong><div>Continuá usando SIGO Gestión por $17.999/mes.</div></div>
+          <button className="primary-button" type="button" onClick={()=>window.dispatchEvent(new CustomEvent("sigo:subscription"))}>SUSCRIBIRME</button>
+        </div>
+      ) : null}
       <div className="sigo-home-actions" aria-label="Accesos rápidos">
         <button className="sigo-home-action primary" onClick={onCaja}><span>▣</span><strong>CAJA</strong><small>Nueva venta</small></button>
         <button className="sigo-home-action" onClick={onProductos}><span>＋</span><strong>Nuevo / ver producto</strong><small>Administrar catálogo</small></button>
