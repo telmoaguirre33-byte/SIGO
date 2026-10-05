@@ -95,21 +95,29 @@ function GraficoGerencial({ ventas, compras, gastosTotal }: { ventas: Array<{fec
   const comprasMap=new Map(compras.map(d=>[d.fecha,d.compras]));
   const gastoDia=ventas.length ? gastosTotal/ventas.length : 0;
   const datos=ventas.map(v=>({fecha:v.fecha,ventas:v.total,compras:comprasMap.get(v.fecha)??0,ganancia:v.total-(comprasMap.get(v.fecha)??0)-gastoDia}));
-  const max=Math.max(1,...datos.flatMap(d=>[d.ventas,d.compras,Math.max(0,d.ganancia)]));
-  const ancho=Math.max(720,datos.length*54), alto=270, base=220, escala=170/max;
-  const puntos=datos.map((d,i)=>`${28+i*54},${base-Math.max(0,d.ganancia)*escala}`).join(" ");
+  const maxPos=Math.max(1,...datos.flatMap(d=>[d.ventas,d.compras,Math.max(0,d.ganancia)]));
+  const maxNeg=Math.max(0,...datos.map(d=>Math.max(0,-d.ganancia)));
+  const ancho=Math.max(720,datos.length*58), alto=330;
+  const margenSup=24, margenInf=42, area=alto-margenSup-margenInf;
+  const proporcionNeg=maxNeg>0 ? Math.min(.42,Math.max(.22,maxNeg/(maxPos+maxNeg))) : 0;
+  const altoNeg=area*proporcionNeg, altoPos=area-altoNeg;
+  const base=margenSup+altoPos;
+  const escalaPos=altoPos/maxPos, escalaNeg=maxNeg>0?altoNeg/maxNeg:0;
+  const yGan=(g:number)=>g>=0?base-g*escalaPos:base+(-g)*escalaNeg;
+  const puntos=datos.map((d,i)=>`${31+i*58},${yGan(d.ganancia)}`).join(" ");
   return <div className="sigo-gerencial-chart-wrap">
     <div className="sigo-gerencial-legend"><span className="venta">Ventas</span><span className="ganancia">Ganancia estimada</span><span className="compra">Compras</span><span className="linea">Línea de ganancia</span></div>
     <div className="sigo-gerencial-chart-scroll"><svg width={ancho} height={alto} role="img" aria-label="Ventas, ganancia estimada y compras por día">
-      <line x1="0" y1={base} x2={ancho} y2={base} stroke="#dbe5f0" />
-      {datos.map((d,i)=>{const x=10+i*54; const vw=Math.max(1,d.ventas*escala), cw=Math.max(1,d.compras*escala), gw=Math.max(1,Math.max(0,d.ganancia)*escala); return <g key={d.fecha}>
-        <rect x={x} y={base-vw} width="11" height={vw} rx="2" fill="#1677e8"><title>{`Ventas ${d.fecha}: ${dinero(d.ventas)}`}</title></rect>
-        <rect x={x+13} y={base-gw} width="11" height={gw} rx="2" fill="#63b32e"><title>{`Ganancia estimada ${d.fecha}: ${dinero(d.ganancia)}`}</title></rect>
-        <rect x={x+26} y={base-cw} width="11" height={cw} rx="2" fill="#9aa5b1"><title>{`Compras ${d.fecha}: ${dinero(d.compras)}`}</title></rect>
-        <text x={x+18} y={244} textAnchor="middle" fontSize="10" fill="#53657c">{new Date(d.fecha+"T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"})}</text>
+      <line x1="0" y1={base} x2={ancho} y2={base} stroke="#64748b" strokeWidth="1.5" />
+      <text x="4" y={base-6} fontSize="10" fill="#64748b">$0</text>
+      {datos.map((d,i)=>{const x=12+i*58; const vh=Math.max(1,d.ventas*escalaPos), ch=Math.max(1,d.compras*escalaPos), gh=d.ganancia>=0?Math.max(1,d.ganancia*escalaPos):Math.max(2,(-d.ganancia)*escalaNeg); const gy=d.ganancia>=0?base-gh:base; return <g key={d.fecha}>
+        <rect x={x} y={base-vh} width="12" height={vh} rx="2" fill="#1677e8"><title>{`Ventas ${d.fecha}: ${dinero(d.ventas)}`}</title></rect>
+        <rect x={x+14} y={gy} width="12" height={gh} rx="2" fill={d.ganancia>=0?"#63b32e":"#d94b45"}><title>{`${d.ganancia>=0?"Ganancia":"Pérdida"} estimada ${d.fecha}: ${dinero(d.ganancia)}`}</title></rect>
+        <rect x={x+28} y={base-ch} width="12" height={ch} rx="2" fill="#9aa5b1"><title>{`Compras ${d.fecha}: ${dinero(d.compras)}`}</title></rect>
+        <text x={x+20} y={alto-14} textAnchor="middle" fontSize="10" fill="#53657c">{new Date(d.fecha+"T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"})}</text>
       </g>})}
       <polyline points={puntos} fill="none" stroke="#2f7d32" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"/>
-      {datos.map((d,i)=><circle key={"p"+d.fecha} cx={28+i*54} cy={base-Math.max(0,d.ganancia)*escala} r="3.5" fill="#2f7d32"><title>{`Ganancia estimada: ${dinero(d.ganancia)}`}</title></circle>)}
+      {datos.map((d,i)=><circle key={"p"+d.fecha} cx={31+i*58} cy={yGan(d.ganancia)} r="3.5" fill={d.ganancia>=0?"#2f7d32":"#b42318"}><title>{`${d.ganancia>=0?"Ganancia":"Pérdida"} estimada: ${dinero(d.ganancia)}`}</title></circle>)}
     </svg></div>
   </div>;
 }
