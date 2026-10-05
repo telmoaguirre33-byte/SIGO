@@ -841,7 +841,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
           <h4>Precios que se actualizarán al confirmar</h4>
           {cambiosPrecio.map((x) => <p key={x.id} style={{margin:"8px 0"}}><strong>{x.nombre}</strong>: costo $ {x.costoAnterior.toLocaleString("es-AR")} → $ {x.costoNuevo.toLocaleString("es-AR")} · precio $ {x.precioAnterior.toLocaleString("es-AR")} → $ {x.precioNuevo.toLocaleString("es-AR")} · margen {x.margen.toFixed(2)}%</p>)}
         </div>}
-        <div className="form-actions"><button type="submit" className="primary-button" disabled={saving || loading || facturaAplicando || !compraValida}>{saving ? "Confirmando…" : "Confirmar compra e ingresar stock"}</button></div>
+        <div className="form-actions"><button type="submit" className="primary-button" disabled={saving || loading || facturaAplicando || !compraValida}>{saving ? "Guardando compra…" : "GUARDAR COMPRA E INGRESAR STOCK"}</button></div>
         <div className="form-actions" style={{marginTop:16}}>
           <button type="button" className="admin-button" aria-expanded={altaManualAbierta} aria-controls="alta-producto-compra" onClick={()=>{setAltaManualAbierta((abierta)=>!abierta);if(!altaManualAbierta && busquedaManual.trim())setNuevoProductoManual((v)=>({...v,nombre:v.nombre||busquedaManual.trim()}));}}>➕ Crear producto nuevo</button>
         </div>
