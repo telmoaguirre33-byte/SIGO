@@ -170,6 +170,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
   const [ajusteStock, setAjusteStock] = useState(false);
   const [scanAction, setScanAction] = useState<BarcodeAction>("consultar");
   const [scanResult, setScanResult] = useState<BarcodeProduct | null>(null);
+  const [seleccionValorizacion, setSeleccionValorizacion] = useState<Set<string>>(new Set());
   const [eanHabilitado, setEanHabilitado] = useState(false);
   const [eanCodigo, setEanCodigo] = useState("");
   const [productoSugerido,setProductoSugerido]=useState(0);
@@ -419,7 +420,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
         <div className="panel products-list-panel">
           <div className="table-wrapper products-list-scroll">
             <table className="products-table">
-              <thead><tr><th>Producto</th><th>Código</th><th>Código de barras</th><th>Precio</th><th>Stock</th><th>Acciones</th></tr></thead>
+              <thead><tr><th>✓</th><th>Producto</th><th>Código</th><th>Código de barras</th><th>Precio</th><th>Stock</th><th>Acciones</th></tr></thead>
               <tbody>
                 {filtrados.map((p) => (
                   <tr key={p.id}>
@@ -550,8 +551,9 @@ function Stock({ empresaId }: { empresaId: string }) {
   const criticos = visibles.filter((p) => p.stock_minimo != null && Number(p.stock_actual) <= Number(p.stock_minimo));
   const sinStock = visibles.filter((p) => Number(p.stock_actual) <= 0);
   const totalUnidades = visibles.reduce((total, p) => total + Number(p.stock_actual || 0), 0);
-  const stockValorCosto = visibles.reduce((total,p)=>total + Number(p.stock_actual || 0) * Number(p.costo_actual ?? p.costo_ultima_compra ?? 0),0);
-  const stockValorVenta = visibles.reduce((total,p)=>total + Number(p.stock_actual || 0) * Number(p.precio_venta ?? 0),0);
+  const productosValorizar = seleccionValorizacion.size ? visibles.filter(p=>seleccionValorizacion.has(p.id)) : visibles;
+  const stockValorCosto = productosValorizar.reduce((total,p)=>total + Number(p.stock_actual || 0) * Number(p.costo_actual ?? p.costo_ultima_compra ?? 0),0);
+  const stockValorVenta = productosValorizar.reduce((total,p)=>total + Number(p.stock_actual || 0) * Number(p.precio_venta ?? 0),0);
   const margenPotencial = stockValorVenta - stockValorCosto;
   const dineroStock = (valor:number) => valor.toLocaleString("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:2});
   function exportarStockExcel() {
@@ -611,7 +613,7 @@ function Stock({ empresaId }: { empresaId: string }) {
       <div className="panel">
         <div className="page-header">
           <div><h3>Detalle de stock</h3><p>Priorizá faltantes y productos bajo mínimo.</p></div>
-          <div style={{display:"flex",gap:8}}><button className="admin-button" onClick={exportarStockExcel}>Exportar Excel</button><button className={soloCriticos ? "primary-button" : "admin-button"} onClick={() => setSoloCriticos((actual) => !actual)}>{soloCriticos ? "Ver todo" : "Solo críticos"}</button></div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button className="admin-button" onClick={() => setSeleccionValorizacion(new Set(filas.map(p=>p.id)))}>Marcar visibles</button><button className="admin-button" onClick={() => setSeleccionValorizacion(new Set())}>Todos</button><button className="admin-button" onClick={exportarStockExcel}>Exportar Excel</button><button className={soloCriticos ? "primary-button" : "admin-button"} onClick={() => setSoloCriticos((actual) => !actual)}>{soloCriticos ? "Ver todo" : "Solo críticos"}</button></div>
         </div>
         {loading && <p>Cargando stock…</p>}
         {!loading && error && <p role="alert">{error}</p>}
@@ -622,7 +624,7 @@ function Stock({ empresaId }: { empresaId: string }) {
               <tbody>
                 {filas.map((p) => {
                   const critico = p.stock_minimo != null && Number(p.stock_actual) <= Number(p.stock_minimo);
-                  return <tr key={p.id}><td><strong>{p.nombre}</strong></td><td>{p.codigo_barras || p.codigo_interno || "-"}</td><td>{p.stock_actual}</td><td>{dineroStock(Number(p.costo_actual ?? p.costo_ultima_compra ?? 0))}</td><td>{dineroStock(Number(p.precio_venta ?? 0))}</td><td>{dineroStock(Number(p.stock_actual||0)*Number(p.costo_actual ?? p.costo_ultima_compra ?? 0))}</td><td>{dineroStock(Number(p.stock_actual||0)*Number(p.precio_venta ?? 0))}</td><td>{Number(p.stock_actual) <= 0 ? "SIN STOCK" : critico ? "CRÍTICO" : "OK"}</td></tr>;
+                  return <tr key={p.id}><td><input type="checkbox" aria-label={`Valorizar ${p.nombre}`} checked={seleccionValorizacion.has(p.id)} onChange={(e)=>setSeleccionValorizacion(actual=>{const n=new Set(actual); if(e.target.checked)n.add(p.id);else n.delete(p.id);return n;})}/></td><td><strong>{p.nombre}</strong></td><td>{p.codigo_barras || p.codigo_interno || "-"}</td><td>{p.stock_actual}</td><td>{dineroStock(Number(p.costo_actual ?? p.costo_ultima_compra ?? 0))}</td><td>{dineroStock(Number(p.precio_venta ?? 0))}</td><td>{dineroStock(Number(p.stock_actual||0)*Number(p.costo_actual ?? p.costo_ultima_compra ?? 0))}</td><td>{dineroStock(Number(p.stock_actual||0)*Number(p.precio_venta ?? 0))}</td><td>{Number(p.stock_actual) <= 0 ? "SIN STOCK" : critico ? "CRÍTICO" : "OK"}</td></tr>;
                 })}
               </tbody>
             </table>
