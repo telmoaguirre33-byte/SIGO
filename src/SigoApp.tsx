@@ -528,7 +528,10 @@ function Stock({ empresaId }: { empresaId: string }) {
   const [error, setError] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [soloCriticos, setSoloCriticos] = useState(false);
-  const [scanResult, setScanResult] = useState<BarcodeProduct | null>(null);\n  const [seleccionValorizacion, setSeleccionValorizacion] = useState<Set<string>>(new Set());\n\n  async function cargar() {
+  const [scanResult, setScanResult] = useState<BarcodeProduct | null>(null);
+  const [seleccionValorizacion, setSeleccionValorizacion] = useState<Set<string>>(new Set());
+
+  async function cargar() {
     setLoading(true);
     setError("");
     try {
@@ -557,7 +560,8 @@ function Stock({ empresaId }: { empresaId: string }) {
   function exportarStockExcel() {
     const esc=(v:unknown)=>`"${String(v??"").replaceAll('"','""')}"`;
     const lineas=[["Producto","Código","Stock","Precio compra","Precio venta","Valorizado compra","Valorizado venta","Margen potencial"],...filas.map(p=>{const stock=Number(p.stock_actual||0), costo=Number(p.costo_actual??p.costo_ultima_compra??0), venta=Number(p.precio_venta??0); return [p.nombre,p.codigo_barras||p.codigo_interno||"",stock,costo,venta,stock*costo,stock*venta,stock*(venta-costo)];})];
-    const blob=new Blob(["\\ufeff"+lineas.map(f=>f.map(esc).join(";")).join("\\r\\n")],{type:"text/csv;charset=utf-8"});
+    const blob=new Blob(["\\ufeff"+lineas.map(f=>f.map(esc).join(";")).join("\\r\
+")],{type:"text/csv;charset=utf-8"});
     const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`SIGO-stock-valorizado-${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1500);
   }
   const normalizarBusqueda = (valor: string) => valor.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es-AR").trim();
