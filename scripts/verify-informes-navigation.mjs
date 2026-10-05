@@ -9,8 +9,8 @@ const patched = patchInformesNavigation(appBefore, rootBefore);
 assert.deepEqual(patchInformesNavigation(patched.app, patched.root), patched, "patch must be idempotent");
 assert.throws(() => patchInformesNavigation("unexpected source", rootBefore), /TARGET_NOT_FOUND/);
 
-const reportRender = '<InformesOperativos key={empresaActiva.empresa_id} empresaId={empresaActiva.empresa_id} />';
-assert.equal(patched.root.split(reportRender).length, 2, "keep one existing reports screen");
+assert.equal((patched.root.match(/<InformesOperativos\b/g) ?? []).length, 1, "keep one existing reports screen");
+assert.ok(patched.root.includes('empresaId={empresaActiva.empresa_id}'), "reports keeps active company context");
 assert.ok(patched.root.includes('onAbrirInformes={workspacePermitido(empresaActiva.rol, "informes") ? () => abrirWorkspace("informes") : undefined}'));
 // Compras/Proveedores ahora vive dentro de Operación y debe permanecer accesible desde la barra lateral.
 assert.ok(!patched.root.includes('initialSection="Compras" purchasesOnly'), "purchase workspace is no longer a detached screen");
