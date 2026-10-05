@@ -106,7 +106,7 @@ function GraficoGerencial({ ventas, compras, gastosTotal }: { ventas: Array<{fec
   const yGan=(g:number)=>g>=0?base-g*escalaPos:base+(-g)*escalaNeg;
   const puntos=datos.map((d,i)=>`${31+i*58},${yGan(d.ganancia)}`).join(" ");
   return <div className="sigo-gerencial-chart-wrap">
-    <div className="sigo-gerencial-legend"><span className="venta">Ventas</span><span className="ganancia">Ganancia estimada</span><span className="compra">Compras</span><span className="linea">Línea de ganancia</span></div>
+    <div className="sigo-gerencial-legend"><span className="venta">Ventas</span><span className="ganancia">Resultado estimado</span><span className="compra">Compras</span><span className="linea">Línea de resultado</span></div>
     <div className="sigo-gerencial-chart-scroll"><svg width={ancho} height={alto} role="img" aria-label="Ventas, ganancia estimada y compras por día">
       <line x1="0" y1={base} x2={ancho} y2={base} stroke="#64748b" strokeWidth="1.5" />
       <text x="4" y={base-6} fontSize="10" fill="#64748b">$0</text>
@@ -325,11 +325,11 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
       ["SIGO Gestión - Informe gerencial"],
       ["Desde", gerencialDesde, "Hasta", gerencialHasta],
       ["Facturación", facturacionGerencial],
-      ["Compras", comprasTotalGerencial],
-      ["Resultado comercial estimado", margenEstimadoGerencial],
-      ["Gastos", gastosTotalGerencial],
-      ["Ganancia neta estimada", gananciaNetaGerencial],
-      ["Rentabilidad estimada %", rentabilidadGerencial.toFixed(2)],
+      ["Compras de mercadería", comprasTotalGerencial],
+      ["Resultado de caja estimado (ventas - compras)", margenEstimadoGerencial],
+      ["Gastos operativos", gastosTotalGerencial],
+      ["Resultado neto estimado", gananciaNetaGerencial],
+      ["Resultado neto estimado sobre ventas %", rentabilidadGerencial.toFixed(2)],
       [],
       ["Gastos cargados"],
       ["Luz", gastosGerenciales.luz], ["Agua", gastosGerenciales.agua], ["Empleados", gastosGerenciales.empleados],
@@ -375,14 +375,14 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
             <button className="admin-button" type="button" onClick={exportarGerencialExcel}>Exportar Excel</button>
           </div>
           <div className="sigo-gerencial-summary-cards">
-            <div className="stat-card"><span>Facturado</span><strong>{dinero(facturacionGerencial)}</strong></div>
-            <div className="stat-card"><span>Resultado comercial</span><strong>{dinero(margenEstimadoGerencial)}</strong><small>Ventas − compras</small></div>
-            <div className="stat-card"><span>Compras</span><strong>{dinero(comprasTotalGerencial)}</strong></div>
-            <div className="stat-card"><span>Gastos</span><strong>{dinero(gastosTotalGerencial)}</strong></div>
-            <div className="stat-card"><span>Ganancia neta estimada</span><strong>{dinero(gananciaNetaGerencial)}</strong></div>
-            <div className="stat-card"><span>Rentabilidad</span><strong>{numero(rentabilidadGerencial,1)}%</strong></div>
+            <div className="stat-card"><span>Ventas / facturación</span><strong>{dinero(facturacionGerencial)}</strong></div>
+            <div className="stat-card"><span>Resultado de caja estimado</span><strong>{dinero(margenEstimadoGerencial)}</strong><small>Ventas − compras</small></div>
+            <div className="stat-card"><span>Compras de mercadería</span><strong>{dinero(comprasTotalGerencial)}</strong></div>
+            <div className="stat-card"><span>Gastos operativos</span><strong>{dinero(gastosTotalGerencial)}</strong></div>
+            <div className="stat-card"><span>Resultado neto estimado</span><strong>{dinero(gananciaNetaGerencial)}</strong><small>No equivale aún al resultado contable por CMV</small></div>
+            <div className="stat-card"><span>Resultado s/ ventas</span><strong>{numero(rentabilidadGerencial,1)}%</strong><small>Indicador estimado</small></div>
           </div>
-          <div className="sigo-manager-chart-card sigo-gerencial-chart-card"><div className="sigo-manager-chart-head"><div><strong>Evolución del período</strong><span>Ventas · ganancia estimada · compras · {gerencialDesde} → {gerencialHasta}</span></div></div><GraficoGerencial ventas={ventasGerenciales?.dias ?? []} compras={comprasGerenciales?.dias ?? []} gastosTotal={gastosTotalGerencial} /></div>
+          <div className="sigo-manager-chart-card sigo-gerencial-chart-card"><div className="sigo-manager-chart-head"><div><strong>Evolución del período</strong><span>Ventas · resultado estimado · compras · {gerencialDesde} → {gerencialHasta}</span></div></div><GraficoGerencial ventas={ventasGerenciales?.dias ?? []} compras={comprasGerenciales?.dias ?? []} gastosTotal={gastosTotalGerencial} /></div>
           <details className="sigo-gerencial-expenses" open>
             <summary style={{cursor:"pointer",fontWeight:700}}>Gastos opcionales para calcular lo que realmente queda</summary>
             <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(120px,1fr))",gap:10,marginTop:12}}>
