@@ -626,14 +626,6 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
 
   return (
     <div className="products-page">
-      <div className="page-header">
-        <div>
-          <h2>Compras / Proveedores</h2>
-          <p>Recepción tenant-safe: confirmar una compra actualiza stock y último costo en una sola transacción.</p>
-        </div>
-        <button className="admin-button" onClick={() => void cargar()} disabled={loading || saving || facturaProcesando || facturaAplicando}>Actualizar</button>
-      </div>
-
       {error && <div className="panel"><p className="form-error" role="alert">{error}</p></div>}
 
       {ultimaConciliacion && (
