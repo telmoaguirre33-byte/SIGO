@@ -19,20 +19,10 @@ export default function ConfiguracionOperativa({ empresa }: { empresa: EmpresaOp
         </div>
       </div>
 
-      <section className="panel">
+      <section className="panel sigo-settings-lines">
         <div className="sigo-detail-title"><span>⚙</span><h3>Empresa activa</h3></div>
-        <div className="stats-grid">
-          <div className="stat-card">
-            <span>Empresa</span>
-            <strong>{empresa.empresa_nombre}</strong>
-            <small>Contexto de datos actualmente seleccionado</small>
-          </div>
-          <div className="stat-card">
-            <span>Perfil</span>
-            <strong>{etiquetaRol(empresa.rol)}</strong>
-            <small>Los permisos se aplican por empresa y usuario</small>
-          </div>
-        </div>
+        <div className="sigo-settings-line"><span>Empresa</span><strong>{empresa.empresa_nombre}</strong><small>Contexto de datos actualmente seleccionado</small></div>
+        <div className="sigo-settings-line"><span>Perfil</span><strong>{etiquetaRol(empresa.rol)}</strong><small>Los permisos se aplican por empresa y usuario</small></div>
       </section>
 
       <ModulosControlPanel empresa={empresa} />
@@ -51,10 +41,10 @@ export default function ConfiguracionOperativa({ empresa }: { empresa: EmpresaOp
         <p className="sigo-stock-risk-note">
           SIGO usa ventas confirmadas para proyectar cobertura. La configuración operativa actual marca quiebre urgente hasta 7 días, próximo quiebre hasta 15 días y objetivo de reposición a 30 días.
         </p>
-        <div className="stats-grid">
-          <div className="stat-card"><span>Urgente</span><strong>≤ 7 días</strong><small>Prioridad máxima de reposición</small></div>
-          <div className="stat-card"><span>Próximo quiebre</span><strong>≤ 15 días</strong><small>Planificar compra</small></div>
-          <div className="stat-card"><span>Cobertura objetivo</span><strong>30 días</strong><small>Base para compra sugerida</small></div>
+        <div className="sigo-settings-lines">
+          <div className="sigo-settings-line"><span>Urgente</span><strong>≤ 7 días</strong><small>Prioridad máxima de reposición</small></div>
+          <div className="sigo-settings-line"><span>Próximo quiebre</span><strong>≤ 15 días</strong><small>Planificar compra</small></div>
+          <div className="sigo-settings-line"><span>Cobertura objetivo</span><strong>30 días</strong><small>Base para compra sugerida</small></div>
         </div>
       </section>
 
