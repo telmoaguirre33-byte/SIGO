@@ -1123,3 +1123,16 @@ main:has(> .productos-oferta){
 @media(max-width:600px){
  .compra-proveedor-fila .form-grid,.compra-nueva-fila>.form-grid{grid-template-columns:1fr}
 }
+
+/* Compras: eliminar definitivamente scroll horizontal de la grilla. */
+.compra-items-wrapper{width:100%;max-width:100%;overflow-x:hidden!important}
+.compra-items-table{width:100%!important;max-width:100%;min-width:0!important;table-layout:fixed!important}
+.compra-items-table th,.compra-items-table td{min-width:0!important;overflow:hidden}
+.compra-items-table select,.compra-items-table input{box-sizing:border-box;max-width:100%!important;min-width:0!important}
+.compra-items-table th:nth-child(1),.compra-items-table td:nth-child(1){width:34%}
+.compra-items-table th:nth-child(2),.compra-items-table td:nth-child(2){width:10%}
+.compra-items-table th:nth-child(3),.compra-items-table td:nth-child(3){width:13%}
+.compra-items-table th:nth-child(4),.compra-items-table td:nth-child(4){width:9%}
+.compra-items-table th:nth-child(5),.compra-items-table td:nth-child(5){width:14%}
+.compra-items-table th:nth-child(6),.compra-items-table td:nth-child(6){width:13%}
+.compra-items-table th:nth-child(7),.compra-items-table td:nth-child(7){width:7%}
