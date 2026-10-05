@@ -146,7 +146,12 @@ export type ResumenComprasPeriodoSigo = {
   ventasCantidad: number;
   ventasTotal: number;
   balanceComercial: number;
+  dias: Array<{ fecha: string; compras: number; ventas: number }>;
 };
+
+function fechaLocalIsoInforme(fecha: Date) {
+  return [fecha.getFullYear().toString().padStart(4,"0"),String(fecha.getMonth()+1).padStart(2,"0"),String(fecha.getDate()).padStart(2,"0")].join("-");
+}
 
 export async function cargarComprasPeriodoSigo(empresaId: string, desde: string, hasta: string): Promise<ResumenComprasPeriodoSigo> {
   if (!empresaId) throw new Error("Seleccioná una empresa activa.");
@@ -175,7 +180,19 @@ export async function cargarComprasPeriodoSigo(empresaId: string, desde: string,
   const [compras, ventas] = await Promise.all([listar("compras_sigo"), listar("ventas_sigo")]);
   const comprasTotal = compras.reduce((total, fila) => total + numeroSeguro(fila.total), 0);
   const ventasTotal = ventas.reduce((total, fila) => total + numeroSeguro(fila.total), 0);
-  return { desde, hasta, comprasCantidad: compras.length, comprasTotal, ventasCantidad: ventas.length, ventasTotal, balanceComercial: ventasTotal - comprasTotal };
+  const claveFecha = (valor?: string | null) => valor ? fechaLocalIsoInforme(new Date(valor)) : "";
+  const comprasDia = new Map<string, number>();
+  const ventasDia = new Map<string, number>();
+  compras.forEach(f => { const k=claveFecha(f.created_at); if(k) comprasDia.set(k,(comprasDia.get(k)??0)+numeroSeguro(f.total)); });
+  ventas.forEach(f => { const k=claveFecha(f.created_at); if(k) ventasDia.set(k,(ventasDia.get(k)??0)+numeroSeguro(f.total)); });
+  const dias: Array<{ fecha:string; compras:number; ventas:number }> = [];
+  const cursor = new Date(inicio);
+  while (cursor < finExclusivo) {
+    const fecha = fechaLocalIsoInforme(cursor);
+    dias.push({ fecha, compras: comprasDia.get(fecha) ?? 0, ventas: ventasDia.get(fecha) ?? 0 });
+    cursor.setDate(cursor.getDate()+1);
+  }
+  return { desde, hasta, comprasCantidad: compras.length, comprasTotal, ventasCantidad: ventas.length, ventasTotal, balanceComercial: ventasTotal - comprasTotal, dias };
 }
 
 export async function cargarVentasPeriodoSigo(empresaId: string, desde: string, hasta: string): Promise<ResumenVentasPeriodoSigo> {
