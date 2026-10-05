@@ -128,3 +128,8 @@
 .sigo-gerencial-legend span::before{content:"";display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}
 .sigo-gerencial-legend .venta::before{background:#1677e8}.sigo-gerencial-legend .ganancia::before{background:#63b32e}.sigo-gerencial-legend .compra::before{background:#9aa5b1}
 .sigo-gerencial-legend .linea::before{height:3px;border-radius:3px;background:#2f7d32;vertical-align:3px}
+
+.sigo-money-input{display:flex;align-items:center;border:1px solid #d8e0ea;border-radius:10px;background:#fff;overflow:hidden}
+.sigo-money-input>span{padding:0 0 0 12px;font-weight:800;color:#334155}
+.sigo-money-input input{border:0!important;outline:0;width:100%;padding-left:7px!important;background:transparent}
+.sigo-money-input:focus-within{border-color:#2587ff;box-shadow:0 0 0 2px rgba(37,135,255,.10)}
