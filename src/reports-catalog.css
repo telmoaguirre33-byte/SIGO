@@ -121,3 +121,10 @@
  .sigo-reports-heading h2{font-size:26px;line-height:1.1}
  .sigo-reports-refresh{margin-top:0}
 }
+
+.sigo-gerencial-chart-wrap{width:100%;overflow:hidden}
+.sigo-gerencial-chart-scroll{width:100%;overflow-x:auto;overflow-y:hidden;padding-bottom:4px}
+.sigo-gerencial-legend{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:12px;font-size:12px;font-weight:700;color:#526174}
+.sigo-gerencial-legend span::before{content:"";display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.sigo-gerencial-legend .venta::before{background:#1677e8}.sigo-gerencial-legend .ganancia::before{background:#63b32e}.sigo-gerencial-legend .compra::before{background:#9aa5b1}
+.sigo-gerencial-legend .linea::before{height:3px;border-radius:3px;background:#2f7d32;vertical-align:3px}
