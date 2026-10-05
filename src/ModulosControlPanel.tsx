@@ -147,22 +147,30 @@ export default function ModulosControlPanel({ empresa }: { empresa: EmpresaOpera
           {categorias.map(({ categoria, items }) => (
             <div key={categoria}>
               <h4 style={{ margin: "0 0 10px" }}>{categoria}</h4>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
+              <div style={{ display: "grid", gap: 8 }}>
                 {items.map((modulo) => {
                   const bloqueado = modulo.obligatorio || !modulo.disponible || !puedeEditar;
                   return (
-                    <article key={modulo.clave} className="stat-card" style={{ minHeight: 150, display: "flex", flexDirection: "column", gap: 8, justifyContent: "space-between" }}>
-                      <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
-                          <strong style={{ fontSize: 16 }}>{modulo.nombre}</strong>
-                          <span className={modulo.habilitado ? "sigo-status active" : "sigo-status suspended"}>
-                            {modulo.obligatorio ? "Esencial" : !modulo.disponible ? "En preparación" : modulo.habilitado ? "Activo" : "Inactivo"}
-                          </span>
-                        </div>
-                        <p style={{ margin: "8px 0 0", fontSize: 13, opacity: .82 }}>{modulo.descripcion}</p>
-                      </div>
+                    <article
+                      key={modulo.clave}
+                      className="stat-card"
+                      style={{
+                        minHeight: 0,
+                        padding: "12px 16px",
+                        display: "grid",
+                        gridTemplateColumns: "minmax(170px, 1.1fr) minmax(260px, 2fr) auto minmax(120px, auto)",
+                        gap: 14,
+                        alignItems: "center",
+                      }}
+                    >
+                      <strong style={{ fontSize: 15 }}>{modulo.nombre}</strong>
+                      <span style={{ fontSize: 13, opacity: .82 }}>{modulo.descripcion}</span>
+                      <span className={modulo.habilitado ? "sigo-status active" : "sigo-status suspended"}>
+                        {modulo.obligatorio ? "Esencial" : !modulo.disponible ? "En preparación" : modulo.habilitado ? "Activo" : "Inactivo"}
+                      </span>
                       <button
                         className={modulo.habilitado ? "admin-button" : "primary-button"}
+                        style={{ width: "100%" }}
                         type="button"
                         disabled={bloqueado || Boolean(working)}
                         onClick={() => void cambiar(modulo)}
