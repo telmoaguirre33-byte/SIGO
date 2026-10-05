@@ -114,7 +114,7 @@ function GraficoGerencial({ ventas, compras, gastosTotal }: { ventas: Array<{fec
         <rect x={x} y={base-vh} width="12" height={vh} rx="2" fill="#1677e8"><title>{`Ventas ${d.fecha}: ${dinero(d.ventas)}`}</title></rect>
         <rect x={x+14} y={gy} width="12" height={gh} rx="2" fill={d.ganancia>=0?"#63b32e":"#d94b45"}><title>{`${d.ganancia>=0?"Ganancia":"Pérdida"} estimada ${d.fecha}: ${dinero(d.ganancia)}`}</title></rect>
         <rect x={x+28} y={base-ch} width="12" height={ch} rx="2" fill="#9aa5b1"><title>{`Compras ${d.fecha}: ${dinero(d.compras)}`}</title></rect>
-        <text x={x+20} y={alto-14} textAnchor="middle" fontSize="10" fill="#53657c">{new Date(d.fecha+"T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"})}</text>
+        <text x={x+20} y={alto-12} textAnchor="middle" fontSize="11" fontWeight="700" fill="#40546d">{new Date(d.fecha+"T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"})}</text>
       </g>})}
       <polyline points={puntos} fill="none" stroke="#2f7d32" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"/>
       {datos.map((d,i)=><circle key={"p"+d.fecha} cx={31+i*58} cy={yGan(d.ganancia)} r="3.5" fill={d.ganancia>=0?"#2f7d32":"#b42318"}><title>{`${d.ganancia>=0?"Ganancia":"Pérdida"} estimada: ${dinero(d.ganancia)}`}</title></circle>)}
