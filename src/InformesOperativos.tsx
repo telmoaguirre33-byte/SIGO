@@ -374,7 +374,7 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
             <label>Hasta <input type="date" value={gerencialHasta} min={gerencialDesde} max={hoyIso} onChange={(e) => { setGerencialPeriodo("personalizado"); setGerencialHasta(e.target.value); }} /></label>
             <button className="admin-button" type="button" onClick={exportarGerencialExcel}>Exportar Excel</button>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(6,minmax(130px,1fr))",gap:8,margin:"12px 0"}}>
+          <div className="sigo-gerencial-summary-cards">
             <div className="stat-card"><span>Facturado</span><strong>{dinero(facturacionGerencial)}</strong></div>
             <div className="stat-card"><span>Resultado comercial</span><strong>{dinero(margenEstimadoGerencial)}</strong><small>Ventas − compras</small></div>
             <div className="stat-card"><span>Compras</span><strong>{dinero(comprasTotalGerencial)}</strong></div>
@@ -382,8 +382,8 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
             <div className="stat-card"><span>Ganancia neta estimada</span><strong>{dinero(gananciaNetaGerencial)}</strong></div>
             <div className="stat-card"><span>Rentabilidad</span><strong>{numero(rentabilidadGerencial,1)}%</strong></div>
           </div>
-          <div className="sigo-manager-chart-card"><div className="sigo-manager-chart-head"><div><strong>Evolución del período</strong><span>Ventas · ganancia estimada · compras · {gerencialDesde} → {gerencialHasta}</span></div></div><GraficoGerencial ventas={ventasGerenciales?.dias ?? []} compras={comprasGerenciales?.dias ?? []} gastosTotal={gastosTotalGerencial} /></div>
-          <details style={{marginTop:12}}>
+          <div className="sigo-manager-chart-card sigo-gerencial-chart-card"><div className="sigo-manager-chart-head"><div><strong>Evolución del período</strong><span>Ventas · ganancia estimada · compras · {gerencialDesde} → {gerencialHasta}</span></div></div><GraficoGerencial ventas={ventasGerenciales?.dias ?? []} compras={comprasGerenciales?.dias ?? []} gastosTotal={gastosTotalGerencial} /></div>
+          <details className="sigo-gerencial-expenses" open>
             <summary style={{cursor:"pointer",fontWeight:700}}>Gastos opcionales para calcular lo que realmente queda</summary>
             <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(120px,1fr))",gap:10,marginTop:12}}>
               {(["luz","agua","empleados","internet","otros"] as const).map((clave)=><label key={clave} className="form-group"><span style={{textTransform:"capitalize"}}>{clave}</span><div className="sigo-money-input"><span>$</span><input type="number" min="0" placeholder="0" value={gastosGerenciales[clave] || ""} onChange={(e)=>setGastosGerenciales(g=>({...g,[clave]:e.target.value === "" ? 0 : Number(e.target.value)}))}/></div></label>)}
