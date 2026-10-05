@@ -1102,3 +1102,24 @@ main:has(> .productos-oferta){
  .compra-items-table tr{padding:10px 0;border-bottom:1px solid var(--border,#e5e7eb)}
  .compra-items-table td{padding:5px 0}
 }
+
+/* Compras: cabeceras de carga compactas en una sola línea en escritorio. */
+.compra-proveedor-fila{display:grid;grid-template-columns:auto 1fr auto;align-items:end;gap:12px;padding:12px 16px}
+.compra-proveedor-fila h3{margin:0 8px 8px 0;white-space:nowrap}
+.compra-proveedor-fila .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0}
+.compra-proveedor-fila .form-group{margin:0}
+.compra-proveedor-fila .form-actions{margin:0;align-self:end}
+.compra-proveedor-fila input{min-height:38px;padding:7px 10px}
+.compra-nueva-fila{padding:12px 16px}
+.compra-nueva-fila>h3{margin:0 0 8px}
+.compra-nueva-fila>.form-grid{display:grid;grid-template-columns:1.35fr .8fr .8fr 1fr;gap:10px}
+.compra-nueva-fila>.form-grid .form-group{margin:0}
+.compra-nueva-fila>.form-grid input,.compra-nueva-fila>.form-grid select{min-height:38px;padding:7px 10px}
+@media(max-width:900px){
+ .compra-proveedor-fila{display:block}
+ .compra-proveedor-fila .form-grid,.compra-nueva-fila>.form-grid{grid-template-columns:1fr 1fr}
+ .compra-proveedor-fila .form-actions{margin-top:8px}
+}
+@media(max-width:600px){
+ .compra-proveedor-fila .form-grid,.compra-nueva-fila>.form-grid{grid-template-columns:1fr}
+}
