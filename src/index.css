@@ -1197,3 +1197,11 @@ main:has(> .productos-oferta){
 .products-master-table th:nth-child(5),.products-master-table td:nth-child(5){width:8%!important}
 .products-master-table th:nth-child(6),.products-master-table td:nth-child(6){width:22%!important}
 .products-master-table td:first-child strong{display:block;overflow:hidden;text-overflow:ellipsis}
+
+/* Productos: eliminar pestaña/resto azul oculto bajo el resultado de búsqueda. */
+.products-page-fixed .product-search-panel{overflow:visible!important}
+.products-page-fixed .product-search-panel::after,
+.products-page-fixed .product-search-panel::before{display:none!important;content:none!important}
+.products-page-fixed .product-search-suggestions:empty{display:none!important}
+.products-page-fixed .product-search-suggestions{border-top-color:var(--line)!important}
+.products-page-fixed .product-search-panel + .products-list-panel{margin-top:0!important}
