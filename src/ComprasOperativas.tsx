@@ -783,7 +783,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
       </div>
 )}
       
-      {(vista === "todo" || vista === "manual") && <><div className="panel compra-proveedor-fila">\n        <h3>Alta rápida de proveedor</h3>
+      {(vista === "todo" || vista === "manual") && <><div className="panel compra-proveedor-fila"><h3>Alta rápida de proveedor</h3>
         <div className="form-grid">
           <div className="form-group"><label>Razón social</label><input value={nuevoProveedor} onChange={(e) => setNuevoProveedor(e.target.value)} placeholder="Proveedor" /></div>
           <div className="form-group"><label>CUIT</label><input value={nuevoCuit} onChange={(e) => setNuevoCuit(e.target.value)} placeholder="Opcional" /></div>
@@ -791,7 +791,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
         <div className="form-actions"><button type="button" className="admin-button" disabled={saving || !nuevoProveedor.trim()} onClick={() => void crearProveedor()}>Crear proveedor</button></div>
       </div>
 
-      <form className="panel compra-nueva-fila" onSubmit={(e) => void confirmar(e)}>\n        <h3>Nueva compra</h3>
+      <form className="panel compra-nueva-fila" onSubmit={(e) => void confirmar(e)}><h3>Nueva compra</h3>
         <div className="form-grid">
           <div className="form-group"><label>Proveedor *</label><select value={proveedorId} onChange={(e) => setProveedorId(e.target.value)} required><option value="">Seleccionar</option>{proveedores.map((p) => <option key={p.id} value={p.id}>{p.razon_social}</option>)}</select></div>
           <div className="form-group"><label>Fecha</label><input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></div>
