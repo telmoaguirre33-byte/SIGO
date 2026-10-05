@@ -1151,3 +1151,9 @@ main:has(> .productos-oferta){
  .compra-items-table th:nth-child(6),.compra-items-table td:nth-child(6){width:11%!important}
  .compra-items-table th:nth-child(7),.compra-items-table td:nth-child(7){width:6%!important}
 }
+
+/* Compras: reducir 40% el largo visual de la grilla de carga manual en escritorio. */
+@media(min-width:901px){
+ .compra-items-wrapper{width:60%!important;max-width:60%!important;margin-left:0!important;margin-right:auto!important}
+ table.products-table.compra-items-table{width:100%!important;max-width:100%!important;min-width:0!important}
+}
