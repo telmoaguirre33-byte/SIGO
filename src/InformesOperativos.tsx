@@ -106,7 +106,7 @@ function GraficoGerencial({ ventas, compras, gastosTotal }: { ventas: Array<{fec
   const yGan=(g:number)=>g>=0?base-g*escalaPos:base+(-g)*escalaNeg;
   const puntos=datos.map((d,i)=>`${31+i*58},${yGan(d.ganancia)}`).join(" ");
   return <div className="sigo-gerencial-chart-wrap">
-    <div className="sigo-gerencial-legend"><span className="venta">Ventas</span><span className="ganancia">Resultado estimado</span><span className="compra">Compras</span><span className="linea">Línea de resultado</span></div>
+    <div className="sigo-gerencial-legend"><span className="venta">Ventas</span><span className="ganancia">Resultado positivo</span><span className="perdida">Resultado negativo</span><span className="compra">Compras</span><span className="linea">Línea de resultado</span></div>
     <div className="sigo-gerencial-chart-scroll"><svg width={ancho} height={alto} role="img" aria-label="Ventas, ganancia estimada y compras por día">
       <line x1="0" y1={base} x2={ancho} y2={base} stroke="#64748b" strokeWidth="1.5" />
       <text x="4" y={base-6} fontSize="10" fill="#64748b">$0</text>
