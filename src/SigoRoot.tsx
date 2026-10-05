@@ -254,7 +254,7 @@ export default function SigoRoot() {
       return <main className="main" style={{ minHeight: "calc(100vh - 88px)" }}><section className="content"><ClientesOperativos key={empresaActiva.empresa_id} empresaId={empresaActiva.empresa_id} /></section></main>;
     }
     if (workspace === "informes" && workspacePermitido(empresaActiva.rol, "informes")) {
-      return <main className="main" style={{ minHeight: "calc(100vh - 88px)" }}><section className="content"><InformesOperativos key={empresaActiva.empresa_id} empresaId={empresaActiva.empresa_id} /></section></main>;
+      return <main className="main" style={{ minHeight: "calc(100vh - 88px)" }}><section className="content"><InformesOperativos key={empresaActiva.empresa_id} empresaId={empresaActiva.empresa_id} onVolver={() => abrirWorkspace("operacion")} /></section></main>;
     }
     if (workspace === "portal" && workspacePermitido(empresaActiva.rol, "portal")) {
       return <main className="main" style={{ minHeight: "calc(100vh - 88px)" }}><section className="content"><PortalCliente key={empresaActiva.empresa_id} empresaId={empresaActiva.empresa_id} /></section></main>;
