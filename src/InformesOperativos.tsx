@@ -210,7 +210,7 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
   const [ventasGerenciales, setVentasGerenciales] = useState<ResumenVentasPeriodoSigo | null>(null);
   const [ventasGerencialesError, setVentasGerencialesError] = useState("");
   const [comprasGerenciales, setComprasGerenciales] = useState<ResumenComprasPeriodoSigo | null>(null);
-  const [gastosGerenciales, setGastosGerenciales] = useState({ luz: 0, agua: 0, empleados: 0, internet: 0, otros: 0 });
+  const [gastosGerenciales, setGastosGerenciales] = useState({ luz: 0, agua: 0, empleados: 0, internet: 0, alquiler: 0, otros: 0 });
   const empresaActivaRef = useRef(empresaId);
   const cargaRef = useRef(0);
 
@@ -333,7 +333,7 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
       [],
       ["Gastos cargados"],
       ["Luz", gastosGerenciales.luz], ["Agua", gastosGerenciales.agua], ["Empleados", gastosGerenciales.empleados],
-      ["Internet", gastosGerenciales.internet], ["Otros", gastosGerenciales.otros],
+      ["Internet", gastosGerenciales.internet], ["Alquiler", gastosGerenciales.alquiler], ["Otros", gastosGerenciales.otros],
       [],
       ["Fecha", "Facturación", "Ventas"],
       ...(ventasGerenciales?.dias ?? []).map(d => [d.fecha, d.total, d.cantidad]),
@@ -386,7 +386,7 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
           <details className="sigo-gerencial-expenses" open>
             <summary style={{cursor:"pointer",fontWeight:700}}>Gastos opcionales para calcular lo que realmente queda</summary>
             <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(120px,1fr))",gap:10,marginTop:12}}>
-              {(["luz","agua","empleados","internet","otros"] as const).map((clave)=><label key={clave} className="form-group"><span style={{textTransform:"capitalize"}}>{clave}</span><div className="sigo-money-input"><span>$</span><input type="number" min="0" placeholder="0" value={gastosGerenciales[clave] || ""} onChange={(e)=>setGastosGerenciales(g=>({...g,[clave]:e.target.value === "" ? 0 : Number(e.target.value)}))}/></div></label>)}
+              {(["luz","agua","empleados","internet","alquiler","otros"] as const).map((clave)=><label key={clave} className="form-group"><span style={{textTransform:"capitalize"}}>{clave}</span><div className="sigo-money-input"><span>$</span><input type="number" min="0" placeholder="0" value={gastosGerenciales[clave] || ""} onChange={(e)=>setGastosGerenciales(g=>({...g,[clave]:e.target.value === "" ? 0 : Number(e.target.value)}))}/></div></label>)}
             </div>
             <small>Estos gastos se usan sólo para estimar la ganancia neta del período mostrado.</small>
           </details>
