@@ -91,6 +91,29 @@ function agruparEvolucionVentas(datos: Array<{ fecha: string; total: number; can
 }
 
 
+function GraficoGerencial({ ventas, compras, gastosTotal }: { ventas: Array<{fecha:string;total:number}>; compras: Array<{fecha:string;compras:number}>; gastosTotal:number }) {
+  const comprasMap=new Map(compras.map(d=>[d.fecha,d.compras]));
+  const gastoDia=ventas.length ? gastosTotal/ventas.length : 0;
+  const datos=ventas.map(v=>({fecha:v.fecha,ventas:v.total,compras:comprasMap.get(v.fecha)??0,ganancia:v.total-(comprasMap.get(v.fecha)??0)-gastoDia}));
+  const max=Math.max(1,...datos.flatMap(d=>[d.ventas,d.compras,Math.max(0,d.ganancia)]));
+  const ancho=Math.max(720,datos.length*54), alto=270, base=220, escala=170/max;
+  const puntos=datos.map((d,i)=>`${28+i*54},${base-Math.max(0,d.ganancia)*escala}`).join(" ");
+  return <div className="sigo-gerencial-chart-wrap">
+    <div className="sigo-gerencial-legend"><span className="venta">Ventas</span><span className="ganancia">Ganancia estimada</span><span className="compra">Compras</span><span className="linea">Línea de ganancia</span></div>
+    <div className="sigo-gerencial-chart-scroll"><svg width={ancho} height={alto} role="img" aria-label="Ventas, ganancia estimada y compras por día">
+      <line x1="0" y1={base} x2={ancho} y2={base} stroke="#dbe5f0" />
+      {datos.map((d,i)=>{const x=10+i*54; const vw=Math.max(1,d.ventas*escala), cw=Math.max(1,d.compras*escala), gw=Math.max(1,Math.max(0,d.ganancia)*escala); return <g key={d.fecha}>
+        <rect x={x} y={base-vw} width="11" height={vw} rx="2" fill="#1677e8"><title>{`Ventas ${d.fecha}: ${dinero(d.ventas)}`}</title></rect>
+        <rect x={x+13} y={base-gw} width="11" height={gw} rx="2" fill="#63b32e"><title>{`Ganancia estimada ${d.fecha}: ${dinero(d.ganancia)}`}</title></rect>
+        <rect x={x+26} y={base-cw} width="11" height={cw} rx="2" fill="#9aa5b1"><title>{`Compras ${d.fecha}: ${dinero(d.compras)}`}</title></rect>
+        <text x={x+18} y={244} textAnchor="middle" fontSize="10" fill="#53657c">{new Date(d.fecha+"T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"})}</text>
+      </g>})}
+      <polyline points={puntos} fill="none" stroke="#2f7d32" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"/>
+      {datos.map((d,i)=><circle key={"p"+d.fecha} cx={28+i*54} cy={base-Math.max(0,d.ganancia)*escala} r="3.5" fill="#2f7d32"><title>{`Ganancia estimada: ${dinero(d.ganancia)}`}</title></circle>)}
+    </svg></div>
+  </div>;
+}
+
 function GraficoPicos({datos,etiqueta}:{datos:Array<{hora:number;total:number;cantidad:number}>;etiqueta:string}) { const max=Math.max(1,...datos.map(d=>d.cantidad)); return <div className="sigo-manager-chart-card"><div className="sigo-manager-chart-head"><div><strong>{etiqueta}</strong><span>Operaciones confirmadas por hora</span></div></div><div style={{display:"flex",alignItems:"end",gap:5,height:115,overflowX:"auto"}}>{datos.filter(d=>d.hora>=7&&d.hora<=23).map(d=><div key={d.hora} title={`${d.hora}:00 · ${d.cantidad} ventas · ${dinero(d.total)}`} style={{minWidth:28,textAlign:"center",fontSize:10}}><div style={{height:78,display:"flex",alignItems:"end",justifyContent:"center"}}><span style={{display:"block",width:16,height:`${Math.max(3,(d.cantidad/max)*74)}px`,background:"currentColor",borderRadius:"4px 4px 0 0"}}/></div><strong>{d.hora}</strong></div>)}</div></div>; }
 function GraficoDias({datos, etiqueta="Días de mayor venta"}:{datos:Array<{dia:string;total:number;cantidad:number}>;etiqueta?:string}) { const max=Math.max(1,...datos.map(d=>d.total)); return <div className="sigo-manager-chart-card"><div className="sigo-manager-chart-head"><div><strong>{etiqueta}</strong><span>Ventas confirmadas del período elegido</span></div></div><div style={{display:"flex",alignItems:"end",gap:12,height:130}}>{datos.map(d=><div key={d.dia} title={`${d.dia} · ${d.cantidad} ventas · ${dinero(d.total)}`} style={{flex:1,textAlign:"center",fontSize:11}}><div style={{height:82,display:"flex",alignItems:"end",justifyContent:"center"}}><span style={{display:"block",width:"55%",height:`${Math.max(3,(d.total/max)*78)}px`,background:"currentColor",borderRadius:"5px 5px 0 0"}}/></div><strong>{d.dia}</strong></div>)}</div></div>; }
 
@@ -351,7 +374,7 @@ export default function InformesOperativos({ empresaId }: { empresaId: string })
             <div className="stat-card"><span>Ganancia neta estimada</span><strong>{dinero(gananciaNetaGerencial)}</strong></div>
             <div className="stat-card"><span>Rentabilidad</span><strong>{numero(rentabilidadGerencial,1)}%</strong></div>
           </div>
-          <div className="sigo-manager-chart-card"><div className="sigo-manager-chart-head"><div><strong>Evolución del período</strong><span>Facturación por fecha · {gerencialDesde} → {gerencialHasta}</span></div></div><GraficoVentas7Dias datos={evolucionGerencial} /></div>
+          <div className="sigo-manager-chart-card"><div className="sigo-manager-chart-head"><div><strong>Evolución del período</strong><span>Ventas · ganancia estimada · compras · {gerencialDesde} → {gerencialHasta}</span></div></div><GraficoGerencial ventas={ventasGerenciales?.dias ?? []} compras={comprasGerenciales?.dias ?? []} gastosTotal={gastosTotalGerencial} /></div>
           <details style={{marginTop:12}}>
             <summary style={{cursor:"pointer",fontWeight:700}}>Gastos opcionales para calcular lo que realmente queda</summary>
             <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(120px,1fr))",gap:10,marginTop:12}}>
