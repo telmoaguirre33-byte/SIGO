@@ -5,6 +5,7 @@ import { cargarResumenOperativoSigo,
   type ResumenOperativoSigo, type ResumenVentasPeriodoSigo, type ResumenComprasPeriodoSigo } from "./informes";
 import { cargarRiesgoStockSigo, type ResumenRiesgoStockSigo, type EstadoRiesgoStockSigo } from "./stockRiesgo";
 import RankingProductosStock from "./RankingProductosStock";
+import { listarProductosSigo, type ProductoSigo } from "./productos";
 
 const vacio: ResumenOperativoSigo = {
   productos: 0,
@@ -194,6 +195,7 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
   const [error, setError] = useState("");
   const [categoria, setCategoria] = useState<CategoriaInforme | null>(null);
   const [vistaStock, setVistaStock] = useState<VistaStock>("menu");
+  const [productosValorizacion, setProductosValorizacion] = useState<ProductoSigo[]>([]);
   const hoyIso = new Date().toISOString().slice(0, 10);
   const desde30Iso = (() => { const d = new Date(); d.setDate(d.getDate() - 29); return d.toISOString().slice(0, 10); })();
   const [comprasDesde, setComprasDesde] = useState(desde30Iso);
@@ -309,6 +311,11 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
     { icono: "👥", titulo: "Clientes", texto: "Cuenta corriente y cobranzas.", categoria: "clientes" },
     { icono: "▥", titulo: "Gerencial", texto: "Resumen completo del negocio.", categoria: "gerencial" },
   ];
+  const stockValorizadoCosto = productosValorizacion.reduce((t,p)=>t + Number(p.stock_actual ?? 0) * Number(p.costo_actual ?? p.costo_ultima_compra ?? 0),0);
+  const stockValorizadoVenta = productosValorizacion.reduce((t,p)=>t + Number(p.stock_actual ?? 0) * Number(p.precio_venta ?? 0),0);
+  const margenPotencialStock = stockValorizadoVenta - stockValorizadoCosto;
+  const cargarValorizacionStock = async () => { try { setProductosValorizacion(await listarProductosSigo(empresaId)); } catch { setProductosValorizacion([]); } };
+
   const evolucionVentas = agruparEvolucionVentas(ventasPeriodo?.dias ?? [], ventasDesde, ventasHasta);
   const evolucionGerencial = agruparEvolucionVentas(ventasGerenciales?.dias ?? [], gerencialDesde, gerencialHasta);
   const gastosTotalGerencial = Object.values(gastosGerenciales).reduce((t, v) => t + Number(v || 0), 0);
@@ -445,12 +452,15 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
             {vistaStock === "menu" && <div className="sigo-stock-menu-row">
               <button onClick={() => setVistaStock("ranking")}><span>🏆</span><strong>Ranking</strong><small>Más vendidos</small></button>
               <button onClick={() => setVistaStock("quiebre")}><span>⚠️</span><strong>Riesgo de quiebre</strong><small>Cobertura</small></button>
-              <button onClick={() => setVistaStock("actual")}><span>📦</span><strong>Stock actual</strong><small>Existencias</small></button>
+              <button onClick={() => { setVistaStock("actual"); void cargarValorizacionStock(); }}><span>📦</span><strong>Valorización de stock</strong><small>Costo y precio de venta</small></button>
               <button onClick={() => setVistaStock("rotacion")}><span>📉</span><strong>Rotación</strong><small>Movimiento</small></button>
             </div>}
             {vistaStock === "ranking" && <RankingProductosStock empresaId={empresaId} />}
             {(vistaStock === "actual" || vistaStock === "quiebre" || vistaStock === "rotacion") && <div className="stats-grid sigo-stock-stats-rows">
               <div className="stat-card"><span>Unidades en stock</span><strong>{resumen.unidadesStock}</strong><small>{resumen.productos} productos</small></div>
+              {vistaStock === "actual" && <div className="stat-card"><span>Stock valorizado a costo</span><strong>{dinero(stockValorizadoCosto)}</strong><small>Stock × costo actual/última compra</small></div>}
+              {vistaStock === "actual" && <div className="stat-card"><span>Stock valorizado a venta</span><strong>{dinero(stockValorizadoVenta)}</strong><small>Stock × precio de venta</small></div>}
+              {vistaStock === "actual" && <div className="stat-card"><span>Margen potencial</span><strong>{dinero(margenPotencialStock)}</strong><small>Venta potencial − costo</small></div>}
               <div className="stat-card"><span>Stock crítico</span><strong>{resumen.productosCriticos}</strong><small>{resumen.productosSinStock} sin stock</small></div>
               {riesgoStock && <div className="stat-card"><span>Quiebre urgente</span><strong>{riesgoStock.urgentes}</strong><small>≤ 7 días de cobertura</small></div>}
               {riesgoStock && <div className="stat-card"><span>Próximo quiebre</span><strong>{riesgoStock.proximos}</strong><small>8 a 15 días de cobertura</small></div>}
