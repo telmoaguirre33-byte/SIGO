@@ -403,7 +403,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
             return productos.some((p) => [p.nombre, p.marca, p.categoria].filter(Boolean).join(" ").toLowerCase().includes(q));
           }}
         />
-        {search.trim() && (
+        {search.trim() && !scanResult && (
           <div className="product-search-suggestions" role="listbox">
             {filtrados.slice(0,12).map((p,i)=><button type="button" key={p.id} className={i===productoSugerido?"active":""} onClick={()=>{setSearch(p.nombre);setScanResult(p);if(puedeEditar&&scanAction==="editar")abrirEdicion(p)}}><strong>{p.nombre}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} · Stock {p.stock_actual??0}</span></button>)}
             {filtrados.length===0&&<div className="table-empty">No se encontraron productos.</div>}
