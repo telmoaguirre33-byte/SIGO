@@ -420,7 +420,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
         <div className="panel products-list-panel">
           <div className="table-wrapper products-list-scroll">
             <table className="products-table">
-              <thead><tr><th>✓</th><th>Producto</th><th>Código</th><th>Código de barras</th><th>Precio</th><th>Stock</th><th>Acciones</th></tr></thead>
+              <thead><tr><th>Producto</th><th>Código</th><th>Código de barras</th><th>Precio</th><th>Stock</th><th>Acciones</th></tr></thead>
               <tbody>
                 {filtrados.map((p) => (
                   <tr key={p.id}>
