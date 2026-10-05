@@ -550,6 +550,16 @@ function Stock({ empresaId }: { empresaId: string }) {
   const criticos = visibles.filter((p) => p.stock_minimo != null && Number(p.stock_actual) <= Number(p.stock_minimo));
   const sinStock = visibles.filter((p) => Number(p.stock_actual) <= 0);
   const totalUnidades = visibles.reduce((total, p) => total + Number(p.stock_actual || 0), 0);
+  const stockValorCosto = visibles.reduce((total,p)=>total + Number(p.stock_actual || 0) * Number(p.costo_actual ?? p.costo_ultima_compra ?? 0),0);
+  const stockValorVenta = visibles.reduce((total,p)=>total + Number(p.stock_actual || 0) * Number(p.precio_venta ?? 0),0);
+  const margenPotencial = stockValorVenta - stockValorCosto;
+  const dineroStock = (valor:number) => valor.toLocaleString("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:2});
+  function exportarStockExcel() {
+    const esc=(v:unknown)=>`"${String(v??"").replaceAll('"','""')}"`;
+    const lineas=[["Producto","Código","Stock","Precio compra","Precio venta","Valorizado compra","Valorizado venta","Margen potencial"],...filas.map(p=>{const stock=Number(p.stock_actual||0), costo=Number(p.costo_actual??p.costo_ultima_compra??0), venta=Number(p.precio_venta??0); return [p.nombre,p.codigo_barras||p.codigo_interno||"",stock,costo,venta,stock*costo,stock*venta,stock*(venta-costo)];})];
+    const blob=new Blob(["\\ufeff"+lineas.map(f=>f.map(esc).join(";")).join("\\r\\n")],{type:"text/csv;charset=utf-8"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`SIGO-stock-valorizado-${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+  }
   const normalizarBusqueda = (valor: string) => valor.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es-AR").trim();
   const termino = normalizarBusqueda(busqueda);
   const filas = (soloCriticos ? criticos : visibles).filter((p) =>
@@ -572,6 +582,9 @@ function Stock({ empresaId }: { empresaId: string }) {
         <div className="stat-card"><span>Unidades totales</span><strong>{totalUnidades.toLocaleString("es-AR")}</strong></div>
         <div className="stat-card"><span>Stock crítico</span><strong>{criticos.length}</strong></div>
         <div className="stat-card"><span>Sin stock</span><strong>{sinStock.length}</strong></div>
+        <div className="stat-card"><span>Valorizado a compra</span><strong>{dineroStock(stockValorCosto)}</strong></div>
+        <div className="stat-card"><span>Valorizado a venta</span><strong>{dineroStock(stockValorVenta)}</strong></div>
+        <div className="stat-card"><span>Margen potencial</span><strong>{dineroStock(margenPotencial)}</strong></div>
       </div>
 
       <div className="panel">
@@ -598,18 +611,18 @@ function Stock({ empresaId }: { empresaId: string }) {
       <div className="panel">
         <div className="page-header">
           <div><h3>Detalle de stock</h3><p>Priorizá faltantes y productos bajo mínimo.</p></div>
-          <button className={soloCriticos ? "primary-button" : "admin-button"} onClick={() => setSoloCriticos((actual) => !actual)}>{soloCriticos ? "Ver todo" : "Solo críticos"}</button>
+          <div style={{display:"flex",gap:8}}><button className="admin-button" onClick={exportarStockExcel}>Exportar Excel</button><button className={soloCriticos ? "primary-button" : "admin-button"} onClick={() => setSoloCriticos((actual) => !actual)}>{soloCriticos ? "Ver todo" : "Solo críticos"}</button></div>
         </div>
         {loading && <p>Cargando stock…</p>}
         {!loading && error && <p role="alert">{error}</p>}
         {!loading && !error && (
           <div className="table-wrapper">
             <table className="products-table">
-              <thead><tr><th>Producto</th><th>Código</th><th>Stock actual</th><th>Mínimo</th><th>Estado</th></tr></thead>
+              <thead><tr><th>Producto</th><th>Código</th><th>Stock actual</th><th>Precio compra</th><th>Precio venta</th><th>Valor compra</th><th>Valor venta</th><th>Estado</th></tr></thead>
               <tbody>
                 {filas.map((p) => {
                   const critico = p.stock_minimo != null && Number(p.stock_actual) <= Number(p.stock_minimo);
-                  return <tr key={p.id}><td><strong>{p.nombre}</strong></td><td>{p.codigo_barras || p.codigo_interno || "-"}</td><td>{p.stock_actual}</td><td>{p.stock_minimo ?? "-"}</td><td>{Number(p.stock_actual) <= 0 ? "SIN STOCK" : critico ? "CRÍTICO" : "OK"}</td></tr>;
+                  return <tr key={p.id}><td><strong>{p.nombre}</strong></td><td>{p.codigo_barras || p.codigo_interno || "-"}</td><td>{p.stock_actual}</td><td>{dineroStock(Number(p.costo_actual ?? p.costo_ultima_compra ?? 0))}</td><td>{dineroStock(Number(p.precio_venta ?? 0))}</td><td>{dineroStock(Number(p.stock_actual||0)*Number(p.costo_actual ?? p.costo_ultima_compra ?? 0))}</td><td>{dineroStock(Number(p.stock_actual||0)*Number(p.precio_venta ?? 0))}</td><td>{Number(p.stock_actual) <= 0 ? "SIN STOCK" : critico ? "CRÍTICO" : "OK"}</td></tr>;
                 })}
               </tbody>
             </table>
