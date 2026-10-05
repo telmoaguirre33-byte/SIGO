@@ -528,9 +528,7 @@ function Stock({ empresaId }: { empresaId: string }) {
   const [error, setError] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [soloCriticos, setSoloCriticos] = useState(false);
-  const [scanResult, setScanResult] = useState<BarcodeProduct | null>(null);
-
-  async function cargar() {
+  const [scanResult, setScanResult] = useState<BarcodeProduct | null>(null);\n  const [seleccionValorizacion, setSeleccionValorizacion] = useState<Set<string>>(new Set());\n\n  async function cargar() {
     setLoading(true);
     setError("");
     try {
