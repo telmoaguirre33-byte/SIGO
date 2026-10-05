@@ -558,11 +558,26 @@ function Stock({ empresaId }: { empresaId: string }) {
   const margenPotencial = stockValorVenta - stockValorCosto;
   const dineroStock = (valor:number) => valor.toLocaleString("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:2});
   function exportarStockExcel() {
-    const esc=(v:unknown)=>`"${String(v??"").replaceAll('"','""')}"`;
-    const lineas=[["Producto","Código","Stock","Precio compra","Precio venta","Valorizado compra","Valorizado venta","Margen potencial"],...filas.map(p=>{const stock=Number(p.stock_actual||0), costo=Number(p.costo_actual??p.costo_ultima_compra??0), venta=Number(p.precio_venta??0); return [p.nombre,p.codigo_barras||p.codigo_interno||"",stock,costo,venta,stock*costo,stock*venta,stock*(venta-costo)];})];
-    const blob=new Blob(["\\ufeff"+lineas.map(f=>f.map(esc).join(";")).join("\\r\
-")],{type:"text/csv;charset=utf-8"});
-    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`SIGO-stock-valorizado-${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+    const esc = (v: unknown) => `"${String(v ?? "").replaceAll('"', '""')}"`;
+    const lineas = [
+      ["Producto","Código","Stock","Precio compra","Precio venta","Valorizado compra","Valorizado venta","Margen potencial"],
+      ...filas.map((p) => {
+        const stock = Number(p.stock_actual || 0);
+        const costo = Number(p.costo_actual ?? p.costo_ultima_compra ?? 0);
+        const venta = Number(p.precio_venta ?? 0);
+        return [p.nombre,p.codigo_barras || p.codigo_interno || "",stock,costo,venta,stock*costo,stock*venta,stock*(venta-costo)];
+      }),
+    ];
+    const csv = "\uFEFFsep=;\r\n" + lineas.map((fila) => fila.map(esc).join(";")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `SIGO-stock-valorizado-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
   const normalizarBusqueda = (valor: string) => valor.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es-AR").trim();
   const termino = normalizarBusqueda(busqueda);
