@@ -97,9 +97,9 @@ function GraficoGerencial({ ventas, compras, gastosTotal }: { ventas: Array<{fec
   const datos=ventas.map(v=>({fecha:v.fecha,ventas:v.total,compras:comprasMap.get(v.fecha)??0,ganancia:v.total-(comprasMap.get(v.fecha)??0)-gastoDia}));
   const maxPos=Math.max(1,...datos.flatMap(d=>[d.ventas,d.compras,Math.max(0,d.ganancia)]));
   const maxNeg=Math.max(0,...datos.map(d=>Math.max(0,-d.ganancia)));
-  const ancho=Math.max(720,datos.length*58), alto=330;
-  const margenSup=24, margenInf=42, area=alto-margenSup-margenInf;
-  const proporcionNeg=maxNeg>0 ? Math.min(.42,Math.max(.22,maxNeg/(maxPos+maxNeg))) : 0;
+  const ancho=Math.max(720,datos.length*58), alto=220;
+  const margenSup=16, margenInf=30, area=alto-margenSup-margenInf;
+  const proporcionNeg=maxNeg>0 ? Math.min(.38,Math.max(.20,maxNeg/(maxPos+maxNeg))) : 0;
   const altoNeg=area*proporcionNeg, altoPos=area-altoNeg;
   const base=margenSup+altoPos;
   const escalaPos=altoPos/maxPos, escalaNeg=maxNeg>0?altoNeg/maxNeg:0;
