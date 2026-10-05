@@ -1136,3 +1136,18 @@ main:has(> .productos-oferta){
 .compra-items-table th:nth-child(5),.compra-items-table td:nth-child(5){width:14%}
 .compra-items-table th:nth-child(6),.compra-items-table td:nth-child(6){width:13%}
 .compra-items-table th:nth-child(7),.compra-items-table td:nth-child(7){width:7%}
+
+/* Compras manual: máxima compactación en escritorio; anula min-width global de products-table. */
+@media(min-width:761px){
+ .table-wrapper.compra-items-wrapper{overflow:hidden!important;border-radius:10px}
+ table.products-table.compra-items-table{display:table!important;width:100%!important;min-width:0!important;max-width:100%!important;table-layout:fixed!important}
+ .compra-items-table th,.compra-items-table td{padding:4px 4px!important;font-size:10px!important;white-space:normal!important}
+ .compra-items-table select,.compra-items-table input{width:100%!important;min-width:0!important;max-width:100%!important;height:31px!important;min-height:31px!important;padding:3px 5px!important;font-size:11px!important}
+ .compra-items-table th:nth-child(1),.compra-items-table td:nth-child(1){width:38%!important}
+ .compra-items-table th:nth-child(2),.compra-items-table td:nth-child(2){width:10%!important}
+ .compra-items-table th:nth-child(3),.compra-items-table td:nth-child(3){width:13%!important}
+ .compra-items-table th:nth-child(4),.compra-items-table td:nth-child(4){width:9%!important}
+ .compra-items-table th:nth-child(5),.compra-items-table td:nth-child(5){width:13%!important}
+ .compra-items-table th:nth-child(6),.compra-items-table td:nth-child(6){width:11%!important}
+ .compra-items-table th:nth-child(7),.compra-items-table td:nth-child(7){width:6%!important}
+}
