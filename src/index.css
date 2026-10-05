@@ -1173,3 +1173,17 @@ main:has(> .productos-oferta){
  .compra-items-table th:nth-child(7),.compra-items-table td:nth-child(7){width:8%!important}
  .compra-items-table .admin-button{height:32px!important;min-height:32px!important;padding:4px 6px!important;font-size:10px!important}
 }
+
+/* Productos: tabla visible completa y columnas alineadas. */
+.products-list-panel{overflow:visible!important}
+.products-list-scroll{overflow-x:hidden!important;max-width:100%!important}
+.products-master-table{width:100%!important;min-width:0!important;max-width:100%!important;table-layout:fixed!important}
+.products-master-table th,.products-master-table td{padding:8px 7px!important;vertical-align:middle!important;overflow:hidden;text-overflow:ellipsis}
+.products-master-table th:nth-child(1),.products-master-table td:nth-child(1){width:30%!important}
+.products-master-table th:nth-child(2),.products-master-table td:nth-child(2){width:12%!important}
+.products-master-table th:nth-child(3),.products-master-table td:nth-child(3){width:18%!important}
+.products-master-table th:nth-child(4),.products-master-table td:nth-child(4){width:10%!important}
+.products-master-table th:nth-child(5),.products-master-table td:nth-child(5){width:8%!important}
+.products-master-table th:nth-child(6),.products-master-table td:nth-child(6){width:22%!important}
+.products-master-table .row-actions{display:flex!important;gap:5px!important;flex-wrap:wrap!important}
+.products-master-table .row-actions .admin-button{padding:6px 8px!important;font-size:11px!important}
