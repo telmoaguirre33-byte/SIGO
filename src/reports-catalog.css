@@ -193,3 +193,10 @@
 .sigo-settings-line>strong{font-size:15px;color:#172033}
 .sigo-settings-line>small{font-size:12px;color:#718096}
 @media(max-width:760px){.sigo-settings-line{grid-template-columns:100px 1fr;gap:5px 10px;padding:9px 4px}.sigo-settings-line>small{grid-column:2}}
+
+/* Informes gerenciales: cada gráfico conserva su propio bloque y no invade al siguiente. */
+.sigo-reports-page .sigo-manager-chart-card{overflow:hidden;clear:both}
+.sigo-reports-page .sigo-sales-chart-compact{min-height:285px}
+.sigo-reports-page .sigo-sales-chart-compact+.sigo-manager-chart-card{margin-top:18px}
+.sigo-reports-page .sigo-trend-chart{position:relative;isolation:isolate}
+@media(max-width:900px){.sigo-reports-page .sigo-sales-chart-compact{min-height:260px}}
