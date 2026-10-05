@@ -160,3 +160,21 @@
 .sigo-gerencial-expenses{margin-top:6px!important;padding:8px 10px}
 .sigo-gerencial-expenses summary{margin-bottom:6px}
 @media(max-width:600px){.sigo-gerencial-chart-card .sigo-gerencial-chart-scroll svg{height:173px}}
+
+/* Gerencial: vista completa en una pantalla de escritorio. */
+.sigo-gerencial-summary-cards .stat-card{min-height:58px;padding:7px 10px}
+.sigo-gerencial-summary-cards .stat-card span{font-size:10px}
+.sigo-gerencial-summary-cards .stat-card strong{font-size:16px}
+.sigo-gerencial-summary-cards .stat-card small{font-size:8px}
+.sigo-gerencial-chart-card{padding:8px 10px!important}
+.sigo-gerencial-chart-card .sigo-manager-chart-head{margin-bottom:4px!important}
+.sigo-gerencial-chart-card .sigo-manager-chart-head strong{font-size:15px}
+.sigo-gerencial-chart-card .sigo-manager-chart-head span{font-size:10px}
+.sigo-gerencial-chart-card .sigo-gerencial-legend{font-size:10px;gap:12px}
+.sigo-gerencial-chart-card .sigo-gerencial-chart-scroll{min-height:220px}
+.sigo-gerencial-chart-card .sigo-gerencial-chart-scroll svg{height:220px!important;overflow:visible}
+.sigo-gerencial-expenses{padding:6px 9px;margin-top:5px!important}
+.sigo-gerencial-expenses summary{font-size:13px;margin-bottom:4px}
+.sigo-gerencial-expenses .form-group{gap:3px}
+.sigo-gerencial-expenses .form-group>span{font-size:11px}
+.sigo-gerencial-expenses .sigo-money-input input{padding-top:6px!important;padding-bottom:6px!important}
