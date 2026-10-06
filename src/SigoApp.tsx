@@ -56,7 +56,7 @@ function numeroOpcional(valor: string, etiqueta: string): number | null {
   return numero;
 }
 
-export default function SigoApp({ empresa, initialSection = "Inicio", purchasesOnly = false }: { empresa: EmpresaOperativa; initialSection?: Section; purchasesOnly?: boolean }) {
+export default function SigoApp({ empresa, initialSection = "Inicio", purchasesOnly = false, onAbrirInformes }: { empresa: EmpresaOperativa; initialSection?: Section; purchasesOnly?: boolean; onAbrirInformes?: () => void }) {
   const [section, setSection] = useState<Section>(initialSection);
   const puedeEditarProductos = can(empresa.rol, "products.write");
 
@@ -72,8 +72,8 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
         </div>
         <div className="sidebar-scroll">
         <nav className="menu">
-          {sections.map((item) => (
-            <button key={item} className={section === item ? "menu-item active" : "menu-item"} onClick={() => setSection(item)}>
+          {sections.filter((item) => item !== "Informes" || Boolean(onAbrirInformes)).map((item) => (
+            <button key={item} className={section === item ? "menu-item active" : "menu-item"} onClick={() => { if (item === "Informes") { onAbrirInformes?.(); return; } setSection(item); }}>
               <span className="menu-icon">{item.slice(0, 2).toUpperCase()}</span>
               <span>{item === "Compras" ? "Compras / Proveedores" : item}</span>
             </button>
