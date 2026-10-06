@@ -6,6 +6,7 @@ import type { BarcodeAction, BarcodeProduct } from "./barcode";
 import VentaRapidaOperativa from "./VentaRapidaOperativa";
 import ComprasOperativas from "./ComprasOperativas";
 import StockVsInventario from "./StockVsInventario";
+import ListaPreciosManager from "./ListaPreciosManager";
 import { cargarResumenOperativoSigo, type ResumenOperativoSigo } from "./informes";
 import { can } from "./permissions";
 import { listarModulosEmpresa } from "./modulosEmpresa";
@@ -16,9 +17,9 @@ import {
   type ProductoSigo,
 } from "./productos";
 
-type Section = "Inicio" | "Productos" | "Ventas" | "Clientes" | "Compras" | "Stock" | "Informes" | "Stock vs Inventario";
+type Section = "Inicio" | "Productos" | "Ventas" | "Clientes" | "Compras" | "Stock" | "Lista de precios" | "Informes" | "Stock vs Inventario";
 
-const sections: Section[] = ["Inicio", "Productos", "Ventas", "Stock", "Compras", "Informes"];
+const sections: Section[] = ["Inicio", "Productos", "Ventas", "Stock", "Compras", "Lista de precios", "Informes"];
 
 type ProductoForm = {
   nombre: string;
@@ -103,6 +104,7 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
           {section === "Inicio" && <Inicio empresa={empresa} onProductos={() => setSection("Productos")} onStock={() => setSection("Stock")} onCaja={() => setSection("Ventas")} />}
           {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
           {section === "Stock" && <Stock empresaId={empresa.empresa_id} />}
+          {section === "Lista de precios" && <ListaPreciosSection empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
           {section === "Stock vs Inventario" && <StockVsInventario empresaId={empresa.empresa_id} />}
           {section === "Ventas" && <VentaRapidaOperativa empresaId={empresa.empresa_id} puedeEditarProductos={puedeEditarProductos} />}
           {section === "Compras" && <ComprasHub empresaId={empresa.empresa_id} />}
@@ -651,6 +653,20 @@ function Stock({ empresaId }: { empresaId: string }) {
       </div>
     </div>
   );
+}
+
+function ListaPreciosSection({ empresaId, puedeEditar }: { empresaId: string; puedeEditar: boolean }) {
+  const [productos, setProductos] = useState<ProductoSigo[]>([]);
+  const [error, setError] = useState("");
+  async function cargarLista() {
+    try { setError(""); setProductos(await listarProductosSigo(empresaId)); }
+    catch (e) { setError(e instanceof Error ? e.message : "No se pudo cargar la lista de precios."); }
+  }
+  useEffect(() => { void cargarLista(); }, [empresaId]);
+  return <div className="products-page">
+    {error ? <p className="form-error" role="alert">{error}</p> : null}
+    <ListaPreciosManager empresaId={empresaId} productos={productos} puedeEditar={puedeEditar} onUpdated={cargarLista} />
+  </div>;
 }
 
 function Pendiente({ title }: { title: string }) {
