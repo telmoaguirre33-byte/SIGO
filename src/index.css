@@ -140,26 +140,28 @@ button { cursor: pointer; }
 .sigo-matriz-kicker { display:inline-block; margin-bottom:8px; color:#2563eb; font-size:11px; font-weight:900; letter-spacing:.12em; }
 .sigo-matriz-search { width:min(380px,100%); min-height:44px; }
 .sigo-matriz-success { margin:0 0 14px; padding:10px 12px; border-radius:10px; background:#f0fdf4; color:#166534; font-size:13px; }
-.sigo-matriz-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
-.sigo-matriz-company { border:1px solid var(--line); border-radius:18px; padding:18px; background:#fff; box-shadow:0 7px 22px rgba(20,31,51,.04); }
-.sigo-matriz-company h4 { margin:0; font-size:18px; }
-.sigo-matriz-company p { margin:6px 0 4px; font-size:13px; }
-.sigo-matriz-company small { color:var(--muted); }
-.sigo-matriz-title-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-.sigo-status { display:inline-flex; align-items:center; min-height:25px; padding:4px 9px; border-radius:999px; font-size:11px; font-weight:850; }
+.sigo-matriz-grid { display:flex; flex-direction:column; gap:0; }
+.sigo-matriz-company { display:grid; grid-template-columns:minmax(260px,1.4fr) minmax(300px,1fr) auto; align-items:center; gap:12px; border:0; border-bottom:1px solid var(--line); border-radius:0; padding:10px 4px; background:transparent; box-shadow:none; }
+.sigo-matriz-company h4 { margin:0; font-size:15px; }
+.sigo-matriz-company p { margin:3px 0 2px; font-size:12px; }
+.sigo-matriz-company small { color:var(--muted); font-size:11px; }
+.sigo-matriz-title-row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+.sigo-status { display:inline-flex; align-items:center; min-height:20px; padding:2px 7px; border-radius:999px; font-size:10px; font-weight:850; }
 .sigo-status.active { background:#ecfdf3; color:#15803d; }
 .sigo-status.suspended { background:#fff1f2; color:#be123c; }
 .sigo-status.support { background:#eef5ff; color:#1d4ed8; }
-.sigo-matriz-metrics { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0; }
-.sigo-matriz-metrics span { padding:7px 9px; border:1px solid #e8edf4; border-radius:10px; background:#f8fafc; color:#64748b; font-size:11px; }
+.sigo-matriz-metrics { display:flex; flex-wrap:wrap; gap:5px; margin:0; }
+.sigo-matriz-metrics span { padding:4px 6px; border:1px solid #e8edf4; border-radius:7px; background:#f8fafc; color:#64748b; font-size:10px; }
 .sigo-matriz-metrics strong { color:#0f172a; }
-.sigo-matriz-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.sigo-matriz-actions { display:flex; flex-wrap:nowrap; gap:5px; justify-content:flex-end; }
+.sigo-matriz-actions .admin-button,.sigo-matriz-actions .primary-button { min-height:32px; padding:6px 9px; border-radius:8px; font-size:11px; white-space:nowrap; }
 .sigo-return-company { white-space:nowrap; }
 
 @media (max-width: 1050px) {
   .stats { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .dashboard-grid { grid-template-columns: 1fr; }
-  .sigo-matriz-grid { grid-template-columns:1fr; }
+  .sigo-matriz-company { grid-template-columns:1fr; align-items:start; }
+  .sigo-matriz-actions { justify-content:flex-start; flex-wrap:wrap; }
 }
 
 @media (max-width: 760px) {
