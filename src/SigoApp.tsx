@@ -631,7 +631,7 @@ function Stock({ empresaId }: { empresaId: string }) {
         {!loading && !error && (
           <div className="table-wrapper">
             <table className="products-table">
-              <thead><tr><th>Producto</th><th>Código</th><th>Stock actual</th><th>Precio compra</th><th>Precio venta</th><th>Valor compra</th><th>Valor venta</th><th>Estado</th></tr></thead>
+              <thead><tr><th aria-label="Seleccionar"></th><th>Producto</th><th>Código</th><th>Stock actual</th><th>Precio compra</th><th>Precio venta</th><th>Valor compra</th><th>Valor venta</th><th>Estado</th></tr></thead>
               <tbody>
                 {filas.map((p) => {
                   const critico = p.stock_minimo != null && Number(p.stock_actual) <= Number(p.stock_minimo);
