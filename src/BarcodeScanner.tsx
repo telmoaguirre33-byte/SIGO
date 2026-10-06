@@ -206,10 +206,7 @@ export default function BarcodeScanner({
     if (source === "manual") {
       setCode("");
       onQueryChange?.("");
-      // Un código de scanner (EAN/numérico) debe resolverse por código y agregarse
-      // al carrito. La búsqueda manual queda reservada para texto/nombre.
-      const scannerLike = /^\\d{6,}$/.test(raw.trim());
-      if (!scannerLike && onManualQuery?.(raw)) { focusScanner(); return; }
+      if (onManualQuery?.(raw)) { focusScanner(); return; }
     }
     const normalized = normalizeBarcode(raw);
     if (!normalized) return;
@@ -472,30 +469,14 @@ export default function BarcodeScanner({
           value={code}
           onChange={(e) => { setCode(e.target.value); setError(""); onQueryChange?.(e.target.value); }}
           onKeyDown={(e) => {
-            // Enter/Tab cierra primero la lectura del scanner. No debe pasar por
-            // la navegación de sugerencias, porque eso dejaba el código anterior
-            // en el input y la pistola concatenaba la siguiente lectura.
-            // Flechas/Escape y, cuando hay una sugerencia elegida, Enter pertenecen
-            // a la búsqueda manual. Preservamos ese flujo antes de interpretar Enter como scanner.
-            if ((e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Escape") && onProductSearchKeyDown?.(e.key)) {
-              e.preventDefault();
-              e.stopPropagation();
-              return;
-            }
-            if (e.key === "Enter" && !/^\\d{6,}$/.test(code.trim()) && onProductSearchKeyDown?.(e.key)) {
+            if (onProductSearchKeyDown?.(e.key)) {
               e.preventDefault();
               e.stopPropagation();
               return;
             }
             if (isLikelyScannerSubmit(e.key)) {
               e.preventDefault();
-              e.stopPropagation();
-              const submitted = code;
-              setCode("");
-              onQueryChange?.("");
-              const source: ScanSource = /^\\d{6,}$/.test(submitted.trim()) ? "wedge" : "manual";
-              void resolveCode(submitted, source);
-              return;
+              void resolveCode(code, "manual");
             }
           }}
           placeholder="Código de barras, interno o nombre del producto"
