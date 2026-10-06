@@ -1338,3 +1338,28 @@ main:has(> .productos-oferta){
 .sigo-price-manager-main .barcode-help{margin:4px 0!important;font-size:9px!important}
 .sigo-price-manager-main .form-actions{margin-top:5px!important}
 @media(max-width:640px){.ofertas-etiquetas-actions{display:grid;grid-template-columns:1fr}.sigo-price-rounding-title{align-items:flex-start;flex-direction:column;gap:2px}}
+
+
+/* Caja: sugerencias manuales compactas. No deben tapar la venta. */
+.sigo-pos-results{
+  position:static!important;
+  left:auto!important;right:auto!important;top:auto!important;
+  z-index:auto!important;
+  max-height:150px!important;
+  margin-top:4px!important;
+  overflow-y:auto!important;
+  border:1px solid #e6ebf2!important;
+  border-radius:8px!important;
+  box-shadow:none!important;
+}
+.sigo-pos-results button{
+  min-height:0!important;
+  padding:5px 9px!important;
+  line-height:1.15!important;
+}
+.sigo-pos-results button strong{font-size:12px!important;line-height:1.15!important}
+.sigo-pos-results span{font-size:9px!important;line-height:1.15!important;margin-top:2px!important}
+.sigo-pos-results button.active,.sigo-pos-results button[aria-selected="true"]{
+  outline:1px solid #1677e8!important;
+  outline-offset:-1px!important;
+}
