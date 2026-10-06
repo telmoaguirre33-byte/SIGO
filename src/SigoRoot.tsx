@@ -260,7 +260,7 @@ export default function SigoRoot() {
       return <main className="main" style={{ minHeight: "calc(100vh - 88px)" }}><section className="content"><PortalCliente key={empresaActiva.empresa_id} empresaId={empresaActiva.empresa_id} /></section></main>;
     }
     if (workspacePermitido(empresaActiva.rol, "operacion")) {
-      return <div className={`sigo-operation-only sigo-role-${empresaActiva.rol}`}><SigoApp key={empresaActiva.empresa_id} empresa={empresaActiva} /></div>;
+      return <div className={`sigo-operation-only sigo-role-${empresaActiva.rol}`}><SigoApp key={empresaActiva.empresa_id} empresa={empresaActiva} onAbrirInformes={workspacePermitido(empresaActiva.rol, "informes") ? () => abrirWorkspace("informes") : undefined} /></div>;
     }
     return <main className="sigo-onboarding-card" role="alert"><h1>Acceso limitado</h1><p>Tu perfil no tiene habilitada esta operación.</p></main>;
   })() : null;
