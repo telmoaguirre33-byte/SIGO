@@ -318,10 +318,12 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
       // recargar historial/borradores. Si esa recarga falla, el producto ya fue creado
       // y debe quedar visible en la factura para evitar altas duplicadas.
       setLineas((actual)=>actual.length===1&&!actual[0].producto_id?[{...actual[0],producto_id:id,cantidad,costo_unitario:costo,margen_porcentaje:margen,precio_venta:precio}]:[...actual,{key:nuevaClave(),producto_id:id,cantidad,costo_unitario:costo,margen_porcentaje:margen,precio_venta:precio}]);
+      // Incorporar el producto recién creado al maestro local sin recargar toda la compra.
+      // cargar() también reescribe proveedores/compra y podía hacer parecer que la línea recién agregada se perdió.
+      setProductos((actual)=>actual.some((p)=>p.id===id)?actual:[...actual,{id,empresa_id:empresaId,nombre,codigo_barras:nuevoProductoManual.codigo.trim()||null,codigo_interno:null,descripcion:null,categoria:null,marca:null,proveedor:null,costo_actual:costo,costo_ultima_compra:costo,precio_venta:precio,margen_ganancia:null,margen_porcentaje:margen,stock_actual:0,stock_minimo:null,stock_maximo:null,activo:true} as ProductoSigo].sort((a,b)=>a.nombre.localeCompare(b.nombre)));
       setNuevoProductoManual({nombre:"",codigo:"",cantidad:"1",costo:"",margen:"",precio:""});
       setAltaManualAbierta(false);
       setBusquedaManual("");
-      try { await cargar(); } catch { /* el producto ya quedó agregado a la compra */ }
     } catch(err){setError(err instanceof Error?err.message:"No se pudo crear el producto.");} finally {setSaving(false);}
   }
 
