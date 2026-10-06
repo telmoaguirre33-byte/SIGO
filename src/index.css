@@ -1205,3 +1205,15 @@ main:has(> .productos-oferta){
 .products-page-fixed .product-search-suggestions:empty{display:none!important}
 .products-page-fixed .product-search-suggestions{border-top-color:var(--line)!important}
 .products-page-fixed .product-search-panel + .products-list-panel{margin-top:0!important}
+
+ 
+/* Lista de precios: mantener código, compra y venta visibles en celular. */
+@media(max-width:640px){
+  .sigo-price-list-compact .products-table{width:100%!important;table-layout:fixed!important}
+  .sigo-price-list-compact .products-table th,.sigo-price-list-compact .products-table td{padding:6px 5px!important;white-space:normal!important;overflow-wrap:anywhere!important;font-size:10px!important}
+  .sigo-price-list-compact .products-table th:nth-child(1),.sigo-price-list-compact .products-table td:nth-child(1){width:40%!important}
+  .sigo-price-list-compact .products-table th:nth-child(2),.sigo-price-list-compact .products-table td:nth-child(2){width:20%!important}
+  .sigo-price-list-compact .products-table th:nth-child(3),.sigo-price-list-compact .products-table td:nth-child(3){width:20%!important}
+  .sigo-price-list-compact .products-table th:nth-child(4),.sigo-price-list-compact .products-table td:nth-child(4){width:20%!important}
+  .sigo-price-list-compact .sigo-price-extra-column{display:none!important}
+}
