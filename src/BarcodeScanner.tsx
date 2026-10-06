@@ -206,7 +206,10 @@ export default function BarcodeScanner({
     if (source === "manual") {
       setCode("");
       onQueryChange?.("");
-      if (onManualQuery?.(raw)) { focusScanner(); return; }
+      // Un código de scanner (EAN/numérico) debe resolverse por código y agregarse
+      // al carrito. La búsqueda manual queda reservada para texto/nombre.
+      const scannerLike = /^\\d{6,}$/.test(raw.trim());
+      if (!scannerLike && onManualQuery?.(raw)) { focusScanner(); return; }
     }
     const normalized = normalizeBarcode(raw);
     if (!normalized) return;
