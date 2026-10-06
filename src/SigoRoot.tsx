@@ -272,9 +272,7 @@ export default function SigoRoot() {
   return (
     <div className="sigo-root">
       <style>{`
-        .sigo-operation-only .sidebar .menu > button:nth-child(6) { display: none; }
         .sigo-role-seller .sidebar .menu > button:nth-child(2),
-        .sigo-role-seller .sidebar .menu > button:nth-child(6),
         .sigo-role-seller .welcome .topbar-actions { display: none; }
         .sigo-role-warehouse .sidebar .menu > button:nth-child(3) { display: none; }
         .sigo-onboarding-card { width:min(540px,calc(100% - 32px)); margin:48px auto; padding:28px; border-radius:22px; background:#fff; box-shadow:0 18px 50px rgba(15,23,42,.12); }
