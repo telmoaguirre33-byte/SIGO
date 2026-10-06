@@ -13,6 +13,9 @@ type EmpresaMatriz = {
   activa: boolean;
   created_at: string;
   owner_email: string | null;
+  owner_telefono: string | null;
+  trial_started_at: string;
+  trial_days: number;
   usuarios_activos: number;
   administradores: number;
   vendedores: number;
@@ -52,6 +55,8 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
   const [empresas, setEmpresas] = useState<EmpresaMatriz[]>([]);
   const [resumen, setResumen] = useState<Resumen>(resumenVacio);
   const [busqueda, setBusqueda] = useState("");
+  const [fechaInicio, setFechaInicio] = useState("");
+  const [fechaVencimiento, setFechaVencimiento] = useState("");
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -86,6 +91,9 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
         activa: Boolean(fila.activa),
         created_at: String(fila.created_at ?? ""),
         owner_email: typeof fila.owner_email === "string" ? fila.owner_email : null,
+        owner_telefono: typeof fila.owner_telefono === "string" ? fila.owner_telefono : null,
+        trial_started_at: String(fila.trial_started_at ?? fila.created_at ?? ""),
+        trial_days: normalizarNumero(fila.trial_days) || 30,
         usuarios_activos: normalizarNumero(fila.usuarios_activos),
         administradores: normalizarNumero(fila.administradores),
         vendedores: normalizarNumero(fila.vendedores),
@@ -107,13 +115,24 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
 
   const filtradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    if (!q) return empresas;
-    return empresas.filter((empresa) =>
-      [empresa.nombre, empresa.razon_social, empresa.cuit, empresa.owner_email]
-        .filter(Boolean)
-        .some((valor) => String(valor).toLowerCase().includes(q)),
-    );
-  }, [empresas, busqueda]);
+    return empresas.filter((empresa) => {
+      const coincideTexto = !q || [empresa.nombre, empresa.razon_social, empresa.cuit, empresa.owner_email, empresa.owner_telefono].filter(Boolean).some((valor) => String(valor).toLowerCase().includes(q));
+      const inicio = new Date(empresa.trial_started_at || empresa.created_at);
+      const vence = new Date(inicio.getTime() + empresa.trial_days * 86400000);
+      const inicioIso = Number.isFinite(inicio.getTime()) ? inicio.toISOString().slice(0,10) : "";
+      const venceIso = Number.isFinite(vence.getTime()) ? vence.toISOString().slice(0,10) : "";
+      return coincideTexto && (!fechaInicio || inicioIso === fechaInicio) && (!fechaVencimiento || venceIso === fechaVencimiento);
+    });
+  }, [empresas, busqueda, fechaInicio, fechaVencimiento]);
+
+  const fechaCorta = (valor: Date) => Number.isFinite(valor.getTime()) ? valor.toLocaleDateString("es-AR") : "—";
+  const telefonoWhatsApp = (valor: string | null) => {
+    if (!valor) return "";
+    let digitos = valor.replace(/\D/g, "");
+    if (digitos.startsWith("0")) digitos = digitos.slice(1);
+    if (!digitos.startsWith("54")) digitos = "54" + digitos;
+    return digitos;
+  };
 
   async function validarOperacionPropia() {
     if (readinessLoading) return;
@@ -335,12 +354,12 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
         <section className="panel sigo-matriz-panel">
           <div className="panel-header sigo-matriz-tools">
             <div><h3>Empresas clientes</h3><p>{resumen.empresas_suspendidas} suspendida(s) · soporte auditable por empresa</p></div>
-            <input
-              className="sigo-matriz-search"
-              placeholder="Buscar empresa, CUIT o propietario"
-              value={busqueda}
-              onChange={(event) => setBusqueda(event.target.value)}
-            />
+            <div className="sigo-matriz-filters">
+              <input className="sigo-matriz-search" placeholder="Buscar empresa, CUIT o propietario" value={busqueda} onChange={(event) => setBusqueda(event.target.value)} />
+              <label>Inicio <input type="date" value={fechaInicio} onChange={(event) => setFechaInicio(event.target.value)} /></label>
+              <label>Vencimiento <input type="date" value={fechaVencimiento} onChange={(event) => setFechaVencimiento(event.target.value)} /></label>
+              {(fechaInicio || fechaVencimiento) ? <button type="button" className="admin-button" onClick={() => { setFechaInicio(""); setFechaVencimiento(""); }}>Limpiar fechas</button> : null}
+            </div>
           </div>
 
           {error ? <div className="form-error">{error}</div> : null}
@@ -364,6 +383,21 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
                     </div>
                   </div>
 
+                  {(() => {
+                    const inicio = new Date(empresa.trial_started_at || empresa.created_at);
+                    const vence = new Date(inicio.getTime() + empresa.trial_days * 86400000);
+                    const dias = Math.ceil((vence.getTime() - Date.now()) / 86400000);
+                    const vencida = dias <= 0;
+                    const porVencer = !vencida && dias <= 10;
+                    const tel = telefonoWhatsApp(empresa.owner_telefono);
+                    return <div className="sigo-matriz-commercial">
+                      <span>Alta <strong>{fechaCorta(new Date(empresa.created_at))}</strong></span>
+                      <span>Prueba <strong>{fechaCorta(inicio)}</strong></span>
+                      <span>Vence <strong>{fechaCorta(vence)}</strong></span>
+                      <span className={vencida ? "trial-expired" : porVencer ? "trial-warning" : "trial-ok"}><strong>{vencida ? "PRUEBA VENCIDA" : `${dias} días`}</strong></span>
+                      {tel ? <a className="sigo-matriz-whatsapp" href={`https://wa.me/${tel}?text=${encodeURIComponent("Hola, te contacto desde SIGO Gestión por tu suscripción.")}`} target="_blank" rel="noreferrer" title={empresa.owner_telefono ?? "WhatsApp"} aria-label={`WhatsApp de ${empresa.nombre}`}><img src="/whatsapp.svg" alt="" /></a> : <span className="sigo-no-phone">Sin teléfono</span>}
+                    </div>;
+                  })()}
                   <div className="sigo-matriz-metrics">
                     <span><strong>{empresa.usuarios_activos}</strong> usuarios</span>
                     <span><strong>{empresa.administradores}</strong> admin</span>
