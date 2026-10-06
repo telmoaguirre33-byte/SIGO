@@ -841,7 +841,10 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
           </table>
         </div>
         <div className="page-header" style={{ marginTop: 16 }}>
-          <button type="button" className="admin-button" onClick={() => setLineas((actual) => [...actual, nuevaLinea()])}>+ Agregar producto</button>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button type="button" className="admin-button" onClick={() => setLineas((actual) => [...actual, nuevaLinea()])}>+ Agregar producto</button>
+            <button type="button" className="admin-button" aria-expanded={altaManualAbierta} aria-controls="alta-producto-compra" onClick={()=>{setAltaManualAbierta((abierta)=>!abierta);if(!altaManualAbierta && busquedaManual.trim())setNuevoProductoManual((v)=>({...v,nombre:v.nombre||busquedaManual.trim()}));}}>➕ Crear producto nuevo</button>
+          </div>
           <div><strong>Total compra: $ {total.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</strong></div>
         </div>
         {cambiosPrecio.length > 0 && <div className="panel" style={{marginTop:16}}>
@@ -849,9 +852,6 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
           {cambiosPrecio.map((x) => <p key={x.id} style={{margin:"8px 0"}}><strong>{x.nombre}</strong>: costo $ {x.costoAnterior.toLocaleString("es-AR")} → $ {x.costoNuevo.toLocaleString("es-AR")} · precio $ {x.precioAnterior.toLocaleString("es-AR")} → $ {x.precioNuevo.toLocaleString("es-AR")} · margen {x.margen.toFixed(2)}%</p>)}
         </div>}
         <div className="form-actions"><button type="submit" className="primary-button" disabled={saving || loading || facturaAplicando || !compraValida}>{saving ? "Guardando compra…" : "GUARDAR COMPRA E INGRESAR STOCK"}</button></div>
-        <div className="form-actions" style={{marginTop:16}}>
-          <button type="button" className="admin-button" aria-expanded={altaManualAbierta} aria-controls="alta-producto-compra" onClick={()=>{setAltaManualAbierta((abierta)=>!abierta);if(!altaManualAbierta && busquedaManual.trim())setNuevoProductoManual((v)=>({...v,nombre:v.nombre||busquedaManual.trim()}));}}>➕ Crear producto nuevo</button>
-        </div>
         {altaManualAbierta && <div id="alta-producto-compra" className="panel compra-alta-compacta" style={{marginTop:10}}><h4>Nuevo producto · crear y cargar stock</h4><div className="form-grid"><div className="form-group"><label>Nombre</label><input value={nuevoProductoManual.nombre} onChange={e=>setNuevoProductoManual(v=>({...v,nombre:e.target.value}))}/></div><div className="form-group"><label>Código / EAN</label><input value={nuevoProductoManual.codigo} onChange={e=>setNuevoProductoManual(v=>({...v,codigo:e.target.value}))}/></div><div className="form-group"><label>Cantidad</label><input type="number" min="0.001" step="0.001" value={nuevoProductoManual.cantidad} onChange={e=>setNuevoProductoManual(v=>({...v,cantidad:e.target.value}))}/></div><div className="form-group"><label>Costo unitario</label><input type="number" value={nuevoProductoManual.costo} onChange={e=>{const costo=e.target.value;setNuevoProductoManual(v=>{const c=Number(costo||0),m=Number(v.margen||0);return {...v,costo,precio:c>0?String(Math.round(c*(1+m/100)*100)/100):v.precio};});}}/></div><div className="form-group"><label>% margen</label><input type="number" value={nuevoProductoManual.margen} onChange={e=>{const margen=e.target.value;setNuevoProductoManual(v=>{const costo=Number(v.costo||0),m=Number(margen||0);return {...v,margen,precio:costo>0?String(Math.round(costo*(1+m/100)*100)/100):v.precio};});}}/></div><div className="form-group"><label>Precio al público</label><input type="number" value={nuevoProductoManual.precio} onChange={e=>{const precio=e.target.value;setNuevoProductoManual(v=>{const costo=Number(v.costo||0),p=Number(precio||0);const margen=costo>0&&p>=0?String(Math.round(((p/costo)-1)*10000)/100):v.margen;return {...v,precio,margen};});}}/></div></div><div className="form-actions"><button type="button" className="primary-button" disabled={saving} onClick={crearProductoManual}>Crear y agregar a compra</button><button type="button" className="admin-button" onClick={()=>setAltaManualAbierta(false)}>Cancelar</button></div></div>}
       </form>
 
