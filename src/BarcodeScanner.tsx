@@ -469,14 +469,22 @@ export default function BarcodeScanner({
           value={code}
           onChange={(e) => { setCode(e.target.value); setError(""); onQueryChange?.(e.target.value); }}
           onKeyDown={(e) => {
+            // Enter/Tab cierra primero la lectura del scanner. No debe pasar por
+            // la navegación de sugerencias, porque eso dejaba el código anterior
+            // en el input y la pistola concatenaba la siguiente lectura.
+            if (isLikelyScannerSubmit(e.key)) {
+              e.preventDefault();
+              e.stopPropagation();
+              const submitted = code;
+              setCode("");
+              onQueryChange?.("");
+              void resolveCode(submitted, "manual");
+              return;
+            }
             if (onProductSearchKeyDown?.(e.key)) {
               e.preventDefault();
               e.stopPropagation();
               return;
-            }
-            if (isLikelyScannerSubmit(e.key)) {
-              e.preventDefault();
-              void resolveCode(code, "manual");
             }
           }}
           placeholder="Código de barras, interno o nombre del producto"
