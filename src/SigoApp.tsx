@@ -7,6 +7,9 @@ import VentaRapidaOperativa from "./VentaRapidaOperativa";
 import ComprasOperativas from "./ComprasOperativas";
 import StockVsInventario from "./StockVsInventario";
 import ListaPreciosManager from "./ListaPreciosManager";
+import ProductosOferta from "./ProductosOferta";
+import EtiquetasPrecios from "./EtiquetasPrecios";
+import CarteleriaOfertas from "./CarteleriaOfertas";
 import IngresosDiariosOperativos from "./IngresosDiariosOperativos";
 import { cargarResumenOperativoSigo, type ResumenOperativoSigo } from "./informes";
 import { can } from "./permissions";
@@ -18,9 +21,9 @@ import {
   type ProductoSigo,
 } from "./productos";
 
-type Section = "Inicio" | "Productos" | "Ventas" | "Clientes" | "Compras" | "Stock" | "Lista de precios" | "Ventas por día" | "Informes" | "Stock vs Inventario";
+type Section = "Inicio" | "Productos" | "Ventas" | "Clientes" | "Compras" | "Stock" | "Lista de precios" | "Ofertas y etiquetas" | "Ventas por día" | "Informes" | "Stock vs Inventario";
 
-const sections: Section[] = ["Inicio", "Productos", "Ventas", "Stock", "Compras", "Lista de precios", "Ventas por día", "Informes"];
+const sections: Section[] = ["Inicio", "Productos", "Ventas", "Stock", "Compras", "Lista de precios", "Ofertas y etiquetas", "Ventas por día", "Informes"];
 
 type ProductoForm = {
   nombre: string;
@@ -74,7 +77,7 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
         <nav className="menu">
           {sections.filter((item) => item !== "Informes" || Boolean(onAbrirInformes)).map((item) => (
             <button key={item} className={section === item ? "menu-item active" : "menu-item"} onClick={() => { if (item === "Informes") { onAbrirInformes?.(); return; } setSection(item); }}>
-              <span className="menu-icon">{item.slice(0, 2).toUpperCase()}</span>
+              <span className="menu-icon">{item === "Ofertas y etiquetas" ? "🏷" : item.slice(0, 2).toUpperCase()}</span>
               <span>{item === "Compras" ? "Compras / Proveedores" : item}</span>
             </button>
           ))}
@@ -100,15 +103,38 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
           {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
           {section === "Stock" && <Stock empresaId={empresa.empresa_id} />}
           {section === "Lista de precios" && <ListaPreciosSection empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
+          {section === "Ofertas y etiquetas" && <OfertasEtiquetasSection empresaId={empresa.empresa_id} />}
           {section === "Ventas por día" && <IngresosDiariosOperativos empresaId={empresa.empresa_id} />}
           {section === "Stock vs Inventario" && <StockVsInventario empresaId={empresa.empresa_id} />}
           {section === "Ventas" && <VentaRapidaOperativa empresaId={empresa.empresa_id} puedeEditarProductos={puedeEditarProductos} />}
           {section === "Compras" && <ComprasHub empresaId={empresa.empresa_id} />}
-          {section !== "Inicio" && section !== "Productos" && section !== "Stock" && section !== "Ventas" && section !== "Compras" && section !== "Stock vs Inventario" && section !== "Lista de precios" && section !== "Ventas por día" && <Pendiente title={section} />}
+          {section !== "Inicio" && section !== "Productos" && section !== "Stock" && section !== "Ventas" && section !== "Compras" && section !== "Stock vs Inventario" && section !== "Lista de precios" && section !== "Ofertas y etiquetas" && section !== "Ventas por día" && <Pendiente title={section} />}
         </section>
       </main>
     </div>
   );
+}
+
+function OfertasEtiquetasSection({ empresaId }: { empresaId: string }) {
+  const [productos, setProductos] = useState<ProductoSigo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let activo = true;
+    setLoading(true);
+    listarProductosSigo(empresaId).then((data) => { if (activo) { setProductos(data); setError(""); } }).catch((err) => { if (activo) { setProductos([]); setError(err instanceof Error ? err.message : "No se pudieron cargar los productos."); } }).finally(() => { if (activo) setLoading(false); });
+    return () => { activo = false; };
+  }, [empresaId]);
+  if (loading) return <div className="panel"><p>Cargando ofertas y etiquetas…</p></div>;
+  if (error) return <div className="panel"><h3>Ofertas y etiquetas</h3><p className="form-error">{error}</p></div>;
+  return <div className="products-page ofertas-etiquetas-page">
+    <div className="page-header"><div><h2>Ofertas y etiquetas</h2><p>Creá promociones, carteles de oferta e imprimí etiquetas de precios.</p></div></div>
+    <ProductosOferta empresaId={empresaId} productos={productos} />
+    <div className="panel ofertas-etiquetas-tools">
+      <div className="page-header"><div><h3>Etiquetas y carteles</h3><p>Elegí los productos y prepará material para el salón.</p></div></div>
+      <div className="ofertas-etiquetas-actions"><EtiquetasPrecios productos={productos} /><CarteleriaOfertas productos={productos} /></div>
+    </div>
+  </div>;
 }
 
 function ComprasHub({ empresaId }: { empresaId: string }) {
