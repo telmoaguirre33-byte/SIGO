@@ -178,7 +178,8 @@ function exportarRankingExcel(filas: Array<{ nombre: string; cantidad: number; t
   const encabezados = ["Posición", "Producto", "Unidades vendidas", "Facturación", "Criterio"];
   const esc = (v: unknown) => `"${String(v ?? "").replaceAll('"', '""')}"`;
   const lineas = [encabezados.map(esc).join(";"), ...filas.map((fila, i) => [i + 1, fila.nombre, fila.cantidad, fila.total, criterio === "facturacion" ? "Facturación" : "Unidades"].map(esc).join(";"))];
-  const blob = new Blob(["\ufeff" + lineas.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const blob = new Blob(["\ufeff" + lineas.join("\r
+")], { type: "text/csv;charset=utf-8" });
   const enlace = document.createElement("a");
   enlace.href = URL.createObjectURL(blob);
   enlace.download = `SIGO-ranking-productos-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -345,7 +346,8 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
       ["Fecha", "Facturación", "Ventas"],
       ...(ventasGerenciales?.dias ?? []).map(d => [d.fecha, d.total, d.cantidad]),
     ];
-    const blob = new Blob(["\\ufeff" + filas.map(f => f.map(esc).join(";")).join("\\r\\n")], { type: "text/csv;charset=utf-8" });
+    const blob = new Blob(["\\ufeff" + filas.map(f => f.map(esc).join(";")).join("\\r\
+")], { type: "text/csv;charset=utf-8" });
     const enlace = document.createElement("a"); enlace.href = URL.createObjectURL(blob);
     enlace.download = `SIGO-informe-gerencial-${gerencialDesde}-a-${gerencialHasta}.csv`;
     document.body.appendChild(enlace); enlace.click(); enlace.remove(); setTimeout(() => URL.revokeObjectURL(enlace.href), 1500);
@@ -429,7 +431,8 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
 
       {!error && (
         <>
-          {categoria === "ventas" && <section id="informe-ventas" className="panel sigo-report-detail">\n            <div className="sigo-report-catalog" aria-label="Ventas por día y productos vendidos" />
+          {categoria === "ventas" && <section id="informe-ventas" className="panel sigo-report-detail">
+            <div className="sigo-report-catalog" aria-label="Ventas por día y productos vendidos"></div>
             <div className="sigo-detail-title"><span>↗</span><h3>Ventas</h3></div>
             <div className="sigo-compras-periodo sigo-ventas-periodo">
               <strong>Período de ventas</strong>
