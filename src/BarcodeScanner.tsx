@@ -183,6 +183,13 @@ export default function BarcodeScanner({
       }
 
       onProduct(producto, actionOperacion);
+      // Tras una lectura válida, liberar únicamente el campo del lector.
+      // No modifica carrito, búsqueda manual, flechas/Enter ni ninguna otra lógica.
+      if (source !== "camera") {
+        setCode("");
+        onQueryChange?.("");
+        focusScanner();
+      }
       if (source === "camera") setCameraStatus(`Listo: ${producto.nombre}`);
       if ("vibrate" in navigator) navigator.vibrate?.(40);
     } catch (e) {
