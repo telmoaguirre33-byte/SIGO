@@ -481,7 +481,11 @@ export default function BarcodeScanner({
               const submitted = code;
               setCode("");
               onQueryChange?.("");
-              void resolveCode(submitted, "manual");
+              // Un valor numérico largo terminado con Enter/Tab proviene de la
+              // pistola: resolverlo directamente por código, sin convertirlo
+              // en una sugerencia de búsqueda manual.
+              const source: ScanSource = /^\\d{6,}$/.test(submitted.trim()) ? "wedge" : "manual";
+              void resolveCode(submitted, source);
               return;
             }
             if (onProductSearchKeyDown?.(e.key)) {
