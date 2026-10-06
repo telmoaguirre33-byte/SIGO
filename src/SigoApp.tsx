@@ -141,7 +141,7 @@ function Inicio({ empresa, onProductos, onStock, onCaja }: { empresa: EmpresaOpe
   return (
     <div className="sigo-home">
       <div className="welcome sigo-home-hero">
-        <div><span className="sigo-home-eyebrow">SIGO GESTIÓN</span><h2>¡Hola! · {empresa.empresa_nombre}</h2><p>Todo tu negocio, en un solo lugar.</p><a className="admin-button" href="https://wa.me/5493764252564?text=Hola%2C%20quiero%20hacer%20una%20consulta%20sobre%20SIGO%20Gesti%C3%B3n" target="_blank" rel="noreferrer" aria-label="Consultar por WhatsApp" title="Consultar por WhatsApp" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",marginTop:10,width:44,height:44,padding:0,borderRadius:"50%",fontSize:24,textDecoration:"none"}}>☎</a></div>
+        <div><span className="sigo-home-eyebrow">SIGO GESTIÓN</span><h2>¡Hola! · {empresa.empresa_nombre}</h2><p>Todo tu negocio, en un solo lugar.</p><a className="admin-button" href="https://wa.me/5493764252564?text=Hola%2C%20quiero%20hacer%20una%20consulta%20sobre%20SIGO%20Gesti%C3%B3n" target="_blank" rel="noreferrer" aria-label="Consultar por WhatsApp" title="Consultar por WhatsApp" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",marginTop:10,width:44,height:44,padding:0,borderRadius:"50%",fontSize:22,textDecoration:"none",background:"#25D366",color:"#fff",border:"none"}}><span aria-hidden="true" style={{fontWeight:800,fontFamily:"Arial, sans-serif"}}>WA</span></a></div>
         <div className="sigo-home-badge"><strong>Empresa activa</strong><span>{empresa.empresa_nombre}</span></div>
       </div>
       <div className="sigo-home-actions" aria-label="Accesos rápidos">
