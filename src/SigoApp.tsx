@@ -499,10 +499,6 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
                   <label htmlFor="producto-stock-min">Stock mínimo</label>
                   <input id="producto-stock-min" type="number" min="0" step="0.001" inputMode="decimal" value={form.stockMinimo} onChange={(e) => setForm((actual) => ({ ...actual, stockMinimo: e.target.value }))} />
                 </div>
-                <div className="form-group">
-                  <label htmlFor="producto-stock-max">Stock máximo</label>
-                  <input id="producto-stock-max" type="number" min="0" step="0.001" inputMode="decimal" value={form.stockMaximo} onChange={(e) => setForm((actual) => ({ ...actual, stockMaximo: e.target.value }))} />
-                </div>
                 <div className="form-group form-span-2">
                   <small>{editing ? "El stock de productos existentes se modifica mediante movimientos operativos." : "Si ya tenés mercadería, podés cargarla como stock inicial sin inventar una compra ni un proveedor."}</small>
                 </div>
