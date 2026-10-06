@@ -533,7 +533,7 @@ export default function SigoAuthGate({ children }: Props) {
         <div className="sigo-auth-help">Acceso seguro por empresa, rol y permisos.</div>
         {mode === "login" ? (
           <>
-            <a className="sigo-auth-secondary" href="https://wa.me/5493764252564?text=Hola%2C%20quiero%20hacer%20una%20consulta%20sobre%20SIGO%20Gesti%C3%B3n" target="_blank" rel="noreferrer">Consulta por WhatsApp</a>
+            <a className="sigo-auth-secondary" href="https://wa.me/5493764252564?text=Hola%2C%20quiero%20hacer%20una%20consulta%20sobre%20SIGO%20Gesti%C3%B3n" target="_blank" rel="noreferrer" aria-label="Consulta por WhatsApp" title="Consulta por WhatsApp" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",alignSelf:"center",width:48,height:48,padding:0,borderRadius:"50%"}}><img src="/whatsapp.svg" alt="" aria-hidden="true" style={{width:34,height:34,display:"block"}} /></a>
             <div className="sigo-auth-help">© 2026 SIGO · Todos los derechos reservados</div>
           </>
         ) : null}
