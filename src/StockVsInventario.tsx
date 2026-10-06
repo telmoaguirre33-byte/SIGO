@@ -143,7 +143,7 @@ export default function StockVsInventario({empresaId}:{empresaId:string}) {
   }
 
   return <div className="products-page">
-    <div className="page-header"><div><p>Comparación visual por bloque. Reporte mensual · fotos disponibles durante 24 horas.</p></div><button className="admin-button" onClick={exportar} disabled={!hallazgos.length}>▣ Exportar Excel</button></div>
+    <div className="page-header"><div><h2>Stock vs Inventario</h2><p>Comparación visual por bloque. Reporte mensual · fotos disponibles durante 24 horas.</p></div><button className="admin-button" onClick={exportar} disabled={!hallazgos.length}>▣ Exportar Excel</button></div>
     <div className="stats-grid sigo-inventory-stats">
       <div className="stat-card"><span>Coinciden</span><strong>{resumen.ok}</strong></div>
       <div className="stat-card"><span>No está en SIGO</span><strong>{resumen.falta}</strong></div>
