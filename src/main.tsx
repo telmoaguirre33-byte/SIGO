@@ -1,13 +1,11 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import ArcaLauncher from "./ArcaLauncher";
 import CarritoLauncher from "./CarritoLauncher";
 import ConfiguracionLauncher from "./ConfiguracionLauncher";
 import DevolucionesLauncher from "./DevolucionesLauncher";
 import IngresosLauncher from "./IngresosLauncher";
 import MobileOperationsMenu from "./MobileOperationsMenu";
 import LectorCelularLauncher from "./LectorCelularLauncher";
-import SigoAyuda from "./SigoAyuda";
 import SigoAuthGate from "./SigoAuthGate";
 import SigoRoot from "./SigoRoot";
 import LectorCelularPage from "./LectorCelularPage";
@@ -32,14 +30,12 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     {lectorToken ? <LectorCelularPage token={lectorToken} /> : <SigoAuthGate>
       <>
         <SigoRoot />
-        <ArcaLauncher />
         <ConfiguracionLauncher />
         <CarritoLauncher />
         <LectorCelularLauncher />
         <DevolucionesLauncher />
         <IngresosLauncher />
         <MobileOperationsMenu />
-        <SigoAyuda />
       </>
     </SigoAuthGate>}
   </React.StrictMode>,
