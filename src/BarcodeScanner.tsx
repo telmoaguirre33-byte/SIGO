@@ -81,6 +81,7 @@ export default function BarcodeScanner({
   const queuedScansRef = useRef<QueuedScan[]>([]);
   const wedgeBufferRef = useRef("");
   const wedgeLastKeyAtRef = useRef(0);
+  const inputWedgeRef = useRef({ buffer: "", lastAt: 0 });
   const lastCameraResolvedRef = useRef<{ code: string; at: number } | null>(null);
   const empresaActivaRef = useRef(empresaId);
   const actionActivaRef = useRef(action);
@@ -476,6 +477,31 @@ export default function BarcodeScanner({
           value={code}
           onChange={(e) => { setCode(e.target.value); setError(""); onQueryChange?.(e.target.value); }}
           onKeyDown={(e) => {
+            if (e.key.length === 1) {
+              const now = Date.now();
+              if (now - inputWedgeRef.current.lastAt > SCANNER_GAP_MS) inputWedgeRef.current.buffer = "";
+              inputWedgeRef.current.lastAt = now;
+              inputWedgeRef.current.buffer = /^\d$/.test(e.key)
+                ? inputWedgeRef.current.buffer + e.key
+                : "";
+              return;
+            }
+            if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Escape") {
+              inputWedgeRef.current = { buffer: "", lastAt: 0 };
+            }
+            if (isLikelyScannerSubmit(e.key)) {
+              const scan = normalizeBarcode(inputWedgeRef.current.buffer);
+              const scanWasFast = Date.now() - inputWedgeRef.current.lastAt <= SCANNER_GAP_MS * 2;
+              inputWedgeRef.current = { buffer: "", lastAt: 0 };
+              if (scan.length >= 4 && /^\d{4,}$/.test(scan) && scanWasFast) {
+                e.preventDefault();
+                e.stopPropagation();
+                setCode("");
+                onQueryChange?.("");
+                void resolveCode(scan, "wedge");
+                return;
+              }
+            }
             if (onProductSearchKeyDown?.(e.key)) {
               e.preventDefault();
               e.stopPropagation();
