@@ -141,7 +141,7 @@ function Inicio({ empresa, onProductos, onStock, onCaja }: { empresa: EmpresaOpe
   return (
     <div className="sigo-home">
       <div className="welcome sigo-home-hero">
-        <div><span className="sigo-home-eyebrow">SIGO GESTIÓN</span><h2>¡Hola! · {empresa.empresa_nombre}</h2><p>Todo tu negocio, en un solo lugar.</p></div>
+        <div><span className="sigo-home-eyebrow">SIGO GESTIÓN</span><h2>¡Hola! · {empresa.empresa_nombre}</h2><p>Todo tu negocio, en un solo lugar.</p><a className="admin-button" href="https://wa.me/5493764252564?text=Hola%2C%20quiero%20hacer%20una%20consulta%20sobre%20SIGO%20Gesti%C3%B3n" target="_blank" rel="noreferrer" style={{display:"inline-flex",marginTop:10}}>Consulta por WhatsApp</a></div>
         <div className="sigo-home-badge"><strong>Empresa activa</strong><span>{empresa.empresa_nombre}</span></div>
       </div>
       <div className="sigo-home-actions" aria-label="Accesos rápidos">
