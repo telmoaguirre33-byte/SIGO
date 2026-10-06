@@ -191,6 +191,18 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     setBusquedaProducto("");
     setProductoSeleccionadoId(null);
     agregar(producto);
+    // La selección manual debe quedar lista para el próximo producto.
+    // BarcodeScanner mantiene su propio texto: lo limpiamos mediante el input
+    // y devolvemos foco sin alterar la lógica de la pistola.
+    window.setTimeout(() => {
+      const input = buscarRef.current;
+      if (input) {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+        setter?.call(input, "");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.focus();
+      }
+    }, 0);
   }
 
   function manejarTeclaBusquedaProducto(key: string) {
