@@ -7,6 +7,7 @@ import VentaRapidaOperativa from "./VentaRapidaOperativa";
 import ComprasOperativas from "./ComprasOperativas";
 import StockVsInventario from "./StockVsInventario";
 import ListaPreciosManager from "./ListaPreciosManager";
+import IngresosDiariosOperativos from "./IngresosDiariosOperativos";
 import { cargarResumenOperativoSigo, type ResumenOperativoSigo } from "./informes";
 import { can } from "./permissions";
 import { listarModulosEmpresa } from "./modulosEmpresa";
@@ -17,9 +18,9 @@ import {
   type ProductoSigo,
 } from "./productos";
 
-type Section = "Inicio" | "Productos" | "Ventas" | "Clientes" | "Compras" | "Stock" | "Lista de precios" | "Informes" | "Stock vs Inventario";
+type Section = "Inicio" | "Productos" | "Ventas" | "Clientes" | "Compras" | "Stock" | "Lista de precios" | "Ventas por día" | "Informes" | "Stock vs Inventario";
 
-const sections: Section[] = ["Inicio", "Productos", "Ventas", "Stock", "Compras", "Lista de precios", "Informes"];
+const sections: Section[] = ["Inicio", "Productos", "Ventas", "Stock", "Compras", "Lista de precios", "Ventas por día", "Informes"];
 
 type ProductoForm = {
   nombre: string;
@@ -105,10 +106,11 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
           {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
           {section === "Stock" && <Stock empresaId={empresa.empresa_id} />}
           {section === "Lista de precios" && <ListaPreciosSection empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
+          {section === "Ventas por día" && <IngresosDiariosOperativos empresaId={empresa.empresa_id} />}
           {section === "Stock vs Inventario" && <StockVsInventario empresaId={empresa.empresa_id} />}
           {section === "Ventas" && <VentaRapidaOperativa empresaId={empresa.empresa_id} puedeEditarProductos={puedeEditarProductos} />}
           {section === "Compras" && <ComprasHub empresaId={empresa.empresa_id} />}
-          {section !== "Inicio" && section !== "Productos" && section !== "Stock" && section !== "Ventas" && section !== "Compras" && section !== "Stock vs Inventario" && <Pendiente title={section} />}
+          {section !== "Inicio" && section !== "Productos" && section !== "Stock" && section !== "Ventas" && section !== "Compras" && section !== "Stock vs Inventario" && section !== "Lista de precios" && section !== "Ventas por día" && <Pendiente title={section} />}
         </section>
       </main>
     </div>
