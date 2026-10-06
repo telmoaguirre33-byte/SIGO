@@ -1217,3 +1217,8 @@ main:has(> .productos-oferta){
   .sigo-price-list-compact .products-table th:nth-child(4),.sigo-price-list-compact .products-table td:nth-child(4){width:20%!important}
   .sigo-price-list-compact .sigo-price-extra-column{display:none!important}
 }
+
+.sigo-price-pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 0;color:var(--muted);font-size:12px}
+.sigo-price-pagination>div{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sigo-price-pagination .admin-button{min-height:34px;padding:6px 10px;font-size:12px}
+@media(max-width:640px){.sigo-price-pagination{justify-content:center;text-align:center}.sigo-price-pagination>div{width:100%;justify-content:center}}
