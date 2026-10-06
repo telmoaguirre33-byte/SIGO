@@ -311,6 +311,9 @@ export default function SigoRoot() {
               {WORKSPACE_LABELS[item]}
             </button>
           )) : null}
+          {!matrixMode && empresaActiva && ["owner","admin"].includes(empresaActiva.rol) ? (
+            <button className="admin-button" type="button" onClick={() => window.dispatchEvent(new CustomEvent("sigo:arca:config"))}>ARCA</button>
+          ) : null}
         </div>
         {matrixMode && isSuperadmin ? (
           <button className="admin-button sigo-return-company" type="button" onClick={() => setMatrixMode(false)} disabled={!empresaActiva}>Volver a empresa</button>
