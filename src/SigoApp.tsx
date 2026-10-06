@@ -667,7 +667,7 @@ function ListaPreciosSection({ empresaId, puedeEditar }: { empresaId: string; pu
   useEffect(() => { void cargarLista(); }, [empresaId]);
   return <div className="products-page">
     {error ? <p className="form-error" role="alert">{error}</p> : null}
-    <ListaPreciosManager empresaId={empresaId} productos={productos} puedeEditar={puedeEditar} onUpdated={cargarLista} />
+    <ListaPreciosManager empresaId={empresaId} productos={productos} puedeEditar={puedeEditar} onUpdated={() => { void cargarLista(); }} />
   </div>;
 }
 
