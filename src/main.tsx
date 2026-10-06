@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import ArcaLauncher from "./ArcaLauncher";
 import CarritoLauncher from "./CarritoLauncher";
 import ConfiguracionLauncher from "./ConfiguracionLauncher";
 import DevolucionesLauncher from "./DevolucionesLauncher";
@@ -30,6 +31,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     {lectorToken ? <LectorCelularPage token={lectorToken} /> : <SigoAuthGate>
       <>
         <SigoRoot />
+        <ArcaLauncher />
         <ConfiguracionLauncher />
         <CarritoLauncher />
         <LectorCelularLauncher />
