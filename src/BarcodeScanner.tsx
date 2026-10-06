@@ -475,22 +475,26 @@ export default function BarcodeScanner({
             // Enter/Tab cierra primero la lectura del scanner. No debe pasar por
             // la navegación de sugerencias, porque eso dejaba el código anterior
             // en el input y la pistola concatenaba la siguiente lectura.
+            // Flechas/Escape y, cuando hay una sugerencia elegida, Enter pertenecen
+            // a la búsqueda manual. Preservamos ese flujo antes de interpretar Enter como scanner.
+            if ((e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Escape") && onProductSearchKeyDown?.(e.key)) {
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+            }
+            if (e.key === "Enter" && !/^\\d{6,}$/.test(code.trim()) && onProductSearchKeyDown?.(e.key)) {
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+            }
             if (isLikelyScannerSubmit(e.key)) {
               e.preventDefault();
               e.stopPropagation();
               const submitted = code;
               setCode("");
               onQueryChange?.("");
-              // Un valor numérico largo terminado con Enter/Tab proviene de la
-              // pistola: resolverlo directamente por código, sin convertirlo
-              // en una sugerencia de búsqueda manual.
               const source: ScanSource = /^\\d{6,}$/.test(submitted.trim()) ? "wedge" : "manual";
               void resolveCode(submitted, source);
-              return;
-            }
-            if (onProductSearchKeyDown?.(e.key)) {
-              e.preventDefault();
-              e.stopPropagation();
               return;
             }
           }}
