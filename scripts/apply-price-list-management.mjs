@@ -29,7 +29,8 @@ if (!sectionsMatch[1].includes('"Lista de precios"')) {
 
 const productosRender = '          {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}';
 const preciosRender = '          {section === "Lista de precios" && <ListaPreciosPage empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}';
-if (!source.includes(preciosRender)) {
+const hasDedicatedPriceListRender = /\{section\s*===\s*"Lista de precios"\s*&&\s*<ListaPrecios(?:Page|Section)\b/.test(source);
+if (!hasDedicatedPriceListRender && !source.includes(preciosRender)) {
   if (!source.includes(productosRender)) throw new Error("No se encontró el render de Productos en SigoApp.tsx");
   source = source.replace(productosRender, `${productosRender}\n${preciosRender}`);
 }
@@ -49,7 +50,7 @@ if (!pendingRenderMatch[1].includes('section !== "Lista de precios"')) {
 const embeddedPriceManager = `      <ListaPreciosManager\n        empresaId={empresaId}\n        productos={productos}\n        puedeEditar={puedeEditar}\n        onUpdated={cargar}\n      />\n\n`;
 source = source.replace(embeddedPriceManager, "");
 
-if (!source.includes("function ListaPreciosPage(")) {
+if (!source.includes("function ListaPreciosPage(") && !source.includes("function ListaPreciosSection(")) {
   const stockAnchor = 'function Stock({ empresaId }: { empresaId: string }) {';
   if (!source.includes(stockAnchor)) throw new Error("No se encontró el ancla de Stock para crear ListaPreciosPage");
 
