@@ -54,7 +54,7 @@ assert.ok(informes, "authorized user sees reports shortcut");
 informes.props.onClick();
 assert.equal(reportCalls, 1, "reports calls shared parent navigation once");
 assert.deepEqual(stateWrites, [], "reports must not select the pending local section");
-for (const [label, section] of [["Productos", "Productos"], ["Compras / Proveedores", "Compras"]]) {
+for (const [label, section] of [["Productos", "Productos"], ["Compras / Proveedores", "Compras"], ["Lista de precios", "Lista de precios"], ["Ventas por día", "Ventas por día"]]) {
   const button = menuButton(tree, label);
   assert.ok(button, `${label} remains available`);
   button.props.onClick();
@@ -63,6 +63,8 @@ for (const [label, section] of [["Productos", "Productos"], ["Compras / Proveedo
 assert.equal(reportCalls, 1, "other menu items do not open reports");
 assert.equal(menuButton(SigoApp({ empresa }), "Informes"), undefined, "no reports shortcut without permission callback");
 assert.ok(menuButton(tree, "Compras / Proveedores"), "purchases remains available in the operation sidebar");
+assert.ok(menuButton(tree, "Lista de precios"), "price list remains available in the operation sidebar");
+assert.ok(menuButton(tree, "Ventas por día"), "daily sales remains available in the operation sidebar");
 
 // Exercise the existing parent permission guard rather than replacing it.
 const ast = ts.createSourceFile("SigoRoot.tsx", patched.root, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
