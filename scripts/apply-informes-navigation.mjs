@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url";
 
 // Follow the existing build-time UI patches. Never duplicate reports or touch data.
 function replaceOnce(source, before, after, label) {
-  if (source.includes(after) && !source.includes(before)) return source;
+  // Idempotent build patch: once the target form is already present, leave it alone
+  // even when the old text is still a substring of the new form.
+  if (source.includes(after)) return source;
   if (source.split(before).length !== 2) {
     throw new Error(`SIGO_INFORMES_NAV_TARGET_NOT_FOUND: ${label}`);
   }
