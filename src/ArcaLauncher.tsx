@@ -67,6 +67,18 @@ export default function ArcaLauncher() {
   }
 
   useEffect(() => {
+    const abrirConfiguracion = () => {
+      void resolverEmpresa().then((activa) => {
+        if (!activa || activa.rol === "seller") return;
+        setVentaSolicitada(null);
+        setOpen(true);
+      });
+    };
+    window.addEventListener("sigo:arca:config", abrirConfiguracion);
+    return () => window.removeEventListener("sigo:arca:config", abrirConfiguracion);
+  }, [resolverEmpresa]);
+
+  useEffect(() => {
     const abrirVenta = (event: Event) => {
       const detalle = (event as CustomEvent<{ empresaId: string; ventaId: string }>).detail;
       if (!detalle?.ventaId || !detalle?.empresaId) return;
@@ -99,10 +111,7 @@ export default function ArcaLauncher() {
 
   return (
     <>
-      <button className="arca-launcher" type="button" onClick={() => void abrir()} disabled={loading} aria-label="Abrir Facturación ARCA">
-        <span className="arca-launcher-icon" aria-hidden="true">A</span>
-        <span><strong>ARCA</strong><small>{esVendedor ? "Emitir" : "Facturar"}</small></span>
-      </button>
+
 
       {open && empresa ? (
         <div className="arca-overlay" role="dialog" aria-modal="true" aria-label="Facturación ARCA">
