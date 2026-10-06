@@ -200,3 +200,26 @@
 .sigo-reports-page .sigo-sales-chart-compact+.sigo-manager-chart-card{margin-top:18px}
 .sigo-reports-page .sigo-trend-chart{position:relative;isolation:isolate}
 @media(max-width:900px){.sigo-reports-page .sigo-sales-chart-compact{min-height:260px}}
+
+/* Informes > Ventas: acceso a Ingresos como fila compacta, no tarjeta. */
+#informe-ventas .sigo-report-catalog{display:block!important;margin:0 0 14px!important}
+#informe-ventas .sigo-income-launch-card{
+ width:100%!important;min-height:0!important;height:auto!important;
+ display:grid!important;grid-template-columns:34px 150px 1fr auto!important;
+ align-items:center!important;justify-content:initial!important;gap:12px!important;
+ padding:10px 14px!important;border-radius:10px!important;text-align:left!important;
+ box-shadow:none!important;background:#fff!important;color:#172033!important;
+ border:1px solid #dbe5f0!important;
+}
+#informe-ventas .sigo-income-launch-card:hover{transform:none!important;box-shadow:none!important;border-color:#9ec5f8!important}
+#informe-ventas .sigo-income-launch-card .sigo-report-icon{
+ width:30px!important;height:30px!important;border-radius:8px!important;font-size:16px!important;
+ background:#eaf3ff!important;color:#1677e8!important;
+}
+#informe-ventas .sigo-income-launch-card strong{font-size:14px!important;line-height:1.2!important}
+#informe-ventas .sigo-income-launch-card>span:last-child{max-width:none!important;font-size:12px!important;line-height:1.25!important;color:#64748b!important;opacity:1!important}
+#informe-ventas .sigo-income-launch-card::after{content:"Ver →";font-size:12px;font-weight:800;color:#1677e8}
+@media(max-width:760px){
+ #informe-ventas .sigo-income-launch-card{grid-template-columns:30px 1fr auto!important;padding:9px 10px!important}
+ #informe-ventas .sigo-income-launch-card>span:last-child{display:none!important}
+}
