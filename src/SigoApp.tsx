@@ -95,7 +95,7 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
       </aside>}
 
       <main className="main" style={purchasesOnly ? {width:"100%",maxWidth:"100%",margin:0} : undefined}>
-        {section !== "Ventas" && section !== "Compras" && <header className="topbar">
+        {section !== "Ventas" && section !== "Compras" && section !== "Ventas por día" && <header className="topbar">
           <div>
             <h1>{section}</h1>
             <p>{empresa.empresa_nombre} · SIGO</p>
