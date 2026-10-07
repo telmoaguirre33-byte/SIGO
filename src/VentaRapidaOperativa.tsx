@@ -65,6 +65,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   const [advertencia, setAdvertencia] = useState("");
   const [descuentoPct,setDescuentoPct]=useState(0);
   const [productoSeleccionadoId,setProductoSeleccionadoId]=useState<string|null>(null);
+  const [scannerInstanceKey,setScannerInstanceKey]=useState(0);
   const [descuentoAbierto,setDescuentoAbierto]=useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState(nuevaClaveVenta);
   const empresaActivaRef = useRef(empresaId);
@@ -190,19 +191,8 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     setProductoBloqueado(null);
     setBusquedaProducto("");
     setProductoSeleccionadoId(null);
+    setScannerInstanceKey((key)=>key+1);
     agregar(producto);
-    // La selección manual debe quedar lista para el próximo producto.
-    // BarcodeScanner mantiene su propio texto: lo limpiamos mediante el input
-    // y devolvemos foco sin alterar la lógica de la pistola.
-    window.setTimeout(() => {
-      const input = buscarRef.current;
-      if (input) {
-        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-        setter?.call(input, "");
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        input.focus();
-      }
-    }, 0);
   }
 
   function manejarTeclaBusquedaProducto(key: string) {
@@ -343,6 +333,8 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     setProductoBloqueado(null);
     setPrecioRapido("");
     setBusquedaProducto("");
+    setProductoSeleccionadoId(null);
+    setScannerInstanceKey((key)=>key+1);
     setDescuentoPct(0); setDescuentoAbierto(false);
     setIdempotencyKey(nuevaClaveVenta());
     window.setTimeout(()=>buscarRef.current?.focus(),0);
@@ -421,6 +413,9 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         catch (printErr) { setError(printErr instanceof Error ? printErr.message : "La venta se confirmó, pero no se pudo abrir la impresión del ticket."); }
       }
       setItems([]);
+      setBusquedaProducto("");
+      setProductoSeleccionadoId(null);
+      setScannerInstanceKey((key)=>key+1);
       setClienteId("");
       setMedioPago("efectivo");
       setIdempotencyKey(nuevaClaveVenta());
@@ -473,7 +468,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       </div>
       {descuentoAbierto&&<div className="sigo-pos-discount"><strong>Descuento</strong>{[0,5,10,15,20].map(n=><button type="button" className={descuentoPct===n?"active":""} onClick={()=>{setDescuentoPct(n);setDescuentoAbierto(false)}} key={n}>{n}%</button>)}<label>Otro % <input type="number" min="0" max="99.99" step="0.01" value={descuentoPct} onChange={e=>setDescuentoPct(Math.max(0,Math.min(99.99,Number(e.target.value)||0)))}/></label></div>}
       <div className="sigo-pos-scan">
-        <BarcodeScanner empresaId={empresaId} action="vender" onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null)}} onManualQuery={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null);return !/^\\d{6,}$/.test(query.trim())}} onProductSearchKeyDown={manejarTeclaBusquedaProducto}/>
+        <BarcodeScanner key={scannerInstanceKey} empresaId={empresaId} action="vender" onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null)}} onManualQuery={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null);return !/^\\d{6,}$/.test(query.trim())}} onProductSearchKeyDown={manejarTeclaBusquedaProducto}/>
         
         {busquedaProducto.trim()&&productosEncontrados.length>0&&<div className="sigo-pos-results">{productosEncontrados.map((p)=><button type="button" data-pos-suggestion="" data-product-id={p.id} aria-selected={p.id===productoSeleccionadoVisibleId} className={p.id===productoSeleccionadoVisibleId?"active":""} key={p.id} onMouseEnter={()=>{productoSeleccionadoIdRef.current=p.id;setProductoSeleccionadoId(p.id)}} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}{Number(p.stock_actual??0)<=0?" · SIN STOCK":""}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} · Stock {p.stock_actual??0}</span></button>)}</div>}{busquedaProducto.trim()&&productosEncontrados.length===0&&!catalogoError&&<div className="sigo-pos-results"><div className="table-empty">No encontré productos. Probá con nombre, marca, código interno o EAN.</div></div>}
       </div>
