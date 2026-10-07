@@ -384,3 +384,12 @@
     margin: -28px 0 22px;
   }
 }
+
+
+/* Entrada desde anuncios Meta: prioriza prueba gratis sin alterar el login normal. */
+.sigo-meta-entry{display:grid;gap:8px;margin:2px 0 12px;padding:14px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:14px;text-align:center}
+.sigo-meta-entry h1{margin:0;color:#102342}
+.sigo-meta-entry-badge{justify-self:center;background:#16a34a;color:#fff;font-weight:900;font-size:11px;letter-spacing:.05em;padding:5px 10px;border-radius:999px}
+.sigo-meta-trial-button{background:#16a34a!important;color:#fff!important;border-color:#16a34a!important;font-weight:900!important;min-height:48px!important;font-size:14px!important}
+.sigo-meta-existing{font-size:11px;font-weight:700;color:#64748b}
+@media(max-width:640px){.sigo-meta-entry{padding:11px;gap:6px}.sigo-meta-trial-button{min-height:46px!important}}
