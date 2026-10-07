@@ -21,9 +21,9 @@ import {
   type ProductoSigo,
 } from "./productos";
 
-type Section = "Inicio" | "Productos" | "Ventas" | "Clientes" | "Compras" | "Stock" | "Lista de precios" | "Ofertas y etiquetas" | "Ventas por día" | "Informes" | "Stock vs Inventario";
+type Section = "Inicio" | "Productos" | "Ventas" | "Clientes" | "Compras" | "Stock" | "Lista de precios" | "Ofertas y etiquetas" | "Ventas por día" | "Informes" | "Stock vs Inventario" | "Negocio seguro";
 
-const sections: Section[] = ["Inicio", "Productos", "Ventas", "Stock", "Compras", "Lista de precios", "Ofertas y etiquetas", "Ventas por día", "Informes"];
+const sections: Section[] = ["Inicio", "Productos", "Ventas", "Stock", "Compras", "Lista de precios", "Ofertas y etiquetas", "Ventas por día", "Informes", "Negocio seguro"];
 
 type ProductoForm = {
   nombre: string;
@@ -77,7 +77,7 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
         <nav className="menu">
           {sections.filter((item) => item !== "Informes" || Boolean(onAbrirInformes)).map((item) => (
             <button key={item} className={section === item ? "menu-item active" : "menu-item"} onClick={() => { if (item === "Informes") { onAbrirInformes?.(); return; } setSection(item); }}>
-              <span className="menu-icon">{item === "Ofertas y etiquetas" ? "🏷" : item.slice(0, 2).toUpperCase()}</span>
+              <span className="menu-icon">{item === "Ofertas y etiquetas" ? "🏷" : item === "Negocio seguro" ? "🛡" : item.slice(0, 2).toUpperCase()}</span>
               <span>{item === "Compras" ? "Compras / Proveedores" : item}</span>
             </button>
           ))}
@@ -106,13 +106,27 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
           {section === "Ofertas y etiquetas" && <OfertasEtiquetasSection empresaId={empresa.empresa_id} />}
           {section === "Ventas por día" && <IngresosDiariosOperativos empresaId={empresa.empresa_id} />}
           {section === "Stock vs Inventario" && <StockVsInventario empresaId={empresa.empresa_id} />}
+          {section === "Negocio seguro" && <NegocioSeguro />}
           {section === "Ventas" && <VentaRapidaOperativa empresaId={empresa.empresa_id} puedeEditarProductos={puedeEditarProductos} />}
           {section === "Compras" && <ComprasHub empresaId={empresa.empresa_id} />}
-          {section !== "Inicio" && section !== "Productos" && section !== "Stock" && section !== "Ventas" && section !== "Compras" && section !== "Stock vs Inventario" && section !== "Lista de precios" && section !== "Ofertas y etiquetas" && section !== "Ventas por día" && <Pendiente title={section} />}
+          {section !== "Inicio" && section !== "Productos" && section !== "Stock" && section !== "Ventas" && section !== "Compras" && section !== "Stock vs Inventario" && section !== "Lista de precios" && section !== "Ofertas y etiquetas" && section !== "Ventas por día" && section !== "Negocio seguro" && <Pendiente title={section} />}
         </section>
       </main>
     </div>
   );
+}
+
+function NegocioSeguro() {
+  const whatsapp = "5493754462580";
+  const opciones = [
+    { icono: "🏪", titulo: "Cotizá tu negocio", texto: "Protegé tu comercio y pedí una cotización rápida.", mensaje: "Hola, quiero cotizar el seguro de mi negocio." },
+    { icono: "🚗", titulo: "Cotizá tu vehículo", texto: "Consultá cobertura para tu auto o vehículo.", mensaje: "Hola, quiero cotizar el seguro de mi vehículo." },
+    { icono: "🏍️", titulo: "Cotizá tu moto", texto: "Pedí una cotización para asegurar tu moto.", mensaje: "Hola, quiero cotizar el seguro de mi moto." },
+  ];
+  return <div className="negocio-seguro-page">
+    <div className="page-header"><div><h2>🛡️ Negocio seguro</h2><p>Cotizá de forma simple y comunicate directamente por WhatsApp.</p></div></div>
+    <div className="negocio-seguro-grid">{opciones.map((opcion) => <a key={opcion.titulo} className="negocio-seguro-card" href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(opcion.mensaje)}`} target="_blank" rel="noreferrer"><span className="negocio-seguro-icon">{opcion.icono}</span><strong>{opcion.titulo}</strong><p>{opcion.texto}</p><span className="negocio-seguro-cta">Consultar por WhatsApp →</span></a>)}</div>
+  </div>;
 }
 
 function OfertasEtiquetasSection({ empresaId }: { empresaId: string }) {
