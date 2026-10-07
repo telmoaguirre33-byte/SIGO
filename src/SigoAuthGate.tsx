@@ -64,6 +64,11 @@ export default function SigoAuthGate({ children }: Props) {
   const [mostrarAyudaInstalacion, setMostrarAyudaInstalacion] = useState(false);
   const [mensajeInstalacion, setMensajeInstalacion] = useState("");
   const requestInFlight = useRef(false);
+  const [entradaPromocional] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const source = `${params.get("utm_source") ?? ""} ${params.get("fbclid") ?? ""} ${params.get("src") ?? ""}`.toLowerCase();
+    return Boolean(params.get("fbclid")) || source.includes("facebook") || source.includes("instagram") || source.includes("meta");
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -515,8 +520,20 @@ export default function SigoAuthGate({ children }: Props) {
           </>
         ) : (
           <>
-            <h1 id="sigo-login-title">Ingresar</h1>
-            <p className="sigo-auth-subtitle">Ingresá con tu email y contraseña.</p>
+            {entradaPromocional ? (
+              <div className="sigo-meta-entry">
+                <span className="sigo-meta-entry-badge">30 DÍAS GRATIS</span>
+                <h1 id="sigo-login-title">Probá SIGO gratis</h1>
+                <p className="sigo-auth-subtitle">Empezá hoy. Sin tarjeta y sin compromiso.</p>
+                <button className="sigo-auth-trial sigo-meta-trial-button" type="button" disabled={submitting} onClick={() => cambiarModo("register")}>CREAR MI CUENTA GRATIS</button>
+                <div className="sigo-meta-existing">¿Ya tenés cuenta? Ingresá abajo.</div>
+              </div>
+            ) : (
+              <>
+                <h1 id="sigo-login-title">Ingresar</h1>
+                <p className="sigo-auth-subtitle">Ingresá con tu email y contraseña.</p>
+              </>
+            )}
             <form onSubmit={iniciarSesion} className="sigo-auth-form">
               <label className="sigo-auth-field"><span>Email</span><input type="email" inputMode="email" autoComplete="email" autoCapitalize="none" spellCheck={false} value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
               {campoPassword(password, setPassword, "current-password")}
@@ -524,7 +541,7 @@ export default function SigoAuthGate({ children }: Props) {
               {success ? <div className="sigo-auth-success" role="status">{success}</div> : null}
               <button className="sigo-auth-submit" type="submit" disabled={submitting}>{submitting ? "Ingresando…" : "Ingresar a SIGO"}</button>
               {puedeReenviarActivacion ? <button className="sigo-auth-secondary" type="button" disabled={submitting} onClick={() => void reenviarActivacion()}>Reenviar activación</button> : null}
-              <button className="sigo-auth-trial" type="button" disabled={submitting} onClick={() => cambiarModo("register")}>Crear cuenta y comenzar</button>
+              {!entradaPromocional ? <button className="sigo-auth-trial" type="button" disabled={submitting} onClick={() => cambiarModo("register")}>Crear cuenta y comenzar</button> : null}
               <button className="sigo-auth-secondary" type="button" disabled={submitting} onClick={() => void recuperarAcceso()}>Recuperar acceso</button>
             </form>
           </>
