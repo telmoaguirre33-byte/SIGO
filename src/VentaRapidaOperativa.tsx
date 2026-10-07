@@ -409,8 +409,12 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       setUltimaVentaTicket(resultado.ventaId);
       setAdvertencia(advertencias.join(" "));
       if (imprimirDespues) {
-        try { await imprimirTicketVenta(empresaConfirmacion, resultado.ventaId, "80", true); }
-        catch (printErr) { setError(printErr instanceof Error ? printErr.message : "La venta se confirmó, pero no se pudo abrir la impresión del ticket."); }
+        void imprimirTicketVenta(empresaConfirmacion, resultado.ventaId, "80", true)
+          .catch((printErr) => {
+            if (empresaActivaRef.current === empresaConfirmacion) {
+              setError(printErr instanceof Error ? printErr.message : "La venta se confirmó, pero no se pudo abrir la impresión del ticket.");
+            }
+          });
       }
       setItems([]);
       setBusquedaProducto("");
@@ -419,8 +423,16 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       setClienteId("");
       setMedioPago("efectivo");
       setIdempotencyKey(nuevaClaveVenta());
-      const [data] = await Promise.all([listarClientesSigo(empresaConfirmacion), cargarVentasRecientes(empresaConfirmacion)]);
-      if (empresaActivaRef.current === empresaConfirmacion) setClientes(data);
+      void listarClientesSigo(empresaConfirmacion)
+        .then((data) => {
+          if (empresaActivaRef.current === empresaConfirmacion) setClientes(data);
+        })
+        .catch((refreshErr) => {
+          if (empresaActivaRef.current === empresaConfirmacion) {
+            setClientesError(refreshErr instanceof Error ? refreshErr.message : "No se pudieron actualizar los clientes.");
+          }
+        });
+      void cargarVentasRecientes(empresaConfirmacion);
     } catch (err) {
       if (empresaActivaRef.current === empresaConfirmacion) {
         setError(err instanceof Error ? err.message : "No se pudo confirmar la venta.");
