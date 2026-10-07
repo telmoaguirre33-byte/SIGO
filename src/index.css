@@ -1363,3 +1363,14 @@ main:has(> .productos-oferta){
   outline:1px solid #1677e8!important;
   outline-offset:-1px!important;
 }
+
+/* Negocio Seguro */
+.negocio-seguro-page{max-width:1100px;margin:0 auto}
+.negocio-seguro-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.negocio-seguro-card{display:flex;min-height:260px;flex-direction:column;align-items:center;justify-content:center;padding:26px 20px;border:1px solid var(--line);border-radius:20px;background:#fff;box-shadow:var(--shadow);color:var(--text);text-decoration:none;text-align:center;transition:.18s ease}
+.negocio-seguro-card:hover{transform:translateY(-3px);border-color:#93b4ef;box-shadow:0 16px 38px rgba(20,31,51,.12)}
+.negocio-seguro-icon{display:grid;place-items:center;width:82px;height:82px;margin-bottom:18px;border-radius:24px;background:#eef5ff;font-size:44px}
+.negocio-seguro-card strong{font-size:22px}
+.negocio-seguro-card p{margin:9px 0 18px;color:var(--muted);line-height:1.45}
+.negocio-seguro-cta{font-size:13px;font-weight:800;color:var(--primary)}
+@media(max-width:760px){.negocio-seguro-grid{grid-template-columns:1fr}.negocio-seguro-card{min-height:190px}.negocio-seguro-icon{width:68px;height:68px;font-size:36px}}
