@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import BarcodeScanner from "./BarcodeScanner";
 import { imprimirTicketVenta } from "./ticketVenta";
-import { isLegacyDuplicateProduct, type BarcodeProduct } from "./barcode";
+import { isLegacyDuplicateProduct, normalizeBarcode, type BarcodeProduct } from "./barcode";
 import { listarClientesSigo, type ClienteSigo } from "./clientes";
 import { guardarProductoSigo, listarProductosSigo, type ProductoSigo } from "./productos";
 import { listarOfertasProductos, ofertaVigente, precioConOferta, type OfertaProducto } from "./ofertasProductos";
@@ -386,28 +386,36 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       });
       if (empresaActivaRef.current !== empresaConfirmacion) return;
 
-      const totalConfirmado = resultado.totalVerificado ?? total;
-      const advertencias: string[] = [];
-      if (
-        resultado.totalVerificado != null
-        && Math.abs(resultado.totalVerificado - total) > DINERO_TOLERANCIA
-      ) {
-        advertencias.push(
-          `El precio cambió mientras confirmabas. SIGO registró el total vigente del backend: $ ${resultado.totalVerificado.toLocaleString("es-AR")}.`,
-        );
-      }
-      if (resultado.integridad !== "ok") {
-        advertencias.push(
-          resultado.integridad === "revisar"
-            ? "La venta quedó registrada, pero no se pudo conciliar su movimiento de Caja/Cuenta Corriente o stock. NO repitas la venta: revisá el estado operativo o Informes."
-            : "La venta quedó registrada, pero la conciliación automática no pudo verificarse. NO repitas la venta hasta revisar Ventas/Informes.",
-        );
-      }
-
+      // La venta ya fue confirmada de forma transaccional por el servidor.
+      // Mostrar el resultado sin esperar las lecturas secundarias de conciliación.
       setExito("Venta confirmada");
       window.setTimeout(() => setExito(""), 2200);
       setUltimaVentaTicket(resultado.ventaId);
-      setAdvertencia(advertencias.join(" "));
+      setAdvertencia("");
+      void resultado.verificacion.then((verificado) => {
+        if (empresaActivaRef.current !== empresaConfirmacion) return;
+        const advertencias: string[] = [];
+        if (
+          verificado.totalVerificado != null
+          && Math.abs(verificado.totalVerificado - total) > DINERO_TOLERANCIA
+        ) {
+          advertencias.push(
+            `El precio cambió mientras confirmabas. SIGO registró el total vigente del backend: $ ${verificado.totalVerificado.toLocaleString("es-AR")}.`,
+          );
+        }
+        if (verificado.integridad !== "ok") {
+          advertencias.push(
+            verificado.integridad === "revisar"
+              ? "La venta quedó registrada, pero no se pudo conciliar su movimiento de Caja/Cuenta Corriente o stock. NO repitas la venta: revisá el estado operativo o Informes."
+              : "La venta quedó registrada, pero la conciliación automática no pudo verificarse. NO repitas la venta hasta revisar Ventas/Informes.",
+          );
+        }
+        setAdvertencia(advertencias.join(" "));
+      }).catch(() => {
+        if (empresaActivaRef.current === empresaConfirmacion) {
+          setAdvertencia("La venta quedó confirmada, pero no se pudo verificar la conciliación posterior. No repitas la venta hasta revisar Ventas/Informes.");
+        }
+      });
       if (imprimirDespues) {
         void imprimirTicketVenta(empresaConfirmacion, resultado.ventaId, "80", true)
           .catch((printErr) => {
@@ -416,6 +424,12 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
             }
           });
       }
+      const cantidadesVendidas = new Map(items.map((item) => [item.producto.id, item.cantidad]));
+      setCatalogo((actual) => actual.map((producto) => {
+        const cantidad = cantidadesVendidas.get(producto.id);
+        if (!cantidad) return producto;
+        return { ...producto, stock_actual: Math.max(0, Number(producto.stock_actual ?? 0) - cantidad) };
+      }));
       setItems([]);
       setBusquedaProducto("");
       setProductoSeleccionadoId(null);
@@ -480,7 +494,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       </div>
       {descuentoAbierto&&<div className="sigo-pos-discount"><strong>Descuento</strong>{[0,5,10,15,20].map(n=><button type="button" className={descuentoPct===n?"active":""} onClick={()=>{setDescuentoPct(n);setDescuentoAbierto(false)}} key={n}>{n}%</button>)}<label>Otro % <input type="number" min="0" max="99.99" step="0.01" value={descuentoPct} onChange={e=>setDescuentoPct(Math.max(0,Math.min(99.99,Number(e.target.value)||0)))}/></label></div>}
       <div className="sigo-pos-scan">
-        <BarcodeScanner key={scannerInstanceKey} empresaId={empresaId} action="vender" onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null)}} onManualQuery={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null);return !/^\\d{6,}$/.test(query.trim())}} onProductSearchKeyDown={manejarTeclaBusquedaProducto}/>
+        <BarcodeScanner key={scannerInstanceKey} empresaId={empresaId} action="vender" onCachedCode={(code)=>{const encontrados=catalogo.filter((p)=>p.empresa_id===empresaId&&(normalizeBarcode(p.codigo_barras??"")===code||normalizeBarcode(p.codigo_interno??"")===code));return encontrados.length?encontrados:null}} onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null)}} onManualQuery={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null);return !/^\\d{6,}$/.test(query.trim())}} onProductSearchKeyDown={manejarTeclaBusquedaProducto}/>
         
         {busquedaProducto.trim()&&productosEncontrados.length>0&&<div className="sigo-pos-results">{productosEncontrados.map((p)=><button type="button" data-pos-suggestion="" data-product-id={p.id} aria-selected={p.id===productoSeleccionadoVisibleId} className={p.id===productoSeleccionadoVisibleId?"active":""} key={p.id} onMouseEnter={()=>{productoSeleccionadoIdRef.current=p.id;setProductoSeleccionadoId(p.id)}} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}{Number(p.stock_actual??0)<=0?" · SIN STOCK":""}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} · Stock {p.stock_actual??0}</span></button>)}</div>}{busquedaProducto.trim()&&productosEncontrados.length===0&&!catalogoError&&<div className="sigo-pos-results"><div className="table-empty">No encontré productos. Probá con nombre, marca, código interno o EAN.</div></div>}
       </div>

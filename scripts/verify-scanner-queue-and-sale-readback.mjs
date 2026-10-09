@@ -39,12 +39,16 @@ if (resolveStart < 0 || clearBeforeQueue < 0 || queueCheck < 0 || clearBeforeQue
 for (const required of [
   "const precio = Number(producto.precio_venta)",
   "!Number.isFinite(precio) || precio <= 0",
-  "resultado.totalVerificado ?? total",
-  "Math.abs(resultado.totalVerificado - total) > DINERO_TOLERANCIA",
-  "const totalConfirmado = resultado.totalVerificado ?? total",
+  "resultado.verificacion.then",
+  "Math.abs(verificado.totalVerificado - total) > DINERO_TOLERANCIA",
   "SIGO registró el total vigente del backend",
+  "Venta confirmada",
 ]) {
   if (!sale.includes(required)) throw new Error(`Sale verified-total safeguard missing: ${required}`);
+}
+
+if (!sale.includes("La venta ya fue confirmada de forma transaccional por el servidor.")) {
+  throw new Error("Caja must display confirmation after the transactional RPC without awaiting secondary readbacks");
 }
 
 console.log("Scanner/sale verified: rapid manual/wedge reads are queued, tenant/action context is protected, and the sale receipt shows the backend-verified total.");

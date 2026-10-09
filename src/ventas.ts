@@ -398,6 +398,13 @@ export async function confirmarVentaSigo(input: {
   integridadCaja: IntegridadVentaSigo;
   integridadStock: IntegridadVentaSigo;
   totalVerificado: number | null;
+  verificacion: Promise<{
+    integridad: IntegridadVentaSigo;
+    integridadCabecera: IntegridadVentaSigo;
+    integridadCaja: IntegridadVentaSigo;
+    integridadStock: IntegridadVentaSigo;
+    totalVerificado: number | null;
+  }>;
 }> {
   const empresaId = normalizarIdentificador(input.empresaId);
   const clienteId = normalizarIdentificador(input.clienteId) || null;
@@ -431,32 +438,43 @@ export async function confirmarVentaSigo(input: {
   const ventaId = normalizarIdentificador(typeof data === "string" ? data : String(data ?? ""));
   if (!ventaId) throw new Error("La venta no devolvió comprobante. No la repitas hasta verificar su estado.");
 
-  // Ningún fallo de conciliación posterior vuelve a ejecutar la venta: si la RPC confirmó,
-  // reportamos integridad y dejamos al operador revisar, evitando dobles descuentos/cobros.
-  const cabecera = await leerCabeceraVentaConfirmada(empresaId, ventaId, input.medioPago, clienteId);
-  const [integridadCaja, integridadStock] = await Promise.all([
-    cabecera.total == null
-      ? Promise.resolve(cabecera.integridad === "revisar" ? "revisar" as const : "no_verificada" as const)
-      : verificarIntegridadVentas(empresaId, [{ id: ventaId, medio_pago: input.medioPago, total: cabecera.total }])
-          .then((mapa) => mapa.get(ventaId) ?? "no_verificada")
-          .catch(() => "no_verificada" as const),
-    verificarIntegridadStockVenta(
-      empresaId,
-      ventaId,
-      itemsConsolidados,
-      stockAntes,
-      estadoReintento,
-      cabecera.total,
-    ),
-  ]);
+  // La RPC confirma el cobro y descuenta el stock en una sola transacción.
+  // Las lecturas de conciliación siguen ejecutándose, pero ya no bloquean la caja.
+  const verificacion = (async () => {
+    const cabecera = await leerCabeceraVentaConfirmada(empresaId, ventaId, input.medioPago, clienteId);
+    const [integridadCaja, integridadStock] = await Promise.all([
+      cabecera.total == null
+        ? Promise.resolve(cabecera.integridad === "revisar" ? "revisar" as const : "no_verificada" as const)
+        : verificarIntegridadVentas(empresaId, [{ id: ventaId, medio_pago: input.medioPago, total: cabecera.total }])
+            .then((mapa) => mapa.get(ventaId) ?? "no_verificada")
+            .catch(() => "no_verificada" as const),
+      verificarIntegridadStockVenta(
+        empresaId,
+        ventaId,
+        itemsConsolidados,
+        stockAntes,
+        estadoReintento,
+        cabecera.total,
+      ),
+    ]);
+
+    return {
+      integridad: combinarIntegridad(cabecera.integridad, integridadCaja, integridadStock),
+      integridadCabecera: cabecera.integridad,
+      integridadCaja,
+      integridadStock,
+      totalVerificado: cabecera.total,
+    };
+  })();
 
   return {
     ventaId,
     idempotencyKey,
-    integridad: combinarIntegridad(cabecera.integridad, integridadCaja, integridadStock),
-    integridadCabecera: cabecera.integridad,
-    integridadCaja,
-    integridadStock,
-    totalVerificado: cabecera.total,
+    integridad: "no_verificada",
+    integridadCabecera: "no_verificada",
+    integridadCaja: "no_verificada",
+    integridadStock: "no_verificada",
+    totalVerificado: null,
+    verificacion,
   };
 }

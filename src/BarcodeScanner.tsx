@@ -17,6 +17,7 @@ type Props = {
   onQueryChange?: (query: string) => void;
   onManualQuery?: (query: string) => boolean;
   onProductSearchKeyDown?: (key: string) => boolean;
+  onCachedCode?: (code: string) => BarcodeProduct[] | null;
   queryResetKey?: number;
 };
 
@@ -64,6 +65,7 @@ export default function BarcodeScanner({
   onQueryChange,
   onManualQuery,
   onProductSearchKeyDown,
+  onCachedCode,
   queryResetKey,
 }: Props) {
   const [code, setCode] = useState("");
@@ -142,7 +144,9 @@ export default function BarcodeScanner({
     setBusy(true);
     setError("");
     try {
-      const matches = await buscarProductoPorCodigo(empresaOperacion, normalized);
+      // En Caja–Venta, los códigos principales conocidos se resuelven desde el catálogo ya cargado.
+      // Códigos alternativos o no reconocidos conservan la consulta segura al servidor.
+      const matches = onCachedCode?.(normalized) ?? await buscarProductoPorCodigo(empresaOperacion, normalized);
       const contextoVigente = empresaActivaRef.current === empresaOperacion
         && actionActivaRef.current === actionOperacion
         && requestRef.current === requestId;
