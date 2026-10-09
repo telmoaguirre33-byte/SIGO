@@ -626,7 +626,7 @@ function Stock({ empresaId }: { empresaId: string }) {
   const totalUnidades = productosValorizar.reduce((total, p) => total + Number(p.stock_actual || 0), 0);
   const stockValorCosto = productosValorizar.reduce((total,p)=>total + Number(p.stock_actual || 0) * Number(p.costo_actual ?? p.costo_ultima_compra ?? 0),0);
   const stockValorVenta = productosValorizar.reduce((total,p)=>total + Number(p.stock_actual || 0) * Number(p.precio_venta ?? 0),0);
-  const margenPotencial = stockValorVenta - stockValorCosto);
+  const margenPotencial = stockValorVenta - stockValorCosto;
 
   return (
     <div className="products-page stock-page-compact">
