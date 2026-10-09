@@ -206,7 +206,7 @@ export default function MobileOperationsMenu() {
                     <span>↘</span><strong>Egresos</strong><b>{grupo === "egresos" ? "⌄" : "›"}</b>
                   </button>
                   {grupo === "egresos" && <div className="sigo-mobile-drawer-submenu">
-                    <button type="button" onClick={() => irWorkspace("Compras / Proveedores")}>Compras a proveedores</button>
+                    <button type="button" onClick={() => irOperacion("Compras / Proveedores")}>Compras a proveedores</button>
                   </div>}
                 </section>
               ) : null}
