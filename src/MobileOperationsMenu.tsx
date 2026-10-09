@@ -214,6 +214,7 @@ export default function MobileOperationsMenu() {
               {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={() => irWorkspace("Clientes / Ctas. corrientes")}><span>👥</span><strong>Contactos / Clientes</strong><b>›</b></button>}
               <button className="sigo-mobile-drawer-item" type="button" onClick={() => irOperacion("Productos")}><span>◇</span><strong>Productos</strong><b>›</b></button>
               <button className="sigo-mobile-drawer-item" type="button" onClick={() => irOperacion("Stock")}><span>▤</span><strong>Stock</strong><b>›</b></button>
+              {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={() => irOperacion("Compras sugeridas")}><span>🛒</span><strong>Compras sugeridas</strong><b>›</b></button>}
               {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={() => irOperacion("Lista de precios")}><span>$</span><strong>Lista de precios</strong><b>›</b></button>}
               {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={() => irOperacion("Ofertas y etiquetas")}><span>🏷️</span><strong>Ofertas y carteles</strong><b>›</b></button>}
               {puedeVender && <button className="sigo-mobile-drawer-item" type="button" onClick={abrirDevoluciones}><span>↩</span><strong>Devoluciones / Anulaciones</strong><b>›</b></button>}
