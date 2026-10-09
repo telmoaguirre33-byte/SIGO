@@ -5,6 +5,7 @@ import BarcodeScanner from "./BarcodeScanner";
 import type { BarcodeAction, BarcodeProduct } from "./barcode";
 import VentaRapidaOperativa from "./VentaRapidaOperativa";
 import ComprasOperativas from "./ComprasOperativas";
+import ComprasSugeridas from "./ComprasSugeridas";
 import StockVsInventario from "./StockVsInventario";
 import ListaPreciosManager from "./ListaPreciosManager";
 import ProductosOferta from "./ProductosOferta";
@@ -21,9 +22,9 @@ import {
   type ProductoSigo,
 } from "./productos";
 
-type Section = "Inicio" | "Productos" | "Ventas" | "Clientes" | "Compras" | "Stock" | "Lista de precios" | "Ofertas y etiquetas" | "Ventas por día" | "Informes" | "Stock vs Inventario" | "Negocio seguro";
+type Section = "Inicio" | "Productos" | "Ventas" | "Clientes" | "Compras" | "Stock" | "Lista de precios" | "Ofertas y etiquetas" | "Ventas por día" | "Informes" | "Stock vs Inventario" | "Negocio seguro" | "Compras sugeridas";
 
-const sections: Section[] = ["Inicio", "Productos", "Ventas", "Stock", "Compras", "Lista de precios", "Ofertas y etiquetas", "Ventas por día", "Informes", "Negocio seguro"];
+const sections: Section[] = ["Inicio", "Productos", "Ventas", "Stock", "Compras", "Compras sugeridas", "Lista de precios", "Ofertas y etiquetas", "Ventas por día", "Informes", "Negocio seguro"];
 
 type ProductoForm = {
   nombre: string;
@@ -109,7 +110,8 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
           {section === "Negocio seguro" && <NegocioSeguro />}
           {section === "Ventas" && <VentaRapidaOperativa empresaId={empresa.empresa_id} puedeEditarProductos={puedeEditarProductos} />}
           {section === "Compras" && <ComprasHub empresaId={empresa.empresa_id} />}
-          {section !== "Inicio" && section !== "Productos" && section !== "Stock" && section !== "Ventas" && section !== "Compras" && section !== "Stock vs Inventario" && section !== "Lista de precios" && section !== "Ofertas y etiquetas" && section !== "Ventas por día" && section !== "Negocio seguro" && <Pendiente title={section} />}
+           {section === "Compras sugeridas" && <ComprasSugeridas empresaId={empresa.empresa_id} />}
+          {section !== "Inicio" && section !== "Productos" && section !== "Stock" && section !== "Ventas" && section !== "Compras" && section !== "Stock vs Inventario" && section !== "Lista de precios" && section !== "Ofertas y etiquetas" && section !== "Ventas por día" && section !== "Negocio seguro" && section !== "Compras sugeridas" && <Pendiente title={section} />}
         </section>
       </main>
     </div>
