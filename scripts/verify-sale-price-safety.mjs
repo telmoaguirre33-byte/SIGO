@@ -19,7 +19,7 @@ requireText('src/BarcodeScanner.tsx', [
 requireText('src/VentaRapidaOperativa.tsx', [
   '!Number.isFinite(precio) || precio <= 0',
   'precio > 0',
-  'resultado.totalVerificado',
+  'verificado.totalVerificado',
   'total vigente del backend',
   'descuentoPct,',
   'precioUnitarioVenta(item,ofertas,descuentoPct)',
@@ -51,4 +51,4 @@ requireText('supabase/migrations/20260913003000_ventas_precio_positivo_guard.sql
   'new.subtotal <= 0',
 ]);
 
-console.log('OK sale-price-safety: scanner, carrito, maestro y base bloquean ventas a precio cero y muestran el total verificado.');
+console.log('OK sale-price-safety: scanner, carrito, maestro y base bloquean ventas a precio cero; caja confirma pronto y conserva la conciliación del total.');
