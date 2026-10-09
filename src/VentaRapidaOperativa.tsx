@@ -386,28 +386,36 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       });
       if (empresaActivaRef.current !== empresaConfirmacion) return;
 
-      const totalConfirmado = resultado.totalVerificado ?? total;
-      const advertencias: string[] = [];
-      if (
-        resultado.totalVerificado != null
-        && Math.abs(resultado.totalVerificado - total) > DINERO_TOLERANCIA
-      ) {
-        advertencias.push(
-          `El precio cambió mientras confirmabas. SIGO registró el total vigente del backend: $ ${resultado.totalVerificado.toLocaleString("es-AR")}.`,
-        );
-      }
-      if (resultado.integridad !== "ok") {
-        advertencias.push(
-          resultado.integridad === "revisar"
-            ? "La venta quedó registrada, pero no se pudo conciliar su movimiento de Caja/Cuenta Corriente o stock. NO repitas la venta: revisá el estado operativo o Informes."
-            : "La venta quedó registrada, pero la conciliación automática no pudo verificarse. NO repitas la venta hasta revisar Ventas/Informes.",
-        );
-      }
-
+      // La venta ya fue confirmada de forma transaccional por el servidor.
+      // Mostrar el resultado sin esperar las lecturas secundarias de conciliación.
       setExito("Venta confirmada");
       window.setTimeout(() => setExito(""), 2200);
       setUltimaVentaTicket(resultado.ventaId);
-      setAdvertencia(advertencias.join(" "));
+      setAdvertencia("");
+      void resultado.verificacion.then((verificado) => {
+        if (empresaActivaRef.current !== empresaConfirmacion) return;
+        const advertencias: string[] = [];
+        if (
+          verificado.totalVerificado != null
+          && Math.abs(verificado.totalVerificado - total) > DINERO_TOLERANCIA
+        ) {
+          advertencias.push(
+            `El precio cambió mientras confirmabas. SIGO registró el total vigente del backend: $ ${verificado.totalVerificado.toLocaleString("es-AR")}.`,
+          );
+        }
+        if (verificado.integridad !== "ok") {
+          advertencias.push(
+            verificado.integridad === "revisar"
+              ? "La venta quedó registrada, pero no se pudo conciliar su movimiento de Caja/Cuenta Corriente o stock. NO repitas la venta: revisá el estado operativo o Informes."
+              : "La venta quedó registrada, pero la conciliación automática no pudo verificarse. NO repitas la venta hasta revisar Ventas/Informes.",
+          );
+        }
+        setAdvertencia(advertencias.join(" "));
+      }).catch(() => {
+        if (empresaActivaRef.current === empresaConfirmacion) {
+          setAdvertencia("La venta quedó confirmada, pero no se pudo verificar la conciliación posterior. No repitas la venta hasta revisar Ventas/Informes.");
+        }
+      });
       if (imprimirDespues) {
         void imprimirTicketVenta(empresaConfirmacion, resultado.ventaId, "80", true)
           .catch((printErr) => {
