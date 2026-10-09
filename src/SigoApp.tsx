@@ -585,13 +585,7 @@ function Stock({ empresaId }: { empresaId: string }) {
   }, [empresaId]);
 
   const visibles = productos.filter((p) => p.stock_actual != null);
-  const criticos = visibles.filter((p) => p.stock_minimo != null && Number(p.stock_actual) <= Number(p.stock_minimo));
-  const sinStock = visibles.filter((p) => Number(p.stock_actual) <= 0);
-  const totalUnidades = visibles.reduce((total, p) => total + Number(p.stock_actual || 0), 0);
-  const productosValorizar = seleccionValorizacion.size ? visibles.filter(p=>seleccionValorizacion.has(p.id)) : visibles;
-  const stockValorCosto = productosValorizar.reduce((total,p)=>total + Number(p.stock_actual || 0) * Number(p.costo_actual ?? p.costo_ultima_compra ?? 0),0);
-  const stockValorVenta = productosValorizar.reduce((total,p)=>total + Number(p.stock_actual || 0) * Number(p.precio_venta ?? 0),0);
-  const margenPotencial = stockValorVenta - stockValorCosto;
+  const criticosCatalogo = visibles.filter((p) => p.stock_minimo != null && Number(p.stock_actual) <= Number(p.stock_minimo));
   const dineroStock = (valor:number) => valor.toLocaleString("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:2});
   function exportarStockExcel() {
     const esc = (v: unknown) => `"${String(v ?? "").replaceAll('"', '""')}"`;
@@ -617,10 +611,22 @@ function Stock({ empresaId }: { empresaId: string }) {
   }
   const normalizarBusqueda = (valor: string) => valor.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es-AR").trim();
   const termino = normalizarBusqueda(busqueda);
-  const filas = (soloCriticos ? criticos : visibles).filter((p) =>
+  const filas = (soloCriticos ? criticosCatalogo : visibles).filter((p) =>
     !termino || [p.nombre, p.codigo_interno, p.codigo_barras, p.marca]
       .some((valor) => valor && normalizarBusqueda(valor).includes(termino))
   );
+  // Las tarjetas y la valorización usan la selección explícita o los filtros actuales.
+  const productosValorizar = seleccionValorizacion.size
+    ? filas.filter((p) => seleccionValorizacion.has(p.id))
+    : filas;
+  const criticos = productosValorizar.filter((p) =>
+    p.stock_minimo != null && Number(p.stock_actual) <= Number(p.stock_minimo)
+  );
+  const sinStock = productosValorizar.filter((p) => Number(p.stock_actual) <= 0);
+  const totalUnidades = productosValorizar.reduce((total, p) => total + Number(p.stock_actual || 0), 0);
+  const stockValorCosto = productosValorizar.reduce((total,p)=>total + Number(p.stock_actual || 0) * Number(p.costo_actual ?? p.costo_ultima_compra ?? 0),0);
+  const stockValorVenta = productosValorizar.reduce((total,p)=>total + Number(p.stock_actual || 0) * Number(p.precio_venta ?? 0),0);
+  const margenPotencial = stockValorVenta - stockValorCosto;
 
   return (
     <div className="products-page stock-page-compact">
@@ -633,7 +639,7 @@ function Stock({ empresaId }: { empresaId: string }) {
       </div>
 
       <div className="stats-grid">
-        <div className="stat-card"><span>Productos con stock visible</span><strong>{visibles.length}</strong></div>
+        <div className="stat-card"><span>Productos con stock visible</span><strong>{productosValorizar.length}</strong></div>
         <div className="stat-card"><span>Unidades totales</span><strong>{totalUnidades.toLocaleString("es-AR")}</strong></div>
         <div className="stat-card"><span>Stock crítico</span><strong>{criticos.length}</strong></div>
         <div className="stat-card"><span>Sin stock</span><strong>{sinStock.length}</strong></div>
