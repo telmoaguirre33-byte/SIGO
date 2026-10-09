@@ -617,7 +617,7 @@ function Stock({ empresaId }: { empresaId: string }) {
   );
   // Las tarjetas y la valorización usan la selección explícita o los filtros actuales.
   const productosValorizar = seleccionValorizacion.size
-    ? visibles.filter((p) => seleccionValorizacion.has(p.id))
+    ? filas.filter((p) => seleccionValorizacion.has(p.id))
     : filas;
   const criticos = productosValorizar.filter((p) =>
     p.stock_minimo != null && Number(p.stock_actual) <= Number(p.stock_minimo)
@@ -639,7 +639,7 @@ function Stock({ empresaId }: { empresaId: string }) {
       </div>
 
       <div className="stats-grid">
-        <div className="stat-card"><span>Productos con stock visible</span><strong>{visibles.length}</strong></div>
+        <div className="stat-card"><span>Productos con stock visible</span><strong>{productosValorizar.length}</strong></div>
         <div className="stat-card"><span>Unidades totales</span><strong>{totalUnidades.toLocaleString("es-AR")}</strong></div>
         <div className="stat-card"><span>Stock crítico</span><strong>{criticos.length}</strong></div>
         <div className="stat-card"><span>Sin stock</span><strong>{sinStock.length}</strong></div>
