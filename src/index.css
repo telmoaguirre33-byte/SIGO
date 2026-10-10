@@ -1374,3 +1374,7 @@ main:has(> .productos-oferta){
 .negocio-seguro-card p{margin:9px 0 18px;color:var(--muted);line-height:1.45}
 .negocio-seguro-cta{font-size:13px;font-weight:800;color:var(--primary)}
 @media(max-width:760px){.negocio-seguro-grid{grid-template-columns:1fr}.negocio-seguro-card{min-height:190px}.negocio-seguro-icon{width:68px;height:68px;font-size:36px}}
+
+/* Logo oficial: conserva los tamaños existentes de cada cabecera. */
+.sigo-brand-logo { background: transparent; border-radius: 0; flex-shrink: 0; }
+.sigo-brand-logo img { display: block; }

@@ -227,3 +227,5 @@
   .sigo-returns-context-button,
   .sigo-settings-context-button { display:none !important; }
 }
+
+.sigo-mobile-drawer-logo { background: transparent; border-radius: 0; flex-shrink: 0; }

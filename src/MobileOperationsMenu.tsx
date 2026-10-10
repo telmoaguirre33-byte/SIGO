@@ -172,7 +172,7 @@ export default function MobileOperationsMenu() {
           <button className="sigo-mobile-drawer-backdrop" type="button" aria-label="Cerrar menú" onClick={cerrar} />
           <aside className="sigo-mobile-drawer" role="dialog" aria-modal="true" aria-label="Menú principal SIGO">
             <div className="sigo-mobile-drawer-head">
-              <div className="sigo-mobile-drawer-logo">S</div>
+              <div className="sigo-mobile-drawer-logo"><img src="/sigo-logo-oficial.png" alt="" width="44" height="44" style={{ display: "block", width: "100%", height: "100%", objectFit: "contain" }} /></div>
               <div><strong>SIGO</strong><span>{nombreEmpresa}{empresa?.rol ? ` · ${etiquetaRol(empresa.rol)}` : ""}</span></div>
               <button type="button" onClick={cerrar} aria-label="Cerrar menú">×</button>
             </div>
