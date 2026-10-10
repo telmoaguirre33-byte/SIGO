@@ -402,7 +402,7 @@ export default function SigoAuthGate({ children }: Props) {
       <main className="sigo-auth-screen">
         <section className="sigo-auth-card" aria-labelledby="sigo-trial-expired-title">
           <div className="sigo-auth-brand">
-            <div className="sigo-auth-brand-mark" aria-hidden="true">SG</div>
+            <div className="sigo-auth-brand-mark" aria-hidden="true"><img src="/sigo-icon.svg" alt="" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "inherit" }} /></div>
             <div className="sigo-auth-brand-copy"><strong>SIGO</strong><span>Sistema Inteligente de Gestión Operativa</span></div>
           </div>
           <h1 id="sigo-trial-expired-title">Finalizó tu prueba de 30 días</h1>
@@ -438,7 +438,7 @@ export default function SigoAuthGate({ children }: Props) {
     <main className="sigo-auth-screen">
       <section className="sigo-auth-card" aria-labelledby="sigo-login-title">
         <div className="sigo-auth-brand">
-          <div className="sigo-auth-brand-mark" aria-hidden="true">SG</div>
+          <div className="sigo-auth-brand-mark" aria-hidden="true"><img src="/sigo-icon.svg" alt="" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "inherit" }} /></div>
           <div className="sigo-auth-brand-copy"><strong>SIGO</strong><span>Sistema Inteligente de Gestión Operativa</span></div>
           {mode === "login" ? (
             <button
