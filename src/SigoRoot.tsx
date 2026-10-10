@@ -284,7 +284,7 @@ export default function SigoRoot() {
         .sigo-recovery { width:min(560px,calc(100% - 28px)); margin:42px auto; background:#fff; border:1px solid #e5edf6; border-radius:24px; box-shadow:0 24px 60px rgba(15,23,42,.10); overflow:hidden; }
         .sigo-recovery-head { padding:28px 28px 20px; }
         .sigo-recovery-brand { display:flex; align-items:center; gap:12px; margin-bottom:22px; }
-        .sigo-recovery-mark { width:42px; height:42px; border-radius:12px; display:grid; place-items:center; background:#2563eb; color:#fff; font-weight:900; }
+        .sigo-recovery-mark { width:42px; height:42px; border-radius:0; display:grid; place-items:center; background:transparent; color:#fff; font-weight:900; }
         .sigo-recovery-status { display:inline-flex; align-items:center; gap:8px; padding:7px 11px; border-radius:999px; background:#eef5ff; color:#1d4ed8; font-size:13px; font-weight:800; }
         .sigo-recovery-dot { width:8px; height:8px; border-radius:50%; background:#2563eb; }
         .sigo-recovery h1 { margin:18px 0 10px; color:#0f172a; }
@@ -326,14 +326,14 @@ export default function SigoRoot() {
         <main className="sigo-onboarding-card" aria-live="polite"><h1>Preparando SIGO…</h1><p>Estamos cargando tu empresa y tus permisos.</p></main>
       ) : tenantState === "error" ? (
         <main className="sigo-recovery" role="status" aria-live="polite">
-          <div className="sigo-recovery-head"><div className="sigo-recovery-brand"><div className="sigo-recovery-mark">SG</div><div><strong>SIGO</strong><span>Sistema Inteligente de Gestión Operativa</span></div></div><div className="sigo-recovery-status"><span className="sigo-recovery-dot" />Reconectando tu empresa</div><h1>Estamos recuperando tu acceso</h1><p>SIGO está intentando restablecer la conexión con tu empresa automáticamente. No necesitás configurar nada.</p></div>
+          <div className="sigo-recovery-head"><div className="sigo-recovery-brand"><div className="sigo-recovery-mark"><img src="/sigo-logo-oficial.png" alt="" width="42" height="42" style={{ display: "block", width: "100%", height: "100%", objectFit: "contain" }} /></div><div><strong>SIGO</strong><span>Sistema Inteligente de Gestión Operativa</span></div></div><div className="sigo-recovery-status"><span className="sigo-recovery-dot" />Reconectando tu empresa</div><h1>Estamos recuperando tu acceso</h1><p>SIGO está intentando restablecer la conexión con tu empresa automáticamente. No necesitás configurar nada.</p></div>
           <div className="sigo-recovery-actions"><button className="primary-button" type="button" onClick={() => { setAutoRetryCount(0); setTenantRetryKey((value) => value + 1); }}>Reintentar ahora</button><button className="sigo-recovery-secondary" type="button" onClick={() => void cambiarUsuario()}>Volver al ingreso</button></div>
           <div className="sigo-recovery-foot">Tus datos permanecen protegidos. SIGO no modifica información mientras completa la reconexión.</div>
         </main>
       ) : empresaActiva ? contenidoPrincipal : emptyTenantMode === "member" ? (
         <main className="sigo-recovery" role="status" aria-live="polite">
           <div className="sigo-recovery-head">
-            <div className="sigo-recovery-brand"><div className="sigo-recovery-mark">SG</div><div><strong>SIGO</strong><span>Sistema Inteligente de Gestión Operativa</span></div></div>
+            <div className="sigo-recovery-brand"><div className="sigo-recovery-mark"><img src="/sigo-logo-oficial.png" alt="" width="42" height="42" style={{ display: "block", width: "100%", height: "100%", objectFit: "contain" }} /></div><div><strong>SIGO</strong><span>Sistema Inteligente de Gestión Operativa</span></div></div>
             <div className="sigo-recovery-status"><span className="sigo-recovery-dot" />Esperando asignación</div>
             <h1>Tu cuenta está lista</h1>
             <p>Esta cuenta fue creada para trabajar dentro de una empresa existente. Pedile al administrador que agregue tu mismo email. SIGO verifica el acceso automáticamente cada pocos segundos.</p>

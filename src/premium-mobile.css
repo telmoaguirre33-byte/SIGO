@@ -23,7 +23,7 @@
 }
 
 .sigo-tenant-copy::before {
-  content: "S";
+  content: "";
   position: absolute;
   left: 0;
   top: 50%;
@@ -32,8 +32,8 @@
   transform: translateY(-50%);
   display: grid;
   place-items: center;
-  border-radius: 13px;
-  background: linear-gradient(145deg, #1d4ed8, #60a5fa);
+  border-radius: 0;
+  background: url("/sigo-logo-oficial.png") center / contain no-repeat;
   color: #fff;
   font-size: 18px;
   font-weight: 900;
@@ -175,7 +175,7 @@
     min-height: 36px;
     gap: 0 7px;
   }
-  .sigo-tenant-copy::before { width:34px; height:34px; border-radius:11px; }
+  .sigo-tenant-copy::before { width:34px; height:34px; border-radius:0; }
   .sigo-tenant-copy strong { font-size: 16px; align-self:end; }
   .sigo-tenant-copy > span { font-size: 10px; align-self:end; max-width:none !important; }
   .sigo-tenant-copy small {
