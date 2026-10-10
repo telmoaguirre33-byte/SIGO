@@ -1,6 +1,7 @@
 const MAX_DATA_URL_LENGTH = 8_000_000;
 const MAX_INVOICE_ITEMS = 300;
 const GEMINI_TIMEOUT_MS = 45_000;
+const GEMINI_INVOICE_ATTEMPT_TIMEOUT_MS = 25_000;
 const ALLOWED_IMAGE = /^data:image\/(jpeg|jpg|png|webp);base64,/i;
 const ALLOWED_PDF = /^data:application\/pdf;base64,/i;
 const GTIN_LENGTHS = new Set([8, 12, 13, 14]);
@@ -503,11 +504,13 @@ Respondé SOLAMENTE JSON válido con esta forma exacta:
 {"proveedor":{"razon_social":string|null,"cuit":string|null},"fecha":string|null,"tipo_comprobante":string|null,"numero_comprobante":string|null,"moneda":string|null,"total":number|null,"confianza_general":number,"items":[{"descripcion":string,"codigo":string|null,"codigo_barras":string|null,"cantidad":number,"costo_unitario":number,"total_linea":number|null,"confianza":number}]}
 confianza_general y confianza van de 0 a 1.`;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
   let aiResponse;
-  try {
-    const fetchGemini = (modelo) => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
+  let ultimoErrorGemini = null;
+  const modelosGemini = [...new Set([model, fallbackModel].filter(Boolean))];
+  const fetchGemini = (modelo) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), GEMINI_INVOICE_ATTEMPT_TIMEOUT_MS);
+    return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
       method: "POST",
       signal: controller.signal,
       headers: {
@@ -536,29 +539,41 @@ confianza_general y confianza van de 0 a 1.`;
           responseSchema: FACTURA_RESPONSE_SCHEMA,
         },
       }),
-    });
-    const inicioGemini = Date.now();
-    aiResponse = await fetchGemini(model);
-    console.info("SIGO Gemini attempt", { intento: 1, status: aiResponse.status, model, ms: Date.now() - inicioGemini });
-    // Evitar que tres reintentos del mismo modelo agoten el presupuesto de 45 s.
-    // Ante saturación, priorizar el modelo alternativo y conservar un único reintento corto.
-    if ((aiResponse.status === 503 || aiResponse.status === 429) && fallbackModel && fallbackModel !== model) {
-      const inicioFallback = Date.now();
-      aiResponse = await fetchGemini(fallbackModel);
-      console.info("SIGO Gemini fallback", { status: aiResponse.status, model: fallbackModel, ms: Date.now() - inicioFallback });
-    } else if (aiResponse.status === 503) {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      const inicioReintento = Date.now();
-      aiResponse = await fetchGemini(model);
-      console.info("SIGO Gemini attempt", { intento: 2, status: aiResponse.status, model, ms: Date.now() - inicioReintento });
+    }).finally(() => clearTimeout(timeout));
+  };
+
+  try {
+    for (let indice = 0; indice < modelosGemini.length; indice += 1) {
+      const modelo = modelosGemini[indice];
+      const inicioGemini = Date.now();
+      try {
+        const respuesta = await fetchGemini(modelo);
+        console.info("SIGO Gemini attempt", {
+          intento: indice + 1,
+          status: respuesta.status,
+          model: modelo,
+          ms: Date.now() - inicioGemini,
+        });
+        aiResponse = respuesta;
+        const esReintentable = respuesta.status === 429 || respuesta.status === 503;
+        if (respuesta.ok || !esReintentable) break;
+      } catch (error) {
+        ultimoErrorGemini = error;
+        console.warn("SIGO Gemini attempt failed", {
+          intento: indice + 1,
+          model: modelo,
+          error: error?.name || "network",
+          ms: Date.now() - inicioGemini,
+        });
+        if (indice === modelosGemini.length - 1) throw error;
+      }
     }
+    if (!aiResponse && ultimoErrorGemini) throw ultimoErrorGemini;
   } catch (error) {
     if (error?.name === "AbortError") {
-      return json(res, 504, { error: "AI_TIMEOUT", message: "La lectura de la factura tardó demasiado. Probá nuevamente con una foto más nítida." });
+      return json(res, 504, { error: "AI_TIMEOUT", message: "Gemini tardó demasiado incluso después del reintento automático. Probá nuevamente en unos segundos." });
     }
     return json(res, 502, { error: "AI_UNAVAILABLE", message: "No se pudo conectar con el servicio de IA." });
-  } finally {
-    clearTimeout(timeout);
   }
 
   if (!aiResponse.ok) {
