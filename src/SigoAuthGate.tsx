@@ -449,14 +449,14 @@ export default function SigoAuthGate({ children }: Props) {
               aria-controls="sigo-install-help"
             >
               <span aria-hidden="true">↓</span>
-              Descargar la app
+              Instalar SIGO
             </button>
           ) : null}
         </div>
         {mode === "login" && mostrarAyudaInstalacion ? (
           <div className="sigo-install-help" id="sigo-install-help" role="status">
             <strong>Instalá SIGO en este dispositivo</strong>
-            <span>Chrome o Edge: menú ⋮ → “Instalar SIGO” o “Aplicaciones”. Android: menú ⋮ → “Instalar app”. iPhone/iPad: Compartir → “Añadir a pantalla de inicio”.</span>
+            <span>No se descarga un archivo: SIGO se instala desde el navegador. Android: abrí esta página en Chrome y tocá ⋮ → “Instalar app” o “Agregar a pantalla principal”. iPhone/iPad: Compartir → “Añadir a pantalla de inicio”. En computadora, Chrome o Edge: menú → “Instalar SIGO”.</span>
           </div>
         ) : null}
         {mode === "login" && mensajeInstalacion ? (
