@@ -533,7 +533,8 @@ confianza_general y confianza van de 0 a 1.`;
         },
       }),
     });
-    const esperas = [800, 1800, 3500];
+    // Un solo reintento breve: varios intentos consecutivos consumían el presupuesto de 45 s.
+    const esperas = [800];
     const inicioGemini = Date.now();
     aiResponse = await fetchGemini(model);
     console.info("SIGO Gemini attempt", { intento: 1, status: aiResponse.status, model, ms: Date.now() - inicioGemini });
@@ -553,7 +554,7 @@ confianza_general y confianza van de 0 a 1.`;
     }
   } catch (error) {
     if (error?.name === "AbortError") {
-      return json(res, 504, { error: "AI_TIMEOUT", message: "La lectura de la factura tardó demasiado. Probá nuevamente con una foto más nítida." });
+      return json(res, 504, { error: "AI_TIMEOUT", message: "La IA tardó demasiado en responder. La calidad de la foto no necesariamente es el problema; intentá nuevamente en unos momentos." });
     }
     return json(res, 502, { error: "AI_UNAVAILABLE", message: "No se pudo conectar con el servicio de IA." });
   } finally {
