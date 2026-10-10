@@ -533,23 +533,20 @@ confianza_general y confianza van de 0 a 1.`;
         },
       }),
     });
-    const esperas = [800, 1800, 3500];
     const inicioGemini = Date.now();
     aiResponse = await fetchGemini(model);
     console.info("SIGO Gemini attempt", { intento: 1, status: aiResponse.status, model, ms: Date.now() - inicioGemini });
-    let intento = 1;
-    for (const espera of esperas) {
-      if (aiResponse.status !== 503) break;
-      await new Promise((resolve) => setTimeout(resolve, espera));
-      intento += 1;
-      const inicioReintento = Date.now();
-      aiResponse = await fetchGemini(model);
-      console.info("SIGO Gemini attempt", { intento, status: aiResponse.status, model, ms: Date.now() - inicioReintento });
-    }
+    // Evitar que tres reintentos del mismo modelo agoten el presupuesto de 45 s.
+    // Ante saturación, priorizar el modelo alternativo y conservar un único reintento corto.
     if ((aiResponse.status === 503 || aiResponse.status === 429) && fallbackModel && fallbackModel !== model) {
       const inicioFallback = Date.now();
       aiResponse = await fetchGemini(fallbackModel);
       console.info("SIGO Gemini fallback", { status: aiResponse.status, model: fallbackModel, ms: Date.now() - inicioFallback });
+    } else if (aiResponse.status === 503) {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      const inicioReintento = Date.now();
+      aiResponse = await fetchGemini(model);
+      console.info("SIGO Gemini attempt", { intento: 2, status: aiResponse.status, model, ms: Date.now() - inicioReintento });
     }
   } catch (error) {
     if (error?.name === "AbortError") {
