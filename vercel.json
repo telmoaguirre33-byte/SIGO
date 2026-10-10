@@ -12,6 +12,9 @@
         "gru1"
       ],
       "maxDuration": 30
+    },
+    "api/compras/analizar-factura.js": {
+      "maxDuration": 60
     }
   },
   "headers": [
