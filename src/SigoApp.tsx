@@ -68,7 +68,7 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
     <div className={purchasesOnly ? "app purchases-hub-only" : "app"}>
       {!purchasesOnly && <aside className="sidebar">
         <div className="brand">
-          <div className="brand-logo">S</div>
+          <div className="brand-logo"><img src="/sigo-icon.svg" alt="SIGO" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "inherit" }} /></div>
           <div>
             <strong>SIGO</strong>
             <span>Gestión Operativa</span>
