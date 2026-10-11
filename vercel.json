@@ -12,8 +12,26 @@
         "gru1"
       ],
       "maxDuration": 30
+    },
+    "api/notificaciones.js": {
+      "regions": [
+        "gru1"
+      ],
+      "maxDuration": 30
+    },
+    "api/notificaciones/*.js": {
+      "regions": [
+        "gru1"
+      ],
+      "maxDuration": 30
     }
   },
+  "crons": [
+    {
+      "path": "/api/notificaciones/cron",
+      "schedule": "0 12 * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { notificarAltaEmpresaAdmin } from "./adminPush";
 
 export type RolEmpresaSigo =
   | "owner"
@@ -195,6 +196,7 @@ export async function crearEmpresaSigo(nombre: string): Promise<string> {
 
   const empresaId = typeof data === "string" ? data.trim() : "";
   if (!empresaId) throw new Error("EMPRESA_ID_INVALID");
+  void notificarAltaEmpresaAdmin(empresaId);
   return empresaId;
 }
 

@@ -4,6 +4,7 @@ import {
   type OperationalReadinessResult,
 } from "./operationalReadiness";
 import { supabase } from "./supabase";
+import AdminNotifications from "./AdminNotifications";
 
 type EmpresaMatriz = {
   empresa_id: string;
@@ -290,6 +291,8 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
           </div>
           <button className="admin-button" type="button" onClick={() => void cargar()} disabled={loading}>Actualizar</button>
         </div>
+
+        <AdminNotifications />
 
         <div className="stats sigo-matriz-stats">
           <article className="stat-card"><span>Empresas</span><strong>{resumen.empresas_total}</strong><small>Total registradas</small></article>
