@@ -1,3 +1,4 @@
+import MayoristaAdministrarAccess from "./modules/mayorista/integration/MayoristaAdministrarAccess";
 import { useEffect, useMemo, useState } from "react";
 import type { EmpresaOperativa } from "./tenant";
 import {
@@ -136,6 +137,8 @@ export default function ModulosControlPanel({ empresa }: { empresa: EmpresaOpera
         </div>
       </div>
 
+      <MayoristaAdministrarAccess key={empresa.empresa_id} empresaId={empresa.empresa_id} rol={empresa.rol} />
+
       {error ? <div className="form-error" role="alert" style={{ marginBottom: 14 }}>{error}</div> : null}
       {mensaje ? <div className="sigo-matriz-success" style={{ marginBottom: 14 }}>{mensaje}</div> : null}
       {!puedeEditar ? <p className="barcode-help">Tu perfil puede consultar los módulos, pero sólo Propietario o Administrador puede modificarlos.</p> : null}
@@ -188,3 +191,4 @@ export default function ModulosControlPanel({ empresa }: { empresa: EmpresaOpera
     </section>
   );
 }
+

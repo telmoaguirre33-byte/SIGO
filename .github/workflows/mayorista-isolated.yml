@@ -1,0 +1,54 @@
+name: Mayorista aislado · TypeScript e IndexedDB
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/modules/mayorista/**'
+      - 'src/ModulosControlPanel.tsx'
+      - '.github/workflows/mayorista-isolated.yml'
+permissions:
+  contents: read
+concurrency:
+  group: mayorista-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  isolated:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: src/modules/mayorista/demo
+    env:
+      CHROMIUM_PATH: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Instalar herramientas aisladas, sin scripts
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Chequear TypeScript Mayorista
+        run: npm run typecheck
+      - name: Generar demo aislada
+        run: npm run build
+      - name: Pruebas unitarias y controles de regresión
+        run: |
+          npm run test:unit
+          npm run test:security
+          npm run test:admin
+          npm run test:recovery
+          npm run test:integration-pwa
+      - name: IndexedDB en Chromium real
+        run: npm test
+      - name: Guardar evidencia y lockfile generado
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mayorista-evidencia-${{ github.run_id }}
+          path: |
+            src/modules/mayorista/tests/artifacts/
+            src/modules/mayorista/demo/package-lock.json
+          if-no-files-found: warn
+          retention-days: 7

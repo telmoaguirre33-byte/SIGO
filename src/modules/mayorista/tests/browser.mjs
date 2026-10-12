@@ -1,5 +1,5 @@
 import {createServer} from 'node:http';
-import {readFile, mkdtemp, rm, writeFile} from 'node:fs/promises';
+import {readFile, mkdtemp, rm, writeFile, mkdir} from 'node:fs/promises';
 import {spawn} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../demo/dist');
 const profile=await mkdtemp('/tmp/sigo-mayorista-browser-');
+const artifacts=path.join(path.dirname(fileURLToPath(import.meta.url)), 'artifacts');
+await mkdir(artifacts,{recursive:true});
 const server=createServer(async(req,res)=>{
   try{const url=new URL(req.url,'http://localhost');const name=url.pathname==='/'?'index.html':decodeURIComponent(url.pathname).slice(1);const file=path.resolve(root,name);if(!file.startsWith(root+path.sep))throw new Error('path');const content=await readFile(file);res.setHeader('Content-Type',({'.mjs':'text/javascript','.js':'text/javascript','.html':'text/html','.css':'text/css','.svg':'image/svg+xml','.webmanifest':'application/manifest+json'})[path.extname(file)]??'text/plain');res.end(content);}catch{res.writeHead(404);res.end('Not found');}
 });
@@ -19,7 +21,7 @@ let child, ws, seq=0;
 const pending=new Map(), runtimeErrors=[];
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function start(){
-  child=spawn('/usr/bin/chromium',['--headless','--no-sandbox','--disable-dev-shm-usage','--no-first-run','--no-default-browser-check','--remote-debugging-port=9223',`--user-data-dir=${profile}`,'about:blank'],{stdio:'ignore'});
+  child=spawn(process.env.CHROMIUM_PATH ?? '/usr/bin/chromium',['--headless','--no-sandbox','--disable-dev-shm-usage','--no-first-run','--no-default-browser-check','--remote-debugging-port=9223',`--user-data-dir=${profile}`,'about:blank'],{stdio:'ignore'});
   let pages;
   for(let i=0;i<100;i++){try{pages=await(await fetch('http://127.0.0.1:9223/json')).json();break;}catch{await delay(100);}}
   if(!pages)throw new Error('Chromium CDP no disponible');
@@ -102,10 +104,10 @@ try{
   await call('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});
   await test('retorno de conexión recupera el pedido con el mismo UUID', `if(!navigator.onLine)throw new Error('no recuperó red');const m=await import('./offline/pedidos-indexeddb.js');const q=new m.PedidosIndexedDB(offlineScope.empresaId,offlineScope.vendedorId);const r=await q.sincronizar(async p=>({id:p.id,empresaId:p.empresaId,vendedorId:p.vendedorId,confirmadoEn:new Date().toISOString()}));const saved=(await q.listar())[0];if(r.enviados!==1 || saved.id!==offlineId || saved.estado!=='sincronizado')throw new Error('reintento incorrecto')`);
 
-  const shot=await call('Page.captureScreenshot',{format:'png'});await writeFile('/workspace/SIGO/src/modules/mayorista/tests/android-preview.png',Buffer.from(shot.data,'base64'));
+  const shot=await call('Page.captureScreenshot',{format:'png'});await writeFile(path.join(artifacts,'android-preview.png'),Buffer.from(shot.data,'base64'));
   await stop();await start();
   await test('persistencia después de cerrar y reabrir Chromium', `const m=await import('./offline/pedidos-indexeddb.js');const a=await import('./storage.mjs');const scope={empresaId:'demo-distribuidora-sur',vendedorId:'demo-lucia'};if((await new m.PedidosIndexedDB(scope.empresaId,scope.vendedorId).listar()).length!==102)throw new Error('pedidos');if((await a.loadDraft(scope)).lineas.length!==1)throw new Error('borrador');if((await a.listVisits(scope)).length!==1)throw new Error('visitas')`);
   assert.deepEqual(runtimeErrors,[],'errores JavaScript');
   console.log(`${passed} pruebas aprobadas en Chromium real. Sin API remota ni Supabase.`);
-  await writeFile('/workspace/SIGO/src/modules/mayorista/tests/last-result.json',JSON.stringify({date:new Date().toISOString(),browser:'Chromium headless',passed,runtimeErrors},null,2));
+  await writeFile(path.join(artifacts,'last-result.json'),JSON.stringify({date:new Date().toISOString(),browser:'Chromium headless',passed,runtimeErrors},null,2));
 }finally{await stop();await new Promise(r=>server.close(r));await rm(profile,{recursive:true,force:true});}
