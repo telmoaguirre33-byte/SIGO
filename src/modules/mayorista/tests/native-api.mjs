@@ -1,3 +1,4 @@
+import {verifyOperationalRoles} from './operational-roles-api.mjs';
 import {verifyCargasApi} from './cargas-api.mjs';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -13,7 +14,7 @@ const origin='https://127.0.0.1:4181',E='10000000-0000-4000-8000-000000000001',B
 const results=[];let server;
 async function check(name,fn){await fn();results.push({name,status:'pass'});console.log('PASS:',name);}
 const keys=generateKeyPairSync('ed25519');
-const handler=createIsolatedService({enabled:true,pool,...keys,origin,issuer:'sigo-mayorista-ci',rateLimit:async()=>true,inventoryRequired:true,accountsEnabled:true});
+let handler=createIsolatedService({enabled:true,pool,...keys,origin,issuer:'sigo-mayorista-ci',rateLimit:async()=>true,inventoryRequired:true,accountsEnabled:true});
 async function listen(){
   server=createServer(async(req,res)=>{try{const request=new Request('http://127.0.0.1:4180'+req.url,{method:req.method,headers:req.headers,...(req.method==='GET'||req.method==='HEAD'?{}:{body:req,duplex:'half'})});const response=await handler(request);res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()));}catch{res.writeHead(503);res.end();}});
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(4180,'127.0.0.1',resolve);});
@@ -102,6 +103,7 @@ try{
   });
   results.push(...await verifyCargasApi({call,token:token2,empresaId:E,otraEmpresa:B,productoId:P,pool,makeOrder:order,restart:async()=>{await new Promise(resolve=>server.close(resolve));await listen();}}));
   await check('Revocación de membresía impide acceso con token firmado vigente',async()=>{await pool.query('UPDATE mayorista.miembros SET activo=false WHERE user_id=$1',[U]);assert.equal((await call('/orders',{token:token2})).status,403);});
+  results.push(...await verifyOperationalRoles({pool,keys,origin,call,setHandler:h=>{handler=h},empresaId:E,otraEmpresa:B,vendedorId:V,clienteId:C,productoId:P}));
   console.log(`API PostgreSQL real: ${results.length} controles aprobados. Sesiones independientes, no teléfonos físicos.`);
 }catch(e){results.push({status:'failure',error:e.message});throw e;}finally{
   if(server?.listening)await new Promise(resolve=>server.close(resolve));await pool.end();

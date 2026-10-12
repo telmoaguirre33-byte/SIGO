@@ -1,14 +1,15 @@
+import {administrative} from '../security/company-roles.mjs';
 import {createHash} from 'node:crypto';
 import {canonical,loadProducts} from '../cargas/model.mjs';
 import {ApiError} from '../api/receive-order.mjs';
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 /** Inventario exclusivamente Mayorista: jamás consulta ni escribe Stock de SIGO. */
 export function createInventoryTransaction({query,principal,loads}){
- const requireAdmin=()=>{if(principal.rol!=='administrador')throw new ApiError(403,'Sin permisos de inventario independiente');};
+ const requireAdmin=()=>{if(!administrative(principal))throw new ApiError(403,'Sin permisos de inventario independiente');};
  return {
   inventory:async()=>{requireAdmin();return {empresaId:principal.empresaId,productos:(await query('SELECT producto_id AS "productoId",unidades,reservadas,unidades-reservadas AS disponibles FROM mayorista.inventario WHERE empresa_id=$1 ORDER BY producto_id',[principal.empresaId])).rows};},
   inventoryCommand:async command=>{
-   requireAdmin();if(command?.empresaId!==principal.empresaId)throw new ApiError(403,'Otra empresa');
+   if(!(principal.rol==='armador'&&command?.tipo==='reserva'))requireAdmin();if(command?.empresaId!==principal.empresaId)throw new ApiError(403,'Otra empresa');
    if(!uuid.test(command.id)||!['ingreso','reserva','salida','devolucion'].includes(command.tipo)||!command.input)throw new ApiError(422,'Movimiento inválido');
    const hash=createHash('sha256').update(JSON.stringify(canonical({tipo:command.tipo,input:command.input}))).digest('hex');
    const old=(await query('SELECT huella,respuesta FROM mayorista.movimientos_inventario WHERE empresa_id=$1 AND comando_id=$2',[principal.empresaId,command.id])).rows[0];

@@ -1,3 +1,5 @@
+import {createAssignedLoadsTransaction} from '../commercial/assigned-loads.mjs';
+import {administrative} from '../security/company-roles.mjs';
 import {createAccountsTransaction} from '../commercial/accounts-postgres.mjs';
 import {createInventoryTransaction} from '../commercial/inventory-postgres.mjs';
 import {createVisitsTransaction} from '../commercial/visits.mjs';
@@ -12,7 +14,7 @@ export function assertIsolatedPool(pool){
 }
 const columns=`empresa_id as "empresaId",pedido_id as "pedidoId",vendedor_id as "vendedorId",cliente_id as "clienteId",creado_en as "creadoEn",recibido_en as "recibidoEn",lineas,huella as hash,estado`;
 function normalize(row){return row?{...row,creadoEn:row.creadoEn.toISOString(),recibidoEn:row.recibidoEn.toISOString()}:null;}
-export function createPostgresRepository({enabled=false,pool,inventoryRequired=false,accountsEnabled=false,databasePolicy}={}){
+export function createPostgresRepository({enabled=false,pool,inventoryRequired=false,accountsEnabled=false,databasePolicy,operational=false}={}){
   return {withPrincipal:async(principal,fn)=>{
     if(!enabled)throw new ApiError(503,'Persistencia desactivada');(databasePolicy?.assertPool??assertIsolatedPool)(pool);
     for(let attempt=0;attempt<4;attempt++){
@@ -37,11 +39,11 @@ export function createPostgresRepository({enabled=false,pool,inventoryRequired=f
           return normalize(result.rows[0])??tx.find(row.empresaId,row.pedidoId);
         },
         adminState:async()=>{
-          if(principal.rol!=='administrador')throw new ApiError(403,'Sin permisos administrativos');
+          if(!administrative(principal))throw new ApiError(403,'Sin permisos administrativos');
           return (await c.query('SELECT datos FROM mayorista.administracion WHERE empresa_id=$1',[principal.empresaId])).rows[0]?.datos??createAdminState(principal.empresaId);
         },
         adminCommand:async(command)=>{
-          if(principal.rol!=='administrador'||command.empresaId!==principal.empresaId)throw new ApiError(403,'Sin permisos administrativos');
+          if(!administrative(principal)||command.empresaId!==principal.empresaId)throw new ApiError(403,'Sin permisos administrativos');
           const actions={vendedor:saveSeller,ruta:saveRoute,cliente:assignCustomer,objetivo:setGoal};
           if(!Object.hasOwn(actions,command.operacion)||!command.input||Array.isArray(command.input)||typeof command.input!=='object')throw new ApiError(422,'Operación inválida');
           const canonical=value=>value&&typeof value==='object'?(Array.isArray(value)?value.map(canonical):Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])]))):value;
@@ -57,13 +59,13 @@ export function createPostgresRepository({enabled=false,pool,inventoryRequired=f
         },
         catalog:async()=>({empresaId:principal.empresaId,vendedorId:principal.vendedorId,descargadoEn:new Date().toISOString(),clientes:(await c.query('SELECT cliente_id AS id,nombre,ruta_id AS "rutaId" FROM mayorista.clientes WHERE empresa_id=$1 AND habilitado',[principal.empresaId])).rows,productos:(await c.query('SELECT producto_id AS id,nombre FROM mayorista.productos WHERE empresa_id=$1 AND activo',[principal.empresaId])).rows,precios:(await c.query('SELECT precio_id AS id,producto_id AS "productoId",unidades_base AS "unidadesBase",precio FROM mayorista.precios WHERE empresa_id=$1',[principal.empresaId])).rows}),
         fulfillment:async(command)=>{
-          if(principal.rol!=='administrador')throw new ApiError(403,'Sin permisos administrativos');
+          if(!administrative(principal))throw new ApiError(403,'Sin permisos administrativos');
           const row=await tx.find(principal.empresaId,command.pedidoId);if(!row)throw new ApiError(404,'Pedido no disponible');
           let state=createFulfillment(row);
           const events=(await c.query('SELECT comando,actor_id FROM mayorista.eventos_pedido WHERE empresa_id=$1 AND pedido_id=$2 ORDER BY version',[principal.empresaId,row.pedidoId])).rows;
           for(const e of events)state=applyFulfillment(state,e.comando,{empresaId:principal.empresaId,userId:e.actor_id,rol:'administrador'});
           if(command.tipo&&((await c.query("SELECT empresa_id FROM mayorista.cargas_estado WHERE empresa_id=$1 AND datos->'pedidos' ? $2",[principal.empresaId,command.pedidoId])).rows.length))throw new ApiError(409,'Pedido asignado a Armado de Cargas');
-          if(command.tipo){let next;try{next=applyFulfillment(state,command,principal);}catch(e){throw new ApiError(409,e.message);}
+          if(command.tipo){let next;try{next=applyFulfillment(state,command,{...principal,rol:'administrador'});}catch(e){throw new ApiError(409,e.message);}
             if(next.version!==state.version)await c.query('INSERT INTO mayorista.eventos_pedido(empresa_id,pedido_id,comando_id,version,comando,actor_id) VALUES($1,$2,$3,$4,$5::jsonb,$6)',[principal.empresaId,row.pedidoId,command.id,next.version,JSON.stringify(command),principal.userId]);
             state=next;
           }
@@ -73,6 +75,7 @@ export function createPostgresRepository({enabled=false,pool,inventoryRequired=f
       };
       Object.assign(tx,createVisitsTransaction({query:(sql,args)=>c.query(sql,args),principal}));
       Object.assign(tx,createCargasTransaction({query:(sql,args)=>c.query(sql,args),principal,findOrder:tx.find,fulfillment:tx.fulfillment}));
+      if(operational){Object.assign(tx,createAssignedLoadsTransaction({query:(sql,args)=>c.query(sql,args),principal,legacyLoads:tx.cargasState,onChange:async(before,after,command)=>{if(accountsEnabled)await tx.accountLoadChanges(before,after,command);if(inventoryRequired){const tipo={verificar:'reserva',salir:'salida',cerrar:'devolucion'}[command.tipo];if(tipo)await createInventoryTransaction({query:(sql,args)=>c.query(sql,args),principal,loads:async()=>after}).inventoryCommand({id:command.id,empresaId:principal.empresaId,tipo,input:{cargaId:command.input.cargaId}});}}}));const apply=tx.cargasCommand;tx.cargasCommand=async command=>{if(command.input?.cargaId&&(await c.query('SELECT carga_id FROM mayorista.cargas_operativas WHERE empresa_id=$1 AND carga_id=$2',[principal.empresaId,command.input.cargaId])).rows.length)throw new ApiError(409,'Carga publicada: usar circuito asignado');return apply(command);};}
       Object.assign(tx,createInventoryTransaction({query:(sql,args)=>c.query(sql,args),principal,loads:tx.cargasState}));
       Object.assign(tx,createAccountsTransaction({query:(sql,args)=>c.query(sql,args),principal}));
       if(accountsEnabled){const apply=tx.cargasCommand;tx.cargasCommand=async command=>{const before=await tx.cargasState(),after=await apply(command);await tx.accountLoadChanges(before,after,command);return after;};}

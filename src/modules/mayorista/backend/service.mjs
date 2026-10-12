@@ -1,3 +1,4 @@
+import {administrative} from '../security/company-roles.mjs';
 import {ApiError,createOrderReceiver} from '../api/receive-order.mjs';
 import {createOrderHttpHandler} from '../api/http-handler.mjs';
 import {assertIsolatedPool,createPostgresRepository} from '../api/postgres-repository.mjs';
@@ -12,10 +13,11 @@ async function smallJson(request,limit=4096){
 
 /** Backend real exclusivamente local/efímero. No monta rutas en SIGO.
  * Llaves Ed25519 y rate limiter son obligatorios; no contiene credenciales remotas. */
-export function createIsolatedService({enabled=false,pool,privateKey,publicKey,origin,issuer,rateLimit,inventoryRequired=false,accountsEnabled=false,databasePolicy}={}){
+export function createIsolatedService({enabled=false,pool,privateKey,publicKey,origin,issuer,rateLimit,inventoryRequired=false,accountsEnabled=false,databasePolicy,operational=false}={}){
+  if(databasePolicy&&!operational)throw new ApiError(503,'Railway requiere permisos operativos persistentes');
   if(enabled)(databasePolicy?.assertPool??assertIsolatedPool)(pool);
-  const auth=createIsolatedAuth({enabled,pool,privateKey,publicKey,issuer,databasePolicy});
-  const repository=createPostgresRepository({enabled,pool,inventoryRequired,accountsEnabled,databasePolicy});
+  const auth=createIsolatedAuth({enabled,pool,privateKey,publicKey,issuer,databasePolicy,operational});
+  const repository=createPostgresRepository({enabled,pool,inventoryRequired,accountsEnabled,databasePolicy,operational});
   const orders=createOrderHttpHandler({enabled,allowedOrigin:origin,rateLimit,receive:createOrderReceiver({enabled,auth,repository})});
   return async request=>{
     const path=new URL(request.url).pathname;
@@ -41,9 +43,13 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
       const principal=await auth.verify(token);
       if(path==='/auth/logout'&&request.method==='POST'){await auth.signOut(token);return reply(200,{revoked:true});}
       if(path==='/me'&&request.method==='GET')return reply(200,principal);
+      if(operational&&['armador','chofer'].includes(principal.rol)&&!path.startsWith('/operations/'))throw new ApiError(403,'Ruta fuera del rol operativo');
+      if(operational&&path==='/operations/loads'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.assignedLoads()));
+      if(operational&&path==='/operations/loads'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const input=await smallJson(request);return reply(200,await repository.withPrincipal(principal,tx=>tx.publishLoad(input)));}
+      if(operational&&path==='/operations/loads/commands'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const command=await smallJson(request,256*1024);return reply(200,await repository.withPrincipal(principal,tx=>tx.assignedLoadCommand(command)));}
       if(path==='/admin/state'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.adminState()));
       if(path==='/admin/commands'&&request.method==='POST'){
-        if(principal.rol!=='administrador')throw new ApiError(403,'Sin permisos administrativos');
+        if(!administrative(principal))throw new ApiError(403,'Sin permisos administrativos');
         if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');
         const command=await smallJson(request);
         if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(command?.id)||!Number.isSafeInteger(command.version))throw new ApiError(422,'Comando inválido');
@@ -51,7 +57,7 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
       }
       if(path==='/cargas'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.cargasState()));
       if(path==='/cargas/commands'&&request.method==='POST'){
-        if(principal.rol!=='administrador')throw new ApiError(403,'Sin permisos de cargas');
+        if(!administrative(principal))throw new ApiError(403,'Sin permisos de cargas');
         if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');
         const command=await smallJson(request,256*1024);
         const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -65,7 +71,7 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
       if(path==='/accounts'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.accounts()));
       if(path==='/catalog'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.catalog()));
       if(path==='/admin/fulfillment'&&request.method==='POST'){
-        if(principal.rol!=='administrador')throw new ApiError(403,'Sin permisos administrativos');
+        if(!administrative(principal))throw new ApiError(403,'Sin permisos administrativos');
         if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');
         const command=await smallJson(request);
         const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

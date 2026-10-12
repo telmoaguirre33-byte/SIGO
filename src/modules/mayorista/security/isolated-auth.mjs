@@ -1,3 +1,4 @@
+import {administrative} from './company-roles.mjs';
 import {randomBytes,randomUUID,scrypt,sign,verify,timingSafeEqual} from 'node:crypto';
 import {promisify} from 'node:util';
 import {ApiError} from '../api/receive-order.mjs';
@@ -5,14 +6,14 @@ import {assertIsolatedPool} from '../api/postgres-repository.mjs';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const derive=promisify(scrypt), encode=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
 export async function passwordRecord(password){if(typeof password!=='string'||password.length<12||password.length>256)throw new ApiError(422,'Contraseña inválida');const salt=randomBytes(16).toString('hex');return {salt,hash:(await derive(password,salt,64)).toString('hex')};}
-export function createIsolatedAuth({enabled=false,pool,privateKey,publicKey,issuer,now=Date.now,databasePolicy}={}){
+export function createIsolatedAuth({enabled=false,pool,privateKey,publicKey,issuer,now=Date.now,databasePolicy,operational=false}={}){
   const gate=()=>{if(!enabled||!privateKey||!publicKey||!issuer)throw new ApiError(503,'Identidad aislada no configurada');(databasePolicy?.assertPool??assertIsolatedPool)(pool);};
-  const member=async(userId,empresaId)=>{const c=await pool.connect();try{await c.query('BEGIN');await c.query('SET LOCAL ROLE authenticated');await c.query("SELECT set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claims',$2,true)",[userId,JSON.stringify({sub:userId,is_anonymous:false})]);const row=(await c.query('SELECT vendedor_id,rol FROM mayorista.miembros WHERE user_id=$1 AND empresa_id=$2 AND activo',[userId,empresaId])).rows[0];await c.query('COMMIT');return row;}catch(e){await c.query('ROLLBACK').catch(()=>{});throw e;}finally{c.release();}};
+  const member=async(userId,empresaId)=>{const c=await pool.connect();try{await c.query('BEGIN');await c.query('SET LOCAL ROLE authenticated');await c.query("SELECT set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claims',$2,true)",[userId,JSON.stringify({sub:userId,is_anonymous:false})]);const row=(await c.query('SELECT vendedor_id,rol FROM mayorista.miembros WHERE user_id=$1 AND empresa_id=$2 AND activo',[userId,empresaId])).rows[0];if(row&&operational){if(!['gerencia','administracion','vendedor','armador','chofer'].includes(row.rol)||!(await c.query('SELECT empresa_id FROM mayorista.empresas WHERE empresa_id=$1 AND habilitada',[empresaId])).rows.length)throw new ApiError(403,'Empresa o rol no habilitados');}await c.query('COMMIT');return row;}catch(e){await c.query('ROLLBACK').catch(()=>{});throw e;}finally{c.release();}};
   const principal=async claims=>{
     const session=(await pool.query('SELECT s.user_id,s.empresa_id FROM mayorista_private.sesiones s JOIN mayorista_private.usuarios u ON u.user_id=s.user_id WHERE session_id=$1 AND s.user_id=$2 AND empresa_id=$3 AND NOT revocada AND vence_en>now() AND u.activo',[claims.sid,claims.sub,claims.empresaId])).rows[0];
     if(!session)throw new ApiError(401,'Sesión revocada o vencida');
     const m=await member(claims.sub,claims.empresaId);if(!m)throw new ApiError(403,'Membresía revocada');
-    return {userId:claims.sub,sessionId:claims.sid,empresaId:claims.empresaId,vendedorId:m.vendedor_id,rol:m.rol,expiresAt:claims.exp*1000,permissions:['pedidos:crear','catalogo:leer',...(m.rol==='administrador'?['admin:gestionar']:[])]};
+    return {userId:claims.sub,sessionId:claims.sid,empresaId:claims.empresaId,vendedorId:m.vendedor_id,rol:m.rol,expiresAt:claims.exp*1000,permissions:[...(m.rol==='vendedor'||!operational&&m.rol==='administrador'?['pedidos:crear','catalogo:leer']:[]),...(administrative(m)?['admin:gestionar']:[])]};
   };
   const api={
     signIn:async({email,password,empresaId})=>{
