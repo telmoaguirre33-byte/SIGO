@@ -25,7 +25,7 @@ try{
   await pool.query(`BEGIN; CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE SCHEMA auth;
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE SECURITY INVOKER AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE SECURITY INVOKER AS $$ SELECT coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb $$;
-    GRANT USAGE ON SCHEMA auth TO authenticated;${proposal}${await readFile(new URL('./native-auth-schema.sql',import.meta.url),'utf8')}COMMIT;`);
+    GRANT USAGE ON SCHEMA auth TO authenticated;${proposal}${(await readFile(new URL('../../../../docs/mayorista/sql/003_flujo_administrativo_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'')}${await readFile(new URL('./native-auth-schema.sql',import.meta.url),'utf8')}COMMIT;`);
   await pool.query('INSERT INTO mayorista.vendedores VALUES($1,$2,$3,true)',[E,V,'Vendedor QA']);
   await pool.query('INSERT INTO mayorista.miembros VALUES($1,$2,$3,$4,true)',[E,U,V,'vendedor']);
   await pool.query('INSERT INTO mayorista.clientes(empresa_id,cliente_id,vendedor_id,nombre) VALUES($1,$2,$3,$4)',[E,C,V,'Cliente QA']);
@@ -45,9 +45,28 @@ try{
   await check('Caída y reapertura del servidor conserva UUID y acuse en PostgreSQL',async()=>{await new Promise(resolve=>server.close(resolve));await assert.rejects(()=>call('/orders',{token,body:first}));await listen();assert.deepEqual((await call('/orders',{token,body:first})).body,receipt);});
   await check('Precio cambiado rechaza nuevo pedido y permite recuperar acuse previo',async()=>{await pool.query('UPDATE mayorista.precios SET precio=12');assert.equal((await call('/orders',{token,body:order()})).status,409);assert.deepEqual((await call('/orders',{token,body:first})).body,receipt);});
   await check('Logout revoca una sesión y conserva la segunda',async()=>{assert.equal((await call('/auth/logout',{token,method:'POST'})).status,200);assert.equal((await call('/me',{token})).status,401);assert.equal((await call('/me',{token:token2})).status,200);});
+  await check('Catálogo real restringido por empresa y vendedor',async()=>{const r=await call('/catalog',{token:token2});assert.equal(r.status,200);assert.equal(r.body.clientes.length,1);assert.equal(r.body.productos[0].id,P);});
   await pool.query('UPDATE mayorista.precios SET precio=10');
   results.push(...await verifyNativeBrowsers({handler,password,empresaId:E,vendedorId:V,clienteId:C,productoId:P}));
   assert.equal(Number((await pool.query('SELECT count(*) FROM mayorista.pedidos')).rows[0].count),202);
+  await check('Vendedor no puede administrar pedidos',async()=>{assert.equal((await call('/admin/fulfillment',{token:token2,body:{empresaId:E,pedidoId:first.pedidoId}})).status,403);});
+  await pool.query("UPDATE mayorista.miembros SET rol='administrador' WHERE user_id=$1",[U]);
+  await check('Administración autenticada prepara, despacha y entrega sin alterar acuse',async()=>{
+    let version=0;
+    for(const estado of ['preparacion','despachado','entregado']){
+      const command={id:randomUUID(),empresaId:E,pedidoId:first.pedidoId,version,tipo:'estado',estado,nota:'Comprobante QA'};
+      const r=await call('/admin/fulfillment',{token:token2,body:command});assert.equal(r.status,200);assert.equal(r.body.estado,estado);version++;
+      const retry=await call('/admin/fulfillment',{token:token2,body:command});assert.equal(retry.body.version,version);
+    }
+    assert.deepEqual((await call('/orders',{token:token2,body:first})).body,receipt);
+  });
+  await check('Administración rechaza versión obsoleta y otra empresa',async()=>{assert.equal((await call('/admin/fulfillment',{token:token2,body:{id:randomUUID(),empresaId:E,pedidoId:first.pedidoId,version:0,tipo:'cobranza',centavos:100,nota:'QA recibo'}})).status,409);assert.equal((await call('/admin/fulfillment',{token:token2,body:{empresaId:B,pedidoId:first.pedidoId}})).status,403);});
+  await check('Devoluciones y cobranzas aisladas conservan saldo auditado',async()=>{
+    const base={empresaId:E,pedidoId:first.pedidoId,nota:'QA comprobante'};
+    assert.equal((await call('/admin/fulfillment',{token:token2,body:{...base,id:randomUUID(),version:3,tipo:'devolucion',linea:0,cantidad:1}})).status,200);
+    const r=await call('/admin/fulfillment',{token:token2,body:{...base,id:randomUUID(),version:4,tipo:'cobranza',centavos:1000}});assert.equal(r.status,200);assert.equal(r.body.version,5);assert.equal(r.body.eventos.length,5);
+    assert.equal(Number((await pool.query('SELECT count(*) FROM mayorista.eventos_pedido')).rows[0].count),5);
+  });
   await check('Revocación de membresía impide acceso con token firmado vigente',async()=>{await pool.query('UPDATE mayorista.miembros SET activo=false WHERE user_id=$1',[U]);assert.equal((await call('/orders',{token:token2})).status,403);});
   console.log(`API PostgreSQL real: ${results.length} controles aprobados. Sesiones independientes, no teléfonos físicos.`);
 }catch(e){results.push({status:'failure',error:e.message});throw e;}finally{

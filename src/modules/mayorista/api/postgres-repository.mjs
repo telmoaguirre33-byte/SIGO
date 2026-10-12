@@ -1,3 +1,4 @@
+import {createFulfillment,applyFulfillment} from '../admin/fulfillment.mjs';
 import {ApiError} from './receive-order.mjs';
 export function assertIsolatedPool(pool){
   const o=pool?.options;
@@ -28,6 +29,19 @@ export function createPostgresRepository({enabled=false,pool}={}){
         insertOnce:async row=>{
           const result=await c.query(`INSERT INTO mayorista.pedidos(empresa_id,pedido_id,vendedor_id,cliente_id,creado_en,recibido_en,lineas,huella,estado) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9) ON CONFLICT(empresa_id,pedido_id) DO NOTHING RETURNING ${columns}`,[row.empresaId,row.pedidoId,row.vendedorId,row.clienteId,row.creadoEn,row.recibidoEn,JSON.stringify(row.lineas),row.hash,row.estado]);
           return normalize(result.rows[0])??tx.find(row.empresaId,row.pedidoId);
+        },
+        catalog:async()=>({empresaId:principal.empresaId,vendedorId:principal.vendedorId,descargadoEn:new Date().toISOString(),clientes:(await c.query('SELECT cliente_id AS id,nombre,ruta_id AS "rutaId" FROM mayorista.clientes WHERE empresa_id=$1 AND habilitado',[principal.empresaId])).rows,productos:(await c.query('SELECT producto_id AS id,nombre FROM mayorista.productos WHERE empresa_id=$1 AND activo',[principal.empresaId])).rows,precios:(await c.query('SELECT precio_id AS id,producto_id AS "productoId",unidades_base AS "unidadesBase",precio FROM mayorista.precios WHERE empresa_id=$1',[principal.empresaId])).rows}),
+        fulfillment:async(command)=>{
+          if(principal.rol!=='administrador')throw new ApiError(403,'Sin permisos administrativos');
+          const row=await tx.find(principal.empresaId,command.pedidoId);if(!row)throw new ApiError(404,'Pedido no disponible');
+          let state=createFulfillment(row);
+          const events=(await c.query('SELECT comando,actor_id FROM mayorista.eventos_pedido WHERE empresa_id=$1 AND pedido_id=$2 ORDER BY version',[principal.empresaId,row.pedidoId])).rows;
+          for(const e of events)state=applyFulfillment(state,e.comando,{empresaId:principal.empresaId,userId:e.actor_id,rol:'administrador'});
+          if(command.tipo){let next;try{next=applyFulfillment(state,command,principal);}catch(e){throw new ApiError(409,e.message);}
+            if(next.version!==state.version)await c.query('INSERT INTO mayorista.eventos_pedido(empresa_id,pedido_id,comando_id,version,comando,actor_id) VALUES($1,$2,$3,$4,$5::jsonb,$6)',[principal.empresaId,row.pedidoId,command.id,next.version,JSON.stringify(command),principal.userId]);
+            state=next;
+          }
+          return state;
         },
         list:async()=> (await c.query(`SELECT ${columns} FROM mayorista.pedidos WHERE empresa_id=$1 ORDER BY recibido_en DESC LIMIT 500`,[principal.empresaId])).rows.map(normalize)
       };

@@ -62,6 +62,7 @@ jobs:
           npm run test:integration-pwa
           npm run test:http-auth
           npm run test:rendiciones
+          node ../tests/fulfillment.mjs
       - name: Políticas RLS en PostgreSQL efímero local
         run: npm run test:rls
       - name: Autenticación firmada y API HTTP contra PostgreSQL aislado
