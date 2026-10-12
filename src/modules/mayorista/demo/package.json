@@ -1,0 +1,8 @@
+{
+  "name": "sigo-mayorista-demo",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {"build": "node build.mjs", "test": "node ../tests/browser.mjs"},
+  "engines": {"node": ">=24"}
+}

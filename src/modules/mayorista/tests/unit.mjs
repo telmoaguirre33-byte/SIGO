@@ -1,0 +1,28 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {revisarPedido} from '../demo/dist/sync/validacion-pedidos.js';
+import {construirSolicitud, verificarAcuse} from '../demo/dist/sync/contrato-pedidos.js';
+import {antiguedadCatalogoHoras} from '../demo/dist/offline/catalogo-indexeddb.js';
+import {PedidosIndexedDB} from '../demo/dist/offline/pedidos-indexeddb.js';
+import {sampleCatalog,identities} from '../demo/dist/sample.mjs';
+
+const catalog=sampleCatalog(identities[0]);
+const order={id:crypto.randomUUID(),empresaId:catalog.empresaId,vendedorId:catalog.vendedorId,clienteId:'c1',creadoEn:new Date().toISOString(),lineas:[{productoId:'p1',cantidad:1,precioUnitario:2200}],estado:'pendiente',intentos:0};
+test('pedido válido con catálogo asignado',()=>assert.equal(revisarPedido(order,catalog).valido,true));
+test('catálogo de otra empresa rechazado',()=>assert.equal(revisarPedido(order,{...catalog,empresaId:'otra'}).valido,false));
+test('catálogo de otro vendedor rechazado',()=>assert.equal(revisarPedido(order,{...catalog,vendedorId:'otro'}).valido,false));
+test('cliente deshabilitado rechazado',()=>assert.equal(revisarPedido(order,{...catalog,clientes:catalog.clientes.map(c=>({...c,habilitado:false}))}).valido,false));
+test('producto inactivo rechazado',()=>assert.equal(revisarPedido(order,{...catalog,productos:catalog.productos.map(p=>({...p,activo:false}))}).valido,false));
+test('cantidad y precio inválidos rechazados',()=>{for(const line of [{...order.lineas[0],cantidad:0},{...order.lineas[0],cantidad:Infinity},{...order.lineas[0],precioUnitario:-1}])assert.equal(revisarPedido({...order,lineas:[line]},catalog).valido,false);});
+test('pedido vacío rechazado',()=>assert.equal(revisarPedido({...order,lineas:[]},catalog).valido,false));
+test('catálogo vencido requiere advertencia',()=>assert.ok(revisarPedido(order,{...catalog,descargadoEn:'2000-01-01'}).advertencias.length));
+test('fecha inválida no aparenta catálogo reciente',()=>assert.equal(antiguedadCatalogoHoras({...catalog,descargadoEn:'inválida'}),Infinity));
+test('solicitud preserva UUID y copia líneas',()=>{const request=construirSolicitud(order);assert.equal(request.pedidoId,order.id);request.lineas[0].cantidad=10;assert.equal(order.lineas[0].cantidad,1);});
+test('acuse de empresa distinta rechazado',()=>assert.throws(()=>verificarAcuse(order,{pedidoId:order.id,empresaId:'otra',recibidoEn:new Date().toISOString(),estado:'recibido'})));
+test('acuse de pedido distinto rechazado',()=>assert.throws(()=>verificarAcuse(order,{pedidoId:'otro',empresaId:order.empresaId,recibidoEn:new Date().toISOString(),estado:'recibido'})));
+test('acuse con fecha inválida rechazado',()=>assert.throws(()=>verificarAcuse(order,{pedidoId:order.id,empresaId:order.empresaId,recibidoEn:'inválida',estado:'recibido'})));
+test('acuse válido conserva identidad',()=>assert.equal(verificarAcuse(order,{pedidoId:order.id,empresaId:order.empresaId,recibidoEn:new Date().toISOString(),estado:'recibido'}).id,order.id));
+test('la cola exige empresa y vendedor',()=>{assert.throws(()=>new PedidosIndexedDB('','v'));assert.throws(()=>new PedidosIndexedDB('e',''));});
+test('la demo no importa API, Supabase ni componentes de SIGO',async()=>{for(const file of ['app.mjs','storage.mjs','sample.mjs']){const code=await readFile(new URL('../demo/'+file,import.meta.url),'utf8');assert.doesNotMatch(code,/(?:import\s.*from|import\()[^\n]*(?:supabase|App\.tsx|\/api\/|Caja|Ventas|Sovi)/i);}});
+test('cache offline limitado al origen y alcance de la demo',async()=>{const code=await readFile(new URL('../demo/sw.js',import.meta.url),'utf8');assert.ok(code.includes("url.origin !== self.location.origin"));assert.ok(code.includes('self.registration.scope'));});
