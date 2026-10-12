@@ -46,7 +46,7 @@ export function createPostgresRepository({enabled=false,pool}={}){
         list:async()=> (await c.query(`SELECT ${columns} FROM mayorista.pedidos WHERE empresa_id=$1 ORDER BY recibido_en DESC LIMIT 500`,[principal.empresaId])).rows.map(normalize)
       };
       const result=await fn(tx);await c.query('COMMIT');return result;
-    }catch(e){await c.query('ROLLBACK').catch(()=>{});if(!['40001','40P01'].includes(e.code)||attempt===3)throw e;}finally{c.release();}
+    }catch(e){await c.query('ROLLBACK').catch(()=>{});if(!['40001','40P01','23505'].includes(e.code)||attempt===3)throw e;}finally{c.release();}
     }
   }};
 }

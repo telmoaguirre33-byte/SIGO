@@ -29,8 +29,8 @@ export function applyFulfillment(state,command,actor){
   next.version++;next.eventos.push({id:command.id,content,actor:actor.userId,nota:reason,version:next.version});return next;
 }
 export function fulfillmentBalance(state){
-  const totalCentavos=state.lineas.reduce((sum,l)=>sum+Math.round(l.precioUnitario*100)*l.cantidad,0);
-  const devolucionCentavos=state.devoluciones.reduce((sum,d)=>sum+Math.round(state.lineas[d.linea].precioUnitario*100)*d.cantidad,0);
+  const totalCentavos=state.lineas.reduce((sum,l)=>sum+Math.round(l.precioUnitario*l.cantidad*100),0);
+  const devolucionCentavos=state.lineas.reduce((sum,l,index)=>{const returned=state.devoluciones.filter(d=>d.linea===index).reduce((n,d)=>n+d.cantidad,0);return sum+Math.round(Math.round(l.precioUnitario*l.cantidad*100)*returned/l.cantidad);},0);
   const cobradoCentavos=state.cobranzas.reduce((sum,c)=>sum+c.centavos,0);
   if(![totalCentavos,devolucionCentavos,cobradoCentavos].every(Number.isSafeInteger))throw new Error('Importe fuera del rango permitido');
   return {totalCentavos,devolucionCentavos,cobradoCentavos,saldoCentavos:totalCentavos-devolucionCentavos-cobradoCentavos};

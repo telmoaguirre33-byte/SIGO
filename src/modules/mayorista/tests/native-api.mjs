@@ -67,6 +67,11 @@ try{
     const r=await call('/admin/fulfillment',{token:token2,body:{...base,id:randomUUID(),version:4,tipo:'cobranza',centavos:1000}});assert.equal(r.status,200);assert.equal(r.body.version,5);assert.equal(r.body.eventos.length,5);
     assert.equal(Number((await pool.query('SELECT count(*) FROM mayorista.eventos_pedido')).rows[0].count),5);
   });
+  await check('Dos administradores concurrentes no sobrescriben la versión',async()=>{
+    const commands=Array.from({length:2},()=>({id:randomUUID(),empresaId:E,pedidoId:first.pedidoId,version:5,tipo:'devolucion',linea:0,cantidad:1,nota:'Devolución concurrente QA'}));
+    const rs=await Promise.all(commands.map(body=>call('/admin/fulfillment',{token:token2,body})));assert.deepEqual(rs.map(r=>r.status).sort(),[200,409]);
+    assert.equal(Number((await pool.query('SELECT count(*) FROM mayorista.eventos_pedido')).rows[0].count),6);
+  });
   await check('Revocación de membresía impide acceso con token firmado vigente',async()=>{await pool.query('UPDATE mayorista.miembros SET activo=false WHERE user_id=$1',[U]);assert.equal((await call('/orders',{token:token2})).status,403);});
   console.log(`API PostgreSQL real: ${results.length} controles aprobados. Sesiones independientes, no teléfonos físicos.`);
 }catch(e){results.push({status:'failure',error:e.message});throw e;}finally{
