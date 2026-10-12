@@ -21,11 +21,12 @@ function approved(source){
     lines.set(l.productoId,{productoId:l.productoId,nombre:l.nombre??l.productoId,cantidad:integer((old?.cantidad??0)+l.cantidad,1),precioUnitario:l.precioUnitario});
   }
   const total=[...lines.values()].reduce((s,l)=>s+Math.round(l.cantidad*l.precioUnitario*100),0);if(!Number.isSafeInteger(total))throw new Error('Importe fuera del rango permitido');
-  return {pedidoId:source.pedidoId,clienteId:source.clienteId,cliente:source.cliente??source.clienteId,estado:'aprobado',lineas:[...lines.values()]};
+  return {pedidoId:source.pedidoId,clienteId:source.clienteId,cliente:source.cliente??source.clienteId,estado:'aprobado',rutaId:source.rutaId??null,lineas:[...lines.values()]};
 }
-function lines(load,pedidoId,productoId){
+function lines(load,pedidoId,productoId,clienteId){
   if(pedidoId&&!load.pedidos[pedidoId])throw new Error('Pedido no pertenece a la carga');
-  const out=[];for(const id of Object.keys(load.pedidos).sort()){if(pedidoId&&pedidoId!==id)continue;for(const l of load.pedidos[id].lineas)if(l.productoId===productoId)out.push(l);}
+  if(clienteId&&!Object.values(load.pedidos).some(p=>p.clienteId===clienteId))throw new Error('Cliente no pertenece a la carga');
+  const out=[];for(const id of Object.keys(load.pedidos).sort()){if(pedidoId&&pedidoId!==id||clienteId&&load.pedidos[id].clienteId!==clienteId)continue;for(const l of load.pedidos[id].lineas)if(l.productoId===productoId)out.push(l);}
   if(!out.length)throw new Error('Producto no pertenece al pedido/carga');return out;
 }
 function setCounts(list,total,verified){
@@ -33,8 +34,8 @@ function setCounts(list,total,verified){
   for(const l of list){const qty=Math.min(l.cantidad,remainder);remainder-=qty;l.preparado=qty;l.escaneado=verified?qty:0;l.faltanteAutorizado=null;}
   if(remainder){list[0].preparado+=remainder;if(verified)list[0].escaneado+=remainder;}
 }
-export function loadProducts(load,pedidoId){
-  const map=new Map();for(const [id,p] of Object.entries(load.pedidos)){if(pedidoId&&id!==pedidoId)continue;for(const l of p.lineas){const r=map.get(l.productoId)??{productoId:l.productoId,nombre:l.nombre,solicitado:0,preparado:0,verificado:0,faltante:0,sobrante:0};r.solicitado+=l.cantidad;r.preparado+=l.preparado;r.verificado+=l.escaneado;r.faltante+=Math.max(0,l.cantidad-l.preparado);r.sobrante+=Math.max(0,l.preparado-l.cantidad);map.set(l.productoId,r);}}
+export function loadProducts(load,pedidoId,clienteId){
+  const map=new Map();for(const [id,p] of Object.entries(load.pedidos)){if(pedidoId&&id!==pedidoId||clienteId&&p.clienteId!==clienteId)continue;for(const l of p.lineas){const r=map.get(l.productoId)??{productoId:l.productoId,nombre:l.nombre,solicitado:0,preparado:0,verificado:0,faltante:0,sobrante:0};r.solicitado+=l.cantidad;r.preparado+=l.preparado;r.verificado+=l.escaneado;r.faltante+=Math.max(0,l.cantidad-l.preparado);r.sobrante+=Math.max(0,l.preparado-l.cantidad);map.set(l.productoId,r);}}
   return [...map.values()];
 }
 export function orderBalance(order){
@@ -70,25 +71,26 @@ export function applyLoadCommand(state,command,actor,now=new Date().toISOString(
     case 'asignar':{
       editing();if(load.estado!=='planificada')throw new Error('La composición se cierra al iniciar picking');
       const p=next.pedidos[i.pedidoId];if(!p||p.estado!=='aprobado'||p.cargaId)throw new Error('Pedido no aprobado o ya asignado');
+      if(p.rutaId&&p.rutaId!==load.ruta)throw new Error('Pedido de una ruta diferente');
       if(load.modo==='individual'&&Object.keys(load.pedidos).length)throw new Error('Una carga individual admite un pedido');
       load.pedidos[p.pedidoId]={...structuredClone(p),estado:'pendiente',lineas:p.lineas.map(l=>({...l,preparado:0,escaneado:0,faltanteAutorizado:null}))};p.cargaId=load.id;break;
     }
     case 'iniciar':editing();if(load.estado!=='planificada'||!Object.keys(load.pedidos).length)throw new Error('Carga vacía o picking iniciado');load.estado='picking';break;
     case 'contar':{
       if(load?.estado!=='picking')throw new Error('Iniciá picking');integer(i.cantidad);note(i.nota);
-      setCounts(lines(load,i.pedidoId,i.productoId),i.cantidad,false);break;
+      setCounts(lines(load,i.pedidoId,i.productoId,i.clienteId),i.cantidad,false);break;
     }
     case 'escanear':{
       if(load?.estado!=='picking')throw new Error('Iniciá picking');const mapped=next.codigos[validateBarcode(i.codigo)];if(!mapped)throw new Error('Código no reconocido');
       if(i.productoId&&i.productoId!==mapped.productoId)throw new Error('Código de otro producto');
-      const count=integer(i.cantidad,1)*mapped.unidadesBase;integer(count,1);const list=lines(load,i.pedidoId,mapped.productoId);
+      const count=integer(i.cantidad,1)*mapped.unidadesBase;integer(count,1);const list=lines(load,i.pedidoId,mapped.productoId,i.clienteId);
       if(i.modo==='verificar'){
         if(count>list.reduce((s,l)=>s+l.preparado-l.escaneado,0))throw new Error('Escaneo excede lo preparado');
         let n=count;for(const l of list){const qty=Math.min(n,l.preparado-l.escaneado);l.escaneado+=qty;n-=qty;}
       }else if(i.modo==='picking'){
         let n=count;for(const l of list){const qty=Math.min(n,Math.max(0,l.cantidad-l.preparado));l.preparado+=qty;l.escaneado+=qty;l.faltanteAutorizado=null;n-=qty;}
         if(n){list[0].preparado+=n;list[0].escaneado+=n;list[0].faltanteAutorizado=null;}
-      }else throw new Error('Elegí picking o verificación');break;
+      }else throw new Error('Elegí picking o verificación');for(const l of list){integer(l.preparado);integer(l.escaneado);}break;
     }
     case 'autorizar_faltante':{
       if(load?.estado!=='picking'||!i.pedidoId)throw new Error('Elegí el pedido para autorizar faltantes');

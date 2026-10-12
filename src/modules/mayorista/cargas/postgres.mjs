@@ -15,7 +15,8 @@ export function createCargasTransaction({query,principal,findOrder,fulfillment})
         const row=await findOrder(principal.empresaId,command.input?.pedidoId);if(!row)throw new ApiError(404,'Pedido no recibido');
         const operation=await fulfillment({pedidoId:row.pedidoId});if(operation.estado!=='recibido')throw new ApiError(409,'Pedido ya procesado individualmente');
         const names=(await query('SELECT producto_id,nombre FROM mayorista.productos WHERE empresa_id=$1',[principal.empresaId])).rows;
-        effective={...command,input:{pedido:{...row,lineas:row.lineas.map(l=>({...l,nombre:names.find(n=>n.producto_id===l.productoId)?.nombre??l.productoId}))}}};
+        const customer=(await query('SELECT nombre,ruta_id FROM mayorista.clientes WHERE empresa_id=$1 AND cliente_id=$2',[principal.empresaId,row.clienteId])).rows[0];
+        effective={...command,input:{pedido:{...row,cliente:customer?.nombre??row.clienteId,rutaId:customer?.ruta_id??null,lineas:row.lineas.map(l=>({...l,nombre:names.find(n=>n.producto_id===l.productoId)?.nombre??l.productoId}))}}};
       }
       if(command.tipo==='codigo'){
         if(!(await query('SELECT producto_id FROM mayorista.productos WHERE empresa_id=$1 AND producto_id=$2 AND activo',[principal.empresaId,command.input?.productoId])).rows.length)throw new ApiError(422,'Producto no disponible');
