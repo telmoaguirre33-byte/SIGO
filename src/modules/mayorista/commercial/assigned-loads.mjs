@@ -35,6 +35,7 @@ export function createAssignedLoadsTransaction({query,principal,legacyLoads,onCh
    let next;try{next=applyLoadCommand(base,command,{...principal,rol:'administrador'});}catch(e){throw new ApiError(409,e.message);}
    const data={...next.cargas[row.carga_id],historial:next.historial};
    const updated=await query('UPDATE mayorista.cargas_operativas SET version=$3,datos=$4::jsonb WHERE empresa_id=$1 AND carga_id=$2 AND version=$5 RETURNING carga_id,version,datos',[principal.empresaId,row.carga_id,next.revision,JSON.stringify(data),row.version]);if(updated.rows.length!==1)throw new ApiError(409,'Conflicto de carga');
+   if(command.tipo==='cancelar'){const source=await legacyLoads(),rootCommand={...command,version:source.revision};let legacy;try{legacy=applyLoadCommand(source,rootCommand,{...principal,rol:'administrador'});}catch(e){throw new ApiError(409,e.message);}await query('UPDATE mayorista.cargas_estado SET revision=$2,datos=$3::jsonb WHERE empresa_id=$1',[principal.empresaId,legacy.revision,JSON.stringify(legacy)]);await query('DELETE FROM mayorista.cargas_asignaciones WHERE empresa_id=$1 AND carga_id=$2',[principal.empresaId,row.carga_id]);}
    if(onChange)await onChange(base,next,command);
    await query('INSERT INTO mayorista.operaciones_carga(empresa_id,carga_id,comando_id,huella,actor_id,respuesta) VALUES($1,$2,$3,$4,$5,$6::jsonb)',[principal.empresaId,row.carga_id,command.id,hash,principal.userId,JSON.stringify(updated.rows[0])]);
    return project(updated.rows[0]);

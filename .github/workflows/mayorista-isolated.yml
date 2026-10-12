@@ -69,6 +69,11 @@ jobs:
         run: node ../tests/native-api.mjs
       - name: IndexedDB en Chromium real
         run: npm test
+      - name: Compilar imagen operativa independiente sin desplegar
+        run: docker build -f ../backend/Dockerfile -t sigo-mayorista-qa:ci ../../../..
+      - name: Verificar paquete runtime y bloqueo por defecto
+        run: |
+          docker run --rm --network none --entrypoint node sigo-mayorista-qa:ci --input-type=module -e "await import('./server.mjs');const {railwayRuntime}=await import('./railway-runtime.mjs');try{railwayRuntime({});throw new Error('Habilitación inesperada')}catch(e){if(e.message!=='Mayorista QA está desactivado')throw e}console.log('Runtime importado y desactivado por defecto; sin red ni despliegue')"
       - name: Guardar evidencia y lockfile generado
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
