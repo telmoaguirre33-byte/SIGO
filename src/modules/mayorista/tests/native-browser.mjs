@@ -22,9 +22,11 @@ export async function verifyNativeBrowsers({handler,password,empresaId,vendedorI
   const results=[],devices=[];
   const delay=ms=>new Promise(r=>setTimeout(r,ms));
   async function start(index){
-    const port=9224+index,child=spawn(process.env.CHROMIUM_PATH??'/usr/bin/google-chrome',['--headless','--no-sandbox','--disable-dev-shm-usage','--no-first-run','--ignore-certificate-errors',`--remote-debugging-port=${port}`,`--user-data-dir=${dir}/profile-${index}`,'about:blank'],{stdio:'ignore'});
+    await mkdir(`${dir}/profile-${index}`,{recursive:true});
+    const port=9224+index,child=spawn(process.env.CHROMIUM_PATH??'/usr/bin/google-chrome',['--headless','--no-sandbox','--disable-dev-shm-usage','--no-first-run','--ignore-certificate-errors',`--remote-debugging-port=${port}`,`--user-data-dir=${dir}/profile-${index}`,'about:blank'],{stdio:['ignore','ignore','pipe']});
+    let stderr='';child.stderr.on('data',data=>{stderr=(stderr+data.toString()).slice(-4000);});
     let pages;for(let n=0;n<100;n++){try{pages=await(await fetch(`http://127.0.0.1:${port}/json`)).json();break;}catch{await delay(100);}}
-    if(!pages){child.kill('SIGKILL');throw new Error('Chromium no inició');}
+    if(!pages){child.kill('SIGKILL');throw new Error('Chromium no inició: '+stderr);}
     const ws=new WebSocket(pages.find(p=>p.type==='page').webSocketDebuggerUrl);await new Promise((r,j)=>{ws.onopen=r;ws.onerror=j;});let id=0;const pending=new Map();
     ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.id&&pending.has(m.id)){const p=pending.get(m.id);pending.delete(m.id);m.error?p.reject(new Error(m.error.message)):p.resolve(m.result);}};
     const command=(method,params={})=>new Promise((resolve,reject)=>{const next=++id,t=setTimeout(()=>{pending.delete(next);reject(new Error('CDP timeout '+method));},30000);pending.set(next,{resolve:r=>{clearTimeout(t);resolve(r);},reject:e=>{clearTimeout(t);reject(e);}});ws.send(JSON.stringify({id:next,method,params}));});
