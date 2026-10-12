@@ -12,10 +12,10 @@ async function smallJson(request,limit=4096){
 
 /** Backend real exclusivamente local/efímero. No monta rutas en SIGO.
  * Llaves Ed25519 y rate limiter son obligatorios; no contiene credenciales remotas. */
-export function createIsolatedService({enabled=false,pool,privateKey,publicKey,origin,issuer,rateLimit,inventoryRequired=false,accountsEnabled=false}={}){
-  if(enabled)assertIsolatedPool(pool);
-  const auth=createIsolatedAuth({enabled,pool,privateKey,publicKey,issuer});
-  const repository=createPostgresRepository({enabled,pool,inventoryRequired,accountsEnabled});
+export function createIsolatedService({enabled=false,pool,privateKey,publicKey,origin,issuer,rateLimit,inventoryRequired=false,accountsEnabled=false,databasePolicy}={}){
+  if(enabled)(databasePolicy?.assertPool??assertIsolatedPool)(pool);
+  const auth=createIsolatedAuth({enabled,pool,privateKey,publicKey,issuer,databasePolicy});
+  const repository=createPostgresRepository({enabled,pool,inventoryRequired,accountsEnabled,databasePolicy});
   const orders=createOrderHttpHandler({enabled,allowedOrigin:origin,rateLimit,receive:createOrderReceiver({enabled,auth,repository})});
   return async request=>{
     const path=new URL(request.url).pathname;

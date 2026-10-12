@@ -7,7 +7,7 @@
     "build": "node build.mjs",
     "test": "node ../tests/browser.mjs",
     "test:unit": "node ../tests/unit.mjs",
-    "test:security": "node ../tests/security.mjs && node ../tests/role-policy.mjs",
+    "test:security": "node ../tests/security.mjs && node ../tests/role-policy.mjs && node ../tests/railway-policy.mjs && node ../tests/railway-tls.mjs",
     "typecheck": "node node_modules/typescript/bin/tsc -p tsconfig.mayorista.json",
     "test:admin": "node ../tests/admin.mjs && node ../tests/cargas.mjs",
     "test:recovery": "node ../tests/recovery-unit.mjs",

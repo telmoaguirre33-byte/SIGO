@@ -12,9 +12,9 @@ export function assertIsolatedPool(pool){
 }
 const columns=`empresa_id as "empresaId",pedido_id as "pedidoId",vendedor_id as "vendedorId",cliente_id as "clienteId",creado_en as "creadoEn",recibido_en as "recibidoEn",lineas,huella as hash,estado`;
 function normalize(row){return row?{...row,creadoEn:row.creadoEn.toISOString(),recibidoEn:row.recibidoEn.toISOString()}:null;}
-export function createPostgresRepository({enabled=false,pool,inventoryRequired=false,accountsEnabled=false}={}){
+export function createPostgresRepository({enabled=false,pool,inventoryRequired=false,accountsEnabled=false,databasePolicy}={}){
   return {withPrincipal:async(principal,fn)=>{
-    if(!enabled)throw new ApiError(503,'Persistencia desactivada');assertIsolatedPool(pool);
+    if(!enabled)throw new ApiError(503,'Persistencia desactivada');(databasePolicy?.assertPool??assertIsolatedPool)(pool);
     for(let attempt=0;attempt<4;attempt++){
     const c=await pool.connect();
     try{
