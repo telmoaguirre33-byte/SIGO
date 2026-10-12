@@ -49,7 +49,7 @@ try{
   await check('Catálogo real restringido por empresa y vendedor',async()=>{const r=await call('/catalog',{token:token2});assert.equal(r.status,200);assert.equal(r.body.clientes.length,1);assert.equal(r.body.productos[0].id,P);});
   await pool.query('UPDATE mayorista.precios SET precio=10');
   results.push(...await verifyNativeBrowsers({handler,password,empresaId:E,vendedorId:V,clienteId:C,productoId:P}));
-  assert.equal(Number((await pool.query('SELECT count(*) FROM mayorista.pedidos')).rows[0].count),203);
+  assert.equal(Number((await pool.query('SELECT count(*) FROM mayorista.pedidos')).rows[0].count),204);
   await check('Vendedor no puede administrar pedidos',async()=>{assert.equal((await call('/admin/fulfillment',{token:token2,body:{empresaId:E,pedidoId:first.pedidoId}})).status,403);});
   await check('RLS rechaza escritura administrativa directa de un vendedor',async()=>{
     const c=await pool.connect();try{await c.query('BEGIN');await c.query('SET LOCAL ROLE authenticated');await c.query("SELECT set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claims',$2,true)",[U,JSON.stringify({sub:U,is_anonymous:false})]);await assert.rejects(()=>c.query('INSERT INTO mayorista.administracion(empresa_id,revision,datos) VALUES($1,1,$2::jsonb)',[E,JSON.stringify({empresaId:E})]),e=>e.code==='42501');}finally{await c.query('ROLLBACK');c.release();}

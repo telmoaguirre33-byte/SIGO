@@ -14,8 +14,9 @@ export async function verifyNativeBrowsers({handler,password,empresaId,vendedorI
   const server=createServer({key:await readFile(path.join(dir,'key.pem')),cert:await readFile(path.join(dir,'cert.pem'))},async(req,res)=>{
     try{
       if(req.url==='/qa.html'){res.setHeader('Content-Type','text/html');res.end('<!doctype html><title>Mayorista QA aislada</title><p>Prueba automática</p>');return;}
+      if(req.url==='/secure-qa.html'){res.setHeader('Content-Type','text/html');res.end('<!doctype html><html><meta charset="utf-8"><main id="secure-app"></main><script type="module">import {mountSecureSeller} from "./vendedor/secure.mjs";mountSecureSeller(document.querySelector("#secure-app"),{enabled:true,baseUrl:location.origin+"/"});</script></html>');return;}
       if(req.url==='/seller-qa.html'){res.setHeader('Content-Type','text/html');res.end('<!doctype html><html><meta charset="utf-8"><main id="qa-app"></main><script type="module">import {mountConnectedSeller} from "./vendedor/connected.mjs";mountConnectedSeller(document.querySelector("#qa-app"),{enabled:true,qa:true,baseUrl:location.origin+"/"});</script></html>');return;}
-      if(req.url.startsWith('/vendedor/')||req.url.startsWith('/offline/')||req.url.startsWith('/sync/')){const file=path.resolve(root,req.url.slice(1));if(!file.startsWith(root+path.sep))throw new Error();res.setHeader('Content-Type','text/javascript');res.end(await readFile(file));return;}
+      if(req.url.startsWith('/vendedor/')||req.url.startsWith('/offline/')||req.url.startsWith('/sync/')||req.url.startsWith('/security/')){const file=path.resolve(root,req.url.slice(1));if(!file.startsWith(root+path.sep))throw new Error();res.setHeader('Content-Type','text/javascript');res.end(await readFile(file));return;}
       const response=await handler(new Request('https://127.0.0.1:4181'+req.url,{method:req.method,headers:req.headers,...(req.method==='GET'?{}:{body:req,duplex:'half'})}));res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()));
     }catch{res.writeHead(503);res.end();}
   });
@@ -69,6 +70,28 @@ export async function verifyNativeBrowsers({handler,password,empresaId,vendedorI
       await a.command('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});
       assert.equal(await a.evaluate(`(async()=>{document.querySelector('#sync').click();for(let n=0;n<100;n++){await new Promise(r=>setTimeout(r,50));const e=document.querySelector('[data-order-id="${id}"]');if(e&&e.textContent.includes('sincronizado'))return true;}return false;})()`),true);
       const remote=await b.evaluate('client.orders()');assert.ok(remote.some(p=>p.pedidoId===id));
+    });
+    await a.command('Page.navigate',{url:'https://127.0.0.1:4181/secure-qa.html'});
+    for(let n=0;n<100;n++){if(await a.evaluate("!!document.querySelector('#login')"))break;await delay(50);}
+    const localPassword='clave-cifrada-real-20261012';
+    await check('App segura autentica y cifra catálogo de API real',async()=>{
+      assert.equal(await a.evaluate(`(async()=>{const f=document.querySelector('#login');f.elements.empresaId.value=${JSON.stringify(empresaId)};f.elements.email.value='vendedor@qa.invalid';f.elements.password.value=${JSON.stringify(password)};f.elements.localPassword.value=${JSON.stringify(localPassword)};f.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));for(let n=0;n<200;n++){await new Promise(r=>setTimeout(r,50));if(document.querySelector('#line'))return document.body.textContent.includes('Catálogo cifrado actualizado.');}return false;})()`),true);
+    });
+    await a.command('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});
+    let encryptedOrderId;
+    await check('App segura crea borrador y pedido cifrados offline con UUID estable',async()=>{
+      assert.equal(await a.evaluate(`(async()=>{document.querySelector('#line').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));for(let n=0;n<100;n++){await new Promise(r=>setTimeout(r,50));if(document.body.textContent.includes('Borrador cifrado conservado.'))break;}document.querySelector('#save').click();for(let n=0;n<100;n++){await new Promise(r=>setTimeout(r,50));if(document.querySelector('[data-order-id]'))return document.body.textContent.includes('Pedido guardado:');}return false;})()`),true);
+      encryptedOrderId=await a.evaluate("document.querySelector('[data-order-id]').dataset.orderId");
+      await a.stop();a=await start(0);await a.command('Page.navigate',{url:'https://127.0.0.1:4181/secure-qa.html'});for(let n=0;n<100;n++){if(await a.evaluate("!!document.querySelector('#unlock')"))break;await delay(50);}
+      await a.command('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});
+      assert.equal(await a.evaluate(`(async()=>{const f=document.querySelector('#unlock');f.elements.empresaId.value=${JSON.stringify(empresaId)};f.elements.vendedorId.value=${JSON.stringify(vendedorId)};f.elements.localPassword.value=${JSON.stringify(localPassword)};f.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));for(let n=0;n<200;n++){await new Promise(r=>setTimeout(r,50));const e=document.querySelector('[data-order-id]');if(e)return e.dataset.orderId===${JSON.stringify(encryptedOrderId)}&&document.body.textContent.includes('Acceso offline');}return false;})()`),true);
+      assert.equal(await a.evaluate(`(async()=>{document.querySelector('#sync').click();await new Promise(r=>setTimeout(r,100));return document.body.textContent.includes('Iniciá sesión online para sincronizar');})()`),true);
+    });
+    await a.command('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});
+    await check('Renovación online envía pedido cifrado una vez a PostgreSQL real',async()=>{
+      await a.evaluate("document.querySelector('#logout').click()");for(let n=0;n<100;n++){if(await a.evaluate("!!document.querySelector('#login')"))break;await delay(50);}
+      assert.equal(await a.evaluate(`(async()=>{const f=document.querySelector('#login');f.elements.empresaId.value=${JSON.stringify(empresaId)};f.elements.email.value='vendedor@qa.invalid';f.elements.password.value=${JSON.stringify(password)};f.elements.localPassword.value=${JSON.stringify(localPassword)};f.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));for(let n=0;n<200;n++){await new Promise(r=>setTimeout(r,50));if(document.querySelector('#sync'))break;}document.querySelector('#sync').click();for(let n=0;n<100;n++){await new Promise(r=>setTimeout(r,50));const e=document.querySelector('[data-order-id]');if(e?.textContent.includes('sincronizado'))return e.dataset.orderId===${JSON.stringify(encryptedOrderId)};}return false;})()`),true);
+      const remote=await b.evaluate('client.orders()');assert.equal(remote.filter(p=>p.pedidoId===encryptedOrderId).length,1);
     });
     return results;
   }finally{
