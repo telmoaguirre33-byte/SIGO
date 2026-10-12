@@ -5,7 +5,7 @@ import {createLoadsState,applyLoadCommand,canonical} from '../cargas/model.mjs';
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const workerActions={armador:['iniciar','contar','escanear','autorizar_faltante','verificar','recibir_devoluciones'],chofer:['entregar','devolver','rendir']};
 export function createAssignedLoadsTransaction({query,principal,legacyLoads,onChange}){
- const project=row=>{const load=structuredClone(row.datos);if(principal.rol==='armador')for(const p of Object.values(load.pedidos)){delete p.rendicion;delete p.entrega;for(const l of p.lineas){delete l.precioUnitario;}}return {cargaId:row.carga_id,version:row.version,load};};
+ const project=row=>{const load=structuredClone(row.datos);if(principal.rol==='armador')for(const p of Object.values(load.pedidos)){delete p.rendicion;delete p.entrega;for(const l of p.lineas){delete l.precioUnitario;delete l.totalCentavos;delete l.desglosePrecios;}}return {cargaId:row.carga_id,version:row.version,load};};
  const one=async id=>(await query('SELECT carga_id,armador_user_id,chofer_user_id,version,datos FROM mayorista.cargas_operativas WHERE empresa_id=$1 AND carga_id=$2',[principal.empresaId,id])).rows[0];
  return {
   assignedLoads:async()=>({empresaId:principal.empresaId,cargas:(await query('SELECT carga_id,version,datos FROM mayorista.cargas_operativas WHERE empresa_id=$1 ORDER BY carga_id',[principal.empresaId])).rows.map(project)}),
