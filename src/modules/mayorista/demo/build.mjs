@@ -21,4 +21,7 @@ await cp(path.join(root,'../admin'),path.join(out,'admin'),{recursive:true});
 await cp(path.join(root,'../cargas'),path.join(out,'cargas'),{recursive:true,filter:p=>!p.endsWith('postgres.mjs')&&!p.endsWith('.sql')});
 await mkdir(path.join(out,'vendedor'),{recursive:true});
 await cp(path.join(root,'../vendedor/connected.mjs'),path.join(out,'vendedor/connected.mjs'));
+await mkdir(path.join(out,'security'),{recursive:true});
+await cp(path.join(root,'../security/encrypted-workspace.mjs'),path.join(out,'security/encrypted-workspace.mjs'));
+await cp(path.join(root,'../offline/encrypted-orders.mjs'),path.join(out,'offline/encrypted-orders.mjs'));
 console.log('Build Mayorista aislado: 6 módulos TypeScript transformados, App Vendedor y administración demo generadas; sin chequeo tsc.');
