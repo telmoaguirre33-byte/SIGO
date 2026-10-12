@@ -16,6 +16,8 @@ export function createMayoristaClient({enabled=false,baseUrl,fetchImpl=globalThi
     logout:async()=>{try{if(token)await request('/auth/logout',{});}finally{token=null;principal=null;}},
     send:async order=>{gate();if(!token||!principal)throw new Error('Iniciá sesión antes de sincronizar');if(order.empresaId!==principal.empresaId||order.vendedorId!==principal.vendedorId)throw new Error('Pedido fuera de la sesión activa');return verificarAcuse(order,await request('/orders',construirSolicitud(order)));},
     orders:()=>request('/orders'),
+    cargas:()=>request('/cargas'),
+    cargasCommand:command=>request('/cargas/commands',command),
     catalog:()=>request('/catalog'),
     adminState:()=>request('/admin/state'),
     adminCommand:command=>request('/admin/commands',command),

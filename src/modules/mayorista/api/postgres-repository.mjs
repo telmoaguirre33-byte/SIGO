@@ -1,3 +1,4 @@
+import {createCargasTransaction} from '../cargas/postgres.mjs';
 import {createHash} from 'node:crypto';
 import {createAdminState,saveSeller,saveRoute,assignCustomer,setGoal} from '../admin/model.mjs';
 import {createFulfillment,applyFulfillment} from '../admin/fulfillment.mjs';
@@ -14,7 +15,7 @@ export function createPostgresRepository({enabled=false,pool}={}){
     for(let attempt=0;attempt<4;attempt++){
     const c=await pool.connect();
     try{
-      await c.query('BEGIN ISOLATION LEVEL REPEATABLE READ');await c.query('SET LOCAL ROLE authenticated');
+      await c.query('BEGIN ISOLATION LEVEL SERIALIZABLE');await c.query('SET LOCAL ROLE authenticated');
       await c.query("SELECT set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claims',$2,true)",[principal.userId,JSON.stringify({sub:principal.userId,is_anonymous:false,session_id:principal.sessionId})]);
       const tx={
         find:async(e,id)=>normalize((await c.query(`SELECT ${columns} FROM mayorista.pedidos WHERE empresa_id=$1 AND pedido_id=$2`,[e,id])).rows[0]),
@@ -58,6 +59,7 @@ export function createPostgresRepository({enabled=false,pool}={}){
           let state=createFulfillment(row);
           const events=(await c.query('SELECT comando,actor_id FROM mayorista.eventos_pedido WHERE empresa_id=$1 AND pedido_id=$2 ORDER BY version',[principal.empresaId,row.pedidoId])).rows;
           for(const e of events)state=applyFulfillment(state,e.comando,{empresaId:principal.empresaId,userId:e.actor_id,rol:'administrador'});
+          if(command.tipo&&((await c.query('SELECT empresa_id FROM mayorista.cargas_estado WHERE empresa_id=$1 AND datos->'pedidos' ? $2',[principal.empresaId,command.pedidoId])).rows.length))throw new ApiError(409,'Pedido asignado a Armado de Cargas');
           if(command.tipo){let next;try{next=applyFulfillment(state,command,principal);}catch(e){throw new ApiError(409,e.message);}
             if(next.version!==state.version)await c.query('INSERT INTO mayorista.eventos_pedido(empresa_id,pedido_id,comando_id,version,comando,actor_id) VALUES($1,$2,$3,$4,$5::jsonb,$6)',[principal.empresaId,row.pedidoId,command.id,next.version,JSON.stringify(command),principal.userId]);
             state=next;
@@ -66,6 +68,7 @@ export function createPostgresRepository({enabled=false,pool}={}){
         },
         list:async()=> (await c.query(`SELECT ${columns} FROM mayorista.pedidos WHERE empresa_id=$1 ORDER BY recibido_en DESC LIMIT 500`,[principal.empresaId])).rows.map(normalize)
       };
+      Object.assign(tx,createCargasTransaction({query:(sql,args)=>c.query(sql,args),principal,findOrder:tx.find,fulfillment:tx.fulfillment}));
       const result=await fn(tx);await c.query('COMMIT');return result;
     }catch(e){await c.query('ROLLBACK').catch(()=>{});if(!['40001','40P01','23505'].includes(e.code)||attempt===3)throw e;}finally{c.release();}
     }

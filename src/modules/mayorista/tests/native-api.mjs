@@ -1,3 +1,4 @@
+import {verifyCargasApi} from './cargas-api.mjs';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {randomUUID,generateKeyPairSync} from 'node:crypto';
@@ -25,7 +26,7 @@ try{
   await pool.query(`BEGIN; CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE SCHEMA auth;
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE SECURITY INVOKER AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE SECURITY INVOKER AS $$ SELECT coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb $$;
-    GRANT USAGE ON SCHEMA auth TO authenticated;${proposal}${(await readFile(new URL('../../../../docs/mayorista/sql/003_flujo_administrativo_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'')}${(await readFile(new URL('../../../../docs/mayorista/sql/004_administracion_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'')}${await readFile(new URL('./native-auth-schema.sql',import.meta.url),'utf8')}COMMIT;`);
+    GRANT USAGE ON SCHEMA auth TO authenticated;${proposal}${(await readFile(new URL('../../../../docs/mayorista/sql/003_flujo_administrativo_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'')}${(await readFile(new URL('../../../../docs/mayorista/sql/004_administracion_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'')}${(await readFile(new URL('../cargas/schema-qa.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'')}${await readFile(new URL('./native-auth-schema.sql',import.meta.url),'utf8')}COMMIT;`);
   await pool.query('INSERT INTO mayorista.vendedores VALUES($1,$2,$3,true)',[E,V,'Vendedor QA']);
   await pool.query('INSERT INTO mayorista.miembros VALUES($1,$2,$3,$4,true)',[E,U,V,'vendedor']);
   await pool.query('INSERT INTO mayorista.clientes(empresa_id,cliente_id,vendedor_id,nombre) VALUES($1,$2,$3,$4)',[E,C,V,'Cliente QA']);
@@ -94,6 +95,7 @@ try{
     const rs=await Promise.all(commands.map(body=>call('/admin/fulfillment',{token:token2,body})));assert.deepEqual(rs.map(r=>r.status).sort(),[200,409]);
     assert.equal(Number((await pool.query('SELECT count(*) FROM mayorista.eventos_pedido')).rows[0].count),6);
   });
+  results.push(...await verifyCargasApi({call,token:token2,empresaId:E,otraEmpresa:B,productoId:P,pool,makeOrder:order}));
   await check('Revocación de membresía impide acceso con token firmado vigente',async()=>{await pool.query('UPDATE mayorista.miembros SET activo=false WHERE user_id=$1',[U]);assert.equal((await call('/orders',{token:token2})).status,403);});
   console.log(`API PostgreSQL real: ${results.length} controles aprobados. Sesiones independientes, no teléfonos físicos.`);
 }catch(e){results.push({status:'failure',error:e.message});throw e;}finally{

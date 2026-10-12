@@ -3,10 +3,10 @@ import {createOrderHttpHandler} from '../api/http-handler.mjs';
 import {assertIsolatedPool,createPostgresRepository} from '../api/postgres-repository.mjs';
 import {createIsolatedAuth} from '../security/isolated-auth.mjs';
 
-async function smallJson(request){
+async function smallJson(request,limit=4096){
   // Límite real sobre stream, también sin Content-Length.
   const reader=request.body?.getReader();if(!reader)throw new ApiError(422,'Solicitud vacía');
-  const chunks=[];let bytes=0;try{while(true){const {done,value}=await reader.read();if(done)break;bytes+=value.length;if(bytes>4096){await reader.cancel();throw new ApiError(413,'Solicitud demasiado grande');}chunks.push(value);}}finally{reader.releaseLock();}
+  const chunks=[];let bytes=0;try{while(true){const {done,value}=await reader.read();if(done)break;bytes+=value.length;if(bytes>limit){await reader.cancel();throw new ApiError(413,'Solicitud demasiado grande');}chunks.push(value);}}finally{reader.releaseLock();}
   try{return JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw new ApiError(422,'JSON inválido');}
 }
 
@@ -48,6 +48,15 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
         const command=await smallJson(request);
         if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(command?.id)||!Number.isSafeInteger(command.version))throw new ApiError(422,'Comando inválido');
         return reply(200,await repository.withPrincipal(principal,tx=>tx.adminCommand(command)));
+      }
+      if(path==='/cargas'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.cargasState()));
+      if(path==='/cargas/commands'&&request.method==='POST'){
+        if(principal.rol!=='administrador')throw new ApiError(403,'Sin permisos de cargas');
+        if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');
+        const command=await smallJson(request,256*1024);
+        const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if(!uuid.test(command?.id)||!Number.isSafeInteger(command.version)||command.input?.cargaId&&!uuid.test(command.input.cargaId)||command.tipo==='crear'&&!uuid.test(command.input?.id)||command.tipo==='aprobar'&&!uuid.test(command.input?.pedidoId))throw new ApiError(422,'Comando inválido');
+        return reply(200,await repository.withPrincipal(principal,tx=>tx.cargasCommand(command)));
       }
       if(path==='/catalog'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.catalog()));
       if(path==='/admin/fulfillment'&&request.method==='POST'){
