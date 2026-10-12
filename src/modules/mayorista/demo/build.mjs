@@ -16,5 +16,6 @@ for (const source of sources) {
 }
 for (const name of ['index.html', 'offline-check.html', 'offline-check.mjs', 'admin.html', 'admin.mjs', 'app.mjs', 'storage.mjs', 'sample.mjs', 'styles.css', 'sw.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png']) await cp(path.join(root, name), path.join(out, name));
 
+await cp(path.join(root,'../sync/http-client.mjs'),path.join(out,'sync/http-client.mjs'));
 await cp(path.join(root,'../admin'),path.join(out,'admin'),{recursive:true});
 console.log('Build Mayorista aislado: 6 módulos TypeScript transformados, App Vendedor y administración demo generadas; sin chequeo tsc.');

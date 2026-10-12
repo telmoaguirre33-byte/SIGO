@@ -18,7 +18,9 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
     if(!enabled||!rateLimit)return reply(503,{error:'Backend aislado desactivado'});
     try{
       const parsed=new URL(origin);if(parsed.protocol!=='https:'||parsed.origin!==origin)return reply(503,{error:'Origen no configurado'});
-      if(request.headers.get('Origin')!==origin)return reply(403,{error:'Origen no autorizado'});
+      let requestOrigin=request.headers.get('Origin');
+      if(!requestOrigin&&request.method==='GET'){try{requestOrigin=new URL(request.headers.get('Referer')).origin;}catch{}}
+      if(requestOrigin!==origin)return reply(403,{error:'Origen no autorizado'});
       headers['Access-Control-Allow-Origin']=origin;
       if(request.method==='OPTIONS')return new Response(null,{status:204,headers:{...headers,'Access-Control-Allow-Methods':'GET, POST','Access-Control-Allow-Headers':'Authorization, Content-Type'}});
       if(await rateLimit(request)!==true)return reply(429,{error:'Demasiados intentos'});

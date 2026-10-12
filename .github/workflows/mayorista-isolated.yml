@@ -44,7 +44,7 @@ jobs:
       - name: Instalar herramientas aisladas, sin scripts
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Instalar driver PostgreSQL aislado, sin scripts
-        run: npm install --prefix ../backend --ignore-scripts --no-audit --no-fund
+        run: npm ci --prefix ../backend --ignore-scripts --no-audit --no-fund
       - name: Registrar lockfile público del backend
         run: node -e "console.log('MAYORISTA_BACKEND_LOCKFILE_JSON='+JSON.stringify(JSON.parse(require('fs').readFileSync('../backend/package-lock.json','utf8'))))"
       - name: Registrar lockfile público de herramientas

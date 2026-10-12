@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {randomUUID,generateKeyPairSync} from 'node:crypto';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
+import {verifyNativeBrowsers} from './native-browser.mjs';
 import pg from '../backend/node_modules/pg/lib/index.js';
 import {createIsolatedService} from '../backend/service.mjs';
 import {passwordRecord} from '../security/isolated-auth.mjs';
 
 const pool=new pg.Pool({host:'127.0.0.1',port:55471,database:'mayorista_qa',user:'postgres',password:'mayorista_ci_only',max:30});
-const origin='https://mayorista.qa.invalid',E='10000000-0000-4000-8000-000000000001',B='10000000-0000-4000-8000-000000000002',U='10000000-0000-4000-8000-000000001001',V='10000000-0000-4000-8000-000000000011',C='10000000-0000-4000-8000-000000000101',P='10000000-0000-4000-8000-000000000301';
+const origin='https://127.0.0.1:4181',E='10000000-0000-4000-8000-000000000001',B='10000000-0000-4000-8000-000000000002',U='10000000-0000-4000-8000-000000001001',V='10000000-0000-4000-8000-000000000011',C='10000000-0000-4000-8000-000000000101',P='10000000-0000-4000-8000-000000000301';
 const results=[];let server;
 async function check(name,fn){await fn();results.push({name,status:'pass'});console.log('PASS:',name);}
 const keys=generateKeyPairSync('ed25519');
@@ -44,6 +45,9 @@ try{
   await check('Caída y reapertura del servidor conserva UUID y acuse en PostgreSQL',async()=>{await new Promise(resolve=>server.close(resolve));await assert.rejects(()=>call('/orders',{token,body:first}));await listen();assert.deepEqual((await call('/orders',{token,body:first})).body,receipt);});
   await check('Precio cambiado rechaza nuevo pedido y permite recuperar acuse previo',async()=>{await pool.query('UPDATE mayorista.precios SET precio=12');assert.equal((await call('/orders',{token,body:order()})).status,409);assert.deepEqual((await call('/orders',{token,body:first})).body,receipt);});
   await check('Logout revoca una sesión y conserva la segunda',async()=>{assert.equal((await call('/auth/logout',{token,method:'POST'})).status,200);assert.equal((await call('/me',{token})).status,401);assert.equal((await call('/me',{token:token2})).status,200);});
+  await pool.query('UPDATE mayorista.precios SET precio=10');
+  results.push(...await verifyNativeBrowsers({handler,password,empresaId:E,vendedorId:V,clienteId:C,productoId:P}));
+  assert.equal(Number((await pool.query('SELECT count(*) FROM mayorista.pedidos')).rows[0].count),202);
   await check('Revocación de membresía impide acceso con token firmado vigente',async()=>{await pool.query('UPDATE mayorista.miembros SET activo=false WHERE user_id=$1',[U]);assert.equal((await call('/orders',{token:token2})).status,403);});
   console.log(`API PostgreSQL real: ${results.length} controles aprobados. Sesiones independientes, no teléfonos físicos.`);
 }catch(e){results.push({status:'failure',error:e.message});throw e;}finally{
