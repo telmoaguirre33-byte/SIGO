@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import BarcodeScanner from "./BarcodeScanner";
+import CajaTurnosOperativa from "./CajaTurnosOperativa";
 import { imprimirTicketVenta } from "./ticketVenta";
 import { isLegacyDuplicateProduct, normalizeBarcode, type BarcodeProduct } from "./barcode";
 import { listarClientesSigo, type ClienteSigo } from "./clientes";
@@ -42,7 +43,7 @@ function precioUnitarioVenta(item: ItemVenta, ofertas: OfertaProducto[], descuen
   return descuentoPct > 0 ? precioConOferta(base, descuentoPct) : base;
 }
 
-export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos = false }: { empresaId: string; puedeEditarProductos?: boolean }) {
+export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos = false, puedeOperarCaja = false }: { empresaId: string; puedeEditarProductos?: boolean; puedeOperarCaja?: boolean }) {
   const [items, setItems] = useState<ItemVenta[]>([]);
   const [catalogo, setCatalogo] = useState<ProductoSigo[]>([]);
   const [ofertas, setOfertas] = useState<OfertaProducto[]>([]);
@@ -53,6 +54,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   const [precioRapido, setPrecioRapido] = useState("");
   const [guardandoPrecio, setGuardandoPrecio] = useState(false);
   const [medioPago, setMedioPago] = useState<MedioPagoSigo>("efectivo");
+  const [efectivoRecibido, setEfectivoRecibido] = useState("");
   const [clientes, setClientes] = useState<ClienteSigo[]>([]);
   const [clienteId, setClienteId] = useState("");
   const [clientesError, setClientesError] = useState("");
@@ -67,6 +69,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   const [productoSeleccionadoId,setProductoSeleccionadoId]=useState<string|null>(null);
   const [scannerInstanceKey,setScannerInstanceKey]=useState(0);
   const [descuentoAbierto,setDescuentoAbierto]=useState(false);
+  const [cajaTurnosAbierta,setCajaTurnosAbierta]=useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState(nuevaClaveVenta);
   const empresaActivaRef = useRef(empresaId);
   const buscarRef = useRef<HTMLInputElement | null>(null);
@@ -97,6 +100,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     setProductoBloqueado(null);
     setPrecioRapido("");
     setMedioPago("efectivo");
+    setEfectivoRecibido("");
     setClientes([]);
     setClienteId("");
     setClientesError("");
@@ -330,6 +334,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     setAdvertencia("");
     setClienteId("");
     setMedioPago("efectivo");
+    setEfectivoRecibido("");
     setProductoBloqueado(null);
     setPrecioRapido("");
     setBusquedaProducto("");
@@ -348,6 +353,8 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     const precioFinal=precioUnitarioVenta(item,ofertas,descuentoPct);
     return suma+Math.round((precioFinal*item.cantidad+Number.EPSILON)*100)/100;
   },0)),[items,ofertas,descuentoPct]);
+  const montoRecibido = efectivoRecibido.trim() === "" ? total : Number(efectivoRecibido);
+  const vuelto = Math.max(0, Math.round((montoRecibido - total + Number.EPSILON) * 100) / 100);
 
   const superaLimite = medioPago === "cuenta_corriente"
     && clienteSeleccionado?.limite_credito != null
@@ -370,6 +377,10 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
 
   async function confirmar(imprimirDespues = false) {
     if (!puedeConfirmar || confirmando) return;
+    if (medioPago === "efectivo" && (!Number.isFinite(montoRecibido) || montoRecibido + DINERO_TOLERANCIA < total)) {
+      setError("El efectivo recibido no alcanza para cubrir el total. La venta sigue sin confirmarse.");
+      return;
+    }
     const empresaConfirmacion = empresaId;
     setConfirmando(true);
     setError("");
@@ -379,6 +390,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       const resultado = await confirmarVentaSigo({
         empresaId: empresaConfirmacion,
         medioPago,
+        efectivoRecibido: medioPago === "efectivo" ? montoRecibido : null,
         clienteId: clienteId || null,
         descuentoPct,
         idempotencyKey,
@@ -436,6 +448,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       setScannerInstanceKey((key)=>key+1);
       setClienteId("");
       setMedioPago("efectivo");
+      setEfectivoRecibido("");
       setIdempotencyKey(nuevaClaveVenta());
       void listarClientesSigo(empresaConfirmacion)
         .then((data) => {
@@ -507,14 +520,17 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         </section>
         <aside className="sigo-pos-summary">
           <div className="sigo-pos-total"><span>TOTAL</span><strong>$ {total.toLocaleString("es-AR")}</strong>{descuentoPct>0&&<small>Subtotal $ {subtotal.toLocaleString("es-AR")} · Descuento {descuentoPct}%</small>}<p>Productos <b>{items.length}</b> · Unidades <b>{unidades}</b></p></div>
+          <button className="admin-button sigo-pos-cash-open" type="button" onClick={()=>setCajaTurnosAbierta(true)}>▣ Apertura / cierre de caja</button>
           <label><span>Cliente</span><select id="sigo-pos-cliente" value={clienteId} onChange={e=>setClienteId(e.target.value)}><option value="">Consumidor final / sin cliente</option>{clientes.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>
-          <button className="sigo-pos-action cobrar" disabled={!puedeConfirmar||confirmando} onClick={()=>void confirmar()}>💳 COBRAR <kbd>F9</kbd></button>
-          <button className="sigo-pos-action ticket" disabled={!puedeConfirmar||confirmando} onClick={()=>void confirmar(true)}>🖨 COBRAR + TICKET <kbd>F10</kbd></button>
+          {medioPago === "efectivo" && <div className="sigo-pos-cash-change"><label><span>EFECTIVO RECIBIDO</span><input aria-label="Efectivo recibido" inputMode="decimal" type="number" min="0" step="0.01" value={efectivoRecibido} onChange={(e)=>setEfectivoRecibido(e.target.value)} placeholder={String(total.toFixed(2))}/></label><div className="sigo-pos-cash-bills">{[500,1000,2000,5000,10000,20000,50000].map((monto)=><button type="button" key={monto} onClick={()=>setEfectivoRecibido(String(monto))}>$ {monto.toLocaleString("es-AR")}</button>)}</div><div className="sigo-pos-change"><span>VUELTO</span><strong>{Number.isFinite(montoRecibido)&&montoRecibido>=total?`$ ${vuelto.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`:"—"}</strong></div></div>}
+          <button className="sigo-pos-action cobrar" disabled={!puedeConfirmar||confirmando||(medioPago==="efectivo"&&(!Number.isFinite(montoRecibido)||montoRecibido+DINERO_TOLERANCIA<total))} onClick={()=>void confirmar()}>💳 COBRAR <kbd>F9</kbd></button>
+          <button className="sigo-pos-action ticket" disabled={!puedeConfirmar||confirmando||(medioPago==="efectivo"&&(!Number.isFinite(montoRecibido)||montoRecibido+DINERO_TOLERANCIA<total))} onClick={()=>void confirmar(true)}>🖨 COBRAR + TICKET <kbd>F10</kbd></button>
           <button className="sigo-pos-action fiscal" type="button" onClick={()=>{if(ultimaVentaTicket)window.dispatchEvent(new CustomEvent("sigo:arca:venta",{detail:{empresaId,ventaId:ultimaVentaTicket}}));else setError("Primero confirmá la venta para emitir la factura fiscal.");}}>▤ FACTURA FISCAL <kbd>F11</kbd></button>
           <button className="sigo-pos-action reprint" disabled={!ultimaVentaTicket||confirmando} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir el ticket."));}}>🖨 REIMPRIMIR <kbd>F12</kbd></button>
           <div className="sigo-pos-mini-actions"><button type="button" disabled={!ultimaVentaTicket} onClick={()=>{const m=encodeURIComponent("Ticket SIGO · Total $ "+total.toLocaleString("es-AR"));window.open("https://wa.me/?text="+m,"_blank","noopener,noreferrer")}}>WhatsApp</button><button type="button" disabled={!ultimaVentaTicket} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket,"a4").catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir A4."));}}>A4</button><button type="button" disabled={!ultimaVentaTicket} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir el ticket."));}}>Ticket 58/80</button><button type="button" onClick={()=>document.querySelector<HTMLElement>(".arca-launcher")?.click()}>ARCA</button></div>
         </aside>
       </div>
+      {cajaTurnosAbierta && <div className="sigo-cart-overlay" role="dialog" aria-modal="true" aria-label="Apertura y cierre de caja"><div className="sigo-cart-topbar"><button className="admin-button" type="button" onClick={()=>setCajaTurnosAbierta(false)}>← Volver a la venta</button><div><strong>Apertura y cierre de caja</strong><small>Empresa activa</small></div></div><main className="sigo-cart-content"><CajaTurnosOperativa key={empresaId} empresaId={empresaId} puedeOperar={puedeOperarCaja} /></main></div>}
     </div>
   );
 }

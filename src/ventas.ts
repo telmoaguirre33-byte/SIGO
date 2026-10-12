@@ -106,6 +106,8 @@ function mensajeVenta(error: unknown): string {
   if (raw.includes("SALE_ITEM_INVALID") || raw.includes("SALE_QUANTITY_INVALID")) return "Hay un producto o una cantidad inválida en el carrito. Revisá la venta antes de confirmar.";
   if (raw.includes("SALE_DISCOUNT_INVALID")) return "El descuento debe estar entre 0% y 99,99%.";
   if (raw.includes("PAYMENT_METHOD_INVALID")) return "Seleccioná un medio de pago válido.";
+  if (raw.includes("CASH_SESSION_REQUIRED")) return "Abrí el turno de caja antes de cobrar. La venta no se registró ni descontó stock.";
+  if (raw.includes("CASH_RECEIVED_INSUFFICIENT")) return "El importe recibido es menor que el total confirmado. La venta no se registró ni descontó stock.";
   if (raw.includes("ACCOUNT_CURRENT_REQUIRES_CLIENT")) return "Cuenta corriente requiere seleccionar un cliente.";
   if (raw.includes("CLIENT_NOT_FOUND")) return "El cliente seleccionado ya no está disponible en esta empresa.";
   if (raw.includes("CREDIT_LIMIT_EXCEEDED")) return "La venta supera el límite de crédito disponible del cliente.";
@@ -389,6 +391,7 @@ export async function confirmarVentaSigo(input: {
   medioPago: MedioPagoSigo;
   clienteId?: string | null;
   descuentoPct?: number;
+  efectivoRecibido?: number | null;
   idempotencyKey?: string;
 }): Promise<{
   ventaId: string;
@@ -414,6 +417,9 @@ export async function confirmarVentaSigo(input: {
   if (input.medioPago === "cuenta_corriente" && !clienteId) {
     throw new Error("Cuenta corriente requiere seleccionar un cliente.");
   }
+  if (input.medioPago === "efectivo" && (!Number.isFinite(input.efectivoRecibido) || Number(input.efectivoRecibido) < 0)) {
+    throw new Error("Ingresá un importe recibido válido para el pago en efectivo.");
+  }
 
   const itemsConsolidados = consolidarItemsVenta(input.items);
   const idempotencyKey = normalizarIdentificador(input.idempotencyKey ?? crearIdempotencyKey());
@@ -422,7 +428,7 @@ export async function confirmarVentaSigo(input: {
   const estadoReintento = await detectarEstadoReintento(empresaId, idempotencyKey);
   const stockAntes = await capturarStockAntes(empresaId, itemsConsolidados, estadoReintento);
 
-  const { data, error } = await supabase.rpc("confirmar_venta_sigo_v2", {
+  const { data, error } = await supabase.rpc("confirmar_venta_caja_sigo", {
     p_empresa_id: empresaId,
     p_items: itemsConsolidados.map((item) => ({
       producto_id: item.productoId,
@@ -432,6 +438,7 @@ export async function confirmarVentaSigo(input: {
     p_idempotency_key: idempotencyKey,
     p_cliente_id: clienteId,
     p_descuento_pct: input.descuentoPct ?? 0,
+    p_efectivo_recibido: input.medioPago === "efectivo" ? input.efectivoRecibido : null,
   });
 
   if (error) throw new Error(mensajeVenta(error));

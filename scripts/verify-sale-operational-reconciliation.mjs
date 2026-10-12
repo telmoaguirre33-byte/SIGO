@@ -1,6 +1,7 @@
 import fs from "node:fs";
 
 const ventas = fs.readFileSync("src/ventas.ts", "utf8");
+const cajaMigration = fs.readFileSync("supabase/migrations/20261012031600_apertura_cierre_caja_sigo.sql", "utf8");
 
 for (const required of [
   'detectarEstadoReintento',
@@ -31,15 +32,15 @@ for (const required of [
   }
 }
 
-if (!ventas.includes('confirmar_venta_sigo_v2')) {
-  throw new Error("Sale confirmation must remain on the hardened transactional RPC");
+if (!ventas.includes('confirmar_venta_caja_sigo') || !cajaMigration.includes('public.confirmar_venta_sigo_v2')) {
+  throw new Error("Sale confirmation must validate cash received inside the hardened transactional RPC");
 }
 
 if (!ventas.includes('listarProductosSigo')) {
   throw new Error("Sale confirmation must capture/verify tenant product stock around a new transaction");
 }
 
-const rpcIndex = ventas.indexOf('supabase.rpc("confirmar_venta_sigo_v2"');
+const rpcIndex = ventas.indexOf('supabase.rpc("confirmar_venta_caja_sigo"');
 const headerIndex = ventas.indexOf('leerCabeceraVentaConfirmada(empresaId, ventaId');
 const cashIndex = ventas.indexOf('verificarIntegridadVentas(empresaId, [{ id: ventaId');
 const stockIndex = ventas.indexOf('verificarIntegridadStockVenta(');
