@@ -1,3 +1,4 @@
+import {verifyOperationalBrowser} from './operational-browser.mjs';
 import {verifyUserDirectory} from './user-directory-api.mjs';
 import {verifyMasterData} from './master-data-api.mjs';
 import assert from 'node:assert/strict';
@@ -5,7 +6,7 @@ import {randomUUID} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {createIsolatedService} from '../backend/service.mjs';
 import {passwordRecord} from '../security/isolated-auth.mjs';
-export async function verifyOperationalRoles({pool,keys,origin,call,setHandler,empresaId:E,otraEmpresa:B,vendedorId:V,clienteId:C,productoId:P}){
+export async function verifyOperationalRoles({pool,keys,origin,call,setHandler,getHandler,empresaId:E,otraEmpresa:B,vendedorId:V,clienteId:C,productoId:P}){
  const results=[];const check=async(name,fn)=>{await fn();results.push({name,status:'pass'});console.log('PASS:',name)};
  const sql=(await readFile(new URL('../commercial/roles-schema-qa.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'');const masters=(await readFile(new URL('../commercial/master-schema-qa.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'');await pool.query('BEGIN;'+sql+masters+'COMMIT;');
  await pool.query('INSERT INTO mayorista.empresas VALUES($1,$2,true),($3,$4,true)',[E,'Empresa operativa QA A',B,'Empresa operativa QA B']);
@@ -30,6 +31,7 @@ export async function verifyOperationalRoles({pool,keys,origin,call,setHandler,e
  await check('RLS limita cargas y prohíbe cambiar los responsables asignados',async()=>{const c=await pool.connect();try{await c.query('BEGIN');await c.query('SET LOCAL ROLE authenticated');await c.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[users.armador]);assert.equal((await c.query('SELECT carga_id FROM mayorista.cargas_operativas WHERE empresa_id=$1',[E])).rows.length,1);assert.equal((await c.query('SELECT * FROM mayorista.cargas_operativas WHERE empresa_id=$1',[B])).rows.length,0);await assert.rejects(()=>c.query('UPDATE mayorista.cargas_operativas SET chofer_user_id=$1 WHERE empresa_id=$2',[users.chofer2,E]),e=>e.code==='42501');}finally{await c.query('ROLLBACK');c.release();}});
  results.push(...await verifyUserDirectory({call,pool,tokens,empresaId:E,otraEmpresa:B}));
  results.push(...await verifyMasterData({call,pool,tokens,empresaId:E,otraEmpresa:B,vendedorId:V}));
+ results.push(...await verifyOperationalBrowser({handler:getHandler(),password,empresaId:E,call}));
  await check('Cambio y revocación de membresía persistente invalidan permisos del token vigente',async()=>{await pool.query("UPDATE mayorista.miembros SET rol='administracion' WHERE empresa_id=$1 AND user_id=$2",[E,users.armador]);assert.equal((await call('/me',{token:tokens.armador})).body.rol,'administracion');await pool.query("UPDATE mayorista.miembros SET activo=false WHERE empresa_id=$1 AND user_id=$2",[E,users.armador]);assert.equal((await call('/operations/loads',{token:tokens.armador})).status,403);await pool.query('UPDATE mayorista.empresas SET habilitada=false WHERE empresa_id=$1',[E]);assert.equal((await call('/catalog',{token:tokens.vendedor})).status,403);const c=await pool.connect();try{await c.query('BEGIN');await c.query('SET LOCAL ROLE authenticated');await c.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[users.vendedor]);assert.equal((await c.query('SELECT * FROM mayorista.clientes WHERE empresa_id=$1',[E])).rows.length,0);}finally{await c.query('ROLLBACK');c.release();}});
  return results;
 }

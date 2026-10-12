@@ -103,7 +103,7 @@ try{
   });
   results.push(...await verifyCargasApi({call,token:token2,empresaId:E,otraEmpresa:B,productoId:P,pool,makeOrder:order,restart:async()=>{await new Promise(resolve=>server.close(resolve));await listen();}}));
   await check('Revocación de membresía impide acceso con token firmado vigente',async()=>{await pool.query('UPDATE mayorista.miembros SET activo=false WHERE user_id=$1',[U]);assert.equal((await call('/orders',{token:token2})).status,403);});
-  results.push(...await verifyOperationalRoles({pool,keys,origin,call,setHandler:h=>{handler=h},empresaId:E,otraEmpresa:B,vendedorId:V,clienteId:C,productoId:P}));
+  results.push(...await verifyOperationalRoles({pool,keys,origin,call,setHandler:h=>{handler=h},getHandler:()=>handler,empresaId:E,otraEmpresa:B,vendedorId:V,clienteId:C,productoId:P}));
   console.log(`API PostgreSQL real: ${results.length} controles aprobados. Sesiones independientes, no teléfonos físicos.`);
 }catch(e){results.push({status:'failure',error:e.message});throw e;}finally{
   if(server?.listening)await new Promise(resolve=>server.close(resolve));await pool.end();
