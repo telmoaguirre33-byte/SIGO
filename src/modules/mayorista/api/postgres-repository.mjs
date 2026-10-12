@@ -1,3 +1,5 @@
+import {createAccountsTransaction} from '../commercial/accounts-postgres.mjs';
+import {createInventoryTransaction} from '../commercial/inventory-postgres.mjs';
 import {createVisitsTransaction} from '../commercial/visits.mjs';
 import {createCargasTransaction} from '../cargas/postgres.mjs';
 import {createHash} from 'node:crypto';
@@ -10,7 +12,7 @@ export function assertIsolatedPool(pool){
 }
 const columns=`empresa_id as "empresaId",pedido_id as "pedidoId",vendedor_id as "vendedorId",cliente_id as "clienteId",creado_en as "creadoEn",recibido_en as "recibidoEn",lineas,huella as hash,estado`;
 function normalize(row){return row?{...row,creadoEn:row.creadoEn.toISOString(),recibidoEn:row.recibidoEn.toISOString()}:null;}
-export function createPostgresRepository({enabled=false,pool}={}){
+export function createPostgresRepository({enabled=false,pool,inventoryRequired=false,accountsEnabled=false}={}){
   return {withPrincipal:async(principal,fn)=>{
     if(!enabled)throw new ApiError(503,'Persistencia desactivada');assertIsolatedPool(pool);
     for(let attempt=0;attempt<4;attempt++){
@@ -71,6 +73,10 @@ export function createPostgresRepository({enabled=false,pool}={}){
       };
       Object.assign(tx,createVisitsTransaction({query:(sql,args)=>c.query(sql,args),principal}));
       Object.assign(tx,createCargasTransaction({query:(sql,args)=>c.query(sql,args),principal,findOrder:tx.find,fulfillment:tx.fulfillment}));
+      Object.assign(tx,createInventoryTransaction({query:(sql,args)=>c.query(sql,args),principal,loads:tx.cargasState}));
+      Object.assign(tx,createAccountsTransaction({query:(sql,args)=>c.query(sql,args),principal}));
+      if(accountsEnabled){const apply=tx.cargasCommand;tx.cargasCommand=async command=>{const before=await tx.cargasState(),after=await apply(command);await tx.accountLoadChanges(before,after,command);return after;};}
+      if(inventoryRequired){const apply=tx.cargasCommand;tx.cargasCommand=async command=>{const state=await apply(command);const tipo={verificar:'reserva',salir:'salida',cerrar:'devolucion'}[command.tipo];if(tipo)await tx.inventoryCommand({id:command.id,empresaId:principal.empresaId,tipo,input:{cargaId:command.input.cargaId}});return state;};}
       const result=await fn(tx);await c.query('COMMIT');return result;
     }catch(e){await c.query('ROLLBACK').catch(()=>{});if(!['40001','40P01','23505'].includes(e.code)||attempt===3)throw e;}finally{c.release();}
     }

@@ -12,10 +12,10 @@ async function smallJson(request,limit=4096){
 
 /** Backend real exclusivamente local/efímero. No monta rutas en SIGO.
  * Llaves Ed25519 y rate limiter son obligatorios; no contiene credenciales remotas. */
-export function createIsolatedService({enabled=false,pool,privateKey,publicKey,origin,issuer,rateLimit}={}){
+export function createIsolatedService({enabled=false,pool,privateKey,publicKey,origin,issuer,rateLimit,inventoryRequired=false,accountsEnabled=false}={}){
   if(enabled)assertIsolatedPool(pool);
   const auth=createIsolatedAuth({enabled,pool,privateKey,publicKey,issuer});
-  const repository=createPostgresRepository({enabled,pool});
+  const repository=createPostgresRepository({enabled,pool,inventoryRequired,accountsEnabled});
   const orders=createOrderHttpHandler({enabled,allowedOrigin:origin,rateLimit,receive:createOrderReceiver({enabled,auth,repository})});
   return async request=>{
     const path=new URL(request.url).pathname;
@@ -60,6 +60,9 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
       }
       if(path==='/visits'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.visits()));
       if(path==='/visits'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const visit=await smallJson(request);return reply(200,await repository.withPrincipal(principal,tx=>tx.receiveVisit(visit)));}
+      if(path==='/inventory'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.inventory()));
+      if(path==='/inventory/commands'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const command=await smallJson(request);return reply(200,await repository.withPrincipal(principal,tx=>tx.inventoryCommand(command)));}
+      if(path==='/accounts'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.accounts()));
       if(path==='/catalog'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.catalog()));
       if(path==='/admin/fulfillment'&&request.method==='POST'){
         if(principal.rol!=='administrador')throw new ApiError(403,'Sin permisos administrativos');

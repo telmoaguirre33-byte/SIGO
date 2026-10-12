@@ -13,7 +13,7 @@ const origin='https://127.0.0.1:4181',E='10000000-0000-4000-8000-000000000001',B
 const results=[];let server;
 async function check(name,fn){await fn();results.push({name,status:'pass'});console.log('PASS:',name);}
 const keys=generateKeyPairSync('ed25519');
-const handler=createIsolatedService({enabled:true,pool,...keys,origin,issuer:'sigo-mayorista-ci',rateLimit:async()=>true});
+const handler=createIsolatedService({enabled:true,pool,...keys,origin,issuer:'sigo-mayorista-ci',rateLimit:async()=>true,inventoryRequired:true,accountsEnabled:true});
 async function listen(){
   server=createServer(async(req,res)=>{try{const request=new Request('http://127.0.0.1:4180'+req.url,{method:req.method,headers:req.headers,...(req.method==='GET'||req.method==='HEAD'?{}:{body:req,duplex:'half'})});const response=await handler(request);res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()));}catch{res.writeHead(503);res.end();}});
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(4180,'127.0.0.1',resolve);});
@@ -26,7 +26,7 @@ try{
   await pool.query(`BEGIN; CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE SCHEMA auth;
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE SECURITY INVOKER AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE SECURITY INVOKER AS $$ SELECT coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb $$;
-    GRANT USAGE ON SCHEMA auth TO authenticated;${proposal}${(await readFile(new URL('../../../../docs/mayorista/sql/003_flujo_administrativo_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'')}${(await readFile(new URL('../../../../docs/mayorista/sql/004_administracion_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'')}${(await readFile(new URL('../cargas/schema-qa.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'')}${(await readFile(new URL('../commercial/visits-schema-qa.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'')}${await readFile(new URL('./native-auth-schema.sql',import.meta.url),'utf8')}COMMIT;`);
+    GRANT USAGE ON SCHEMA auth TO authenticated;${proposal}${(await readFile(new URL('../../../../docs/mayorista/sql/003_flujo_administrativo_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'')}${(await readFile(new URL('../../../../docs/mayorista/sql/004_administracion_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'')}${(await readFile(new URL('../cargas/schema-qa.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'')}${(await readFile(new URL('../commercial/visits-schema-qa.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'')}${(await readFile(new URL('../commercial/inventory-schema-qa.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'')}${(await readFile(new URL('../commercial/accounts-schema-qa.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'')}${await readFile(new URL('./native-auth-schema.sql',import.meta.url),'utf8')}COMMIT;`);
   await pool.query('INSERT INTO mayorista.vendedores VALUES($1,$2,$3,true)',[E,V,'Vendedor QA']);
   await pool.query('INSERT INTO mayorista.miembros VALUES($1,$2,$3,$4,true)',[E,U,V,'vendedor']);
   await pool.query('INSERT INTO mayorista.clientes(empresa_id,cliente_id,vendedor_id,nombre) VALUES($1,$2,$3,$4)',[E,C,V,'Cliente QA']);
@@ -58,6 +58,7 @@ try{
   await check('RLS rechaza escritura administrativa directa de un vendedor',async()=>{
     const c=await pool.connect();try{await c.query('BEGIN');await c.query('SET LOCAL ROLE authenticated');await c.query("SELECT set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claims',$2,true)",[U,JSON.stringify({sub:U,is_anonymous:false})]);await assert.rejects(()=>c.query('INSERT INTO mayorista.administracion(empresa_id,revision,datos) VALUES($1,1,$2::jsonb)',[E,JSON.stringify({empresaId:E})]),e=>e.code==='42501');}finally{await c.query('ROLLBACK');c.release();}
   });
+  await check('Vendedor no obtiene acceso al inventario independiente',async()=>{assert.equal((await call('/inventory',{token:token2})).status,403);assert.equal((await call('/accounts',{token:token2})).status,403);assert.equal((await call('/inventory/commands',{token:token2,body:{id:randomUUID(),empresaId:E,tipo:'ingreso',input:{productoId:P,cantidad:1,comprobante:'NO-ADMIN'}}})).status,403);});
   await pool.query("UPDATE mayorista.miembros SET rol='administrador' WHERE user_id=$1",[U]);
   await check('Vendedores, rutas, clientes y objetivos guardados bajo sesión administrativa',async()=>{
     const route=randomUUID();let version=0,last;

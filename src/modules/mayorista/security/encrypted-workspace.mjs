@@ -16,7 +16,7 @@ async function decrypt(key,scope,kind,id,revision,envelope){if(!Array.isArray(en
  * Los metadatos de alcance/UUID/revisión permiten CAS, no contienen datos comerciales. */
 export class EncryptedWorkspace{
   #key=null;#scope;#generation=0;
-  constructor(scope){if(!scope?.empresaId||!scope?.vendedorId)throw new Error('Ámbito obligatorio');this.#scope=Object.freeze({...scope});}
+  constructor(scope){if(!scope?.empresaId||!scope?.vendedorId)throw new Error('Ámbito obligatorio');this.#scope=Object.freeze({empresaId:scope.empresaId,vendedorId:scope.vendedorId});}
   get scope(){return {...this.#scope};}
   get unlocked(){return this.#key!==null;}
   lock(){this.#generation++;this.#key=null;}
