@@ -15,6 +15,20 @@ jobs:
   isolated:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: mayorista_ci_only
+          POSTGRES_DB: mayorista_qa
+        ports:
+          - '127.0.0.1:55471:5432'
+        options: >-
+          --health-cmd 'pg_isready -U postgres -d mayorista_qa'
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     defaults:
       run:
         working-directory: src/modules/mayorista/demo
@@ -40,6 +54,10 @@ jobs:
           npm run test:admin
           npm run test:recovery
           npm run test:integration-pwa
+          npm run test:http-auth
+          npm run test:rendiciones
+      - name: Políticas RLS en PostgreSQL efímero local
+        run: npm run test:rls
       - name: IndexedDB en Chromium real
         run: npm test
       - name: Guardar evidencia y lockfile generado

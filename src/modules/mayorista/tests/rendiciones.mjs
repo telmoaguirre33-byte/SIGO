@@ -1,0 +1,10 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {saveRendition,reviewRendition} from '../admin/rendiciones.mjs';
+const state={empresaId:'a',vendedores:[{id:'v',activo:true}]};
+const input={id:crypto.randomUUID(),vendedorId:'v',fecha:'2026-10-12',importe:123.45,medio:'efectivo',nota:''};
+test('rendición agrega centavos exactos sin cambiar estado anterior',()=>{const next=saveRendition(state,input);assert.equal(next.rendiciones[0].centavos,12345);assert.equal(state.rendiciones,undefined);});
+test('rendición rechaza empresa o vendedor ajenos',()=>{assert.throws(()=>saveRendition(state,{...input,empresaId:'b'}));assert.throws(()=>saveRendition(state,{...input,vendedorId:'otro'}));});
+test('importe negativo, fraccional de centavo y fecha imposible se rechazan',()=>{for(const change of [{importe:-1},{importe:1.001},{fecha:'2026-02-30'}])assert.throws(()=>saveRendition(state,{...input,...change}));});
+test('mismo UUID no crea otra rendición',()=>{const next=saveRendition(state,input);assert.equal(saveRendition(next,input).rendiciones.length,1);assert.throws(()=>saveRendition(next,{...input,importe:200}));});
+test('revisión requiere administrador de la empresa',()=>{const next=saveRendition(state,input);assert.throws(()=>reviewRendition(next,input.id,{empresaId:'b',rol:'admin'}));assert.throws(()=>reviewRendition(next,input.id,{empresaId:'a',rol:'seller'}));assert.equal(reviewRendition(next,input.id,{empresaId:'a',rol:'admin'}).rendiciones[0].estado,'revisada');});
+test('revisión no genera movimientos financieros existentes',()=>{const next=reviewRendition(saveRendition(state,input),input.id,{empresaId:'a',rol:'admin'});assert.equal(next.rendiciones[0].centavos,12345);assert.equal(next.movimientos,undefined);assert.equal(next.ventas,undefined);});
