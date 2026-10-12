@@ -10,7 +10,7 @@ const profile=await mkdtemp('/tmp/sigo-mayorista-browser-');
 const artifacts=path.join(path.dirname(fileURLToPath(import.meta.url)), 'artifacts');
 await mkdir(artifacts,{recursive:true});
 const server=createServer(async(req,res)=>{
-  try{const url=new URL(req.url,'http://localhost');const name=url.pathname==='/'?'index.html':decodeURIComponent(url.pathname).slice(1);const file=path.resolve(root,name);if(!file.startsWith(root+path.sep))throw new Error('path');const content=await readFile(file);res.setHeader('Content-Type',({'.mjs':'text/javascript','.js':'text/javascript','.html':'text/html','.css':'text/css','.svg':'image/svg+xml','.webmanifest':'application/manifest+json'})[path.extname(file)]??'text/plain');res.end(content);}catch{res.writeHead(404);res.end('Not found');}
+  try{const url=new URL(req.url,'http://localhost');const name=url.pathname==='/'?'index.html':decodeURIComponent(url.pathname).slice(1);const file=path.resolve(root,name);if(!file.startsWith(root+path.sep))throw new Error('path');const content=await readFile(file);res.setHeader('Content-Type',({'.mjs':'text/javascript','.js':'text/javascript','.html':'text/html','.css':'text/css','.svg':'image/svg+xml','.webmanifest':'application/manifest+json','.png':'image/png'})[path.extname(file)]??'text/plain');res.end(content);}catch{res.writeHead(404);res.end('Not found');}
 });
 await new Promise((resolve,reject)=>{
   const timer=setTimeout(()=>{server.close();reject(new Error('BLOCKED: servidor local no pudo abrirse en 5 segundos; revisar permisos del entorno'));},5000);
@@ -102,6 +102,9 @@ try{
   await test('transacción abortada no deja una visita parcial', `await new Promise((resolve,reject)=>{const r=indexedDB.open('sigo-mayorista-demo-aux-v1',1);r.onsuccess=()=>{const db=r.result;const tx=db.transaction('visits','readwrite');tx.objectStore('visits').add({...scope,id:'abort-test',clienteId:'c1'});tx.onabort=()=>{db.close();resolve()};tx.oncomplete=()=>reject(new Error('no abortó'));tx.abort()}});check(!(await aux.listVisits(scope)).some(v=>v.id==='abort-test'),'escritura parcial')`);
   await test('desborde horizontal ausente en pantalla Android de 390 px', `check(document.documentElement.scrollWidth<=390,'overflow')`);
   await evaluate(`(async()=>{await navigator.serviceWorker.ready;await new Promise(r=>setTimeout(r,200));})()`);
+  const manifest=await call('Page.getAppManifest');const installability=await call('Page.getInstallabilityErrors');
+  await writeFile(path.join(artifacts,'pwa-result.json'),JSON.stringify({date:new Date().toISOString(),manifestUrl:manifest.url,manifestErrors:manifest.errors,installability},null,2));
+  assert.deepEqual(manifest.errors,[],'manifest Chromium');assert.deepEqual(installability.installabilityErrors,[],'criterios PWA Chromium');passed++;console.log('PASS manifest y criterios de instalación PWA en Chromium (sin instalación Android física)');
   await call('Page.reload');await ready();
   await test('persistencia después de recargar la página', `const m=await import('./offline/pedidos-indexeddb.js');check=(c,m)=>{if(!c)throw new Error(m)};check((await new m.PedidosIndexedDB('demo-distribuidora-sur','demo-lucia').listar()).length===102,'pedidos')`);
   await call('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});
