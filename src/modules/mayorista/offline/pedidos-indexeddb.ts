@@ -43,8 +43,7 @@ async function operar<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) =
   try {
     const tx = db.transaction(STORE, mode);
     const done = transactionDone(tx);
-    const result = await request(fn(tx.objectStore(STORE)));
-    await done;
+    const [result] = await Promise.all([request(fn(tx.objectStore(STORE))), done]);
     return result;
   } finally { db.close(); }
 }
@@ -57,28 +56,53 @@ export class PedidosIndexedDB {
   async listar(): Promise<PedidoLocal[]> {
     return operar("readonly", store => store.index("porVendedor").getAll([this.empresaId, this.vendedorId]));
   }
-  async crear(clienteId: string, lineas: LineaPedido[]): Promise<PedidoLocal> {
+  async crear(clienteId: string, lineas: LineaPedido[], id = crypto.randomUUID()): Promise<PedidoLocal> {
     if (!clienteId || !lineas.length || lineas.some(l =>
-      !l.productoId || !Number.isFinite(l.cantidad) || l.cantidad <= 0 ||
+      !l.productoId || !Number.isSafeInteger(l.cantidad) || l.cantidad <= 0 ||
       !Number.isFinite(l.precioUnitario) || l.precioUnitario < 0
     )) throw new Error("Pedido inválido");
     const now = new Date().toISOString();
     const pedido: PedidoLocal = {
-      id: crypto.randomUUID(), empresaId: this.empresaId, vendedorId: this.vendedorId,
+      id, empresaId: this.empresaId, vendedorId: this.vendedorId,
       clienteId, creadoEn: now, actualizadoEn: now,
       lineas: lineas.map(l => ({...l})), estado: "pendiente", intentos: 0
     };
-    await operar("readwrite", store => store.add(pedido));
+    try { await operar("readwrite", store => store.add(pedido)); }
+    catch (error) {
+      if (!(error instanceof DOMException) || error.name !== "ConstraintError") throw error;
+      const existente = await operar<PedidoLocal | undefined>("readonly", store => store.get(id));
+      if (!existente || existente.empresaId !== this.empresaId || existente.vendedorId !== this.vendedorId ||
+          existente.clienteId !== clienteId || JSON.stringify(existente.lineas) !== JSON.stringify(pedido.lineas))
+        throw new Error("Conflicto de identificador de pedido");
+      return existente;
+    }
     return pedido;
   }
   private async actualizar(pedido: PedidoLocal): Promise<void> {
-    const actual = await operar<PedidoLocal | undefined>("readonly", store => store.get(pedido.id));
-    if (!actual || actual.empresaId !== this.empresaId || actual.vendedorId !== this.vendedorId)
-      throw new Error("Pedido no encontrado en esta empresa/vendedor");
-    await operar("readwrite", store => store.put(pedido));
+    const db = await abrirDB();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(STORE, "readwrite");
+        const store = tx.objectStore(STORE);
+        const req = store.get(pedido.id);
+        req.onsuccess = () => {
+          const actual = req.result as PedidoLocal | undefined;
+          if (!actual || actual.empresaId !== this.empresaId || actual.vendedorId !== this.vendedorId ||
+              pedido.empresaId !== this.empresaId || pedido.vendedorId !== this.vendedorId) { tx.abort(); return; }
+          store.put(pedido);
+        };
+        tx.oncomplete = () => resolve();
+        tx.onabort = () => reject(tx.error ?? new Error("Pedido fuera de esta empresa/vendedor"));
+        tx.onerror = () => reject(tx.error ?? new Error("Error al actualizar pedido"));
+      });
+    } finally { db.close(); }
   }
+
   async sincronizar(enviar: EnviarPedido): Promise<{ enviados: number; fallidos: number }> {
     if (this.enProceso) return { enviados: 0, fallidos: 0 };
+    if (typeof navigator === "undefined" || !navigator.locks) throw new Error("Este navegador no admite sincronización segura entre pestañas");
+    return navigator.locks.request(JSON.stringify([DB_NAME, this.empresaId, this.vendedorId]), {ifAvailable: true}, async lock => {
+    if (!lock) return { enviados: 0, fallidos: 0 };
     this.enProceso = true;
     let enviados = 0, fallidos = 0;
     try {
@@ -90,7 +114,7 @@ export class PedidosIndexedDB {
         try {
           // Reintentar con el mismo UUID; la API futura DEBE implementar idempotencia.
           const acuse = await enviar(actual);
-          if (acuse.id !== actual.id || !acuse.confirmadoEn) throw new Error("Acuse inválido");
+          if (acuse.id !== actual.id || !Number.isFinite(Date.parse(acuse.confirmadoEn))) throw new Error("Acuse inválido");
           await this.actualizar({...actual, estado: "sincronizado", confirmadoEn: acuse.confirmadoEn, actualizadoEn: new Date().toISOString()});
           enviados++;
         } catch (error) {
@@ -100,5 +124,7 @@ export class PedidosIndexedDB {
       }
       return { enviados, fallidos };
     } finally { this.enProceso = false; }
+    });
   }
 }
+

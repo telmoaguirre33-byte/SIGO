@@ -20,7 +20,7 @@ export type SnapshotCatalogo = {
 };
 const DB = "sigo-mayorista-catalogo-v1";
 const STORE = "snapshots";
-function clave(empresaId: string, vendedorId: string) { return empresaId + "::" + vendedorId; }
+function clave(empresaId: string, vendedorId: string) { return JSON.stringify([empresaId, vendedorId]); }
 function abrir(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === "undefined") { reject(new Error("IndexedDB no disponible")); return; }
@@ -51,15 +51,24 @@ export async function guardarCatalogo(snapshot: SnapshotCatalogo): Promise<void>
 export async function leerCatalogo(empresaId: string, vendedorId: string): Promise<SnapshotCatalogo | null> {
   const db = await abrir();
   try {
-    return await new Promise((resolve, reject) => {
+    const snapshot = await new Promise<SnapshotCatalogo | null>((resolve, reject) => {
       const tx = db.transaction(STORE, "readonly");
-      const req = tx.objectStore(STORE).get(clave(empresaId, vendedorId));
-      req.onsuccess = () => resolve((req.result as SnapshotCatalogo | undefined) ?? null);
+      const store = tx.objectStore(STORE);
+      const req = store.get(clave(empresaId, vendedorId));
+      req.onsuccess = () => {
+        if (req.result) { resolve(req.result as SnapshotCatalogo); return; }
+        const legacy = store.get(empresaId + "::" + vendedorId);
+        legacy.onsuccess = () => resolve((legacy.result as SnapshotCatalogo | undefined) ?? null);
+        legacy.onerror = () => reject(legacy.error);
+      };
       req.onerror = () => reject(req.error ?? new Error("No se pudo leer catálogo"));
     });
+    if (snapshot && (snapshot.empresaId !== empresaId || snapshot.vendedorId !== vendedorId)) throw new Error("Catálogo de otra empresa/vendedor");
+    return snapshot;
   } finally { db.close(); }
 }
 export function antiguedadCatalogoHoras(snapshot: SnapshotCatalogo, ahora = Date.now()): number {
   const ms = Date.parse(snapshot.descargadoEn);
   return Number.isFinite(ms) ? Math.max(0, (ahora - ms) / 3_600_000) : Infinity;
 }
+
