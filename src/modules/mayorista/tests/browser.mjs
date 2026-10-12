@@ -36,7 +36,7 @@ async function start(){
   await call('Page.navigate',{url:'http://127.0.0.1:4173/'});await ready();
 }
 function call(method,params={}){return new Promise((resolve,reject)=>{const id=++seq;const timer=setTimeout(()=>{pending.delete(id);reject(new Error('CDP timeout '+method));},30000);pending.set(id,{resolve:v=>{clearTimeout(timer);resolve(v);},reject:e=>{clearTimeout(timer);reject(e);}});ws.send(JSON.stringify({id,method,params}));});}
-async function evaluate(expression){const r=await call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true,replMode:true});if(r.exceptionDetails)throw new Error(r.exceptionDetails.exception?.description??r.exceptionDetails.text);return r.result.value;}
+async function evaluate(expression){const r=await call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw new Error(r.exceptionDetails.exception?.description??r.exceptionDetails.text);return r.result.value;}
 // Segunda pestaña real del mismo perfil, para verificar Web Locks entre documentos.
 async function otherTab(){
   const {targetId}=await call('Target.createTarget',{url:'http://127.0.0.1:4173/'});
@@ -46,7 +46,7 @@ async function otherTab(){
   let id=0;const requests=new Map();
   socket.onmessage=e=>{const m=JSON.parse(e.data);if(m.id && requests.has(m.id)){const p=requests.get(m.id);requests.delete(m.id);m.error?p.reject(new Error(m.error.message)):p.resolve(m.result);}};
   const command=(method,params={})=>new Promise((resolve,reject)=>{const rid=++id;const timer=setTimeout(()=>{requests.delete(rid);reject(new Error('Timeout segunda pestaña'));},30000);requests.set(rid,{resolve:r=>{clearTimeout(timer);resolve(r)},reject:e=>{clearTimeout(timer);reject(e)}});socket.send(JSON.stringify({id:rid,method,params}));});
-  const evaluate=async expression=>{const r=await command('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true,replMode:true});if(r.exceptionDetails)throw new Error(r.exceptionDetails.exception?.description??r.exceptionDetails.text);return r.result.value;};
+  const evaluate=async expression=>{const r=await command('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw new Error(r.exceptionDetails.exception?.description??r.exceptionDetails.text);return r.result.value;};
   for(let i=0;i<100;i++){if(await evaluate("document.readyState==='complete' && location.protocol==='http:'"))break;await delay(50);}
   return {evaluate,close:async()=>{for(const p of requests.values())p.reject(new Error('Pestaña cerrada durante envío'));requests.clear();socket.close();await call('Target.closeTarget',{targetId});}};
 }
@@ -60,7 +60,7 @@ let passed=0;
 async function test(name,expression){assert.equal(await evaluate(`(async()=>{${expression};return true})()`),true);passed++;console.log('PASS '+name);}
 try{
   await start();
-  await evaluate(`window.core=await import('./offline/pedidos-indexeddb.js');window.cat=await import('./offline/catalogo-indexeddb.js');window.aux=await import('./storage.mjs');window.sample=await import('./sample.mjs');window.check=(condition,message)=>{if(!condition)throw new Error(message)};window.scope=sample.identities[0];window.queue=new core.PedidosIndexedDB(scope.empresaId,scope.vendedorId);window.catalog=sample.sampleCatalog(scope);`);
+  await evaluate(`(async()=>{window.core=await import('./offline/pedidos-indexeddb.js');window.cat=await import('./offline/catalogo-indexeddb.js');window.aux=await import('./storage.mjs');window.sample=await import('./sample.mjs');window.check=(condition,message)=>{if(!condition)throw new Error(message)};window.scope=sample.identities[0];window.queue=new core.PedidosIndexedDB(scope.empresaId,scope.vendedorId);window.catalog=sample.sampleCatalog(scope);})()`);
   await test('catálogo IndexedDB y aislamiento empresa/vendedor', `await cat.guardarCatalogo(catalog);check((await cat.leerCatalogo(scope.empresaId,scope.vendedorId)).clientes.length===4,'clientes');check(await cat.leerCatalogo('otra',scope.vendedorId)===null,'otra empresa');check(await cat.leerCatalogo(scope.empresaId,'otro')===null,'otro vendedor')`);
   await test('claves compuestas sin colisiones', `await cat.guardarCatalogo({...catalog,empresaId:'a::b',vendedorId:'c'});await cat.guardarCatalogo({...catalog,empresaId:'a',vendedorId:'b::c'});check((await cat.leerCatalogo('a::b','c')).empresaId==='a::b','colisión')`);
   await test('rechazo de cantidades fraccionarias e infinitas', `for(const cantidad of [0,-1,1.5,Infinity,NaN]){let rejected=false;try{await queue.crear('c1',[{productoId:'p1',cantidad,precioUnitario:2200}])}catch{rejected=true}check(rejected,'cantidad '+cantidad)}`);
@@ -101,7 +101,7 @@ try{
   await test('catálogo vencido y empresa incorrecta rechazan envío', `const p=(await queue.listar())[0];for(const c of [{...catalog,descargadoEn:'2000-01-01'}, {...catalog,empresaId:'otra'}]){let rejected=false;try{await aux.demoReceive(scope,p,c)}catch{rejected=true}check(rejected,'validación catálogo')}`);
   await test('transacción abortada no deja una visita parcial', `await new Promise((resolve,reject)=>{const r=indexedDB.open('sigo-mayorista-demo-aux-v1',1);r.onsuccess=()=>{const db=r.result;const tx=db.transaction('visits','readwrite');tx.objectStore('visits').add({...scope,id:'abort-test',clienteId:'c1'});tx.onabort=()=>{db.close();resolve()};tx.oncomplete=()=>reject(new Error('no abortó'));tx.abort()}});check(!(await aux.listVisits(scope)).some(v=>v.id==='abort-test'),'escritura parcial')`);
   await test('desborde horizontal ausente en pantalla Android de 390 px', `check(document.documentElement.scrollWidth<=390,'overflow')`);
-  await evaluate(`await navigator.serviceWorker.ready;await new Promise(r=>setTimeout(r,200));`);
+  await evaluate(`(async()=>{await navigator.serviceWorker.ready;await new Promise(r=>setTimeout(r,200));})()`);
   await call('Page.reload');await ready();
   await test('persistencia después de recargar la página', `const m=await import('./offline/pedidos-indexeddb.js');check=(c,m)=>{if(!c)throw new Error(m)};check((await new m.PedidosIndexedDB('demo-distribuidora-sur','demo-lucia').listar()).length===102,'pedidos')`);
   await call('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});

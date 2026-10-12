@@ -25,4 +25,5 @@ No se modificaron pantallas existentes, esquemas de Supabase, producción ni mó
 7. Pruebas de compilación y regresión; no publicar sin aprobación explícita.
 
 ## Restricción permanente
-No modificar Caja, Ventas, Compras, Stock, Facturación, SOVI ni producción. Integrar únicamente después de pruebas y autorización.
+No modificar Caja, Ventas, Compras, Stock, Facturación ni módulos de otros productos o producción. Integrar únicamente después de pruebas y autorización.
+
