@@ -19,21 +19,24 @@ await new Promise((resolve,reject)=>{
 }).catch(async e=>{await rm(profile,{recursive:true,force:true});throw e;});
 let child, ws, seq=0;
 const pending=new Map(), runtimeErrors=[];
+let browserStderr='';
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function start(){
-  child=spawn(process.env.CHROMIUM_PATH ?? '/usr/bin/chromium',['--headless','--no-sandbox','--disable-dev-shm-usage','--no-first-run','--no-default-browser-check','--remote-debugging-port=9223',`--user-data-dir=${profile}`,'about:blank'],{stdio:'ignore'});
+  child=spawn(process.env.CHROMIUM_PATH ?? '/usr/bin/chromium',['--headless','--no-sandbox','--disable-dev-shm-usage','--no-first-run','--no-default-browser-check','--remote-debugging-port=9223',`--user-data-dir=${profile}`,'about:blank'],{stdio:['ignore','ignore','pipe']});
+  child.stderr.on('data',data=>{browserStderr=(browserStderr+data.toString()).slice(-20000);});
   let pages;
   for(let i=0;i<100;i++){try{pages=await(await fetch('http://127.0.0.1:9223/json')).json();break;}catch{await delay(100);}}
   if(!pages)throw new Error('Chromium CDP no disponible');
   ws=new WebSocket(pages.find(p=>p.type==='page').webSocketDebuggerUrl);
   await new Promise((r,j)=>{ws.onopen=r;ws.onerror=j;});
+  ws.onclose=()=>{for(const p of pending.values())p.reject(new Error('Conexión Chromium cerrada'));pending.clear();};
   ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.id){const p=pending.get(m.id);if(p){pending.delete(m.id);m.error?p.reject(new Error(m.error.message)):p.resolve(m.result);}}else if(m.method==='Runtime.exceptionThrown')runtimeErrors.push(m.params.exceptionDetails.text);};
   await call('Runtime.enable');await call('Page.enable');await call('Network.enable');
   await call('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
   await call('Page.navigate',{url:'http://127.0.0.1:4173/'});await ready();
 }
 function call(method,params={}){return new Promise((resolve,reject)=>{const id=++seq;const timer=setTimeout(()=>{pending.delete(id);reject(new Error('CDP timeout '+method));},30000);pending.set(id,{resolve:v=>{clearTimeout(timer);resolve(v);},reject:e=>{clearTimeout(timer);reject(e);}});ws.send(JSON.stringify({id,method,params}));});}
-async function evaluate(expression){const r=await call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw new Error(r.exceptionDetails.exception?.description??r.exceptionDetails.text);return r.result.value;}
+async function evaluate(expression){const r=await call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true,replMode:true});if(r.exceptionDetails)throw new Error(r.exceptionDetails.exception?.description??r.exceptionDetails.text);return r.result.value;}
 // Segunda pestaña real del mismo perfil, para verificar Web Locks entre documentos.
 async function otherTab(){
   const {targetId}=await call('Target.createTarget',{url:'http://127.0.0.1:4173/'});
@@ -43,12 +46,16 @@ async function otherTab(){
   let id=0;const requests=new Map();
   socket.onmessage=e=>{const m=JSON.parse(e.data);if(m.id && requests.has(m.id)){const p=requests.get(m.id);requests.delete(m.id);m.error?p.reject(new Error(m.error.message)):p.resolve(m.result);}};
   const command=(method,params={})=>new Promise((resolve,reject)=>{const rid=++id;const timer=setTimeout(()=>{requests.delete(rid);reject(new Error('Timeout segunda pestaña'));},30000);requests.set(rid,{resolve:r=>{clearTimeout(timer);resolve(r)},reject:e=>{clearTimeout(timer);reject(e)}});socket.send(JSON.stringify({id:rid,method,params}));});
-  const evaluate=async expression=>{const r=await command('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw new Error(r.exceptionDetails.exception?.description??r.exceptionDetails.text);return r.result.value;};
+  const evaluate=async expression=>{const r=await command('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true,replMode:true});if(r.exceptionDetails)throw new Error(r.exceptionDetails.exception?.description??r.exceptionDetails.text);return r.result.value;};
   for(let i=0;i<100;i++){if(await evaluate("document.readyState==='complete' && location.protocol==='http:'"))break;await delay(50);}
   return {evaluate,close:async()=>{for(const p of requests.values())p.reject(new Error('Pestaña cerrada durante envío'));requests.clear();socket.close();await call('Target.closeTarget',{targetId});}};
 }
 async function ready(){for(let i=0;i<100;i++){if(await evaluate("!!document.querySelector('[data-tab=clientes]')"))return;await delay(50);}throw new Error('La aplicación no inició');}
-async function stop(){if(ws){ws.close();ws=null;}if(child && child.exitCode===null){await new Promise(r=>{child.once('exit',r);child.kill('SIGTERM');});}}
+async function stop(){
+  if(ws?.readyState===1)await call('Browser.close').catch(()=>{});
+  if(ws){ws.close();ws=null;}
+  if(child && child.exitCode===null)await new Promise(resolve=>{const timer=setTimeout(()=>child.kill('SIGKILL'),5000);child.once('exit',()=>{clearTimeout(timer);resolve();});child.kill('SIGTERM');});
+}
 let passed=0;
 async function test(name,expression){assert.equal(await evaluate(`(async()=>{${expression};return true})()`),true);passed++;console.log('PASS '+name);}
 try{
@@ -110,4 +117,10 @@ try{
   assert.deepEqual(runtimeErrors,[],'errores JavaScript');
   console.log(`${passed} pruebas aprobadas en Chromium real. Sin API remota ni Supabase.`);
   await writeFile(path.join(artifacts,'last-result.json'),JSON.stringify({date:new Date().toISOString(),browser:'Chromium headless',passed,runtimeErrors},null,2));
-}finally{await stop();await new Promise(r=>server.close(r));await rm(profile,{recursive:true,force:true});}
+}catch(error){
+  await writeFile(path.join(artifacts,'last-result.json'),JSON.stringify({date:new Date().toISOString(),browser:'Chromium headless',status:'failure',passed,error:error.stack,browserStderr,runtimeErrors},null,2));
+  throw error;
+}finally{
+  await stop();await new Promise(r=>server.close(r));
+  await rm(profile,{recursive:true,force:true,maxRetries:10,retryDelay:200}).catch(e=>console.error('No se pudo limpiar perfil temporal:',e.message));
+}
