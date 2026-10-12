@@ -2,18 +2,18 @@ import {construirSolicitud,verificarAcuse} from './contrato-pedidos.js';
 /** Transporte opcional. Tokens solo en memoria, sin almacenamiento ni URLs.
  * La cola IndexedDB existente conserva el pedido ante cualquier fallo. */
 export function createMayoristaClient({enabled=false,baseUrl,fetchImpl=globalThis.fetch}={}){
-  let token=null,principal=null;
+  let token=null,principal=null,generation=0;
   const gate=()=>{if(!enabled)throw new Error('Conexión Mayorista desactivada');const u=new URL(baseUrl);if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash||u.pathname!=='/')throw new Error('API HTTPS independiente inválida');return u.origin;};
-  async function request(path,body){
+  async function request(path,body,authorization=token){
     const url=gate()+path;
-    const r=await fetchImpl(url,{method:body?'POST':'GET',credentials:'omit',cache:'no-store',headers:{...(body?{'Content-Type':'application/json'}:{}),...(token?{Authorization:'Bearer '+token}:{})},...(body?{body:JSON.stringify(body)}:{})});
+    const r=await fetchImpl(url,{method:body?'POST':'GET',credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(20000),headers:{...(body?{'Content-Type':'application/json'}:{}),...(authorization?{Authorization:'Bearer '+authorization}:{})},...(body?{body:JSON.stringify(body)}:{})});
     let value;try{value=await r.json();}catch{throw new Error('Respuesta inválida del servidor');}
-    if(!r.ok){if(r.status===401||r.status===403){token=null;principal=null;}throw new Error(r.status===409?'Conflicto: revisar pedido conservado en el dispositivo':r.status===401?'Volvé a iniciar sesión':r.status===403?'Sin permisos para esta empresa':`Error de sincronización (${r.status})`);}
+    if(!r.ok){if((r.status===401||r.status===403)&&authorization===token){token=null;principal=null;}throw new Error(r.status===409?'Conflicto: revisar pedido conservado en el dispositivo':r.status===401?'Volvé a iniciar sesión':r.status===403?'Sin permisos para esta empresa':`Error de sincronización (${r.status})`);}
     return value;
   }
   return {
-    login:async credentials=>{token=null;principal=null;const session=await request('/auth/login',credentials);if(typeof session.accessToken!=='string'||!Number.isFinite(session.expiresAt)||session.expiresAt<=Date.now())throw new Error('Sesión inválida');token=session.accessToken;try{principal=await request('/me');if(principal.empresaId!==credentials.empresaId||!principal.vendedorId)throw new Error('Identidad fuera de la empresa');return {...principal};}catch(e){token=null;principal=null;throw e;}},
-    logout:async()=>{try{if(token)await request('/auth/logout',{});}finally{token=null;principal=null;}},
+    login:async credentials=>{const attempt=++generation;token=null;principal=null;const session=await request('/auth/login',credentials);if(attempt!==generation)throw new Error('Inicio de sesión cancelado');if(typeof session.accessToken!=='string'||!Number.isFinite(session.expiresAt)||session.expiresAt<=Date.now())throw new Error('Sesión inválida');token=session.accessToken;try{const verified=await request('/me');if(attempt!==generation)throw new Error('Inicio de sesión cancelado');if(verified.empresaId!==credentials.empresaId||!verified.vendedorId)throw new Error('Identidad fuera de la empresa');principal=verified;return {...principal};}catch(e){if(attempt===generation){token=null;principal=null;}throw e;}},
+    logout:async()=>{const previous=token;generation++;token=null;principal=null;if(previous)await request('/auth/logout',{},previous);},
     send:async order=>{gate();if(!token||!principal)throw new Error('Iniciá sesión antes de sincronizar');if(order.empresaId!==principal.empresaId||order.vendedorId!==principal.vendedorId)throw new Error('Pedido fuera de la sesión activa');return verificarAcuse(order,await request('/orders',construirSolicitud(order)));},
     visits:()=>request('/visits'),
     sendVisit:visit=>{if(!token||!principal||visit.empresaId!==principal.empresaId||visit.vendedorId!==principal.vendedorId)throw new Error('Iniciá sesión en la empresa de la visita');return request('/visits',visit);},

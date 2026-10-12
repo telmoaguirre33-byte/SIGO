@@ -14,7 +14,7 @@ for (const source of sources) {
   await mkdir(path.dirname(path.join(out, source)), { recursive: true });
   await writeFile(path.join(out, source + '.js'), js);
 }
-for (const name of ['index.html', 'offline-check.html', 'offline-check.mjs', 'admin.html', 'admin.mjs', 'cargas.html', 'cargas.mjs', 'connected.html', 'secure.html', 'app.mjs', 'storage.mjs', 'sample.mjs', 'styles.css', 'sw.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png']) await cp(path.join(root, name), path.join(out, name));
+for (const name of ['index.html', 'offline-check.html', 'offline-check.mjs', 'admin.html', 'admin.mjs', 'cargas.html', 'cargas.mjs', 'connected.html', 'secure.html', 'secure-config.mjs', 'secure.webmanifest', 'app.mjs', 'storage.mjs', 'sample.mjs', 'styles.css', 'sw.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png']) await cp(path.join(root, name), path.join(out, name));
 
 await cp(path.join(root,'../sync/http-client.mjs'),path.join(out,'sync/http-client.mjs'));
 await cp(path.join(root,'../admin'),path.join(out,'admin'),{recursive:true});
