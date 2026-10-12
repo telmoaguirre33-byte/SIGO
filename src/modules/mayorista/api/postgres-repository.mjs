@@ -1,3 +1,5 @@
+import {createHash} from 'node:crypto';
+import {createAdminState,saveSeller,saveRoute,assignCustomer,setGoal} from '../admin/model.mjs';
 import {createFulfillment,applyFulfillment} from '../admin/fulfillment.mjs';
 import {ApiError} from './receive-order.mjs';
 export function assertIsolatedPool(pool){
@@ -29,6 +31,25 @@ export function createPostgresRepository({enabled=false,pool}={}){
         insertOnce:async row=>{
           const result=await c.query(`INSERT INTO mayorista.pedidos(empresa_id,pedido_id,vendedor_id,cliente_id,creado_en,recibido_en,lineas,huella,estado) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9) ON CONFLICT(empresa_id,pedido_id) DO NOTHING RETURNING ${columns}`,[row.empresaId,row.pedidoId,row.vendedorId,row.clienteId,row.creadoEn,row.recibidoEn,JSON.stringify(row.lineas),row.hash,row.estado]);
           return normalize(result.rows[0])??tx.find(row.empresaId,row.pedidoId);
+        },
+        adminState:async()=>{
+          if(principal.rol!=='administrador')throw new ApiError(403,'Sin permisos administrativos');
+          return (await c.query('SELECT datos FROM mayorista.administracion WHERE empresa_id=$1',[principal.empresaId])).rows[0]?.datos??createAdminState(principal.empresaId);
+        },
+        adminCommand:async(command)=>{
+          if(principal.rol!=='administrador'||command.empresaId!==principal.empresaId)throw new ApiError(403,'Sin permisos administrativos');
+          const actions={vendedor:saveSeller,ruta:saveRoute,cliente:assignCustomer,objetivo:setGoal};
+          if(!Object.hasOwn(actions,command.operacion)||!command.input||Array.isArray(command.input)||typeof command.input!=='object')throw new ApiError(422,'Operación inválida');
+          const canonical=value=>value&&typeof value==='object'?(Array.isArray(value)?value.map(canonical):Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])]))):value;
+          const hash=createHash('sha256').update(JSON.stringify(canonical({operacion:command.operacion,input:command.input}))).digest('hex');
+          const old=(await c.query('SELECT huella,respuesta FROM mayorista.comandos_administrativos WHERE empresa_id=$1 AND comando_id=$2',[principal.empresaId,command.id])).rows[0];
+          if(old){if(old.huella!==hash)throw new ApiError(409,'UUID administrativo reutilizado');return old.respuesta;}
+          const state=await tx.adminState();if(command.version!==state.revision)throw new ApiError(409,'Edición concurrente');
+          let next;try{next=actions[command.operacion](state,{...command.input,empresaId:command.input.empresaId??principal.empresaId});}catch(e){throw new ApiError(422,e.message);}
+          next.revision++;
+          await c.query('INSERT INTO mayorista.administracion(empresa_id,revision,datos) VALUES($1,$2,$3::jsonb) ON CONFLICT(empresa_id) DO UPDATE SET revision=excluded.revision,datos=excluded.datos',[principal.empresaId,next.revision,JSON.stringify(next)]);
+          await c.query('INSERT INTO mayorista.comandos_administrativos(empresa_id,comando_id,huella,actor_id,respuesta) VALUES($1,$2,$3,$4,$5::jsonb)',[principal.empresaId,command.id,hash,principal.userId,JSON.stringify(next)]);
+          return next;
         },
         catalog:async()=>({empresaId:principal.empresaId,vendedorId:principal.vendedorId,descargadoEn:new Date().toISOString(),clientes:(await c.query('SELECT cliente_id AS id,nombre,ruta_id AS "rutaId" FROM mayorista.clientes WHERE empresa_id=$1 AND habilitado',[principal.empresaId])).rows,productos:(await c.query('SELECT producto_id AS id,nombre FROM mayorista.productos WHERE empresa_id=$1 AND activo',[principal.empresaId])).rows,precios:(await c.query('SELECT precio_id AS id,producto_id AS "productoId",unidades_base AS "unidadesBase",precio FROM mayorista.precios WHERE empresa_id=$1',[principal.empresaId])).rows}),
         fulfillment:async(command)=>{

@@ -41,6 +41,14 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
       const principal=await auth.verify(token);
       if(path==='/auth/logout'&&request.method==='POST'){await auth.signOut(token);return reply(200,{revoked:true});}
       if(path==='/me'&&request.method==='GET')return reply(200,principal);
+      if(path==='/admin/state'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.adminState()));
+      if(path==='/admin/commands'&&request.method==='POST'){
+        if(principal.rol!=='administrador')throw new ApiError(403,'Sin permisos administrativos');
+        if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');
+        const command=await smallJson(request);
+        if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(command?.id)||!Number.isSafeInteger(command.version))throw new ApiError(422,'Comando inválido');
+        return reply(200,await repository.withPrincipal(principal,tx=>tx.adminCommand(command)));
+      }
       if(path==='/catalog'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.catalog()));
       if(path==='/admin/fulfillment'&&request.method==='POST'){
         if(principal.rol!=='administrador')throw new ApiError(403,'Sin permisos administrativos');

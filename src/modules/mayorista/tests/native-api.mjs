@@ -25,7 +25,7 @@ try{
   await pool.query(`BEGIN; CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE SCHEMA auth;
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE SECURITY INVOKER AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE SECURITY INVOKER AS $$ SELECT coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb $$;
-    GRANT USAGE ON SCHEMA auth TO authenticated;${proposal}${(await readFile(new URL('../../../../docs/mayorista/sql/003_flujo_administrativo_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'')}${await readFile(new URL('./native-auth-schema.sql',import.meta.url),'utf8')}COMMIT;`);
+    GRANT USAGE ON SCHEMA auth TO authenticated;${proposal}${(await readFile(new URL('../../../../docs/mayorista/sql/003_flujo_administrativo_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'')}${(await readFile(new URL('../../../../docs/mayorista/sql/004_administracion_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/m,'').replace(/^rollback;$/m,'')}${await readFile(new URL('./native-auth-schema.sql',import.meta.url),'utf8')}COMMIT;`);
   await pool.query('INSERT INTO mayorista.vendedores VALUES($1,$2,$3,true)',[E,V,'Vendedor QA']);
   await pool.query('INSERT INTO mayorista.miembros VALUES($1,$2,$3,$4,true)',[E,U,V,'vendedor']);
   await pool.query('INSERT INTO mayorista.clientes(empresa_id,cliente_id,vendedor_id,nombre) VALUES($1,$2,$3,$4)',[E,C,V,'Cliente QA']);
@@ -51,6 +51,22 @@ try{
   assert.equal(Number((await pool.query('SELECT count(*) FROM mayorista.pedidos')).rows[0].count),202);
   await check('Vendedor no puede administrar pedidos',async()=>{assert.equal((await call('/admin/fulfillment',{token:token2,body:{empresaId:E,pedidoId:first.pedidoId}})).status,403);});
   await pool.query("UPDATE mayorista.miembros SET rol='administrador' WHERE user_id=$1",[U]);
+  await check('Vendedores, rutas, clientes y objetivos guardados bajo sesión administrativa',async()=>{
+    const route=randomUUID();let version=0,last;
+    for(const [operacion,input] of [['vendedor',{id:V,nombre:'Vendedor QA',zona:'Centro'}],['ruta',{id:route,nombre:'Ruta QA',zona:'Centro'}],['cliente',{id:C,nombre:'Cliente QA',direccion:'Calle QA',vendedorId:V,rutaId:route}],['objetivo',{vendedorId:V,importe:1000,visitas:3}]]){
+      last={id:randomUUID(),empresaId:E,version,operacion,input};const r=await call('/admin/commands',{token:token2,body:last});assert.equal(r.status,200);assert.equal(r.body.revision,++version);
+    }
+    const retry=await call('/admin/commands',{token:token2,body:last});assert.equal(retry.body.revision,4);
+    const state=await call('/admin/state',{token:token2});assert.equal(state.status,200);assert.equal(state.body.clientes[0].vendedorId,V);assert.equal(state.body.objetivos[0].importe,1000);
+    assert.equal(Number((await pool.query('SELECT count(*) FROM mayorista.comandos_administrativos')).rows[0].count),4);
+  });
+  await check('Administración concurrente y empresa falsa rechazadas sin borrar planificación',async()=>{
+    const base={id:randomUUID(),empresaId:E,version:4,operacion:'vendedor',input:{id:V,nombre:'Actualización QA',zona:'Centro'}};
+    const rs=await Promise.all([call('/admin/commands',{token:token2,body:base}),call('/admin/commands',{token:token2,body:{...base,id:randomUUID(),input:{...base.input,nombre:'Otra edición QA'}}})]);assert.deepEqual(rs.map(r=>r.status).sort(),[200,409]);
+    assert.equal((await call('/admin/commands',{token:token2,body:{...base,id:randomUUID(),empresaId:B}})).status,403);
+    assert.equal((await call('/admin/commands',{token:token2,body:{...base,id:randomUUID(),version:5,input:{...base.input,empresaId:B}}})).status,422);
+    assert.equal((await call('/admin/state',{token:token2})).body.clientes.length,1);
+  });
   await check('Administración autenticada prepara, despacha y entrega sin alterar acuse',async()=>{
     let version=0;
     for(const estado of ['preparacion','despachado','entregado']){
