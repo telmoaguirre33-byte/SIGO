@@ -18,7 +18,12 @@ export type PedidoLocal = {
   error?: string;
   confirmadoEn?: string;
 };
-export type ResultadoEnvio = { id: string; confirmadoEn: string };
+export type ResultadoEnvio = { id: string; empresaId: string; vendedorId: string; confirmadoEn: string };
+export function verificarResultadoEnvio(pedido: PedidoLocal, acuse: ResultadoEnvio): void {
+  if (!acuse || acuse.id !== pedido.id || acuse.empresaId !== pedido.empresaId ||
+      acuse.vendedorId !== pedido.vendedorId || !Number.isFinite(Date.parse(acuse.confirmadoEn)))
+    throw new Error("Acuse inválido: pedido, empresa, vendedor o fecha no coinciden");
+}
 export type EnviarPedido = (pedido: Readonly<PedidoLocal>) => Promise<ResultadoEnvio>;
 const PREFIX = "sigo-mayorista-pedidos-v1";
 const clave = (empresaId: string, vendedorId: string) =>
@@ -86,7 +91,7 @@ export class ColaPedidosLocal {
         this.reemplazar(actual);
         try {
           const acuse = await enviar(actual);
-          if (acuse.id !== actual.id || !acuse.confirmadoEn) throw new Error("Acuse inválido");
+          verificarResultadoEnvio(actual, acuse);
           this.reemplazar({ ...actual, estado: "sincronizado", confirmadoEn: acuse.confirmadoEn,
             actualizadoEn: new Date().toISOString() });
           enviados++;
@@ -103,3 +108,4 @@ export class ColaPedidosLocal {
     }
   }
 }
+

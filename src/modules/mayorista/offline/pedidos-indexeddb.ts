@@ -4,6 +4,7 @@
  * Almacenamiento transaccional de pedidos por empresa/vendedor.
  */
 import type { PedidoLocal, LineaPedido, EnviarPedido } from "./pedidos-locales";
+import { verificarResultadoEnvio } from "./pedidos-locales";
 
 const DB_NAME = "sigo-mayorista-offline-v1";
 const STORE = "pedidos";
@@ -56,23 +57,23 @@ export class PedidosIndexedDB {
   async listar(): Promise<PedidoLocal[]> {
     return operar("readonly", store => store.index("porVendedor").getAll([this.empresaId, this.vendedorId]));
   }
-  async crear(clienteId: string, lineas: LineaPedido[], id = crypto.randomUUID()): Promise<PedidoLocal> {
-    if (!clienteId || !lineas.length || lineas.some(l =>
-      !l.productoId || !Number.isSafeInteger(l.cantidad) || l.cantidad <= 0 ||
+  async crear(clienteId: string, lineas: LineaPedido[], id: string = crypto.randomUUID()): Promise<PedidoLocal> {
+    if (!clienteId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) || !Array.isArray(lineas) || !lineas.length || lineas.some(l =>
+      !l?.productoId || !Number.isSafeInteger(l.cantidad) || l.cantidad <= 0 ||
       !Number.isFinite(l.precioUnitario) || l.precioUnitario < 0
     )) throw new Error("Pedido inválido");
     const now = new Date().toISOString();
     const pedido: PedidoLocal = {
       id, empresaId: this.empresaId, vendedorId: this.vendedorId,
       clienteId, creadoEn: now, actualizadoEn: now,
-      lineas: lineas.map(l => ({...l})), estado: "pendiente", intentos: 0
+      lineas: lineas.map(l => ({productoId: l.productoId, cantidad: l.cantidad, precioUnitario: l.precioUnitario})), estado: "pendiente", intentos: 0
     };
     try { await operar("readwrite", store => store.add(pedido)); }
     catch (error) {
       if (!(error instanceof DOMException) || error.name !== "ConstraintError") throw error;
       const existente = await operar<PedidoLocal | undefined>("readonly", store => store.get(id));
       if (!existente || existente.empresaId !== this.empresaId || existente.vendedorId !== this.vendedorId ||
-          existente.clienteId !== clienteId || JSON.stringify(existente.lineas) !== JSON.stringify(pedido.lineas))
+          existente.clienteId !== clienteId || JSON.stringify(existente.lineas.map(l => ({productoId: l.productoId, cantidad: l.cantidad, precioUnitario: l.precioUnitario}))) !== JSON.stringify(pedido.lineas))
         throw new Error("Conflicto de identificador de pedido");
       return existente;
     }
@@ -114,7 +115,7 @@ export class PedidosIndexedDB {
         try {
           // Reintentar con el mismo UUID; la API futura DEBE implementar idempotencia.
           const acuse = await enviar(actual);
-          if (acuse.id !== actual.id || !Number.isFinite(Date.parse(acuse.confirmadoEn))) throw new Error("Acuse inválido");
+          verificarResultadoEnvio(actual, acuse);
           await this.actualizar({...actual, estado: "sincronizado", confirmadoEn: acuse.confirmadoEn, actualizadoEn: new Date().toISOString()});
           enviados++;
         } catch (error) {

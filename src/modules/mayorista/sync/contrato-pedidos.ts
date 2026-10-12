@@ -1,4 +1,4 @@
-import type { PedidoLocal } from "../offline/pedidos-locales";
+import type { PedidoLocal, ResultadoEnvio } from "../offline/pedidos-locales";
 
 /**
  * Contrato de recepción idempotente. Implementación futura en API aislada de Mayorista.
@@ -15,6 +15,7 @@ export type PedidoRemoto = {
 export type AcuseRemoto = {
   pedidoId: string;
   empresaId: string;
+  vendedorId: string;
   recibidoEn: string;
   estado: "recibido" | "requiere_revision";
 };
@@ -30,12 +31,13 @@ export function construirSolicitud(pedido: PedidoLocal): PedidoRemoto {
     lineas: pedido.lineas.map(l => ({...l}))
   };
 }
-export function verificarAcuse(pedido: PedidoLocal, acuse: AcuseRemoto): { id: string; confirmadoEn: string } {
-  if (acuse.pedidoId !== pedido.id || acuse.empresaId !== pedido.empresaId ||
+export function verificarAcuse(pedido: PedidoLocal, acuse: AcuseRemoto): ResultadoEnvio {
+  if (acuse.pedidoId !== pedido.id || acuse.empresaId !== pedido.empresaId || acuse.vendedorId !== pedido.vendedorId ||
       !Number.isFinite(Date.parse(acuse.recibidoEn)) ||
       !["recibido", "requiere_revision"].includes(acuse.estado)) {
     throw new Error("El servidor no confirmó correctamente el pedido");
   }
   // 'requiere_revision' significa recibido, no aprobado para despacho ni facturación.
-  return { id: pedido.id, confirmadoEn: acuse.recibidoEn };
+  return { id: pedido.id, empresaId: pedido.empresaId, vendedorId: pedido.vendedorId, confirmadoEn: acuse.recibidoEn };
 }
+

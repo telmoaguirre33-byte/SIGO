@@ -72,8 +72,9 @@ export async function demoReceive(scope, pedido, catalogo) {
     const r = s.get(key);
     r.onsuccess = () => {
       if (r.result && r.result.fingerprint !== fingerprint) {tx.abort(); return;}
-      const receipt = r.result ?? {id: pedido.id, confirmadoEn: new Date().toISOString(), fingerprint};
-      s.put(receipt, key); done(receipt);
+      const receipt = r.result ?? {id: pedido.id, empresaId: scope.empresaId, vendedorId: scope.vendedorId, confirmadoEn: new Date().toISOString(), fingerprint};
+      const scopedReceipt = {...receipt, empresaId: scope.empresaId, vendedorId: scope.vendedorId};
+      s.put(scopedReceipt, key); done(scopedReceipt);
     };
   });
 }

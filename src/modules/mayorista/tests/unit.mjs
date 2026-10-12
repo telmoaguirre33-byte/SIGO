@@ -20,9 +20,9 @@ test('catálogo vencido requiere advertencia',()=>assert.ok(revisarPedido(order,
 test('fecha inválida no aparenta catálogo reciente',()=>assert.equal(antiguedadCatalogoHoras({...catalog,descargadoEn:'inválida'}),Infinity));
 test('solicitud preserva UUID y copia líneas',()=>{const request=construirSolicitud(order);assert.equal(request.pedidoId,order.id);request.lineas[0].cantidad=10;assert.equal(order.lineas[0].cantidad,1);});
 test('acuse de empresa distinta rechazado',()=>assert.throws(()=>verificarAcuse(order,{pedidoId:order.id,empresaId:'otra',recibidoEn:new Date().toISOString(),estado:'recibido'})));
-test('acuse de pedido distinto rechazado',()=>assert.throws(()=>verificarAcuse(order,{pedidoId:'otro',empresaId:order.empresaId,recibidoEn:new Date().toISOString(),estado:'recibido'})));
-test('acuse con fecha inválida rechazado',()=>assert.throws(()=>verificarAcuse(order,{pedidoId:order.id,empresaId:order.empresaId,recibidoEn:'inválida',estado:'recibido'})));
-test('acuse válido conserva identidad',()=>assert.equal(verificarAcuse(order,{pedidoId:order.id,empresaId:order.empresaId,recibidoEn:new Date().toISOString(),estado:'recibido'}).id,order.id));
+test('acuse de pedido distinto rechazado',()=>assert.throws(()=>verificarAcuse(order,{pedidoId:'otro',empresaId:order.empresaId,vendedorId:order.vendedorId,recibidoEn:new Date().toISOString(),estado:'recibido'})));
+test('acuse con fecha inválida rechazado',()=>assert.throws(()=>verificarAcuse(order,{pedidoId:order.id,empresaId:order.empresaId,vendedorId:order.vendedorId,recibidoEn:'inválida',estado:'recibido'})));
+test('acuse válido conserva identidad',()=>assert.equal(verificarAcuse(order,{pedidoId:order.id,empresaId:order.empresaId,vendedorId:order.vendedorId,recibidoEn:new Date().toISOString(),estado:'recibido'}).id,order.id));
 test('la cola exige empresa y vendedor',()=>{assert.throws(()=>new PedidosIndexedDB('','v'));assert.throws(()=>new PedidosIndexedDB('e',''));});
 test('la demo no importa API, Supabase ni componentes de SIGO',async()=>{for(const file of ['app.mjs','storage.mjs','sample.mjs']){const code=await readFile(new URL('../demo/'+file,import.meta.url),'utf8');assert.doesNotMatch(code,/(?:import\s.*from|import\()[^\n]*(?:supabase|App\.tsx|\/api\/|Caja|Ventas|Sovi)/i);}});
 test('cache offline limitado al origen y alcance de la demo',async()=>{const code=await readFile(new URL('../demo/sw.js',import.meta.url),'utf8');assert.ok(code.includes("url.origin !== self.location.origin"));assert.ok(code.includes('self.registration.scope'));});

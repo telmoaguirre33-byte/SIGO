@@ -18,7 +18,7 @@ export function revisarPedido(pedido: PedidoLocal, catalogo: SnapshotCatalogo | 
     errores.push("Faltan identificadores obligatorios");
   if (!pedido.lineas.length) errores.push("El pedido está vacío");
   for (const l of pedido.lineas) {
-    if (!l.productoId || !Number.isFinite(l.cantidad) || l.cantidad <= 0 ||
+    if (!l.productoId || !Number.isSafeInteger(l.cantidad) || l.cantidad <= 0 ||
         !Number.isFinite(l.precioUnitario) || l.precioUnitario < 0)
       errores.push("Renglón con cantidad o precio inválido");
   }
@@ -33,8 +33,9 @@ export function revisarPedido(pedido: PedidoLocal, catalogo: SnapshotCatalogo | 
         errores.push("Producto no habilitado: " + linea.productoId);
     }
     const edad = (Date.now() - Date.parse(catalogo.descargadoEn)) / 3_600_000;
-    if (!Number.isFinite(edad) || edad > maxHorasCatalogo)
+    if (!Number.isFinite(edad) || edad < -5 / 60 || edad > maxHorasCatalogo)
       advertencias.push("Catálogo desactualizado; los precios y el stock deberán revisarse al sincronizar");
   }
   return { valido: errores.length === 0, errores, advertencias };
 }
+

@@ -69,6 +69,6 @@ export async function leerCatalogo(empresaId: string, vendedorId: string): Promi
 }
 export function antiguedadCatalogoHoras(snapshot: SnapshotCatalogo, ahora = Date.now()): number {
   const ms = Date.parse(snapshot.descargadoEn);
-  return Number.isFinite(ms) ? Math.max(0, (ahora - ms) / 3_600_000) : Infinity;
+  return Number.isFinite(ms) && ms <= ahora + 300_000 ? Math.max(0, (ahora - ms) / 3_600_000) : Infinity;
 }
 
