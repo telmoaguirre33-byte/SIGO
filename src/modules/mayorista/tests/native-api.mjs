@@ -50,6 +50,9 @@ try{
   results.push(...await verifyNativeBrowsers({handler,password,empresaId:E,vendedorId:V,clienteId:C,productoId:P}));
   assert.equal(Number((await pool.query('SELECT count(*) FROM mayorista.pedidos')).rows[0].count),202);
   await check('Vendedor no puede administrar pedidos',async()=>{assert.equal((await call('/admin/fulfillment',{token:token2,body:{empresaId:E,pedidoId:first.pedidoId}})).status,403);});
+  await check('RLS rechaza escritura administrativa directa de un vendedor',async()=>{
+    const c=await pool.connect();try{await c.query('BEGIN');await c.query('SET LOCAL ROLE authenticated');await c.query("SELECT set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claims',$2,true)",[U,JSON.stringify({sub:U,is_anonymous:false})]);await assert.rejects(()=>c.query('INSERT INTO mayorista.administracion(empresa_id,revision,datos) VALUES($1,1,$2::jsonb)',[E,JSON.stringify({empresaId:E})]),e=>e.code==='42501');}finally{await c.query('ROLLBACK');c.release();}
+  });
   await pool.query("UPDATE mayorista.miembros SET rol='administrador' WHERE user_id=$1",[U]);
   await check('Vendedores, rutas, clientes y objetivos guardados bajo sesión administrativa',async()=>{
     const route=randomUUID();let version=0,last;
@@ -66,6 +69,9 @@ try{
     assert.equal((await call('/admin/commands',{token:token2,body:{...base,id:randomUUID(),empresaId:B}})).status,403);
     assert.equal((await call('/admin/commands',{token:token2,body:{...base,id:randomUUID(),version:5,input:{...base.input,empresaId:B}}})).status,422);
     assert.equal((await call('/admin/state',{token:token2})).body.clientes.length,1);
+  });
+  await check('RLS oculta configuración administrativa de otra empresa',async()=>{
+    await pool.query('INSERT INTO mayorista.administracion(empresa_id,revision,datos) VALUES($1,1,$2::jsonb)',[B,JSON.stringify({empresaId:B})]);const c=await pool.connect();try{await c.query('BEGIN');await c.query('SET LOCAL ROLE authenticated');await c.query("SELECT set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claims',$2,true)",[U,JSON.stringify({sub:U,is_anonymous:false})]);assert.equal((await c.query('SELECT empresa_id FROM mayorista.administracion WHERE empresa_id=$1',[B])).rows.length,0);}finally{await c.query('ROLLBACK');c.release();}
   });
   await check('Administración autenticada prepara, despacha y entrega sin alterar acuse',async()=>{
     let version=0;

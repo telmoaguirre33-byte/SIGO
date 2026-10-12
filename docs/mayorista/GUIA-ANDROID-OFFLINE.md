@@ -10,7 +10,7 @@ Preparar los archivos en una máquina de pruebas con Node 24:
 
 ```sh
 cd src/modules/mayorista/demo
-npm install --ignore-scripts
+npm ci --ignore-scripts --no-audit --no-fund
 npm run typecheck
 npm run build
 npm run test:unit
@@ -20,7 +20,7 @@ npm run test:recovery
 npm test
 ```
 
-La instalación genera lockfile: conservarlo para futuras ejecuciones con `npm ci`. El build solamente transforma TypeScript; `typecheck` debe aprobar por separado. La suite `npm test` requiere Chromium y permiso de sockets localhost. Puede configurarse un entorno de pruebas permitido; no se deben modificar las restricciones de sandbox o red del entorno para eludirlas.
+El lockfile ya está incorporado. El build solamente transforma TypeScript; `typecheck` debe aprobar por separado. La suite `npm test` requiere Chromium y permiso de sockets localhost. Puede configurarse un entorno de pruebas permitido; no se deben modificar las restricciones de sandbox o red del entorno para eludirlas.
 
 Los archivos generados quedan en `demo/dist`. Esta continuación **no los publicó**. Una futura habilitación HTTPS necesita una autorización aparte sobre el proyecto existente.
 
@@ -99,3 +99,19 @@ Fecha/hora; commit bajo prueba; URL/origen; modelo Android; versión Chrome; per
 | Servidor, JWT y RLS | No evaluados por diagnóstico local |
 
 Estado actual de esta guía: preparada; las pruebas Android no fueron ejecutadas desde el entorno Codex.
+
+## 7. GPS físico y mapa
+
+En el Android real, con permiso de ubicación habilitado, abrir clientes/mapa, localizar el dispositivo y registrar una visita. Comparar el punto con la ubicación conocida, anotar precisión y confirmar el destino del cliente en el mapa. Repetir con permiso denegado, ubicación apagada y sin red: la visita debe conservarse y mostrar la falta de ubicación; los mapas externos pueden necesitar internet. No informar navegación de mapa offline como aprobada si sus tiles no estuvieron disponibles.
+
+Repetir la prueba fuera del edificio y con señal débil. GPS emulado de CI cubre coordenadas, denegación y posición no disponible; no prueba el sensor ni la precisión del teléfono.
+
+## 8. Dos Android y API real
+
+Este ensayo exige un backend persistente de pruebas autorizado y una pantalla conectada a él; la demo actual conserva su simulador. No enviar datos comerciales a un destino improvisado. Ver [BACKEND-AISLADO.md](BACKEND-AISLADO.md).
+
+Con esas condiciones resueltas, iniciar sesión en ambos teléfonos, descargar el catálogo propio y guardar 100 pedidos ficticios en cada uno. Registrar los 200 UUID. Desconectar uno, cerrar/reabrirlo y verificar contenidos; recuperar red y sincronizar ambos simultáneamente. Consultar la base aislada: debe existir exactamente una recepción por UUID y todos los acuses deben coincidir con empresa/vendedor.
+
+Interrumpir una respuesta después del commit del servidor, repetir el mismo UUID y comprobar el mismo acuse. Probar un UUID con contenido diferente y un pedido de otra empresa: rechazo sin pérdida local. Revocar una sesión y una membresía desde la administración de QA; el dispositivo debe pedir autenticación y conservar su cola.
+
+El CI ya usa dos perfiles Chromium independientes y API/PostgreSQL reales; ese resultado sigue siendo distinto de estos dos teléfonos físicos.
