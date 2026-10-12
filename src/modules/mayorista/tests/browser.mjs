@@ -10,7 +10,11 @@ const profile=await mkdtemp('/tmp/sigo-mayorista-browser-');
 const server=createServer(async(req,res)=>{
   try{const url=new URL(req.url,'http://localhost');const name=url.pathname==='/'?'index.html':decodeURIComponent(url.pathname).slice(1);const file=path.resolve(root,name);if(!file.startsWith(root+path.sep))throw new Error('path');const content=await readFile(file);res.setHeader('Content-Type',({'.mjs':'text/javascript','.js':'text/javascript','.html':'text/html','.css':'text/css','.svg':'image/svg+xml','.webmanifest':'application/manifest+json'})[path.extname(file)]??'text/plain');res.end(content);}catch{res.writeHead(404);res.end('Not found');}
 });
-await new Promise(r=>server.listen(4173,'127.0.0.1',r));
+await new Promise((resolve,reject)=>{
+  const timer=setTimeout(()=>{server.close();reject(new Error('BLOCKED: servidor local no pudo abrirse en 5 segundos; revisar permisos del entorno'));},5000);
+  server.once('error',e=>{clearTimeout(timer);reject(e);});
+  server.listen(4173,'127.0.0.1',()=>{clearTimeout(timer);resolve();});
+}).catch(async e=>{await rm(profile,{recursive:true,force:true});throw e;});
 let child, ws, seq=0;
 const pending=new Map(), runtimeErrors=[];
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
