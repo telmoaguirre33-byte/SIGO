@@ -47,6 +47,8 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
       if(operational&&path==='/operations/loads'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.assignedLoads()));
       if(operational&&path==='/operations/loads'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const input=await smallJson(request);return reply(200,await repository.withPrincipal(principal,tx=>tx.publishLoad(input)));}
       if(operational&&path==='/operations/loads/commands'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const command=await smallJson(request,256*1024);return reply(200,await repository.withPrincipal(principal,tx=>tx.assignedLoadCommand(command)));}
+      if(operational&&path==='/admin/catalog'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.masterState()));
+      if(operational&&path==='/admin/catalog/commands'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const command=await smallJson(request);return reply(200,await repository.withPrincipal(principal,tx=>tx.masterCommand(command)));}
       if(path==='/admin/state'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.adminState()));
       if(path==='/admin/commands'&&request.method==='POST'){
         if(!administrative(principal))throw new ApiError(403,'Sin permisos administrativos');
