@@ -30,9 +30,9 @@ Se corrigieron las rutas absolutas del ejecutor de navegador para que su evidenc
 ## Pendientes de cierre
 
 - Regresión adicional de Compras pendiente por un fallo fuera del módulo; TypeScript, build SIGO y suite real Mayorista ya aprobaron en CI (ver evidencia).
-- Auth real en ambiente aislado, pertenencia por empresa, repositorio transaccional y RLS ejecutada.
+- Ambiente persistente autorizado y login comercial. Auth nativa, API transaccional y RLS ya se probaron en PostgreSQL efímero; ver BACKEND-AISLADO.md y CONTINUACION-PR72-20261012.md.
 - Cifrado integrado, revocación y recuperación en dispositivos comerciales.
-- Conectar administración/rendiciones a persistencia autenticada conforme al organigrama; la administración actual y las rendiciones nuevas son demo local.
+- Conectar las pantallas y rendiciones conforme al organigrama. Planificación y flujo de pedidos ya tienen persistencia autenticada probada; la UI actual sigue siendo demo local y las asignaciones no publican catálogo.
 - Dos dispositivos, GPS físico, instalación Android, modo avión y cierre/reinicio físico.
 - Destino HTTPS de demo autorizado: no crear ni reactivar recursos ni quitar SSO sin aprobación.
 
@@ -61,11 +61,11 @@ https://github.com/telmoaguirre33-byte/SIGO/actions/runs/38285568991/artifacts/1
 SHA256 del ZIP: `b1586c8562a96e124e16295feda1c1f8860dc9793933b46a903295fcab091fd1`.
 Expiración informada del artifact: 2026-10-19. Los logs del workflow y este informe conservan la referencia a la ejecución. El lockfile generado se recuperó del log público del mismo job y se incorpora para usar `npm ci` reproducible.
 
-## Límites de los nuevos componentes
+## Límites de los componentes en la entrega anterior
 
 `api/test-project-auth.mjs` consulta `auth/v1/user` del proyecto de prueba aprobado y exige comprobar sesión activa y membresía vigente mediante adaptadores. Está desactivado y no tiene URL/ref/clave reales configuradas. Las ocho pruebas HTTP/auth usan un fetch simulado y tokens ficticios; no acreditan login real.
 
-`api/http-handler.mjs` prepara POST JSON, origen HTTPS exacto, bearer, rate limiter obligatorio, límite de cuerpo 256 KiB, errores sin datos internos y no-store. No está montado en SIGO ni publicado. Sigue pendiente el repositorio transaccional real y la conexión UI/API/configuración por empresa en un ambiente autorizado.
+`api/http-handler.mjs` prepara POST JSON, origen HTTPS exacto, bearer, rate limiter obligatorio, límite de cuerpo 256 KiB, errores sin datos internos y no-store. No está montado en SIGO ni publicado. En esa entrega estaba pendiente el repositorio transaccional. La continuación incorpora PostgreSQL real aislado; siguen pendientes conexión UI/API/configuración por empresa y ambiente comercial autorizado.
 
 Las rendiciones guardan registros demo con centavos, validación de vendedor/empresa y revisión administrativa local. No registran cobros en SIGO, ni alteran cuentas corrientes, ventas, stock o facturación. La pantalla de administración conserva la etiqueta de demo; su actor administrativo es ficticio.
 
