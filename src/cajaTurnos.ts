@@ -34,7 +34,16 @@ export type CajaAjusteSigo = {
 };
 
 function errorCaja(error: unknown): Error {
-  const raw = error instanceof Error ? error.message : String(error ?? "");
+  const record = error && typeof error === "object" ? error as Record<string, unknown> : null;
+  const code = typeof record?.code === "string" ? record.code : "";
+  const message = typeof record?.message === "string" ? record.message : "";
+  const details = typeof record?.details === "string" ? record.details : "";
+  const raw = error instanceof Error ? error.message
+    : typeof error === "string" ? error
+    : [code, message, details].filter(Boolean).join(" ");
+  if (code === "PGRST205" || /caja_(turnos|ajustes|movimientos)_sigo/i.test(raw) && /not found|schema cache|does not exist|could not find|relation/i.test(raw)) {
+    return new Error("La estructura de Caja aún no está disponible en este entorno de pruebas. Aplicá la migración de caja y volvé a cargar.");
+  }
   const messages: Array<[string, string]> = [
     ["CASH_SESSION_ALREADY_OPEN", "Ya existe una apertura activa para esta caja."],
     ["CASH_SESSION_REQUIRED", "Abrí la caja antes de registrar ventas o cobros."],
@@ -46,7 +55,7 @@ function errorCaja(error: unknown): Error {
     ["CASH_REASON_REQUIRED", "Escribí un motivo de al menos 3 caracteres."],
     ["AUTH_REQUIRED", "La sesión venció. Volvé a ingresar a SIGO."],
   ];
-  return new Error(messages.find(([code]) => raw.includes(code))?.[1] || raw || "No se pudo completar la operación de caja.");
+  return new Error(messages.find(([knownCode]) => raw.includes(knownCode))?.[1] || raw || "No se pudo completar la operación de caja.");
 }
 
 export async function obtenerTurnoAbiertoSigo(empresaId: string, cajaId = "principal"): Promise<CajaTurnoSigo | null> {
