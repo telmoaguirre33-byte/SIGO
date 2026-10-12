@@ -10,7 +10,7 @@ const derive=promisify(scrypt),uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[
 export function createUserDirectory({pool,databasePolicy}){
  async function transaction(principal,write,fn){
   (databasePolicy?.assertPool??assertIsolatedPool)(pool);const c=await pool.connect();try{
-   await c.query('BEGIN ISOLATION LEVEL SERIALIZABLE');const actor=(await c.query('SELECT m.rol FROM mayorista.miembros m JOIN mayorista.empresas e USING(empresa_id) WHERE m.empresa_id=$1 AND m.user_id=$2 AND m.activo AND e.habilitada FOR UPDATE OF m',[principal.empresaId,principal.userId])).rows[0];
+   await c.query('BEGIN ISOLATION LEVEL SERIALIZABLE');const actor=(await c.query('SELECT m.rol FROM mayorista.miembros m JOIN mayorista.empresas e USING(empresa_id) JOIN mayorista_private.usuarios u ON u.user_id=m.user_id JOIN mayorista_private.sesiones s ON s.user_id=m.user_id AND s.empresa_id=m.empresa_id WHERE m.empresa_id=$1 AND m.user_id=$2 AND s.session_id=$3 AND m.activo AND u.activo AND e.habilitada AND NOT s.revocada AND s.vence_en>now() FOR UPDATE OF m,s,u',[principal.empresaId,principal.userId,principal.sessionId])).rows[0];
    if(!actor||!(write?['gerencia']:['gerencia','administracion']).includes(actor.rol))throw new ApiError(403,'Gestión de accesos no autorizada');const result=await fn(c);await c.query('COMMIT');return result;
   }catch(e){await c.query('ROLLBACK').catch(()=>{});if(e.code==='23503')throw new ApiError(422,'Vendedor de otra empresa o inexistente');if(['23505','40001','40P01'].includes(e.code))throw new ApiError(409,'Edición concurrente o usuario no disponible');throw e;}finally{c.release();}
  }

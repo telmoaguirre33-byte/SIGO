@@ -12,7 +12,7 @@ async function smallJson(request,limit=4096){
   try{return JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw new ApiError(422,'JSON inválido');}
 }
 
-/** Backend real exclusivamente local/efímero. No monta rutas en SIGO.
+/** Backend Mayorista: localhost QA o Railway QA explícito con TLS verificado. No monta rutas en SIGO.
  * Llaves Ed25519 y rate limiter son obligatorios; no contiene credenciales remotas. */
 export function createIsolatedService({enabled=false,pool,privateKey,publicKey,origin,issuer,rateLimit,inventoryRequired=false,accountsEnabled=false,databasePolicy,operational=false}={}){
   if(databasePolicy&&!operational)throw new ApiError(503,'Railway requiere permisos operativos persistentes');
@@ -49,6 +49,8 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
       if(operational&&path==='/operations/loads'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.assignedLoads()));
       if(operational&&path==='/operations/loads'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const input=await smallJson(request);return reply(200,await repository.withPrincipal(principal,tx=>tx.publishLoad(input)));}
       if(operational&&path==='/operations/loads/commands'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const command=await smallJson(request,256*1024);return reply(200,await repository.withPrincipal(principal,tx=>tx.assignedLoadCommand(command)));}
+      if(operational&&path==='/admin/reports'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.managementReport()));
+      if(operational&&path==='/accounts/commands'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const command=await smallJson(request);return reply(200,await repository.withPrincipal(principal,tx=>tx.collectionCommand(command)));}
       if(operational&&path==='/admin/users'&&request.method==='GET')return reply(200,await directory.list(principal));
       if(operational&&path==='/admin/users/commands'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const command=await smallJson(request);return reply(200,await directory.command(principal,command));}
       if(operational&&path==='/admin/catalog'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.masterState()));

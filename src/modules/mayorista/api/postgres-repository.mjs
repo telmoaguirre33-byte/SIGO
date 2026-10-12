@@ -1,3 +1,5 @@
+import {createCollectionsTransaction} from '../commercial/collections.mjs';
+import {createReportTransaction} from '../commercial/reports.mjs';
 import {createMasterTransaction,offerPrice} from '../commercial/master-data.mjs';
 import {createAssignedLoadsTransaction} from '../commercial/assigned-loads.mjs';
 import {administrative} from '../security/company-roles.mjs';
@@ -77,12 +79,13 @@ export function createPostgresRepository({enabled=false,pool,inventoryRequired=f
       };
       Object.assign(tx,createVisitsTransaction({query:(sql,args)=>c.query(sql,args),principal}));
       Object.assign(tx,createCargasTransaction({query:(sql,args)=>c.query(sql,args),principal,findOrder:tx.find,fulfillment:tx.fulfillment}));
-      if(operational){Object.assign(tx,createMasterTransaction({query:(sql,args)=>c.query(sql,args),principal}));tx.catalog=tx.operationalCatalog;}
+      if(operational){Object.assign(tx,createMasterTransaction({query:(sql,args)=>c.query(sql,args),principal}));tx.catalog=tx.operationalCatalog;Object.assign(tx,createCollectionsTransaction({query:(sql,args)=>c.query(sql,args),principal}),createReportTransaction({query:(sql,args)=>c.query(sql,args),principal}));}
       if(operational){Object.assign(tx,createAssignedLoadsTransaction({query:(sql,args)=>c.query(sql,args),principal,legacyLoads:tx.cargasState,onChange:async(before,after,command)=>{if(accountsEnabled&&['entregar','devolver','revisar_rendicion'].includes(command.tipo))await tx.accountLoadChanges(before,after,command);if(inventoryRequired){const tipo={verificar:'reserva',salir:'salida',cerrar:'devolucion'}[command.tipo];if(tipo)await createInventoryTransaction({query:(sql,args)=>c.query(sql,args),principal,loads:async()=>after}).inventoryCommand({id:command.id,empresaId:principal.empresaId,tipo,input:{cargaId:command.input.cargaId}});}}}));const apply=tx.cargasCommand;tx.cargasCommand=async command=>{if(command.input?.cargaId&&(await c.query('SELECT carga_id FROM mayorista.cargas_operativas WHERE empresa_id=$1 AND carga_id=$2',[principal.empresaId,command.input.cargaId])).rows.length)throw new ApiError(409,'Carga publicada: usar circuito asignado');return apply(command);};}
       Object.assign(tx,createInventoryTransaction({query:(sql,args)=>c.query(sql,args),principal,loads:tx.cargasState}));
       Object.assign(tx,createAccountsTransaction({query:(sql,args)=>c.query(sql,args),principal}));
       if(accountsEnabled){const apply=tx.cargasCommand;tx.cargasCommand=async command=>{const before=await tx.cargasState(),after=await apply(command);await tx.accountLoadChanges(before,after,command);return after;};}
       if(inventoryRequired){const apply=tx.cargasCommand;tx.cargasCommand=async command=>{const state=await apply(command);const tipo={verificar:'reserva',salir:'salida',cerrar:'devolucion'}[command.tipo];if(tipo)await tx.inventoryCommand({id:command.id,empresaId:principal.empresaId,tipo,input:{cargaId:command.input.cargaId}});return state;};}
+      if(operational)tx.accounts=tx.collectionsAccounts;
       const result=await fn(tx);await c.query('COMMIT');return result;
     }catch(e){await c.query('ROLLBACK').catch(()=>{});if(!['40001','40P01','23505'].includes(e.code)||attempt===3)throw e;}finally{c.release();}
     }

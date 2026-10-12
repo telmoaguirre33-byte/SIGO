@@ -28,6 +28,8 @@ export function createMayoristaClient({enabled=false,baseUrl,fetchImpl=globalThi
     assignedLoads:()=>request('/operations/loads'),
     publishLoad:input=>request('/operations/loads',input),
     loadCommand:command=>request('/operations/loads/commands',command),
+    report:()=>request('/admin/reports'),
+    collectionCommand:command=>request('/accounts/commands',command),
     accounts:()=>request('/accounts'),
     inventory:()=>request('/inventory'),
     inventoryCommand:command=>request('/inventory/commands',command),
