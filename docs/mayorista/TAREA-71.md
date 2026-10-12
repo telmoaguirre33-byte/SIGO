@@ -29,11 +29,50 @@ Se corrigieron las rutas absolutas del ejecutor de navegador para que su evidenc
 
 ## Pendientes de cierre
 
-- Resultado de TypeScript y suite real en CI; regresión del build principal SIGO y diff del PR.
+- Regresión adicional de Compras pendiente por un fallo fuera del módulo; TypeScript, build SIGO y suite real Mayorista ya aprobaron en CI (ver evidencia).
 - Auth real en ambiente aislado, pertenencia por empresa, repositorio transaccional y RLS ejecutada.
 - Cifrado integrado, revocación y recuperación en dispositivos comerciales.
-- Completar administración/rendición conforme al organigrama; la administración actual es demo local.
+- Conectar administración/rendiciones a persistencia autenticada conforme al organigrama; la administración actual y las rendiciones nuevas son demo local.
 - Dos dispositivos, GPS físico, instalación Android, modo avión y cierre/reinicio físico.
 - Destino HTTPS de demo autorizado: no crear ni reactivar recursos ni quitar SSO sin aprobación.
 
 La tarea permanece abierta. El PR se entrega como borrador, sin merge. No se promete URL operativa ni finalización mientras falten estos puntos.
+
+
+## Evidencia posterior de CI
+
+PR borrador: https://github.com/telmoaguirre33-byte/SIGO/pull/72
+
+Commit de código verificado: `cc9543f4a87666246aafda922c42ff649613b483`.
+Workflow Mayorista: https://github.com/telmoaguirre33-byte/SIGO/actions/runs/38285568991
+
+- TypeScript aislado: aprobado.
+- Generación aislada: aprobada.
+- 77 pruebas unitarias: 17 base + 18 seguridad + 7 administración + 8 recuperación + 13 acceso/PWA + 8 HTTP/auth + 6 rendiciones.
+- 23 ensayos aprobados en Chromium real: 100 pedidos, identidades locales separadas, UUID y contenido estable, cierre/reapertura, borradores/visitas, recarga offline, reintentos, dos pestañas, cierre durante envío, conflictos, transacción abortada y guardado desde UI.
+- 7 controles RLS aprobados sobre PostgreSQL 17 efímero local: vendedor/empresa, recepción propia, rechazo de otra empresa, unicidad, rechazo de escalamiento de rol, administración por empresa y revocación.
+- El schema propuesto se aplicó únicamente dentro de una transacción rollback del contenedor CI. `auth.uid/auth.jwt` se simularon para probar RLS; no es una prueba de JWT/Supabase real.
+- Build SIGO y `verify:critical`: workflow aprobado, https://github.com/telmoaguirre33-byte/SIGO/actions/runs/38285569012
+- El workflow adicional de Compras sigue fallando: `verify-guardar-compra-ia.mjs`, comparación `150 !== null`, https://github.com/telmoaguirre33-byte/SIGO/actions/runs/38285569034 . No se cambió ese script ni sus funciones de negocio. No declarar todos los checks del PR aprobados.
+
+Artifact con capturas, resultados JSON, evidencia RLS y lockfile:
+https://github.com/telmoaguirre33-byte/SIGO/actions/runs/38285568991/artifacts/11763187129
+
+SHA256 del ZIP: `b1586c8562a96e124e16295feda1c1f8860dc9793933b46a903295fcab091fd1`.
+Expiración informada del artifact: 2026-10-19. Los logs del workflow y este informe conservan la referencia a la ejecución. El lockfile generado se recuperó del log público del mismo job y se incorpora para usar `npm ci` reproducible.
+
+## Límites de los nuevos componentes
+
+`api/test-project-auth.mjs` consulta `auth/v1/user` del proyecto de prueba aprobado y exige comprobar sesión activa y membresía vigente mediante adaptadores. Está desactivado y no tiene URL/ref/clave reales configuradas. Las ocho pruebas HTTP/auth usan un fetch simulado y tokens ficticios; no acreditan login real.
+
+`api/http-handler.mjs` prepara POST JSON, origen HTTPS exacto, bearer, rate limiter obligatorio, límite de cuerpo 256 KiB, errores sin datos internos y no-store. No está montado en SIGO ni publicado. Sigue pendiente el repositorio transaccional real y la conexión UI/API/configuración por empresa en un ambiente autorizado.
+
+Las rendiciones guardan registros demo con centavos, validación de vendedor/empresa y revisión administrativa local. No registran cobros en SIGO, ni alteran cuentas corrientes, ventas, stock o facturación. La pantalla de administración conserva la etiqueta de demo; su actor administrativo es ficticio.
+
+Diff completo del PR inspeccionado: 58 archivos a esta etapa. Fuera de Mayorista solo están el workflow aislado nuevo y cuatro líneas agregadas a ModulosControlPanel. El preset y todo el código administrativo anterior mantienen el hash verificado. No se modificó main ni se realizó merge.
+
+## Estado de entrega
+
+No hay enlace HTTPS Android operativo verificado. La demo existente sigue pausada; no se creó proyecto ni se reactivó hosting o se quitó SSO. El acceso/costo del scope y la activación de una preview del proyecto existente requieren autorización. No se ofrece un enlace a localhost o un artifact como si fuera la app instalada.
+
+La guía Android existente sigue vigente para GPS, instalación, modo avión y cierre físico. Chromium headless no demuestra esos ensayos físicos ni dos dispositivos. La tarea #71 permanece abierta y el PR sigue en borrador.

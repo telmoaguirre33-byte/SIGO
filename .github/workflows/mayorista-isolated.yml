@@ -42,7 +42,7 @@ jobs:
         with:
           node-version: '24'
       - name: Instalar herramientas aisladas, sin scripts
-        run: npm install --ignore-scripts --no-audit --no-fund
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Registrar lockfile público de herramientas
         run: node -e "console.log('MAYORISTA_LOCKFILE_JSON='+JSON.stringify(JSON.parse(require('fs').readFileSync('package-lock.json','utf8'))))"
       - name: Chequear TypeScript Mayorista
