@@ -14,7 +14,7 @@ for (const source of sources) {
   await mkdir(path.dirname(path.join(out, source)), { recursive: true });
   await writeFile(path.join(out, source + '.js'), js);
 }
-for (const name of ['index.html', 'admin.html', 'admin.mjs', 'app.mjs', 'storage.mjs', 'sample.mjs', 'styles.css', 'sw.js', 'manifest.webmanifest', 'icon.svg']) await cp(path.join(root, name), path.join(out, name));
+for (const name of ['index.html', 'offline-check.html', 'offline-check.mjs', 'admin.html', 'admin.mjs', 'app.mjs', 'storage.mjs', 'sample.mjs', 'styles.css', 'sw.js', 'manifest.webmanifest', 'icon.svg']) await cp(path.join(root, name), path.join(out, name));
 
 await cp(path.join(root,'../admin'),path.join(out,'admin'),{recursive:true});
 console.log('Build Mayorista aislado: 5 módulos TypeScript transformados, App Vendedor y administración demo generadas; sin chequeo tsc.');

@@ -9,7 +9,8 @@
     "test:unit": "node ../tests/unit.mjs",
     "test:security": "node ../tests/security.mjs",
     "typecheck": "node node_modules/typescript/bin/tsc -p tsconfig.mayorista.json",
-    "test:admin": "node ../tests/admin.mjs"
+    "test:admin": "node ../tests/admin.mjs",
+    "test:recovery": "node ../tests/recovery-unit.mjs"
   },
   "engines": {
     "node": ">=24"

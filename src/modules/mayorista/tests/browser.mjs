@@ -43,7 +43,7 @@ async function otherTab(){
   const command=(method,params={})=>new Promise((resolve,reject)=>{const rid=++id;const timer=setTimeout(()=>{requests.delete(rid);reject(new Error('Timeout segunda pestaña'));},30000);requests.set(rid,{resolve:r=>{clearTimeout(timer);resolve(r)},reject:e=>{clearTimeout(timer);reject(e)}});socket.send(JSON.stringify({id:rid,method,params}));});
   const evaluate=async expression=>{const r=await command('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw new Error(r.exceptionDetails.exception?.description??r.exceptionDetails.text);return r.result.value;};
   for(let i=0;i<100;i++){if(await evaluate("document.readyState==='complete' && location.protocol==='http:'"))break;await delay(50);}
-  return {evaluate,close:async()=>{socket.close();await call('Target.closeTarget',{targetId});}};
+  return {evaluate,close:async()=>{for(const p of requests.values())p.reject(new Error('Pestaña cerrada durante envío'));requests.clear();socket.close();await call('Target.closeTarget',{targetId});}};
 }
 async function ready(){for(let i=0;i<100;i++){if(await evaluate("!!document.querySelector('[data-tab=clientes]')"))return;await delay(50);}throw new Error('La aplicación no inició');}
 async function stop(){if(ws){ws.close();ws=null;}if(child && child.exitCode===null){await new Promise(r=>{child.once('exit',r);child.kill('SIGTERM');});}}
@@ -58,6 +58,7 @@ try{
   await test('guardar 100 pedidos y releer desde otra instancia', `window.ids=[];for(let i=0;i<100;i++){ids.push((await queue.crear('c1',[{productoId:'p1',cantidad:1,precioUnitario:2200}])).id)}check(new Set(ids).size===100,'UUID únicos');check((await new core.PedidosIndexedDB(scope.empresaId,scope.vendedorId).listar()).length===100,'persistencia')`);
   await test('cola aislada por empresa y vendedor', `check((await new core.PedidosIndexedDB('otra',scope.vendedorId).listar()).length===0,'empresa');check((await new core.PedidosIndexedDB(scope.empresaId,'otro').listar()).length===0,'vendedor')`);
   await test('doble guardado con UUID estable produce un pedido', `window.stableId=crypto.randomUUID();const lines=[{productoId:'p2',cantidad:24,precioUnitario:1440}];await Promise.all([queue.crear('c2',lines,stableId),queue.crear('c2',lines,stableId)]);check((await queue.listar()).filter(p=>p.id===stableId).length===1,'duplicado');let rejected=false;try{await queue.crear('c1',lines,stableId)}catch{rejected=true}check(rejected,'colisión diferente')`);
+  await test('reintento con propiedades en otro orden conserva UUID', `const stored=(await queue.listar()).find(p=>p.id===stableId);const reordered=stored.lineas.map(l=>({precioUnitario:l.precioUnitario,cantidad:l.cantidad,productoId:l.productoId}));const retry=await queue.crear(stored.clienteId,reordered,stableId);check(retry.id===stableId,'UUID');check((await queue.listar()).length===101,'duplicado')`);
   await test('borrador durable y conflicto entre pestañas', `let d=await aux.loadDraft(scope);window.draftId=d.id;window.draftSaved=await aux.saveDraft(scope,{...d,clienteId:'c1',lineas:[{productoId:'p1',cantidad:1,precioUnitario:2200}]});check((await aux.loadDraft(scope)).id===draftId,'UUID borrador');let rejected=false;try{await aux.saveDraft(scope,d)}catch{rejected=true}check(rejected,'conflicto revision')`);
   await test('visitas persistentes y aisladas', `await aux.registerVisit(scope,'c1','sin_pedido','Visita de prueba',null);check((await aux.listVisits(scope)).length===1,'visita');check((await aux.listVisits({empresaId:'otra',vendedorId:scope.vendedorId})).length===0,'empresa visitas')`);
   await test('acuse inválido mantiene errores recuperables', `let r=await queue.sincronizar(async p=>({id:p.id,confirmadoEn:'no-es-fecha'}));check(r.fallidos===101,'errores');check((await queue.listar()).every(p=>p.estado==='error'),'no confirmado')`);
@@ -73,6 +74,20 @@ try{
     assert.equal((await evaluate('sentCount'))+(await second.evaluate('sentCount')),101,'envíos entre pestañas reales');
     await test('dos pestañas reales sincronizan sin duplicar UUID', `check((await queue.listar()).every(p=>p.estado==='sincronizado'),'acuse');const r=await queue.sincronizar(p=>aux.demoReceive(scope,p,catalog));check(r.enviados===0,'no repetir')`);
   }finally{await second.close();}
+  // Cierre real de una pestaña mientras una recepción queda sin resolver.
+  const interrupted=await otherTab();
+  const crashScope={empresaId:'cierre-'+crypto.randomUUID(),vendedorId:'vendedor-cierre'};
+  let sending;
+  try{
+    await interrupted.evaluate(`(async()=>{window.scope=${JSON.stringify(crashScope)};const m=await import('./offline/pedidos-indexeddb.js');window.q=new m.PedidosIndexedDB(scope.empresaId,scope.vendedorId);window.saved=await q.crear('c1',[{productoId:'p1',cantidad:1,precioUnitario:2200}]);window.started=false;})()`);
+    const preservedId=await interrupted.evaluate('saved.id');
+    sending=interrupted.evaluate(`q.sincronizar(async()=>{window.started=true;await new Promise(()=>{});})`).catch(()=>null);
+    let started=false;for(let i=0;i<100;i++){if(await interrupted.evaluate('started')){started=true;break;}await delay(50);}
+    assert.equal(started,true,'envío no inició');
+    await interrupted.close();
+    await sending;
+    await test('cierre de pestaña durante envío conserva pedido y permite reintento', `const scope=${JSON.stringify(crashScope)};const q=new core.PedidosIndexedDB(scope.empresaId,scope.vendedorId);const before=await q.listar();check(before.length===1 && before[0].id===${JSON.stringify(preservedId)} && before[0].estado==='sincronizando','persistencia del envío interrumpido');let sends=0;const result=await q.sincronizar(async p=>{sends++;return {id:p.id,empresaId:p.empresaId,vendedorId:p.vendedorId,confirmadoEn:new Date().toISOString()}});check(result.enviados===1 && sends===1,'recuperación');check((await q.listar())[0].id===${JSON.stringify(preservedId)},'UUID preservado')`);
+  }catch(e){await interrupted.close().catch(()=>{});throw e;}
   await test('conflicto de precio conserva pedido para revisión', `window.conflict=await queue.crear('c1',[{productoId:'p1',cantidad:1,precioUnitario:1}]);const r=await queue.sincronizar(p=>aux.demoReceive(scope,p,catalog));check(r.fallidos===1,'precio');check((await queue.listar()).find(p=>p.id===conflict.id).estado==='error','conservado')`);
   await test('catálogo vencido y empresa incorrecta rechazan envío', `const p=(await queue.listar())[0];for(const c of [{...catalog,descargadoEn:'2000-01-01'}, {...catalog,empresaId:'otra'}]){let rejected=false;try{await aux.demoReceive(scope,p,c)}catch{rejected=true}check(rejected,'validación catálogo')}`);
   await test('transacción abortada no deja una visita parcial', `await new Promise((resolve,reject)=>{const r=indexedDB.open('sigo-mayorista-demo-aux-v1',1);r.onsuccess=()=>{const db=r.result;const tx=db.transaction('visits','readwrite');tx.objectStore('visits').add({...scope,id:'abort-test',clienteId:'c1'});tx.onabort=()=>{db.close();resolve()};tx.oncomplete=()=>reject(new Error('no abortó'));tx.abort()}});check(!(await aux.listVisits(scope)).some(v=>v.id==='abort-test'),'escritura parcial')`);
@@ -83,7 +98,10 @@ try{
   await call('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});
   await call('Page.reload');await ready();
   await test('arranque sin red mediante Service Worker', `if(navigator.onLine)throw new Error('online');if(!document.body.textContent.includes('Sin internet'))throw new Error('sin indicador');const m=await import('./offline/pedidos-indexeddb.js');if((await new m.PedidosIndexedDB('demo-distribuidora-sur','demo-lucia').listar()).length!==102)throw new Error('datos offline')`);
+  await test('guardar sin conexión y error de envío conserva UUID', `const m=await import('./offline/pedidos-indexeddb.js');window.offlineScope={empresaId:'offline-'+crypto.randomUUID(),vendedorId:'vendedor-offline'};const q=new m.PedidosIndexedDB(offlineScope.empresaId,offlineScope.vendedorId);const p=await q.crear('c1',[{productoId:'p1',cantidad:1,precioUnitario:2200}]);window.offlineId=p.id;const r=await q.sincronizar(async()=>{if(!navigator.onLine)throw new Error('Sin internet');throw new Error('La simulación no está offline')});if(r.fallidos!==1 || (await q.listar())[0].id!==offlineId)throw new Error('pedido perdido sin conexión')`);
   await call('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});
+  await test('retorno de conexión recupera el pedido con el mismo UUID', `if(!navigator.onLine)throw new Error('no recuperó red');const m=await import('./offline/pedidos-indexeddb.js');const q=new m.PedidosIndexedDB(offlineScope.empresaId,offlineScope.vendedorId);const r=await q.sincronizar(async p=>({id:p.id,empresaId:p.empresaId,vendedorId:p.vendedorId,confirmadoEn:new Date().toISOString()}));const saved=(await q.listar())[0];if(r.enviados!==1 || saved.id!==offlineId || saved.estado!=='sincronizado')throw new Error('reintento incorrecto')`);
+
   const shot=await call('Page.captureScreenshot',{format:'png'});await writeFile('/workspace/SIGO/src/modules/mayorista/tests/android-preview.png',Buffer.from(shot.data,'base64'));
   await stop();await start();
   await test('persistencia después de cerrar y reabrir Chromium', `const m=await import('./offline/pedidos-indexeddb.js');const a=await import('./storage.mjs');const scope={empresaId:'demo-distribuidora-sur',vendedorId:'demo-lucia'};if((await new m.PedidosIndexedDB(scope.empresaId,scope.vendedorId).listar()).length!==102)throw new Error('pedidos');if((await a.loadDraft(scope)).lineas.length!==1)throw new Error('borrador');if((await a.listVisits(scope)).length!==1)throw new Error('visitas')`);
