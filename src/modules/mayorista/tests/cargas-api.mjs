@@ -32,7 +32,7 @@ export async function verifyCargasApi({call,token,empresaId,otraEmpresa,producto
     await send('cerrar',{cargaId:cargo});assert.equal(state.cargas[cargo].estado,'cerrada');assert.ok(state.historial.every(e=>e.responsable&&e.fecha));
     assert.equal(Number((await pool.query('SELECT count(*) FROM mayorista.cargas_asignaciones WHERE empresa_id=$1',[empresaId])).rows[0].count),2);
   });
-  await check('Reapertura del servicio conserva carga y pedidos originales recibidos',async()=>{await restart();const r=await call('/cargas',{token});assert.deepEqual(r.body,state);assert.equal((await call('/orders',{token,body:a})).status,200);assert.equal((await pool.query('SELECT estado FROM mayorista.pedidos WHERE empresa_id=$1 AND pedido_id=$2',[empresaId,a.pedidoId])).rows[0].estado,'recibido');});
+  await check('Reapertura del servicio conserva carga y pedidos originales recibidos',async()=>{await restart();let r;try{r=await call('/cargas',{token});}catch(e){assert.ok(e instanceof TypeError&&e.message==='fetch failed');r=await call('/cargas',{token});}assert.deepEqual(r.body,state);assert.equal((await call('/orders',{token,body:a})).status,200);assert.equal((await pool.query('SELECT estado FROM mayorista.pedidos WHERE empresa_id=$1 AND pedido_id=$2',[empresaId,a.pedidoId])).rows[0].estado,'recibido');});
   await check('Cargas rechaza otra empresa y RLS oculta filas ajenas',async()=>{
     assert.equal((await call('/cargas/commands',{token,body:{...make('crear',{id:randomUUID(),modo:'individual',camion:'X',ruta:'R',chofer:'C',responsable:'A'}),empresaId:otraEmpresa}})).status,403);
     await pool.query('INSERT INTO mayorista.cargas_estado(empresa_id,revision,datos) VALUES($1,1,$2::jsonb)',[otraEmpresa,JSON.stringify({empresaId:otraEmpresa})]);
