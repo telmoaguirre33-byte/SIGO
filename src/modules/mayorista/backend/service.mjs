@@ -1,3 +1,4 @@
+import {createUserDirectory} from '../commercial/user-directory.mjs';
 import {administrative} from '../security/company-roles.mjs';
 import {ApiError,createOrderReceiver} from '../api/receive-order.mjs';
 import {createOrderHttpHandler} from '../api/http-handler.mjs';
@@ -17,6 +18,7 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
   if(databasePolicy&&!operational)throw new ApiError(503,'Railway requiere permisos operativos persistentes');
   if(enabled)(databasePolicy?.assertPool??assertIsolatedPool)(pool);
   const auth=createIsolatedAuth({enabled,pool,privateKey,publicKey,issuer,databasePolicy,operational});
+  const directory=operational?createUserDirectory({pool,databasePolicy}):null;
   const repository=createPostgresRepository({enabled,pool,inventoryRequired,accountsEnabled,databasePolicy,operational});
   const orders=createOrderHttpHandler({enabled,allowedOrigin:origin,rateLimit,receive:createOrderReceiver({enabled,auth,repository})});
   return async request=>{
@@ -47,6 +49,8 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
       if(operational&&path==='/operations/loads'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.assignedLoads()));
       if(operational&&path==='/operations/loads'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const input=await smallJson(request);return reply(200,await repository.withPrincipal(principal,tx=>tx.publishLoad(input)));}
       if(operational&&path==='/operations/loads/commands'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const command=await smallJson(request,256*1024);return reply(200,await repository.withPrincipal(principal,tx=>tx.assignedLoadCommand(command)));}
+      if(operational&&path==='/admin/users'&&request.method==='GET')return reply(200,await directory.list(principal));
+      if(operational&&path==='/admin/users/commands'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const command=await smallJson(request);return reply(200,await directory.command(principal,command));}
       if(operational&&path==='/admin/catalog'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.masterState()));
       if(operational&&path==='/admin/catalog/commands'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const command=await smallJson(request);return reply(200,await repository.withPrincipal(principal,tx=>tx.masterCommand(command)));}
       if(path==='/admin/state'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.adminState()));

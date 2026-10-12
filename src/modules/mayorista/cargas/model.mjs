@@ -112,12 +112,12 @@ export function applyLoadCommand(state,command,actor,now=new Date().toISOString(
       if(!Array.isArray(i.lineas)||i.lineas.length!==p.lineas.length||new Set(i.lineas.map(l=>l.productoId)).size!==p.lineas.length)throw new Error('Detalle incompleto/duplicado');
       for(const l of p.lineas){const d=i.lineas.find(d=>d.productoId===l.productoId);if(!d)throw new Error('Producto incorrecto');integer(d.entregado);integer(d.devuelto);if(d.entregado+d.devuelto!==l.preparado)throw new Error('Entrega y devolución no concilian con lo cargado');l.entregado=d.entregado;l.devuelto=d.devuelto;}
       const delivered=p.lineas.reduce((s,l)=>s+l.entregado,0),returned=p.lineas.reduce((s,l)=>s+l.devuelto,0);
-      p.estado=delivered===0?'rechazado':returned||p.lineas.some(l=>l.preparado<l.cantidad)?'parcial':'entregado';p.entrega={fecha:now,responsable:actor.userId,comprobante:note(i.nota)};break;
+      load.recepcionDevoluciones=null;p.estado=delivered===0?'rechazado':returned||p.lineas.some(l=>l.preparado<l.cantidad)?'parcial':'entregado';p.entrega={fecha:now,responsable:actor.userId,comprobante:note(i.nota)};break;
     }
     case 'devolver':{
       const p=load?.pedidos[i.pedidoId];if(load?.estado!=='en_reparto'||!p||p.estado==='pendiente')throw new Error('Devolución no disponible');
       const l=p.lineas.find(l=>l.productoId===i.productoId);integer(i.cantidad,1);if(!l||i.cantidad>l.entregado)throw new Error('Devolución excede entrega');
-      l.entregado-=i.cantidad;l.devuelto+=i.cantidad;p.estado=p.lineas.every(l=>l.entregado===0)?'rechazado':'parcial';if(p.rendicion){p.rendicion.estado='presentada';p.rendicion.necesitaRevision=true;}note(i.nota);break;
+      l.entregado-=i.cantidad;l.devuelto+=i.cantidad;load.recepcionDevoluciones=null;p.estado=p.lineas.every(l=>l.entregado===0)?'rechazado':'parcial';if(p.rendicion){p.rendicion.estado='presentada';p.rendicion.necesitaRevision=true;}note(i.nota);break;
     }
     case 'rendir':{
       const p=load?.pedidos[i.pedidoId];if(load?.estado!=='en_reparto'||!p||p.estado==='pendiente'||p.rendicion)throw new Error('Rendición no disponible o duplicada');
@@ -127,7 +127,15 @@ export function applyLoadCommand(state,command,actor,now=new Date().toISOString(
     case 'revisar_rendicion':{
       const p=load?.pedidos[i.pedidoId];if(load?.estado!=='en_reparto'||p?.rendicion?.estado!=='presentada')throw new Error('Rendición no presentada');p.rendicion.estado='revisada';p.rendicion.notaRevision=note(i.nota);p.rendicion.revisadoPor=actor.userId;p.rendicion.revisadoEn=now;break;
     }
-    case 'cerrar':if(load?.estado!=='en_reparto'||Object.values(load.pedidos).some(p=>p.estado==='pendiente'||p.rendicion?.estado!=='revisada'))throw new Error('Entregas/rendiciones pendientes');load.estado='cerrada';load.cierre={fecha:now,responsable:actor.userId};break;
+    case 'recibir_devoluciones':{
+      if(load?.estado!=='en_reparto'||Object.values(load.pedidos).some(p=>p.estado==='pendiente')||load.recepcionDevoluciones)throw new Error('Recepción no disponible o duplicada');
+      if(!Array.isArray(i.lineas)||!i.lineas.length||new Set(i.lineas.map(l=>l.productoId)).size!==i.lineas.length)throw new Error('Detalle de devolución inválido');
+      const expected=new Map();for(const p of Object.values(load.pedidos))for(const l of p.lineas)if(l.devuelto)expected.set(l.productoId,(expected.get(l.productoId)??0)+l.devuelto);
+      if(i.lineas.length!==expected.size||i.lineas.some(l=>!expected.has(l.productoId)||integer(l.cantidad)!==expected.get(l.productoId)))throw new Error('La recepción física no concilia con lo devuelto');
+      load.recepcionDevoluciones={lineas:structuredClone(i.lineas),nota:note(i.nota),responsable:actor.userId,fecha:now};break;
+    }
+    case 'cerrar':if(load?.requiereRecepcion&&Object.values(load.pedidos).some(p=>p.lineas.some(l=>l.devuelto>0))&&!load.recepcionDevoluciones)throw new Error('Falta confirmar recepción física de las devoluciones');
+if(load?.estado!=='en_reparto'||Object.values(load.pedidos).some(p=>p.estado==='pendiente'||p.rendicion?.estado!=='revisada'))throw new Error('Entregas/rendiciones pendientes');load.estado='cerrada';load.cierre={fecha:now,responsable:actor.userId};break;
     case 'cancelar':editing();note(i.nota);for(const id of Object.keys(load.pedidos))delete next.pedidos[id].cargaId;load.estado='cancelada';break;
     default:throw new Error('Operación de cargas inválida');
   }

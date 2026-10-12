@@ -1,5 +1,8 @@
 -- Datos maestros propios de Mayorista. Aplicar únicamente en QA independiente.
 begin;
+alter table mayorista_private.usuarios add nombre text not null default '';
+create table mayorista_private.user_commands(empresa_id uuid not null,comando_id uuid not null,actor_id uuid not null,huella text not null,respuesta jsonb not null,creado_en timestamptz not null default now(),primary key(empresa_id,comando_id));
+revoke all on mayorista_private.user_commands from public,anon,authenticated;
 create table mayorista.rutas(empresa_id uuid not null,ruta_id uuid not null,nombre text not null,zona text not null,primary key(empresa_id,ruta_id));
 create table mayorista.listas(empresa_id uuid not null,lista_id uuid not null,nombre text not null,activa boolean not null default true,primary key(empresa_id,lista_id));
 alter table mayorista.clientes add direccion text not null default '';

@@ -29,6 +29,8 @@ create function mayorista_private.validar_responsables() returns trigger languag
 begin
  if not exists(select 1 from mayorista.miembros m join mayorista.empresas e using(empresa_id) where m.empresa_id=new.empresa_id and m.user_id=auth.uid() and m.activo and e.habilitada and m.rol in ('gerencia','administracion')) then raise exception 'Asignación no autorizada' using errcode='42501'; end if;
  if not exists(select 1 from mayorista.miembros m where m.empresa_id=new.empresa_id and m.user_id=new.armador_user_id and m.activo and m.rol='armador') or not exists(select 1 from mayorista.miembros m where m.empresa_id=new.empresa_id and m.user_id=new.chofer_user_id and m.activo and m.rol='chofer') then raise exception 'Responsables no válidos' using errcode='23503'; end if;
+ new.datos:=jsonb_set(new.datos,'{choferNombre}',to_jsonb((select coalesce(nullif(u.nombre,''),u.email) from mayorista_private.usuarios u where u.user_id=new.chofer_user_id)));
+ new.datos:=jsonb_set(new.datos,'{armadorNombre}',to_jsonb((select coalesce(nullif(u.nombre,''),u.email) from mayorista_private.usuarios u where u.user_id=new.armador_user_id)));
  return new;
 end $$;
 revoke all on function mayorista_private.validar_responsables() from public,anon,authenticated;

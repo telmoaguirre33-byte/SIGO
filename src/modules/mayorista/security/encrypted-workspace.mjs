@@ -1,6 +1,6 @@
 const DB='sigo-mayorista-secure-v1',encoder=new TextEncoder(),decoder=new TextDecoder();
 const scopeKey=s=>JSON.stringify([s.empresaId,s.vendedorId]);
-const safeIdentity=i=>({empresaId:i.empresaId,vendedorId:i.vendedorId,userId:i.userId});
+const safeIdentity=i=>({empresaId:i.empresaId,vendedorId:i.vendedorId,userId:i.userId,...(typeof i.nombre==='string'&&i.nombre.length<=160?{nombre:i.nombre}:{}),...(typeof i.empresaNombre==='string'&&i.empresaNombre.length<=160?{empresaNombre:i.empresaNombre}:{})});
 function validOffline(identity,scope,now,maxHours=168){const age=now-Date.parse(identity.offlineValidatedAt);if(!Number.isFinite(now)||!Number.isFinite(maxHours)||maxHours<=0||maxHours>168||identity.empresaId!==scope.empresaId||identity.vendedorId!==scope.vendedorId||!identity.userId||!Number.isFinite(age)||age< -300000||age>maxHours*3600000)throw new Error('El acceso offline requiere renovar la validación online');}
 const aad=(s,kind,id,revision)=>encoder.encode(JSON.stringify([DB,s.empresaId,s.vendedorId,kind,id,revision]));
 async function keyFor(password,salt){

@@ -3,9 +3,9 @@ import {ApiError} from '../api/receive-order.mjs';
 import {administrative} from '../security/company-roles.mjs';
 import {createLoadsState,applyLoadCommand,canonical} from '../cargas/model.mjs';
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const workerActions={armador:['iniciar','contar','escanear','autorizar_faltante','verificar'],chofer:['entregar','devolver','rendir']};
+const workerActions={armador:['iniciar','contar','escanear','autorizar_faltante','verificar','recibir_devoluciones'],chofer:['entregar','devolver','rendir']};
 export function createAssignedLoadsTransaction({query,principal,legacyLoads,onChange}){
- const project=row=>{const load=structuredClone(row.datos);if(principal.rol==='armador')for(const p of Object.values(load.pedidos)){delete p.rendicion;delete p.entrega;for(const l of p.lineas){delete l.precioUnitario;delete l.entregado;delete l.devuelto;}}return {cargaId:row.carga_id,version:row.version,load};};
+ const project=row=>{const load=structuredClone(row.datos);if(principal.rol==='armador')for(const p of Object.values(load.pedidos)){delete p.rendicion;delete p.entrega;for(const l of p.lineas){delete l.precioUnitario;}}return {cargaId:row.carga_id,version:row.version,load};};
  const one=async id=>(await query('SELECT carga_id,armador_user_id,chofer_user_id,version,datos FROM mayorista.cargas_operativas WHERE empresa_id=$1 AND carga_id=$2',[principal.empresaId,id])).rows[0];
  return {
   assignedLoads:async()=>({empresaId:principal.empresaId,cargas:(await query('SELECT carga_id,version,datos FROM mayorista.cargas_operativas WHERE empresa_id=$1 ORDER BY carga_id',[principal.empresaId])).rows.map(project)}),
@@ -14,7 +14,7 @@ export function createAssignedLoadsTransaction({query,principal,legacyLoads,onCh
    if(![input?.cargaId,input?.armadorUserId,input?.choferUserId].every(v=>uuid.test(v)))throw new ApiError(422,'Asignación inválida');
    const existing=await one(input.cargaId);if(existing){if(existing.armador_user_id!==input.armadorUserId||existing.chofer_user_id!==input.choferUserId)throw new ApiError(409,'Carga ya publicada con responsables distintos');return project(existing);}
    const source=await legacyLoads(),load=source.cargas[input.cargaId];if(load?.estado!=='planificada'||!Object.keys(load.pedidos).length)throw new ApiError(409,'Solo cargas con pedidos aprobados, antes de picking');
-   const copy={...load,responsable:input.armadorUserId,chofer:input.choferUserId,historial:[]};
+   const copy={...load,requiereRecepcion:true,responsable:input.armadorUserId,chofer:input.choferUserId,historial:[]};
    for(const [codigo,p] of Object.entries(source.codigos))await query('INSERT INTO mayorista.codigos_operativos(empresa_id,codigo,producto_id,unidades_base) VALUES($1,$2,$3,$4) ON CONFLICT(empresa_id,codigo) DO NOTHING',[principal.empresaId,codigo,p.productoId,p.unidadesBase]);
    try{await query('INSERT INTO mayorista.cargas_operativas(empresa_id,carga_id,armador_user_id,chofer_user_id,version,datos) VALUES($1,$2,$3,$4,0,$5::jsonb)',[principal.empresaId,input.cargaId,input.armadorUserId,input.choferUserId,JSON.stringify(copy)]);}catch(e){if(e.code==='23503')throw new ApiError(422,'Responsables no pertenecen a los roles de esta empresa');throw e;}
    return project(await one(input.cargaId));

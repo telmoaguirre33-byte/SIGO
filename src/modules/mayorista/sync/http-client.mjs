@@ -12,7 +12,7 @@ export function createMayoristaClient({enabled=false,baseUrl,fetchImpl=globalThi
     return value;
   }
   return {
-    login:async credentials=>{const attempt=++generation;token=null;principal=null;const session=await request('/auth/login',credentials);if(attempt!==generation)throw new Error('Inicio de sesión cancelado');if(typeof session.accessToken!=='string'||!Number.isFinite(session.expiresAt)||session.expiresAt<=Date.now())throw new Error('Sesión inválida');token=session.accessToken;try{const verified=await request('/me');if(attempt!==generation)throw new Error('Inicio de sesión cancelado');if(verified.empresaId!==credentials.empresaId||!verified.vendedorId)throw new Error('Identidad fuera de la empresa');principal=verified;return {...principal};}catch(e){if(attempt===generation){token=null;principal=null;}throw e;}},
+    login:async credentials=>{const attempt=++generation;token=null;principal=null;const session=await request('/auth/login',credentials);if(attempt!==generation)throw new Error('Inicio de sesión cancelado');if(typeof session.accessToken!=='string'||!Number.isFinite(session.expiresAt)||session.expiresAt<=Date.now())throw new Error('Sesión inválida');token=session.accessToken;try{const verified=await request('/me');if(attempt!==generation)throw new Error('Inicio de sesión cancelado');if(verified.empresaId!==credentials.empresaId||!verified.userId||verified.rol==='vendedor'&&!verified.vendedorId)throw new Error('Identidad fuera de la empresa');principal=verified;return {...principal};}catch(e){if(attempt===generation){token=null;principal=null;}throw e;}},
     logout:async()=>{const previous=token;generation++;token=null;principal=null;if(previous)await request('/auth/logout',{},previous);},
     send:async order=>{gate();if(!token||!principal)throw new Error('Iniciá sesión antes de sincronizar');if(order.empresaId!==principal.empresaId||order.vendedorId!==principal.vendedorId)throw new Error('Pedido fuera de la sesión activa');return verificarAcuse(order,await request('/orders',construirSolicitud(order)));},
     visits:()=>request('/visits'),
@@ -21,6 +21,16 @@ export function createMayoristaClient({enabled=false,baseUrl,fetchImpl=globalThi
     cargas:()=>request('/cargas'),
     cargasCommand:command=>request('/cargas/commands',command),
     catalog:()=>request('/catalog'),
+    users:()=>request('/admin/users'),
+    userCommand:command=>request('/admin/users/commands',command),
+    masterState:()=>request('/admin/catalog'),
+    masterCommand:command=>request('/admin/catalog/commands',command),
+    assignedLoads:()=>request('/operations/loads'),
+    publishLoad:input=>request('/operations/loads',input),
+    loadCommand:command=>request('/operations/loads/commands',command),
+    accounts:()=>request('/accounts'),
+    inventory:()=>request('/inventory'),
+    inventoryCommand:command=>request('/inventory/commands',command),
     adminState:()=>request('/admin/state'),
     adminCommand:command=>request('/admin/commands',command),
     fulfillment:command=>request('/admin/fulfillment',command),

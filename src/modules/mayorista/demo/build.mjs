@@ -14,7 +14,7 @@ for (const source of sources) {
   await mkdir(path.dirname(path.join(out, source)), { recursive: true });
   await writeFile(path.join(out, source + '.js'), js);
 }
-for (const name of ['index.html', 'offline-check.html', 'offline-check.mjs', 'admin.html', 'admin.mjs', 'cargas.html', 'cargas.mjs', 'connected.html', 'secure.html', 'secure-config.mjs', 'secure.webmanifest', 'app.mjs', 'storage.mjs', 'sample.mjs', 'styles.css', 'sw.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png']) await cp(path.join(root, name), path.join(out, name));
+for (const name of ['index.html', 'offline-check.html', 'offline-check.mjs', 'admin.html', 'admin.mjs', 'cargas.html', 'cargas.mjs', 'connected.html', 'secure.html', 'portal.html', 'operational-sw.js', 'secure-config.mjs', 'secure.webmanifest', 'app.mjs', 'storage.mjs', 'sample.mjs', 'styles.css', 'sw.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png']) await cp(path.join(root, name), path.join(out, name));
 
 await cp(path.join(root,'../sync/http-client.mjs'),path.join(out,'sync/http-client.mjs'));
 await cp(path.join(root,'../admin'),path.join(out,'admin'),{recursive:true});
@@ -22,6 +22,7 @@ await cp(path.join(root,'../cargas'),path.join(out,'cargas'),{recursive:true,fil
 await mkdir(path.join(out,'vendedor'),{recursive:true});
 await cp(path.join(root,'../vendedor/connected.mjs'),path.join(out,'vendedor/connected.mjs'));
 await cp(path.join(root,'../vendedor/secure.mjs'),path.join(out,'vendedor/secure.mjs'));
+await cp(path.join(root,'../vendedor/route-map.mjs'),path.join(out,'vendedor/route-map.mjs'));
 await mkdir(path.join(out,'security'),{recursive:true});
 await cp(path.join(root,'../security/encrypted-workspace.mjs'),path.join(out,'security/encrypted-workspace.mjs'));
 await cp(path.join(root,'../offline/encrypted-orders.mjs'),path.join(out,'offline/encrypted-orders.mjs'));
