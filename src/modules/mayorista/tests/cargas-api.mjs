@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
-export async function verifyCargasApi({call,token,empresaId,otraEmpresa,productoId,pool,makeOrder}){
+export async function verifyCargasApi({call,token,empresaId,otraEmpresa,productoId,pool,makeOrder,restart}){
   const results=[];let state=(await call('/cargas',{token})).body;
   async function check(name,fn){await fn();results.push({name,status:'pass'});console.log('PASS:',name);}
   const make=(tipo,input)=>({id:randomUUID(),empresaId,version:state.revision,tipo,input});
@@ -32,9 +32,10 @@ export async function verifyCargasApi({call,token,empresaId,otraEmpresa,producto
     await send('cerrar',{cargaId:cargo});assert.equal(state.cargas[cargo].estado,'cerrada');assert.ok(state.historial.every(e=>e.responsable&&e.fecha));
     assert.equal(Number((await pool.query('SELECT count(*) FROM mayorista.cargas_asignaciones WHERE empresa_id=$1',[empresaId])).rows[0].count),2);
   });
-  await check('Reapertura del servicio conserva carga y pedidos originales recibidos',async()=>{const r=await call('/cargas',{token});assert.deepEqual(r.body,state);assert.equal((await call('/orders',{token,body:a})).status,200);assert.equal((await pool.query('SELECT estado FROM mayorista.pedidos WHERE empresa_id=$1 AND pedido_id=$2',[empresaId,a.pedidoId])).rows[0].estado,'recibido');});
+  await check('Reapertura del servicio conserva carga y pedidos originales recibidos',async()=>{await restart();const r=await call('/cargas',{token});assert.deepEqual(r.body,state);assert.equal((await call('/orders',{token,body:a})).status,200);assert.equal((await pool.query('SELECT estado FROM mayorista.pedidos WHERE empresa_id=$1 AND pedido_id=$2',[empresaId,a.pedidoId])).rows[0].estado,'recibido');});
   await check('Cargas rechaza otra empresa y RLS oculta filas ajenas',async()=>{
     assert.equal((await call('/cargas/commands',{token,body:{...make('crear',{id:randomUUID(),modo:'individual',camion:'X',ruta:'R',chofer:'C',responsable:'A'}),empresaId:otraEmpresa}})).status,403);
+    await pool.query('INSERT INTO mayorista.cargas_estado(empresa_id,revision,datos) VALUES($1,1,$2::jsonb)',[otraEmpresa,JSON.stringify({empresaId:otraEmpresa})]);
     const c=await pool.connect();try{await c.query('BEGIN');await c.query('SET LOCAL ROLE authenticated');const actor=state.historial[0].responsable;await c.query("SELECT set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claims',$2,true)",[actor,JSON.stringify({sub:actor,is_anonymous:false})]);assert.equal((await c.query('SELECT empresa_id FROM mayorista.cargas_estado WHERE empresa_id=$1',[otraEmpresa])).rows.length,0);}finally{await c.query('ROLLBACK');c.release();}
   });
   return results;
