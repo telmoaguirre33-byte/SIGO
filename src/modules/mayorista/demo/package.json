@@ -8,7 +8,8 @@
     "test": "node ../tests/browser.mjs",
     "test:unit": "node ../tests/unit.mjs",
     "test:security": "node ../tests/security.mjs",
-    "typecheck": "node node_modules/typescript/bin/tsc -p tsconfig.mayorista.json"
+    "typecheck": "node node_modules/typescript/bin/tsc -p tsconfig.mayorista.json",
+    "test:admin": "node ../tests/admin.mjs"
   },
   "engines": {
     "node": ">=24"

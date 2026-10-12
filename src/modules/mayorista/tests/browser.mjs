@@ -32,6 +32,19 @@ async function start(){
 }
 function call(method,params={}){return new Promise((resolve,reject)=>{const id=++seq;const timer=setTimeout(()=>{pending.delete(id);reject(new Error('CDP timeout '+method));},30000);pending.set(id,{resolve:v=>{clearTimeout(timer);resolve(v);},reject:e=>{clearTimeout(timer);reject(e);}});ws.send(JSON.stringify({id,method,params}));});}
 async function evaluate(expression){const r=await call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw new Error(r.exceptionDetails.exception?.description??r.exceptionDetails.text);return r.result.value;}
+// Segunda pestaña real del mismo perfil, para verificar Web Locks entre documentos.
+async function otherTab(){
+  const {targetId}=await call('Target.createTarget',{url:'http://127.0.0.1:4173/'});
+  const pages=await(await fetch('http://127.0.0.1:9223/json')).json();
+  const socket=new WebSocket(pages.find(p=>p.id===targetId).webSocketDebuggerUrl);
+  await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Segunda pestaña no abrió')),5000);socket.onopen=()=>{clearTimeout(timer);resolve()};socket.onerror=()=>{clearTimeout(timer);reject(new Error('CDP segunda pestaña'))};});
+  let id=0;const requests=new Map();
+  socket.onmessage=e=>{const m=JSON.parse(e.data);if(m.id && requests.has(m.id)){const p=requests.get(m.id);requests.delete(m.id);m.error?p.reject(new Error(m.error.message)):p.resolve(m.result);}};
+  const command=(method,params={})=>new Promise((resolve,reject)=>{const rid=++id;const timer=setTimeout(()=>{requests.delete(rid);reject(new Error('Timeout segunda pestaña'));},30000);requests.set(rid,{resolve:r=>{clearTimeout(timer);resolve(r)},reject:e=>{clearTimeout(timer);reject(e)}});socket.send(JSON.stringify({id:rid,method,params}));});
+  const evaluate=async expression=>{const r=await command('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw new Error(r.exceptionDetails.exception?.description??r.exceptionDetails.text);return r.result.value;};
+  for(let i=0;i<100;i++){if(await evaluate("document.readyState==='complete' && location.protocol==='http:'"))break;await delay(50);}
+  return {evaluate,close:async()=>{socket.close();await call('Target.closeTarget',{targetId});}};
+}
 async function ready(){for(let i=0;i<100;i++){if(await evaluate("!!document.querySelector('[data-tab=clientes]')"))return;await delay(50);}throw new Error('La aplicación no inició');}
 async function stop(){if(ws){ws.close();ws=null;}if(child && child.exitCode===null){await new Promise(r=>{child.once('exit',r);child.kill('SIGTERM');});}}
 let passed=0;
@@ -49,7 +62,17 @@ try{
   await test('visitas persistentes y aisladas', `await aux.registerVisit(scope,'c1','sin_pedido','Visita de prueba',null);check((await aux.listVisits(scope)).length===1,'visita');check((await aux.listVisits({empresaId:'otra',vendedorId:scope.vendedorId})).length===0,'empresa visitas')`);
   await test('acuse inválido mantiene errores recuperables', `let r=await queue.sincronizar(async p=>({id:p.id,confirmadoEn:'no-es-fecha'}));check(r.fallidos===101,'errores');check((await queue.listar()).every(p=>p.estado==='error'),'no confirmado')`);
   await test('fallo de red después de recibir conserva UUID y acuse idempotente', `window.firstReceipt=null;await queue.sincronizar(async p=>{const r=await aux.demoReceive(scope,p,catalog);if(!firstReceipt)firstReceipt=r;throw new Error('Red perdida después de recibir')});check((await queue.listar()).every(p=>p.estado==='error'),'conservación');const p=(await queue.listar()).find(p=>p.id===firstReceipt.id);const retry=await aux.demoReceive(scope,p,catalog);check(retry.confirmadoEn===firstReceipt.confirmadoEn,'acuse estable')`);
-  await test('dos instancias concurrentes envían una sola vez por UUID', `let sent=0;const another=new core.PedidosIndexedDB(scope.empresaId,scope.vendedorId);const send=async p=>{sent++;return aux.demoReceive(scope,p,catalog)};await Promise.all([queue.sincronizar(send),another.sincronizar(send)]);check(sent===101,'duplicación '+sent);check((await queue.listar()).every(p=>p.estado==='sincronizado'),'acuse');const r=await queue.sincronizar(send);check(r.enviados===0,'no repetir')`);
+  const second=await otherTab();
+  try{
+    await evaluate('window.sentCount=0');
+    await second.evaluate(`(async()=>{window.sentCount=0;window.core=await import('./offline/pedidos-indexeddb.js');window.aux=await import('./storage.mjs');window.sample=await import('./sample.mjs');window.scope=sample.identities[0];window.catalog=sample.sampleCatalog(scope);window.queue=new core.PedidosIndexedDB(scope.empresaId,scope.vendedorId);})()`);
+    await Promise.all([
+      evaluate(`queue.sincronizar(async p=>{sentCount++;return aux.demoReceive(scope,p,catalog)})`),
+      second.evaluate(`queue.sincronizar(async p=>{sentCount++;return aux.demoReceive(scope,p,catalog)})`)
+    ]);
+    assert.equal((await evaluate('sentCount'))+(await second.evaluate('sentCount')),101,'envíos entre pestañas reales');
+    await test('dos pestañas reales sincronizan sin duplicar UUID', `check((await queue.listar()).every(p=>p.estado==='sincronizado'),'acuse');const r=await queue.sincronizar(p=>aux.demoReceive(scope,p,catalog));check(r.enviados===0,'no repetir')`);
+  }finally{await second.close();}
   await test('conflicto de precio conserva pedido para revisión', `window.conflict=await queue.crear('c1',[{productoId:'p1',cantidad:1,precioUnitario:1}]);const r=await queue.sincronizar(p=>aux.demoReceive(scope,p,catalog));check(r.fallidos===1,'precio');check((await queue.listar()).find(p=>p.id===conflict.id).estado==='error','conservado')`);
   await test('catálogo vencido y empresa incorrecta rechazan envío', `const p=(await queue.listar())[0];for(const c of [{...catalog,descargadoEn:'2000-01-01'}, {...catalog,empresaId:'otra'}]){let rejected=false;try{await aux.demoReceive(scope,p,c)}catch{rejected=true}check(rejected,'validación catálogo')}`);
   await test('transacción abortada no deja una visita parcial', `await new Promise((resolve,reject)=>{const r=indexedDB.open('sigo-mayorista-demo-aux-v1',1);r.onsuccess=()=>{const db=r.result;const tx=db.transaction('visits','readwrite');tx.objectStore('visits').add({...scope,id:'abort-test',clienteId:'c1'});tx.onabort=()=>{db.close();resolve()};tx.oncomplete=()=>reject(new Error('no abortó'));tx.abort()}});check(!(await aux.listVisits(scope)).some(v=>v.id==='abort-test'),'escritura parcial')`);
