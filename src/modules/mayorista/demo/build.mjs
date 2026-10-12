@@ -25,4 +25,5 @@ await cp(path.join(root,'../vendedor/secure.mjs'),path.join(out,'vendedor/secure
 await mkdir(path.join(out,'security'),{recursive:true});
 await cp(path.join(root,'../security/encrypted-workspace.mjs'),path.join(out,'security/encrypted-workspace.mjs'));
 await cp(path.join(root,'../offline/encrypted-orders.mjs'),path.join(out,'offline/encrypted-orders.mjs'));
+await cp(path.join(root,'../offline/encrypted-visits.mjs'),path.join(out,'offline/encrypted-visits.mjs'));
 console.log('Build Mayorista aislado: 6 módulos TypeScript transformados, App Vendedor y administración demo generadas; sin chequeo tsc.');

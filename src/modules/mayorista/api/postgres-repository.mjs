@@ -1,3 +1,4 @@
+import {createVisitsTransaction} from '../commercial/visits.mjs';
 import {createCargasTransaction} from '../cargas/postgres.mjs';
 import {createHash} from 'node:crypto';
 import {createAdminState,saveSeller,saveRoute,assignCustomer,setGoal} from '../admin/model.mjs';
@@ -68,6 +69,7 @@ export function createPostgresRepository({enabled=false,pool}={}){
         },
         list:async()=> (await c.query(`SELECT ${columns} FROM mayorista.pedidos WHERE empresa_id=$1 ORDER BY recibido_en DESC LIMIT 500`,[principal.empresaId])).rows.map(normalize)
       };
+      Object.assign(tx,createVisitsTransaction({query:(sql,args)=>c.query(sql,args),principal}));
       Object.assign(tx,createCargasTransaction({query:(sql,args)=>c.query(sql,args),principal,findOrder:tx.find,fulfillment:tx.fulfillment}));
       const result=await fn(tx);await c.query('COMMIT');return result;
     }catch(e){await c.query('ROLLBACK').catch(()=>{});if(!['40001','40P01','23505'].includes(e.code)||attempt===3)throw e;}finally{c.release();}

@@ -15,6 +15,8 @@ export function createMayoristaClient({enabled=false,baseUrl,fetchImpl=globalThi
     login:async credentials=>{token=null;principal=null;const session=await request('/auth/login',credentials);if(typeof session.accessToken!=='string'||!Number.isFinite(session.expiresAt)||session.expiresAt<=Date.now())throw new Error('Sesión inválida');token=session.accessToken;try{principal=await request('/me');if(principal.empresaId!==credentials.empresaId||!principal.vendedorId)throw new Error('Identidad fuera de la empresa');return {...principal};}catch(e){token=null;principal=null;throw e;}},
     logout:async()=>{try{if(token)await request('/auth/logout',{});}finally{token=null;principal=null;}},
     send:async order=>{gate();if(!token||!principal)throw new Error('Iniciá sesión antes de sincronizar');if(order.empresaId!==principal.empresaId||order.vendedorId!==principal.vendedorId)throw new Error('Pedido fuera de la sesión activa');return verificarAcuse(order,await request('/orders',construirSolicitud(order)));},
+    visits:()=>request('/visits'),
+    sendVisit:visit=>{if(!token||!principal||visit.empresaId!==principal.empresaId||visit.vendedorId!==principal.vendedorId)throw new Error('Iniciá sesión en la empresa de la visita');return request('/visits',visit);},
     orders:()=>request('/orders'),
     cargas:()=>request('/cargas'),
     cargasCommand:command=>request('/cargas/commands',command),

@@ -58,6 +58,8 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
         if(!uuid.test(command?.id)||!Number.isSafeInteger(command.version)||command.input?.cargaId&&!uuid.test(command.input.cargaId)||command.tipo==='crear'&&!uuid.test(command.input?.id)||command.tipo==='aprobar'&&!uuid.test(command.input?.pedidoId))throw new ApiError(422,'Comando inválido');
         return reply(200,await repository.withPrincipal(principal,tx=>tx.cargasCommand(command)));
       }
+      if(path==='/visits'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.visits()));
+      if(path==='/visits'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const visit=await smallJson(request);return reply(200,await repository.withPrincipal(principal,tx=>tx.receiveVisit(visit)));}
       if(path==='/catalog'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.catalog()));
       if(path==='/admin/fulfillment'&&request.method==='POST'){
         if(principal.rol!=='administrador')throw new ApiError(403,'Sin permisos administrativos');
