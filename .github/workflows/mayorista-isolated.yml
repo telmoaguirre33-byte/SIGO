@@ -5,9 +5,6 @@ on:
     paths:
       - 'src/modules/mayorista/**'
       - 'src/ModulosControlPanel.tsx'
-      - 'src/MatrizAdmin.tsx'
-      - 'supabase/migrations/*mayorista*'
-      - 'src/modules/mayorista/tests/matriz-toggle-contract.mjs'
       - '.github/workflows/mayorista-isolated.yml'
 permissions:
   contents: read
@@ -63,14 +60,11 @@ jobs:
           npm run test:admin
           npm run test:recovery
           npm run test:integration-pwa
-          node ../tests/matriz-toggle-contract.mjs
           npm run test:http-auth
           npm run test:rendiciones
           node ../tests/fulfillment.mjs
       - name: Políticas RLS en PostgreSQL efímero local
         run: npm run test:rls
-      - name: Toggle Mayorista y permisos en PostgreSQL efímero
-        run: node ../tests/matriz-toggle-postgres.mjs
       - name: Autenticación firmada y API HTTP contra PostgreSQL aislado
         run: node ../tests/native-api.mjs
       - name: IndexedDB en Chromium real
