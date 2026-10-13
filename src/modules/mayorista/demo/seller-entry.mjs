@@ -1,0 +1,3 @@
+import {mountInstallation} from './installation.mjs';
+import {mountSecureSeller} from './vendedor/secure.mjs';import {secureConfig} from './secure-config.mjs';const enabled=secureConfig.enabled===true&&secureConfig.approvedOrigin===location.origin;mountSecureSeller(document.querySelector('#secure-app'),{enabled,baseUrl:location.origin+'/'});if('serviceWorker' in navigator)navigator.serviceWorker.register('./operational-sw.js',{scope:'./',updateViaCache:'none'}).catch(()=>{const p=document.createElement('p');p.setAttribute('role','alert');p.textContent='No se pudo preparar el inicio offline de la aplicación. Revisá la instalación antes de salir a la ruta.';document.querySelector('#secure-app').append(p);});
+mountInstallation(document.querySelector('#pwa-install'));

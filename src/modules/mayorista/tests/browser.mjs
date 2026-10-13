@@ -142,6 +142,14 @@ try{
   const printHtml=await evaluate(`(async()=>{const m=await import('./cargas/storage.mjs'),d=await import('./cargas/documents.mjs');const s=await m.loadLoads('demo-distribuidora-sur');return d.renderLoadDocument(s,Object.keys(s.cargas)[0],'carga');})()`);
   const frame=(await call('Page.getFrameTree')).frameTree.frame.id;await call('Page.setDocumentContent',{frameId:frame,html:printHtml});
   const pdf=await call('Page.printToPDF',{printBackground:true,preferCSSPageSize:true});const bytes=Buffer.from(pdf.data,'base64');assert.equal(bytes.subarray(0,4).toString(),'%PDF');await writeFile(path.join(artifacts,'cargas-hoja.pdf'),bytes);passed++;console.log('PASS hoja de carga renderizada y PDF generado (sin impresora física)');
+  await call('Page.navigate',{url:'http://127.0.0.1:4173/secure.html'});
+  for(let n=0;n<100;n++){if(await evaluate("!!document.querySelector('#pwa-install [role=status]')"))break;await delay(50);}
+  await evaluate('navigator.serviceWorker.ready');await delay(500);
+  const secureManifest=await call('Page.getAppManifest'),secureInstallability=await call('Page.getInstallabilityErrors');
+  assert.deepEqual(secureManifest.errors,[]);assert.deepEqual(secureInstallability.installabilityErrors,[]);
+  assert.equal(JSON.parse(secureManifest.data).name,'SIGO Vendedor');passed++;console.log('PASS entrada segura tiene manifest propio e instalación PWA válida en Chromium (sin Android físico)');
+  await test('iconos negros any y maskable se descargan y conservan dimensión real desde navegador', `const check=(c,msg)=>{if(!c)throw new Error(msg)};const m=await(await fetch('./secure.webmanifest')).json();for(const i of m.icons){const response=await fetch(i.src);check(response.ok,'icono no accesible');const bitmap=await createImageBitmap(await response.blob()),size=Number(i.sizes.split('x')[0]);check(bitmap.width===size&&bitmap.height===size,'dimensión');const canvas=document.createElement('canvas');canvas.width=canvas.height=size;canvas.getContext('2d').drawImage(bitmap,0,0);const data=canvas.getContext('2d').getImageData(0,0,size,size).data;check(data[0]===255&&data[1]===255&&data[2]===255&&data[3]===255,'fondo blanco opaco');check([...data].some((v,n)=>n%4===0&&v<20),'marca negra');bitmap.close();}`);
+  await writeFile(path.join(artifacts,'sigo-vendedor-installation.json'),JSON.stringify({manifestUrl:secureManifest.url,manifest:JSON.parse(secureManifest.data),secureInstallability,physicalAndroid:false},null,2));
   assert.deepEqual(runtimeErrors,[],'errores JavaScript');
   console.log(`${passed} pruebas aprobadas en Chromium real. Sin API remota ni Supabase.`);
   await writeFile(path.join(artifacts,'last-result.json'),JSON.stringify({date:new Date().toISOString(),browser:'Chromium headless',passed,runtimeErrors},null,2));

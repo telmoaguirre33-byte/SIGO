@@ -1,3 +1,4 @@
+import './pwa-brand.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -25,6 +26,6 @@ test('la entrada real no inyecta proveedor ni activa empresas',async()=>{
 test('manifest PWA mantiene alcance independiente',async()=>{const manifest=JSON.parse(await readFile(new URL('../demo/manifest.webmanifest',import.meta.url),'utf8'));assert.equal(manifest.scope,'./');assert.equal(manifest.start_url,'./');assert.equal(manifest.display,'standalone');});
 test('iconos PNG de Android tienen dimensiones reales 192 y 512',async()=>{
   const manifest=JSON.parse(await readFile(new URL('../demo/manifest.webmanifest',import.meta.url),'utf8'));
-  for(const size of [192,512]){const icon=manifest.icons.find(i=>i.sizes===size+'x'+size);assert.equal(icon?.type,'image/png');const bytes=await readFile(new URL('../demo/'+icon.src.slice(2),import.meta.url));assert.equal(bytes.subarray(0,8).toString('hex'),'89504e470d0a1a0a');assert.equal(bytes.readUInt32BE(16),size);assert.equal(bytes.readUInt32BE(20),size);}
+  for(const size of [192,512]){const icon=manifest.icons.find(i=>i.sizes===size+'x'+size);assert.equal(icon?.type,'image/png');const bytes=await readFile(new URL('../demo/'+icon.src.split('?')[0].slice(2),import.meta.url));assert.equal(bytes.subarray(0,8).toString('hex'),'89504e470d0a1a0a');assert.equal(bytes.readUInt32BE(16),size);assert.equal(bytes.readUInt32BE(20),size);}
 });
 test('shell offline incluye los iconos PNG propios',async()=>{const sw=await readFile(new URL('../demo/sw.js',import.meta.url),'utf8');assert.ok(sw.includes("'./icon-192.png'"));assert.ok(sw.includes("'./icon-512.png'"));});

@@ -87,4 +87,4 @@ function showVisit(id) {
 window.addEventListener('online',()=>{render();void sync();});
 window.addEventListener('offline',render);
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;render();});
-try{await load();render();if('serviceWorker' in navigator)await navigator.serviceWorker.register('./sw.js');}catch(e){app.textContent='No se pudo iniciar el almacenamiento: '+e.message;}
+try{await load();render();if('serviceWorker' in navigator)await navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'});}catch(e){app.textContent='No se pudo iniciar el almacenamiento: '+e.message;}
