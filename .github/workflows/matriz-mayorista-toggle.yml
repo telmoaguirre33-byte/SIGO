@@ -35,7 +35,7 @@ jobs:
         with:
           node-version: '24'
       - name: Instalar herramientas del build
-        run: npm ci --ignore-scripts --no-audit --no-fund
+        run: npm install --no-audit --no-fund
       - name: Verificar contrato de la acción Matriz
         run: node scripts/test-matriz-mayorista.mjs
       - name: Compilar SIGO y verificar flujos críticos
