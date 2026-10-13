@@ -4,9 +4,9 @@ Estado: pendiente de ejecución en dispositivos físicos. No hay una URL HTTPS o
 
 ## Preparación
 
-1. Usar únicamente un Supabase QA independiente autorizado, datos ficticios y el origen HTTPS independiente aprobado. No usar credenciales ni datos de SIGO existente.
-2. Habilitar `secure-config.mjs` con `enabled: true` y el origen exacto aprobado, sin claves. La entrada `secure.html` y `secure.webmanifest` arrancan la aplicación cifrada, distinta de la demo. El servidor debe autenticar, comprobar empresa y permisos; esta configuración pública no concede acceso.
-3. Antes de activar, resolver la persistencia QA, el adaptador Supabase, las membresías de los cinco roles, activación por empresa y el mantenimiento del catálogo real. El backend actual de pruebas solo admite PostgreSQL localhost; no está configurado como servidor comercial.
+1. Usar únicamente Railway MAYORISTA-QA, datos ficticios y un origen HTTPS independiente aprobado. No usar credenciales ni datos de SIGO existente. La activación sigue bloqueada por la verificación del presupuesto; consultar `RAILWAY-QA-OPERACION.md`.
+2. El runtime independiente genera `secure-config.mjs` público con el origen exacto. `secure.html` y `secure.webmanifest` arrancan la aplicación cifrada; `portal.html` administra mediante la misma API. La configuración pública no concede acceso: el servidor verifica sesión, empresa habilitada y membresía persistente en cada petición.
+3. Instalar el paquete SQL en una base vacía y habilitar explícitamente la empresa QA. El backend admite exclusivamente la instancia privada autorizada con CA y hostname TLS verificados. Los cinco roles, catálogos, clientes, precios y cargas ya disponen de API/PostgreSQL; resta ejecutar esta aceptación en el entorno persistente y teléfonos reales.
 4. Preparar dos teléfonos Android con Chrome actualizado, empresas QA A/B, vendedores A1/A2/B1, clientes asignados, precios unidad/pack/caja/bulto y productos con códigos. Registrar modelo, Android, Chrome, fecha, commit y URL.
 5. Usar un lector concreto y la impresora de reparto que utilizará la distribuidora. Anotar modelo y conexión Bluetooth/USB/red. Registrar comprobantes anonimizados de cada caso.
 
@@ -26,16 +26,18 @@ Estado: pendiente de ejecución en dispositivos físicos. No hay una URL HTTPS o
 ## Administración, carga y reparto
 
 - Validar por cada rol la matriz aprobada: gerencia total; administración clientes/vendedores/productos/precios/rutas/pedidos/cargas/cobranzas; vendedor asignados/visitas/objetivos; armador preparación/picking/control; chofer rutas/entregas/devoluciones/rendiciones.
-- Intentar acceder a empresa B desde A mediante UI y peticiones API; comprobar RLS con identidades reales. Estos cinco roles todavía requieren vinculación persistente en servidor; los controles unitarios no sustituyen esta aceptación.
+- Intentar acceder a empresa B desde A mediante UI y peticiones API; comprobar RLS con identidades reales. Los roles persistentes y RLS pasaron CI contra PostgreSQL; repetir con empresas QA A/B y comprobar también revocación de sesiones, cambio de rol y desactivación de usuarios.
 - Aprobar pedidos recibidos, asignar camión/ruta/chofer/armador y preparar por cliente y por carga consolidada. Repetir asignación a dos camiones: debe existir un solo destino.
 - Usar lector físico con cada presentación y con un código inválido/ajeno. Registrar sobrantes y autorizar faltantes por pedido. No salir sin verificación completa.
 - Con inventario exclusivamente Mayorista habilitado, intentar verificar dos cargas que excedan la disponibilidad conjunta. Confirmar una sola reserva válida y que la operación rechazada no cambió carga, inventario ni cuenta.
 - Imprimir hoja de carga, reparto y pedido. Comprobar legibilidad, cliente, cantidades, chofer y firmas en papel. Un PDF generado no acredita funcionamiento de la impresora.
 - Registrar entregas parciales, rechazo, devolución posterior al cobro, rendición y revisión. Confirmar que el cobro se conserva y que la cuenta muestra el crédito correspondiente. No se efectúan operaciones en Caja, Stock o Facturación de SIGO.
-- Cerrar solo con todas las entregas y rendiciones revisadas. Verificar devolución física recibida en depósito antes de aceptar el reingreso: el control comercial de recepción física sigue pendiente.
+- Cerrar solo con todas las entregas y rendiciones revisadas. El armador registra la recepción física exacta de las devoluciones antes del cierre. Intentar cerrar sin ese registro: debe rechazarse sin reingresar inventario. Repetir el cierre y comprobar un único movimiento por producto.
+- Cancelar una carga publicada que aún no salió, reintentar la cancelación y reasignar su pedido a otro camión. Conservar ambos historiales y un único destino activo.
+- Consolidar el mismo producto vendido por unidad y pack promocional: verificar cantidades, total exacto y cuenta de la entrega parcial. El total parcial se prorratea sobre el importe consolidado del pedido, con redondeo a centavos.
 
 ## Registro de resultados
 
 Para cada caso: PASS/FAIL/BLOQUEADO, equipo/usuario/empresa, UUID implicados, resultado esperado/observado y evidencia. No marcar «aprobado» un caso no ejecutado. Conservar los errores y no borrar pedidos para obtener una pantalla limpia.
 
-La comercialización exige además alta/baja y recuperación de usuarios, monitoreo, respaldos persistentes/restauración completa, carga de datos reales, permisos persistentes, publicación de catálogos/listas/ofertas/objetivos y administración operativa completa. Este protocolo no certifica que esas tareas estén terminadas.
+La API ya incluye alta/baja, cambio de rol y restablecimiento de contraseña por gerencia, permisos persistentes y publicación de catálogos/listas/ofertas/objetivos. Antes de comercializar faltan la aceptación física, monitoreo operativo, respaldos persistentes y un ensayo completo de restauración. El historial local del vendedor corresponde a su almacén cifrado: validar la política comercial de consulta entre dispositivos. Este protocolo no certifica tareas no ejecutadas.
