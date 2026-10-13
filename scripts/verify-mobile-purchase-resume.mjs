@@ -103,6 +103,7 @@ function harness() {
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: "fragment" };
       if (name === "./tenant") return tenant;
       if (name === "./supabase") return { supabase };
+      if (name === "./adminPush") return { cerrarSesionConPushRevocado: async () => { await supabase.auth.signOut(); } };
       throw new Error(`Unexpected import: ${name}`);
     }, document, console: { error() {}, warn(...args) { state.warnings.push(args); } },
   });
