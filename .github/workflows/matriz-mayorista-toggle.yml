@@ -1,0 +1,54 @@
+name: Matriz Mayorista · integración mínima
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/MatrizAdmin.tsx'
+      - 'supabase/migrations/*mayorista_modulo_matriz.sql'
+      - 'supabase/tests/mayorista_modulo_matriz.sql'
+      - '.github/workflows/matriz-mayorista-toggle.yml'
+permissions:
+  contents: read
+jobs:
+  matriz-mayorista:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: matriz_ci_only
+          POSTGRES_DB: matriz_ci
+        ports:
+          - '127.0.0.1:55472:5432'
+        options: >-
+          --health-cmd "pg_isready -U postgres -d matriz_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Instalar herramientas del build
+        run: npm install --no-audit --no-fund
+      - name: Verificar contrato de la acción Matriz
+        run: node scripts/test-matriz-mayorista.mjs
+      - name: Compilar SIGO y verificar flujos críticos
+        run: |
+          npm run build
+          npm run verify:critical
+      - name: Preparar cliente PostgreSQL del runner
+        run: |
+          if ! command -v psql >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+      - name: Probar migraciones y aislamiento en PostgreSQL efímero
+        env:
+          PGPASSWORD: matriz_ci_only
+        run: psql "postgresql://postgres@127.0.0.1:55472/matriz_ci" --set=ON_ERROR_STOP=1 --file=supabase/tests/mayorista_modulo_matriz.sql
