@@ -36,9 +36,9 @@ try {
   `);
   await client.query(updater);
   await client.query(mayorista);
+  assert.equal((await client.query("SELECT count(*)::int n FROM public.sigo_modulos_catalogo WHERE clave='mayorista_distribuidora' AND disponible AND NOT obligatorio")).rows[0].n,1);
   await client.query("SET LOCAL ROLE authenticated");
   await client.query("SELECT set_config('request.jwt.claim.sub',$1,true), set_config('request.jwt.claim.superadmin','true',true)",[admin]);
-  assert.equal((await client.query("SELECT count(*)::int n FROM public.sigo_modulos_catalogo WHERE clave='mayorista_distribuidora' AND disponible AND NOT obligatorio")).rows[0].n,1);
   assert.deepEqual((await client.query("SELECT empresa_id,mayorista_habilitado FROM public.matriz_listar_mayorista_modulos_sigo() ORDER BY empresa_id")).rows,[
     {empresa_id:empresaA,mayorista_habilitado:false},{empresa_id:empresaB,mayorista_habilitado:false}
   ]);
