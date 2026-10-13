@@ -69,6 +69,8 @@ jobs:
           node ../tests/fulfillment.mjs
       - name: Políticas RLS en PostgreSQL efímero local
         run: npm run test:rls
+      - name: Toggle Mayorista y permisos en PostgreSQL efímero
+        run: node ../tests/matriz-toggle-postgres.mjs
       - name: Autenticación firmada y API HTTP contra PostgreSQL aislado
         run: node ../tests/native-api.mjs
       - name: IndexedDB en Chromium real
