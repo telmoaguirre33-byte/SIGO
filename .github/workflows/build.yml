@@ -25,5 +25,8 @@ jobs:
       - name: Build SIGO
         run: npm run build
 
+      - name: Verify administrator notification security
+        run: npm run test:admin-notifications
+
       - name: Verify critical SIGO flow
         run: npm run verify:critical

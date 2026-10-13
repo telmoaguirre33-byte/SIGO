@@ -8,6 +8,7 @@ import {
   type EmpresaOperativa,
 } from "./tenant";
 import { supabase } from "./supabase";
+import { cerrarSesionConPushRevocado } from "./adminPush";
 
 type TenantState = "loading" | "ready" | "empty" | "error";
 
@@ -161,7 +162,7 @@ export default function TenantSwitcher({ value, onChange, onStateChange, disable
     requestRef.current += 1;
     contextoRef.current = null;
     guardarEmpresaActiva(null, userId);
-    await supabase.auth.signOut();
+    await cerrarSesionConPushRevocado();
   }
 
   if (loading || error || empresas.length === 0) return null;
