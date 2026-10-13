@@ -24,6 +24,7 @@ type EmpresaMatriz = {
   soporte_activo: boolean;
   busqueda_ean_habilitada?: boolean;
   lector_celular_habilitado?: boolean;
+  mayorista_habilitado?: boolean;
 };
 
 type Resumen = {
@@ -62,18 +63,26 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [readiness, setReadiness] = useState<OperationalReadinessResult | null>(null);
+  const [mayoristaDisponible, setMayoristaDisponible] = useState(false);
+  const [mayoristaError, setMayoristaError] = useState("");
   const [readinessLoading, setReadinessLoading] = useState(false);
 
   async function cargar() {
     setLoading(true);
     setError("");
     try {
-      const [resumenResp, empresasResp] = await Promise.all([
+      const [resumenResp, empresasResp, mayoristaResp] = await Promise.all([
         supabase.rpc("matriz_resumen_sigo"),
         supabase.rpc("matriz_listar_empresas_sigo"),
+        supabase.rpc("matriz_listar_mayorista_modulos_sigo"),
       ]);
       if (resumenResp.error) throw resumenResp.error;
       if (empresasResp.error) throw empresasResp.error;
+      setMayoristaDisponible(!mayoristaResp.error);
+      setMayoristaError(mayoristaResp.error ? "El módulo Mayorista requiere su migración de base de datos y permisos; queda desactivado." : "");
+      const estadosMayorista = new Map<string, boolean>(
+        ((mayoristaResp.data ?? []) as Array<{ empresa_id: string; mayorista_habilitado: boolean }>).map((fila) => [String(fila.empresa_id), Boolean(fila.mayorista_habilitado)]),
+      );
 
       const filaResumen = Array.isArray(resumenResp.data) ? resumenResp.data[0] : resumenResp.data;
       setResumen({
@@ -102,9 +111,12 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
         soporte_activo: Boolean(fila.soporte_activo),
         busqueda_ean_habilitada: Boolean(fila.busqueda_ean_habilitada),
         lector_celular_habilitado: Boolean(fila.lector_celular_habilitado),
+        mayorista_habilitado: estadosMayorista.get(String(fila.empresa_id)) ?? false,
       })));
     } catch (e) {
       console.error(e);
+      setMayoristaDisponible(false);
+      setMayoristaError("No se pudo verificar la disponibilidad de Mayorista; el módulo queda desactivado.");
       setError("No pudimos cargar la Matriz. Revisá el despliegue de Supabase y volvé a intentar.");
     } finally {
       setLoading(false);
@@ -242,6 +254,33 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
     } finally { setWorkingId(null); }
   }
 
+  async function cambiarMayorista(empresa: EmpresaMatriz) {
+    if (workingId || !mayoristaDisponible) return;
+    const proximo = !empresa.mayorista_habilitado;
+    setWorkingId(empresa.empresa_id);
+    setError("");
+    setMensaje("");
+    try {
+      const { error: rpcError } = await supabase.rpc("matriz_actualizar_modulo_empresa_sigo", {
+        p_empresa_id: empresa.empresa_id,
+        p_modulo_clave: "mayorista_distribuidora",
+        p_habilitado: proximo,
+      });
+      if (rpcError) throw rpcError;
+      setEmpresas((actuales) => actuales.map((item) =>
+        item.empresa_id === empresa.empresa_id
+          ? { ...item, mayorista_habilitado: proximo }
+          : item
+      ));
+      setMensaje(`${empresa.nombre}: módulo Mayorista ${proximo ? "activado" : "desactivado"}.`);
+    } catch (e) {
+      console.error(e);
+      setError("No pudimos actualizar Mayorista. Revisá que el catálogo del módulo esté migrado y disponible.");
+    } finally {
+      setWorkingId(null);
+    }
+  }
+
   async function abrirSoporte(empresa: EmpresaMatriz) {
     setWorkingId(empresa.empresa_id);
     setError("");
@@ -363,6 +402,7 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
           </div>
 
           {error ? <div className="form-error">{error}</div> : null}
+          {mayoristaError ? <div className="empty-state" role="status">{mayoristaError}</div> : null}
           {mensaje ? <div className="sigo-matriz-success">{mensaje}</div> : null}
 
           {loading ? <div className="empty-state">Cargando Matriz…</div> : filtradas.length === 0 ? (
@@ -412,6 +452,9 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
                     </button>
                     <button className={empresa.lector_celular_habilitado ? "admin-button" : "primary-button"} type="button" disabled={workingId === empresa.empresa_id} onClick={() => void cambiarLectorCelular(empresa)}>
                       {empresa.lector_celular_habilitado ? "📱 Lector celular: Activo" : "📱 Agregar lector celular"}
+                    </button>
+                    <button className={empresa.mayorista_habilitado ? "admin-button" : "primary-button"} type="button" disabled={!mayoristaDisponible || workingId === empresa.empresa_id} onClick={() => void cambiarMayorista(empresa)} aria-label={empresa.mayorista_habilitado ? "Desactivar módulo Mayorista" : "Agregar módulo Mayorista"}>
+                      {empresa.mayorista_habilitado ? "Mayorista: Activo" : "Agregar módulo Mayorista"}
                     </button>
                     {empresa.soporte_activo ? (
                       <button className="admin-button" type="button" disabled={workingId === empresa.empresa_id} onClick={() => void cerrarSoporte(empresa)}>Cerrar soporte</button>
