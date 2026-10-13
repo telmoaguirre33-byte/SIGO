@@ -51,9 +51,15 @@ try {
   assert.equal((await client.query("SELECT bool_and(NOT mayorista_habilitado) all_off FROM public.matriz_listar_mayorista_modulos_sigo()")).rows[0].all_off,true);
   assert.equal((await client.query("SELECT has_function_privilege('authenticated','public.matriz_listar_mayorista_modulos_sigo()','EXECUTE')")).rows[0].has_function_privilege,true);
   await client.query("SELECT set_config('request.jwt.claim.superadmin','false',true)");
+  await client.query("SAVEPOINT non_superadmin_check");
   await assert.rejects(()=>client.query("SELECT * FROM public.matriz_listar_mayorista_modulos_sigo()"),e=>String(e.message).includes("SUPERADMIN_REQUIRED"));
+  await client.query("ROLLBACK TO SAVEPOINT non_superadmin_check");
+  await client.query("RELEASE SAVEPOINT non_superadmin_check");
   await client.query("SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claim.superadmin','true',true)");
+  await client.query("SAVEPOINT anonymous_check");
   await assert.rejects(()=>client.query("SELECT * FROM public.matriz_listar_mayorista_modulos_sigo()"),e=>String(e.message).includes("AUTH_REQUIRED"));
+  await client.query("ROLLBACK TO SAVEPOINT anonymous_check");
+  await client.query("RELEASE SAVEPOINT anonymous_check");
   console.log("PostgreSQL efímero: módulo apagado, activar/desactivar aislado por empresa y permisos de Superadmin aprobados.");
 } finally {
   await client.query("ROLLBACK").catch(()=>{});
