@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
+import { cerrarSesionConPushRevocado, notificarAltaEmpresaAdmin } from "./adminPush";
 import "./auth.css";
 
 type Props = { children: ReactNode };
@@ -266,13 +267,14 @@ export default function SigoAuthGate({ children }: Props) {
       return;
     }
 
-    const { error: empresaError } = await supabase.rpc("crear_empresa", {
+    const { data: empresaId, error: empresaError } = await supabase.rpc("crear_empresa", {
       p_nombre: nombre,
       p_razon_social: null,
       p_cuit: null,
     });
 
     if (!empresaError) {
+      if (typeof empresaId === "string") void notificarAltaEmpresaAdmin(empresaId);
       const { error: metadataError } = await supabase.auth.updateUser({
         data: { [PENDING_EMPRESA_METADATA_KEY]: null },
       });
@@ -409,7 +411,7 @@ export default function SigoAuthGate({ children }: Props) {
           <p className="sigo-auth-subtitle">Tus datos siguen guardados. Activá la suscripción para continuar usando SIGO.</p>
           {error ? <div className="sigo-auth-error" role="alert">{error}</div> : null}
           <button className="sigo-auth-submit sigo-mercadopago-button" type="button" onClick={abrirMercadoPago}>Activar con Mercado Pago</button>
-          <button className="sigo-auth-secondary" type="button" onClick={() => void supabase.auth.signOut()}>Cerrar sesión</button>
+          <button className="sigo-auth-secondary" type="button" onClick={() => void cerrarSesionConPushRevocado()>Cerrar sesión</button>
         </section>
       </main>
     );
