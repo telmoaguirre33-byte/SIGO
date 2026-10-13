@@ -12,4 +12,4 @@ COPY --from=build --chown=node:node /app /app
 USER node
 ENV NODE_ENV=production
 EXPOSE 8080
-CMD ["node","server.mjs"]
+CMD ["node","/app/src/modules/mayorista/backend/server.mjs"]
