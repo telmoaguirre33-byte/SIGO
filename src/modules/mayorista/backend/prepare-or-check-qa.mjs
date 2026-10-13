@@ -1,3 +1,4 @@
+import {startupDiagnostic} from './startup-diagnostic.mjs';
 import pg from 'pg';
 import {railwayRuntime,assertInstalledQA} from './railway-runtime.mjs';
 export async function prepareOrCheckQA(env,{Pool=pg.Pool,install=()=>import('./prepare-qa.mjs')}={}){
@@ -8,4 +9,4 @@ export async function prepareOrCheckQA(env,{Pool=pg.Pool,install=()=>import('./p
  await install();if(process.exitCode)throw new Error('Instalación inicial QA rechazada');
  return {installed:true,verified:true};
 }
-if(process.argv[1]&&new URL(import.meta.url).pathname===process.argv[1])prepareOrCheckQA(process.env).then(r=>console.log(JSON.stringify({event:'MAYORISTA_QA_SCHEMA_READY',...r}))).catch(()=>{console.error('MAYORISTA_QA_SCHEMA_BLOCKED');process.exitCode=1;});
+if(process.argv[1]&&new URL(import.meta.url).pathname===process.argv[1])prepareOrCheckQA(process.env).then(r=>console.log(JSON.stringify({event:'MAYORISTA_QA_SCHEMA_READY',...r}))).catch(error=>{console.error(JSON.stringify({...startupDiagnostic(error,process.env),stage:'pre_deploy'}));process.exitCode=1;});

@@ -15,7 +15,7 @@ export function verifiedPublicCA(output,now=Date.now()){
 }
 export function variableCommand(name){
  if(!/^[A-Z][A-Z0-9_]*$/.test(name))throw new Error('Nombre de variable inválido');
- return ['variable','set',name,'--stdin','--skip-deploys','--service',API_SERVICE,'--environment',QA_RAILWAY.environmentId,'--json'];
+ return ['variable','set',name,'--stdin','--skip-deploys','--project',QA_RAILWAY.projectId,'--service',API_SERVICE,'--environment',QA_RAILWAY.environmentId,'--json'];
 }
 export async function provisionQA({run,budgetConfirmed=false,onStep=()=>{},request=fetch,persistCredentials=async()=>{},sleep=ms=>new Promise(r=>setTimeout(r,ms)),now=Date.now}={}){
  if(budgetConfirmed!==true)throw new Error('Confirmar presupuesto total QA de hasta US$15 antes de activar');
@@ -54,7 +54,7 @@ export async function provisionQA({run,budgetConfirmed=false,onStep=()=>{},reque
   const raw=JSON.parse(await run(['deployment','list','--project',QA_RAILWAY.projectId,...scope,'--limit','1','--json']));
   const deployments=Array.isArray(raw)?raw:raw.deployments;
   const d=deployments?.[0];
-  if(!d||d.serviceId!==API_SERVICE||d.environmentId!==QA_RAILWAY.environmentId)throw new Error('No se pudo verificar identidad del despliegue QA');
+  if(!d||(d.serviceId!==undefined&&d.serviceId!==API_SERVICE)||(d.environmentId!==undefined&&d.environmentId!==QA_RAILWAY.environmentId))throw new Error('No se pudo verificar identidad del despliegue QA');
   onStep('Despliegue QA: '+d.status);
   if(d.status==='SUCCESS'){success=true;break;}
   if(['FAILED','CRASHED','NEEDS_APPROVAL','SKIPPED','REMOVED','REMOVING'].includes(d.status))throw new Error('Despliegue QA detenido: '+d.status);

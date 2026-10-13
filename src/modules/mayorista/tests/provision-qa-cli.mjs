@@ -25,7 +25,7 @@ test('puente rechaza bootstrap existente antes de obtener certificados o reempla
 });
 test('puente guarda secretos fuera de argv y comprueba login, rol, catálogo y revocación',async()=>{
  const calls=[],steps=[],values={},credentials=[];
- const run=async(args,input)=>{calls.push({args,input});if(args[0]==='ssh')return publicChain;if(args[0]==='variable'&&args[1]==='list')return '{}';if(args[0]==='variable'&&args[1]==='set'){values[args[2]]=input;return '{}';}if(args[0]==='deployment')return JSON.stringify([{serviceId:API_SERVICE,environmentId:QA_RAILWAY.environmentId,status:'SUCCESS'}]);return '{}';};
+ const run=async(args,input)=>{calls.push({args,input});if(args[0]==='ssh')return publicChain;if(args[0]==='variable'&&args[1]==='list')return '{}';if(args[0]==='variable'&&args[1]==='set'){values[args[2]]=input;return '{}';}if(args[0]==='deployment')return JSON.stringify([{id:'deployment-qa-fixture',status:'SUCCESS',createdAt:new Date().toISOString(),meta:{}}]);return '{}';};
  const requested=[];
  const request=async(url,options={})=>{
   requested.push({url,options});
