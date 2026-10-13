@@ -411,7 +411,7 @@ export default function SigoAuthGate({ children }: Props) {
           <p className="sigo-auth-subtitle">Tus datos siguen guardados. Activá la suscripción para continuar usando SIGO.</p>
           {error ? <div className="sigo-auth-error" role="alert">{error}</div> : null}
           <button className="sigo-auth-submit sigo-mercadopago-button" type="button" onClick={abrirMercadoPago}>Activar con Mercado Pago</button>
-          <button className="sigo-auth-secondary" type="button" onClick={() => void cerrarSesionConPushRevocado()>Cerrar sesión</button>
+          <button className="sigo-auth-secondary" type="button" onClick={() => void cerrarSesionConPushRevocado()}>Cerrar sesión</button>
         </section>
       </main>
     );
