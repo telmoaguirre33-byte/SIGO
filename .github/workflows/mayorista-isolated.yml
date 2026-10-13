@@ -5,6 +5,9 @@ on:
     paths:
       - 'src/modules/mayorista/**'
       - 'src/ModulosControlPanel.tsx'
+      - 'src/MatrizAdmin.tsx'
+      - 'supabase/migrations/*mayorista*'
+      - 'src/modules/mayorista/tests/matriz-toggle-contract.mjs'
       - '.github/workflows/mayorista-isolated.yml'
 permissions:
   contents: read
@@ -60,6 +63,7 @@ jobs:
           npm run test:admin
           npm run test:recovery
           npm run test:integration-pwa
+          node ../tests/matriz-toggle-contract.mjs
           npm run test:http-auth
           npm run test:rendiciones
           node ../tests/fulfillment.mjs
