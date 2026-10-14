@@ -67,7 +67,7 @@ returns table(empresa_id uuid,habilitado boolean,aplicacion_disponible boolean,o
 language plpgsql stable security definer set search_path=public as $$
 begin
  if auth.uid() is null then raise exception 'AUTH_REQUIRED';end if;
- if not exists(select 1 from public.empresa_usuarios where empresa_id=p_empresa_id and user_id=auth.uid() and activo and rol in ('owner','admin')) then raise exception 'FORBIDDEN';end if;
+ if not exists(select 1 from public.empresa_usuarios eu where eu.empresa_id=p_empresa_id and eu.user_id=auth.uid() and eu.activo and eu.rol in ('owner','admin')) then raise exception 'FORBIDDEN';end if;
  return query select p_empresa_id,coalesce(em.habilitado,false),coalesce(d.aplicacion_disponible,false),d.origen_aprobado,d.administracion_url,d.vendedor_url
  from public.empresas e left join public.sigo_empresa_modulos em on em.empresa_id=e.id and em.modulo_clave='mayorista_distribuidora'
  left join public.sigo_mayorista_destinos d on d.empresa_id=e.id where e.id=p_empresa_id and e.activa;
