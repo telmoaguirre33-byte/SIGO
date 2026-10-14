@@ -13,6 +13,11 @@ export async function startRailwayServer(env=process.env){
  const server=createServer(async(req,res)=>{try{
   const url=new URL(req.url,config.origin),headers={'X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin','X-Frame-Options':'DENY','Strict-Transport-Security':'max-age=31536000'};
   if(url.pathname==='/health'&&req.method==='GET'){res.writeHead(200,{...headers,'Content-Type':'application/json','Cache-Control':'no-store'});res.end('{"status":"ok","module":"mayorista"}');return;}
+  if(url.pathname==='/readiness'&&req.method==='GET'){
+   const installed=(await pool.query("SELECT to_regclass('mayorista_private.acceptance_runs') AS runs")).rows[0]?.runs;
+   const report=installed?(await pool.query('SELECT report FROM mayorista_private.acceptance_runs WHERE revision=$1',[env.RAILWAY_GIT_COMMIT_SHA])).rows[0]?.report:null;
+   res.writeHead(report?200:503,{...headers,'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(report??{status:'acceptance_pending',productionActivation:false}));return;
+  }
   if(url.pathname==='/'&&req.method==='GET'){res.writeHead(302,{...headers,Location:'/portal.html'});res.end();return;}
   if(req.method==='GET'&&allowed.has(url.pathname)){
    const f=path.resolve(root,'.'+url.pathname);if(!f.startsWith(root+path.sep))throw new Error();let content;

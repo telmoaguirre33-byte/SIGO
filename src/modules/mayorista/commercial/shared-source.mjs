@@ -1,5 +1,6 @@
 import {ApiError} from '../api/receive-order.mjs';
 import {administrative} from '../security/company-roles.mjs';
+import {canonical} from '../cargas/model.mjs';
 /** Fuente por empresa. Solo se instala en un backend con conexión SIGO validada.
  * No habilita una empresa por variables, por datos del navegador ni por licencia. */
 export function createSharedSource({pool,databasePolicy}){
@@ -28,7 +29,16 @@ export function createSharedSource({pool,databasePolicy}){
     sharedState:()=>{admin();return rpc('leer_comercio_mayorista_sigo',[E]);},
     sharedCommand:async command=>{
      admin();if(command?.empresaId!==E)throw new ApiError(403,'Otra empresa');
-     if(command.tipo==='entrega')return rpc('registrar_entrega_mayorista_sigo',[E,command.id,JSON.stringify(command.datos)]);
+     if(command.tipo==='entrega'){
+      const d=command.datos??{},loads=(await query('SELECT datos FROM mayorista.cargas_operativas WHERE empresa_id=$1',[E])).rows;
+      const load=loads.map(r=>r.datos).find(l=>l.historial?.some(h=>h.id===command.id&&h.tipo==='entregar'&&h.input?.pedidoId===d.pedidoId));
+      const event=load?.historial.find(h=>h.id===command.id),p=load?.pedidos[d.pedidoId];
+      if(!p?.entrega||p.clienteId!==d.clienteId)throw new ApiError(409,'La venta requiere una entrega registrada');
+      const lines=event.input.lineas.filter(l=>l.entregado>0).map(l=>({productoId:l.productoId,cantidad:l.entregado,precioUnitario:p.lineas.find(x=>x.productoId===l.productoId)?.precioUnitario}));
+      const normalized=x=>JSON.stringify(canonical([...(x??[])].sort((a,b)=>a.productoId.localeCompare(b.productoId))));
+      if(!Array.isArray(d.lineas)||normalized(d.lineas)!==normalized(lines))throw new ApiError(409,'El detalle no coincide con la entrega');
+      return rpc('registrar_entrega_mayorista_sigo',[E,command.id,JSON.stringify(d)]);
+     }
      if(command.tipo==='credito')return rpc('autorizar_credito_mayorista_sigo',[E,command.id,command.aprobar,command.motivo]);
      if(command.tipo==='cobro'){const d=command.datos??{};return rpc('registrar_cobro_mayorista_sigo',[E,command.id,d.clienteId,d.pedidoId??null,d.centavos,d.medio,d.comprobante]);}
      throw new ApiError(422,'Operación compartida inválida');

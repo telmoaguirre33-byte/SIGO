@@ -13,6 +13,11 @@ import {
 } from "./modulosEmpresa";
 
 const sharedCommerceRpc=async(name:string,args:Record<string,unknown>)=>{
+ if(name==='facturar_entrega_mayorista_sigo'){
+  const {data}=await supabase.auth.getSession();const token=data.session?.access_token;if(!token)throw new Error('Volvé a ingresar a SIGO');
+  const response=await fetch('/api/mayorista/arca',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(args),signal:AbortSignal.timeout(60000)});
+  const result=await response.json();if(!response.ok)throw new Error('No se confirmó la factura. La entrega se conserva para reintentar o revisar en Facturación.');return result;
+ }
  if(!['registrar_entrega_mayorista_sigo','autorizar_credito_mayorista_sigo','registrar_cobro_mayorista_sigo','leer_comercio_mayorista_sigo'].includes(name))throw new Error('Operación compartida inválida');
  const {data,error}=await supabase.rpc(name,args);if(error)throw new Error('No se pudo registrar en SIGO. La operación Mayorista se conserva para revisión.');return data;
 };

@@ -12,6 +12,12 @@
         "gru1"
       ],
       "maxDuration": 30
+    },
+    "api/mayorista/*.js": {
+      "regions": [
+        "gru1"
+      ],
+      "maxDuration": 60
     }
   },
   "headers": [

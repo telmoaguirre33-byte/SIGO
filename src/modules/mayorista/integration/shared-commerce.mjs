@@ -9,6 +9,7 @@ export function createSharedCommerce({empresaId,rpc,sourceMode}={}){
  };
  return {
   read:async()=>{gate();const result=await rpc('leer_comercio_mayorista_sigo',{p_empresa_id:empresaId});if(result?.empresaId!==empresaId||!Array.isArray(result.operaciones))throw new Error('Estado comercial compartido inválido');return result;},
+  invoice:async({id,ventaId,puntoVenta,tipoCbte,condicionIvaReceptorId})=>{gate();if(!uuid(id)||!uuid(ventaId)||!Number.isInteger(puntoVenta)||puntoVenta<1||![1,6,11].includes(tipoCbte))throw new Error('Solicitud fiscal inválida');const result=await rpc('facturar_entrega_mayorista_sigo',{empresaId,comandoId:id,puntoVenta,tipoCbte,condicionIvaReceptorId});if(result?.ok!==true||result.ambiente!=='homologacion'||result.comprobante?.venta_id!==ventaId||!/^\d{14}$/.test(result.comprobante?.cae??''))throw new Error('Comprobante fiscal no confirmado');return result;},
   delivery:async(load,pedidoId,medioPago)=>{
    gate();const p=load?.pedidos?.[pedidoId],event=load?.historial?.find(h=>h.tipo==='entregar'&&h.input?.pedidoId===pedidoId);
    if(!p?.entrega||!uuid(pedidoId)||!uuid(p.clienteId)||!uuid(event?.id)||!['efectivo','transferencia','cuenta_corriente'].includes(medioPago))throw new Error('Entrega o condición de pago inválida');

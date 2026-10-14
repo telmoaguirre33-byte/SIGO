@@ -1,5 +1,19 @@
 -- Requiere 006 y asignaciones Mayorista en la misma DB SIGO. Propuesta; no producción.
 begin;
+create table mayorista.codigos_compartidos(empresa_id uuid not null,codigo text not null,producto_id uuid not null references public.productos(id),unidades_base integer not null check(unidades_base>0),primary key(empresa_id,codigo));
+alter table mayorista.codigos_compartidos enable row level security;
+alter table mayorista.codigos_compartidos force row level security;
+create policy codigos_compartidos_read on mayorista.codigos_compartidos for select to authenticated using(mayorista.operador(empresa_id,array['gerencia','administracion','armador','chofer']));
+create policy codigos_compartidos_insert on mayorista.codigos_compartidos for insert to authenticated with check(mayorista.operador(empresa_id,array['gerencia','administracion']));
+grant select,insert on mayorista.codigos_compartidos to authenticated;
+create function mayorista_private.validar_codigo_compartido() returns trigger language plpgsql security definer set search_path='' as $$
+begin
+ perform public.sigo_mayorista_operador_comercial(NEW.empresa_id);
+ if not exists(select 1 from public.productos p where p.id=NEW.producto_id and p.empresa_id=NEW.empresa_id and p.activo) then raise exception 'PRODUCT_NOT_FOUND';end if;
+ return NEW;
+end $$;
+revoke all on function mayorista_private.validar_codigo_compartido() from public,anon,authenticated;
+create trigger validar_codigo_compartido before insert on mayorista.codigos_compartidos for each row execute function mayorista_private.validar_codigo_compartido();
 create function public.sigo_mayorista_lector(p_empresa_id uuid) returns text
 language plpgsql stable security definer set search_path='' as $$
 declare v_rol text;

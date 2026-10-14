@@ -15,9 +15,9 @@ export async function verifySharedBackend(pool){
  await pool.query('INSERT INTO mayorista.vendedores VALUES($1,$2,$3,true)',[E,V,'Vendedor fuente compartida']);
  await pool.query('INSERT INTO mayorista.rutas VALUES($1,$2,$3,$4)',[E,R,'Ruta compartida','Centro']);
  await pool.query('INSERT INTO mayorista.clientes(empresa_id,cliente_id,vendedor_id,nombre,ruta_id) VALUES($1,$2,$3,$4,$5)',[E,C,V,'Nombre QA que NO debe usarse',R]);
- const creds={},password=randomBytes(24).toString('hex'),hash=await passwordRecord(password);
+ const creds={},actors={},password=randomBytes(24).toString('hex'),hash=await passwordRecord(password);
  for(const [i,role] of ['gerencia','administracion','vendedor','armador','chofer'].entries()){
-  const id=i===0?U:randomUUID(),email=role+'@shared.qa.invalid';creds[role]={email,password,empresaId:E};
+  const id=i===0?U:randomUUID(),email=role+'@shared.qa.invalid';creds[role]={email,password,empresaId:E};actors[role]=id;
   await pool.query('INSERT INTO auth.users VALUES($1) ON CONFLICT DO NOTHING',[id]);
   if(i)await pool.query('INSERT INTO public.empresa_usuarios VALUES($1,$2,true,$3)',[E,id,role==='administracion'?'admin':role]);
   await pool.query('INSERT INTO mayorista_private.usuarios(user_id,email,salt,password_hash,nombre) VALUES($1,$2,$3,$4,$5)',[id,email,hash.salt,hash.hash,role]);
@@ -42,7 +42,18 @@ export async function verifySharedBackend(pool){
  assert.equal((await call('/catalog',{token:tokens.armador})).status,403);assert.equal((await call('/catalog',{token:tokens.chofer})).status,403);
  for(const path of ['/inventory/commands','/accounts/commands','/admin/catalog/commands'])assert.equal((await call(path,{token:owner,body:{id:randomUUID(),empresaId:E}})).status,409);
  assert.equal((await call('/shared/commerce',{token:owner,body:{id:randomUUID(),empresaId:B,tipo:'entrega'}})).status,403);
- const command={id:randomUUID(),empresaId:E,tipo:'entrega',datos:{pedidoId:pedido.pedidoId,clienteId:C,medioPago:'cuenta_corriente',lineas:pedido.lineas}};
+ const eventId=randomUUID(),loadId=randomUUID(),command={id:eventId,empresaId:E,tipo:'entrega',datos:{pedidoId:pedido.pedidoId,clienteId:C,medioPago:'cuenta_corriente',lineas:pedido.lineas}};
+ assert.equal((await call('/shared/commerce',{token:owner,body:command})).status,409);
+ let legacyVersion=0;
+ for(const [tipo,input] of [['aprobar',{pedidoId:pedido.pedidoId}],['codigo',{productoId:P,codigo:'QA-UNIT-001',unidadesBase:1}],['crear',{id:loadId,camion:'QA-001',ruta:R,chofer:'Chofer QA',responsable:'Armador QA',modo:'individual'}],['asignar',{cargaId:loadId,pedidoId:pedido.pedidoId}]]){
+  const r=await call('/cargas/commands',{token:owner,body:{id:randomUUID(),empresaId:E,version:legacyVersion++,tipo,input}});assert.equal(r.status,200,JSON.stringify(r));
+ }
+ assert.equal((await call('/operations/loads',{token:owner,body:{cargaId:loadId,armadorUserId:actors.armador,choferUserId:actors.chofer}})).status,200);
+ let loadVersion=0;
+ for(const [role,tipo,input] of [['armador','iniciar',{}],['armador','escanear',{codigo:'QA-UNIT-001',cantidad:1,modo:'picking'}],['armador','verificar',{}],['gerencia','salir',{nota:'Salida QA'}],['chofer','entregar',{pedidoId:pedido.pedidoId,lineas:[{productoId:P,entregado:1,devuelto:0}],nota:'Comprobante de entrega QA'}]]){
+  const r=await call('/operations/loads/commands',{token:tokens[role],body:{id:tipo==='entregar'?eventId:randomUUID(),empresaId:E,version:loadVersion++,tipo,input:{cargaId:loadId,...input}}});assert.equal(r.status,200,JSON.stringify(r));
+ }
+ assert.equal(Number((await pool.query('SELECT stock_actual FROM public.productos WHERE id=$1',[P])).rows[0].stock_actual),7);
  const salesBefore=Number((await pool.query('SELECT count(*) FROM public.ventas_sigo WHERE empresa_id=$1',[E])).rows[0].count);
  let sale=await call('/shared/commerce',{token:owner,body:command});assert.equal(sale.status,200);assert.equal(sale.body.estado,'requiere_autorizacion');
  const credit={id:command.id,empresaId:E,tipo:'credito',aprobar:true,motivo:'Crédito por pedido en backend QA'};
@@ -50,6 +61,8 @@ export async function verifySharedBackend(pool){
  assert.equal((await call('/shared/commerce',{token:owner,body:credit})).body.estado,'aprobado');
  sale=await call('/shared/commerce',{token:owner,body:command});assert.equal(sale.body.estado,'confirmado');assert.deepEqual(await call('/shared/commerce',{token:owner,body:command}),sale);
  assert.equal(Number((await pool.query('SELECT count(*) FROM public.ventas_sigo WHERE empresa_id=$1',[E])).rows[0].count),salesBefore+1);
+ assert.equal(Number((await pool.query('SELECT stock_actual FROM public.productos WHERE id=$1',[P])).rows[0].stock_actual),6);
+ assert.equal(Number((await pool.query('SELECT count(*) FROM mayorista.movimientos_inventario WHERE empresa_id=$1',[E])).rows[0].count),0);
  const minorista=await call('/auth/login',{body:{...creds.gerencia,empresaId:B}});assert.equal((await call('/me',{token:minorista.body.accessToken})).body.fuenteComercial,undefined);
  await call('/auth/logout',{token:owner,body:{}});assert.equal((await call('/shared/commerce',{token:owner})).status,401);
  console.log('PASS fuente compartida backend: catálogo SIGO, cinco roles, UUID recuperable, escritores QA bloqueados, crédito y aislamiento');

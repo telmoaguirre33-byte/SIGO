@@ -2,7 +2,7 @@ import {administrative} from '../security/company-roles.mjs';
 import {ApiError} from '../api/receive-order.mjs';
 import {createLoadsState,applyLoadCommand} from './model.mjs';
 /** El llamador ya abrió transacción con rol authenticated/contexto verificado/RLS. */
-export function createCargasTransaction({query,principal,findOrder,fulfillment}){
+export function createCargasTransaction({query,principal,findOrder,fulfillment,readCatalog}){
   const gate=()=>{if(!administrative(principal))throw new ApiError(403,'Sin permisos de cargas');};
   const read=async()=>{gate();return (await query('SELECT datos FROM mayorista.cargas_estado WHERE empresa_id=$1',[principal.empresaId])).rows[0]?.datos??createLoadsState(principal.empresaId);};
   return {
@@ -15,12 +15,15 @@ export function createCargasTransaction({query,principal,findOrder,fulfillment})
       if(command.tipo==='aprobar'){
         const row=await findOrder(principal.empresaId,command.input?.pedidoId);if(!row)throw new ApiError(404,'Pedido no recibido');
         const operation=await fulfillment({pedidoId:row.pedidoId});if(operation.estado!=='recibido')throw new ApiError(409,'Pedido ya procesado individualmente');
-        const names=(await query('SELECT producto_id,nombre FROM mayorista.productos WHERE empresa_id=$1',[principal.empresaId])).rows;
-        const customer=(await query('SELECT nombre,ruta_id FROM mayorista.clientes WHERE empresa_id=$1 AND cliente_id=$2',[principal.empresaId,row.clienteId])).rows[0];
+        const shared=readCatalog?await readCatalog():null;
+        const names=shared?shared.productos.map(p=>({producto_id:p.id,nombre:p.nombre})):(await query('SELECT producto_id,nombre FROM mayorista.productos WHERE empresa_id=$1',[principal.empresaId])).rows;
+        const selected=shared?.clientes.find(p=>p.id===row.clienteId);
+        const customer=shared?(selected?{nombre:selected.nombre,ruta_id:selected.rutaId}:null):(await query('SELECT nombre,ruta_id FROM mayorista.clientes WHERE empresa_id=$1 AND cliente_id=$2',[principal.empresaId,row.clienteId])).rows[0];
         effective={...command,input:{pedido:{...row,cliente:customer?.nombre??row.clienteId,rutaId:customer?.ruta_id??null,lineas:row.lineas.map(l=>({...l,nombre:names.find(n=>n.producto_id===l.productoId)?.nombre??l.productoId}))}}};
       }
       if(command.tipo==='codigo'){
-        if(!(await query('SELECT producto_id FROM mayorista.productos WHERE empresa_id=$1 AND producto_id=$2 AND activo',[principal.empresaId,command.input?.productoId])).rows.length)throw new ApiError(422,'Producto no disponible');
+        const valid=readCatalog?(await readCatalog()).productos.some(p=>p.id===command.input?.productoId):(await query('SELECT producto_id FROM mayorista.productos WHERE empresa_id=$1 AND producto_id=$2 AND activo',[principal.empresaId,command.input?.productoId])).rows.length;
+        if(!valid)throw new ApiError(422,'Producto no disponible');
       }
       let next;try{next=applyLoadCommand(state,effective,{...principal,rol:'administrador'},new Date().toISOString(),command);}catch(e){throw new ApiError(409,e.message);}
       if(next.revision===state.revision)return next;
