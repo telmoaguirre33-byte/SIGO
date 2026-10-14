@@ -174,7 +174,8 @@ if(load?.estado!=='en_reparto'||Object.values(load.pedidos).some(p=>p.estado==='
 /** Estado visible derivado de evidencia operativa; el acuse original nunca cambia. */
 export function orderState({order,approved,load,commercial}={}){
  if(commercial?.estado==='requiere_autorizacion')return 'requiere_autorizacion';
- if(approved?.estado==='anulado'||load?.estado==='cancelada')return 'anulado';
+ if(approved?.estado==='anulado')return 'anulado';
+ if(load?.estado==='cancelada')return approved?.estado==='aprobado'&&!approved.cargaId?'aprobado':'anulado';
  const p=load?.pedidos?.[order?.pedidoId];
  if(load?.estado==='cerrada')return 'cerrado';
  if(p?.entrega){if(p.lineas.every(l=>(l.entregado??0)===0)&&load.historial?.some(h=>h.tipo==='devolver'&&h.input.pedidoId===p.pedidoId))return 'devuelto';return {rechazado:'no_entregado',parcial:'parcial',entregado:'entregado'}[p.estado]??p.estado;}

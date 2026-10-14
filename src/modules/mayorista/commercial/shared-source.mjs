@@ -17,8 +17,8 @@ export function createSharedSource({pool,databasePolicy}){
     JOIN public.sigo_empresa_modulos m ON m.empresa_id=f.empresa_id AND m.modulo_clave='mayorista_distribuidora' AND m.habilitado
     JOIN public.empresa_usuarios u ON u.empresa_id=f.empresa_id AND u.user_id=$2 AND u.activo
     WHERE f.empresa_id=$1 AND f.fuente='sigo'`,[principal.empresaId,principal.userId])).rows[0];
-   const roles={gerencia:'owner',administracion:'admin',vendedor:'vendedor',armador:'armador',chofer:'chofer'};
-   if(!row||row.rol!==roles[principal.rol])throw new ApiError(403,'Fuente compartida deshabilitada o rol divergente');
+   const employee=['owner','admin','seller','warehouse'],roles={gerencia:['owner'],administracion:['owner','admin'],vendedor:employee,armador:employee,chofer:employee};
+   if(!row||!roles[principal.rol]?.includes(row.rol))throw new ApiError(403,'Fuente compartida deshabilitada o rol divergente');
    return {...principal,fuenteComercial:'sigo'};
   },
   transaction:({query,principal})=>{

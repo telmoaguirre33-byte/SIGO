@@ -24,7 +24,7 @@ export async function prepareSharedBackendFixture(pool,{origin='https://shared.q
  for(const [i,role] of ['gerencia','administracion','vendedor','armador','chofer'].entries()){
   const id=i===0?U:randomUUID(),email=role+'@shared.qa.invalid';creds[role]={email,password,empresaId:E};actors[role]=id;
   await pool.query('INSERT INTO auth.users VALUES($1) ON CONFLICT DO NOTHING',[id]);
-  if(i)await pool.query('INSERT INTO public.empresa_usuarios VALUES($1,$2,true,$3)',[E,id,role==='administracion'?'admin':role]);
+  if(i)await pool.query('INSERT INTO public.empresa_usuarios VALUES($1,$2,true,$3)',[E,id,role==='administracion'?'admin':role==='vendedor'?'seller':'warehouse']);
   await pool.query('INSERT INTO mayorista_private.usuarios(user_id,email,salt,password_hash,nombre) VALUES($1,$2,$3,$4,$5)',[id,email,hash.salt,hash.hash,role]);
   await pool.query('INSERT INTO mayorista.miembros(empresa_id,user_id,vendedor_id,rol) VALUES($1,$2,$3,$4)',[E,id,role==='vendedor'?V:null,role]);
  }
@@ -141,6 +141,14 @@ export async function verifySharedBackend(pool){
  const substitutedSale=await call('/shared/commerce',{token:owner,body:sharedSub});assert.equal(substitutedSale.body.estado,'confirmado',JSON.stringify(substitutedSale));assert.deepEqual(await call('/shared/commerce',{token:owner,body:sharedSub}),substitutedSale);
  assert.equal(Number((await pool.query('SELECT stock_actual FROM public.productos WHERE id=$1',[P])).rows[0].stock_actual),before+1);assert.equal(Number((await pool.query('SELECT stock_actual FROM public.productos WHERE id=$1',[substitute])).rows[0].stock_actual),14);
  const subVenta=(await pool.query('SELECT medio_pago,total FROM public.ventas_sigo WHERE id=$1',[substitutedSale.body.ventaId])).rows[0];assert.equal(subVenta.medio_pago,'transferencia');assert.equal(Number(subVenta.total),18);
+ // Usuarios SIGO conservan sus roles canónicos; permisos Mayorista viven en su membresía propia.
+ assert.equal((await call('/admin/users/candidates',{token:owner})).status,200);
+ const forbiddenNew={id:randomUUID(),empresaId:E,tipo:'crear',input:{userId:randomUUID(),nombre:'No crear otro usuario SIGO',email:'no-create@qa.invalid',password:'ClaveMayoristaSegura2026!',rol:'vendedor',vendedorId:V}};
+ assert.equal((await call('/admin/users/commands',{token:owner,body:forbiddenNew})).status,422);
+ const permissions={id:randomUUID(),empresaId:E,tipo:'permisos',input:{userId:actors.armador,rol:'chofer',vendedorId:null,activo:true}};
+ assert.equal((await call('/admin/users/commands',{token:owner,body:permissions})).status,200);
+ const reassigned=await call('/auth/login',{body:creds.armador});assert.equal(reassigned.status,200);assert.equal((await call('/me',{token:reassigned.body.accessToken})).body.rol,'chofer');assert.equal((await pool.query('SELECT rol FROM public.empresa_usuarios WHERE empresa_id=$1 AND user_id=$2',[E,actors.armador])).rows[0].rol,'warehouse');
+ assert.equal((await call('/admin/users/commands',{token:owner,body:{...permissions,id:randomUUID(),input:{...permissions.input,rol:'armador'}}})).status,200);
  await call('/auth/logout',{token:owner,body:{}});assert.equal((await call('/shared/commerce',{token:owner})).status,401);
  console.log('PASS fuente compartida backend: catálogo SIGO, cinco roles, UUID recuperable, escritores QA bloqueados, crédito y aislamiento');
  return [{name:'Backend conectado a fuente SIGO por empresa; cinco roles y escritores QA bloqueados',status:'pass'}];

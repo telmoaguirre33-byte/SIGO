@@ -82,6 +82,7 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
         const command=await smallJson(request);return reply(200,await repository.withPrincipal(principal,tx=>tx.goalCommand(command)));
       }
       if(operational&&path==='/accounts/commands'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const command=await smallJson(request);return reply(200,await repository.withPrincipal(principal,tx=>tx.collectionCommand(command)));}
+      if(operational&&path==='/admin/users/candidates'&&request.method==='GET')return reply(200,await directory.candidates(principal));
       if(operational&&path==='/admin/users'&&request.method==='GET')return reply(200,await directory.list(principal));
       if(operational&&path==='/admin/users/commands'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const command=await smallJson(request);return reply(200,await directory.command(principal,command));}
       if(operational&&path==='/admin/catalog'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.masterState()));

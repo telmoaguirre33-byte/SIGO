@@ -16,7 +16,7 @@ revoke all on function mayorista_private.validar_codigo_compartido() from public
 create trigger validar_codigo_compartido before insert on mayorista.codigos_compartidos for each row execute function mayorista_private.validar_codigo_compartido();
 create function public.sigo_mayorista_lector(p_empresa_id uuid) returns text
 language plpgsql stable security definer set search_path='' as $$
-declare v_rol text;
+declare v_rol text;perfil record;
 begin
  if auth.uid() is null then raise exception 'AUTH_REQUIRED';end if;
  if not exists(select 1 from auth.sessions s where s.id=nullif(auth.jwt()->>'session_id','')::uuid and s.user_id=auth.uid()) then raise exception 'SESSION_REVOKED';end if;
@@ -25,6 +25,12 @@ begin
  where u.empresa_id=p_empresa_id and u.user_id=auth.uid() and u.activo;
  if v_rol is null or not exists(select 1 from public.sigo_empresa_modulos m where m.empresa_id=p_empresa_id and m.modulo_clave='mayorista_distribuidora' and m.habilitado)
  or not exists(select 1 from public.sigo_mayorista_comercio_fuente f where f.empresa_id=p_empresa_id and f.fuente='sigo') then raise exception 'MAYORISTA_FORBIDDEN';end if;
+ select rol,activo into perfil from mayorista.miembros where empresa_id=p_empresa_id and user_id=auth.uid();
+ if found then
+  if not perfil.activo or v_rol='client' or perfil.rol='gerencia' and v_rol<>'owner' or perfil.rol='administracion' and v_rol not in ('owner','admin') then raise exception 'MAYORISTA_FORBIDDEN';end if;
+  return case perfil.rol when 'gerencia' then 'owner' when 'administracion' then 'admin' else perfil.rol end;
+ end if;
+ if v_rol not in ('owner','admin') then raise exception 'MAYORISTA_FORBIDDEN';end if;
  return v_rol;
 end $$;
 create function public.leer_catalogo_mayorista_sigo(p_empresa_id uuid) returns jsonb

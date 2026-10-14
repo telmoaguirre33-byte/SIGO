@@ -7,7 +7,7 @@ export async function verifyBusinessTypeSQL(pool){
  const E='30000000-0000-4000-8000-000000000001',B='30000000-0000-4000-8000-000000000002',U='30000000-0000-4000-8000-000000000011',OTHER='30000000-0000-4000-8000-000000000012';
  const sql=(await readFile(new URL('../../../../docs/mayorista/sql/005_integracion_empresa_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/mi,'').replace(/^rollback;$/mi,'');
  await pool.query(`CREATE TABLE auth.users(id uuid primary key);CREATE TABLE public.empresas(id uuid primary key,activa boolean not null default true);
- CREATE TABLE public.empresa_usuarios(empresa_id uuid,user_id uuid,activo boolean,rol text);
+ CREATE TABLE public.empresa_usuarios(empresa_id uuid,user_id uuid,activo boolean,rol text check(rol in ('owner','admin','seller','warehouse','client')));
  CREATE TABLE public.sigo_modulos_catalogo(clave text primary key,nombre text,descripcion text,categoria text,disponible boolean,obligatorio boolean,orden integer);
  CREATE TABLE public.sigo_empresa_modulos(empresa_id uuid,modulo_clave text,habilitado boolean,actualizado_por uuid,updated_at timestamptz,primary key(empresa_id,modulo_clave));
  CREATE FUNCTION public.es_superadmin_sigo() RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT auth.uid()='${OTHER}'::uuid $$;${sql}`);

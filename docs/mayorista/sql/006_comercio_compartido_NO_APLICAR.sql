@@ -44,7 +44,7 @@ create trigger sigo_mayorista_historial_entrega before insert or update on publi
 
 create function public.sigo_mayorista_operador_comercial(p_empresa_id uuid) returns text
 language plpgsql stable security definer set search_path='' as $$
-declare v_rol text;v_session uuid;
+declare v_rol text;v_session uuid;perfil record;
 begin
  if auth.uid() is null or coalesce((auth.jwt()->>'is_anonymous')::boolean,false) then raise exception 'AUTH_REQUIRED';end if;
  v_session:=nullif(auth.jwt()->>'session_id','')::uuid;
@@ -53,6 +53,8 @@ begin
  select eu.rol into v_rol from public.empresa_usuarios eu join public.empresas e on e.id=eu.empresa_id
  where eu.empresa_id=p_empresa_id and eu.user_id=auth.uid() and eu.activo and e.activa and eu.rol in ('owner','admin');
  if v_rol is null or not exists(select 1 from public.sigo_empresa_modulos m where m.empresa_id=p_empresa_id and m.modulo_clave='mayorista_distribuidora' and m.habilitado) then raise exception 'MAYORISTA_FORBIDDEN';end if;
+ select rol,activo into perfil from mayorista.miembros where empresa_id=p_empresa_id and user_id=auth.uid();
+ if found then if not perfil.activo or perfil.rol not in ('gerencia','administracion') or perfil.rol='gerencia' and v_rol<>'owner' then raise exception 'MAYORISTA_FORBIDDEN';end if;if perfil.rol='administracion' then v_rol:='admin';end if;end if;
  if not exists(select 1 from public.sigo_mayorista_comercio_fuente f where f.empresa_id=p_empresa_id and f.fuente='sigo') then raise exception 'SHARED_SOURCE_NOT_READY';end if;
  if not public.tiene_permiso_empresa(p_empresa_id,'sales.write') or not public.tiene_permiso_empresa(p_empresa_id,'clients.read') then raise exception 'MAYORISTA_FORBIDDEN';end if;
  return v_rol;

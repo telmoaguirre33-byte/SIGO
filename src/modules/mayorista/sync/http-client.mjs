@@ -32,6 +32,7 @@ export function createMayoristaClient({enabled=false,baseUrl,fetchImpl=globalThi
     sharedState:()=>request('/shared/commerce'),
     sharedCommand:command=>request('/shared/commerce',command),
     users:()=>request('/admin/users'),
+    sharedUserCandidates:()=>request('/admin/users/candidates'),
     userCommand:command=>request('/admin/users/commands',command),
     masterState:()=>request('/admin/catalog'),
     masterCommand:command=>request('/admin/catalog/commands',command),

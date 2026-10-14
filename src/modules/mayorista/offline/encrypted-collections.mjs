@@ -8,7 +8,7 @@ export async function syncEncryptedCollections(workspace,send){
    const actual={...record.data,estado:'sincronizando',error:null},saved=await workspace.write('collections',record.id,actual,record.revision);
    try{
     const ack=await send(actual);
-    if(ack?.estado!=='confirmado'||ack.empresaId!==actual.empresaId||ack.comandoId!==actual.id||!/^[a-f0-9-]{36}$/i.test(ack.movimientoId??''))throw Error('Acuse de cobranza inválido');
+    if(ack?.estado!=='confirmado'||ack.empresaId!==actual.empresaId||ack.comandoId!==actual.id||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ack.movimientoId??''))throw Error('Acuse de cobranza inválido');
     await workspace.write('collections',record.id,{...actual,estado:'sincronizado',movimientoId:ack.movimientoId},saved.revision);enviados++;
    }catch(e){await workspace.write('collections',record.id,{...actual,estado:'error',error:e.message},saved.revision);fallidos++;}
   }return {enviados,fallidos};
