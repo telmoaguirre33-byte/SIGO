@@ -24,8 +24,14 @@ export function createSharedSource({pool,databasePolicy}){
   transaction:({query,principal})=>{
    if(principal.fuenteComercial!=='sigo')throw new ApiError(503,'Fuente compartida no confirmada');
    const E=principal.empresaId,admin=()=>{if(!administrative(principal))throw new ApiError(403,'Solo administración comercial');};
-   const rpc=async(name,args)=>{const names={registrar_entrega_mayorista_sigo:'$1,$2,$3::jsonb',autorizar_credito_mayorista_sigo:'$1,$2,$3,$4',registrar_cobro_mayorista_sigo:'$1,$2,$3,$4,$5,$6,$7',leer_comercio_mayorista_sigo:'$1'};if(!Object.hasOwn(names,name))throw new ApiError(422,'RPC inválida');try{return (await query(`SELECT public.${name}(${names[name]}) AS r`,args)).rows[0].r;}catch(e){if(e.code==='P0001')throw new ApiError(/FORBIDDEN|MANAGEMENT_REQUIRED/.test(e.message)?403:/CONFLICT|ALREADY_REGISTERED|STATE_INVALID/.test(e.message)?409:/SESSION_|AUTH_REQUIRED/.test(e.message)?401:422,'Operación compartida rechazada');throw e;}};
+   const rpc=async(name,args)=>{const names={registrar_entrega_mayorista_sigo:'$1,$2,$3::jsonb',autorizar_credito_mayorista_sigo:'$1,$2,$3,$4',registrar_cobro_mayorista_sigo:'$1,$2,$3,$4,$5,$6,$7',leer_comercio_mayorista_sigo:'$1',leer_ficha_mayorista_sigo:'$1,$2',permiso_cobro_mayorista_sigo:'$1',configurar_cobrador_mayorista_sigo:'$1,$2,$3,$4',cobrar_mayorista_autorizado_sigo:'$1,$2,$3,$4,$5,$6,$7',devolver_mayorista_sigo:'$1,$2,$3::jsonb',clasificar_devolucion_mayorista_sigo:'$1,$2,$3,$4,$5'};if(!Object.hasOwn(names,name))throw new ApiError(422,'RPC inválida');try{return (await query(`SELECT public.${name}(${names[name]}) AS r`,args)).rows[0].r;}catch(e){if(e.code==='P0001')throw new ApiError(/FORBIDDEN|MANAGEMENT_REQUIRED/.test(e.message)?403:/CONFLICT|ALREADY_REGISTERED|STATE_INVALID/.test(e.message)?409:/SESSION_|AUTH_REQUIRED/.test(e.message)?401:422,'Operación compartida rechazada');throw e;}};
    return {
+    sharedReturn:command=>{admin();if(command?.empresaId!==E)throw new ApiError(403,'Otra empresa');return rpc('devolver_mayorista_sigo',[E,command.id,JSON.stringify(command.datos)]);},
+    sharedInspection:command=>{if(command?.empresaId!==E)throw new ApiError(403,'Otra empresa');return rpc('clasificar_devolucion_mayorista_sigo',[E,command.devolucionId,command.ventaItemId,command.disposicion,command.motivo]);},
+    sharedCustomer:id=>rpc('leer_ficha_mayorista_sigo',[E,id]),
+    sharedCollectionPermission:()=>rpc('permiso_cobro_mayorista_sigo',[E]),
+    sharedCollector:command=>{admin();if(command?.empresaId!==E)throw new ApiError(403,'Otra empresa');return rpc('configurar_cobrador_mayorista_sigo',[E,command.usuario,command.activo,command.limiteCentavos]);},
+    sharedCollection:command=>{if(command?.empresaId!==E)throw new ApiError(403,'Otra empresa');const d=command.datos??{};return rpc('cobrar_mayorista_autorizado_sigo',[E,command.id,d.clienteId,d.pedidoId??null,d.centavos,d.medio,d.comprobante]);},
     sharedState:()=>{admin();return rpc('leer_comercio_mayorista_sigo',[E]);},
     sharedCommand:async command=>{
      admin();if(command?.empresaId!==E)throw new ApiError(403,'Otra empresa');

@@ -49,6 +49,19 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
       const principal=await auth.verify(token);
       if(path==='/auth/logout'&&request.method==='POST'){await auth.signOut(token);return reply(200,{revoked:true});}
       if(path==='/me'&&request.method==='GET')return reply(200,principal);
+      if(principal.fuenteComercial==='sigo'&&['/shared/returns','/shared/returns/inspect'].includes(path)&&request.method==='POST'){
+        if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const d=await smallJson(request,256*1024);return reply(200,await repository.withPrincipal(principal,tx=>path.endsWith('/inspect')?tx.sharedInspection(d):tx.sharedReturn(d)));
+      }
+      if(principal.fuenteComercial==='sigo'&&path.startsWith('/shared/customers/')&&request.method==='GET'){
+        const id=path.slice('/shared/customers/'.length);if(!/^[a-f0-9-]{36}$/i.test(id))throw new ApiError(422,'Cliente inválido');return reply(200,await repository.withPrincipal(principal,tx=>tx.sharedCustomer(id)));
+      }
+      if(principal.fuenteComercial==='sigo'&&path==='/shared/collections'){
+        if(request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.sharedCollectionPermission()));
+        if(request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const d=await smallJson(request);return reply(200,await repository.withPrincipal(principal,tx=>tx.sharedCollection(d)));}
+      }
+      if(principal.fuenteComercial==='sigo'&&path==='/shared/collectors'&&request.method==='POST'){
+        if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const d=await smallJson(request);return reply(200,await repository.withPrincipal(principal,tx=>tx.sharedCollector(d)));
+      }
       if(path==='/shared/commerce'&&principal.fuenteComercial==='sigo'){
         if(request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.sharedState()));
         if(request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const command=await smallJson(request,256*1024);return reply(200,await repository.withPrincipal(principal,tx=>tx.sharedCommand(command)));}

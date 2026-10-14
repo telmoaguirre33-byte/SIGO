@@ -10,6 +10,8 @@ export async function prepareSharedBackendFixture(pool,{origin='https://shared.q
  const C=(await pool.query('SELECT id FROM public.clientes_sigo WHERE empresa_id=$1',[E])).rows[0].id,P=(await pool.query('SELECT id FROM public.productos WHERE empresa_id=$1',[E])).rows[0].id;
  await pool.query((await readFile(new URL('../../../../docs/mayorista/sql/007_lectura_compartida_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/mi,'').replace(/^rollback;$/mi,''));
  await pool.query('UPDATE public.productos SET marca=$1,codigo_interno=$2,codigo_barras=$3 WHERE id=$4',['Marca SIGO','SIGO-001','7790012345678',P]);
+ await pool.query(await readFile(new URL('../../../../supabase/migrations/20260913205500_carrito_devoluciones_anulaciones.sql',import.meta.url),'utf8'));
+ await pool.query((await readFile(new URL('../../../../docs/mayorista/sql/008_operacion_comercial_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/mi,'').replace(/^rollback;$/mi,''));
  // SOLO el fixture QA usa la identidad nativa: ninguna función Auth de Supabase real se modifica.
  await pool.query('DROP TABLE auth.sessions; CREATE VIEW auth.sessions AS SELECT session_id AS id,user_id FROM mayorista_private.sesiones WHERE NOT revocada AND vence_en>now(); REVOKE ALL ON auth.sessions FROM public,anon,authenticated');
  await pool.query('INSERT INTO mayorista.empresas VALUES($1,$2,true),($3,$4,true)',[E,'Empresa compartida QA',B,'Empresa minorista QA']);
@@ -84,6 +86,26 @@ export async function verifySharedBackend(pool){
  assert.equal((await call('/inventory/commands',{token:owner,body:{id:randomUUID(),empresaId:E,tipo:'ingreso',input:{productoId:P,cantidad:1,comprobante:'NO-FALLBACK-QA'}}})).status,403);
  await pool.query('UPDATE public.sigo_empresa_modulos SET habilitado=true WHERE empresa_id=$1',[E]);
  const minorista=await call('/auth/login',{body:{...creds.gerencia,empresaId:B}});assert.equal((await call('/me',{token:minorista.body.accessToken})).body.fuenteComercial,undefined);
+ // Nuevas extensiones: ficha, delegación explícita y devolución canónica no vendible.
+ const ficha=await call('/shared/customers/'+C,{token:seller});assert.equal(ficha.status,200);assert.equal(ficha.body.compras.length,3);assert.ok(ficha.body.productosHabituales.length);assert.equal(ficha.body.deudaVencida,null);
+ assert.equal((await call('/shared/customers/'+C,{token:tokens.armador})).status,403);
+ const delegated={id:randomUUID(),empresaId:E,datos:{clienteId:newCustomer,centavos:100,medio:'efectivo',comprobante:'Cobro vendedor autorizado QA'}};
+ assert.equal((await call('/shared/collections',{token:seller,body:delegated})).status,403);
+ assert.equal((await call('/shared/collectors',{token:tokens.administracion,body:{empresaId:E,usuario:actors.vendedor,activo:true,limiteCentavos:1000}})).status,403);
+ await pool.query('UPDATE public.clientes_sigo SET saldo_actual=2 WHERE id=$1',[newCustomer]);await pool.query("INSERT INTO public.cliente_movimientos_sigo(empresa_id,cliente_id,tipo,importe,concepto,created_by) VALUES($1,$2,'debe',2,'Saldo inicial QA',$3)",[E,newCustomer,U]);
+ assert.equal((await call('/shared/collectors',{token:owner,body:{empresaId:E,usuario:actors.vendedor,activo:true,limiteCentavos:1000}})).status,200);
+ const cobro=await call('/shared/collections',{token:seller,body:delegated});assert.equal(cobro.status,200);assert.deepEqual(await call('/shared/collections',{token:seller,body:delegated}),cobro);
+ assert.equal(Number((await pool.query('SELECT saldo_actual FROM public.clientes_sigo WHERE id=$1',[newCustomer])).rows[0].saldo_actual),1);
+ assert.equal((await call('/shared/collections',{token:tokens.chofer,body:delegated})).status,403);
+ const original=ficha.body.compras.find(v=>v.lineas.some(l=>Number(l.cantidad)===2)),item=original.lineas[0],before=Number((await pool.query('SELECT stock_actual FROM public.productos WHERE id=$1',[P])).rows[0].stock_actual);
+ const returned={id:randomUUID(),empresaId:E,datos:{ventaId:original.id,motivo:'Revisión de mercadería QA',lineas:[{ventaItemId:item.id,cantidad:1,disposicion:'revision'}]}};
+ assert.equal((await call('/shared/returns',{token:seller,body:returned})).status,403);
+ const receiptReturn=await call('/shared/returns',{token:owner,body:returned});assert.equal(receiptReturn.status,200,JSON.stringify(receiptReturn));assert.deepEqual(await call('/shared/returns',{token:owner,body:returned}),receiptReturn);
+ assert.equal(Number((await pool.query('SELECT stock_actual FROM public.productos WHERE id=$1',[P])).rows[0].stock_actual),before);
+ const inspection={empresaId:E,devolucionId:receiptReturn.body.devolucionId,ventaItemId:item.id,disposicion:'vendible',motivo:'Inspección autorizada QA'};
+ assert.equal((await call('/shared/returns/inspect',{token:owner,body:inspection})).status,200);assert.equal((await call('/shared/returns/inspect',{token:owner,body:inspection})).status,200);
+ assert.equal(Number((await pool.query('SELECT stock_actual FROM public.productos WHERE id=$1',[P])).rows[0].stock_actual),before+1);
+ assert.equal((await call('/shared/customers/'+C,{token:owner})).body.devoluciones.length,1);
  await call('/auth/logout',{token:owner,body:{}});assert.equal((await call('/shared/commerce',{token:owner})).status,401);
  console.log('PASS fuente compartida backend: catálogo SIGO, cinco roles, UUID recuperable, escritores QA bloqueados, crédito y aislamiento');
  return [{name:'Backend conectado a fuente SIGO por empresa; cinco roles y escritores QA bloqueados',status:'pass'}];
