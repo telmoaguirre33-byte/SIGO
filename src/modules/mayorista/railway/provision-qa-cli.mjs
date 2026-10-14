@@ -1,8 +1,8 @@
-import {execFileSync} from 'node:child_process';
 import {generateKeyPairSync,randomBytes,randomUUID,X509Certificate} from 'node:crypto';
-import {mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';import path from 'node:path';import {fileURLToPath} from 'node:url';
 import {QA_RAILWAY} from './database-policy.mjs';
+import {createRailwayRunner} from './cli-runner.mjs';
 export const API_SERVICE='9053689a-0e32-4f3c-b5da-3c01e480a9c6';
 export const QA_ORIGIN='https://mayorista-api-qa-qa.up.railway.app';
 export function verifiedPublicCA(output,now=Date.now()){
@@ -17,7 +17,15 @@ export function variableCommand(name){
  if(!/^[A-Z][A-Z0-9_]*$/.test(name))throw new Error('Nombre de variable inválido');
  return ['variable','set',name,'--stdin','--skip-deploys','--project',QA_RAILWAY.projectId,'--service',API_SERVICE,'--environment',QA_RAILWAY.environmentId,'--json'];
 }
-export async function provisionQA({run,budgetConfirmed=false,onStep=()=>{},request=fetch,persistCredentials=async()=>{},sleep=ms=>new Promise(r=>setTimeout(r,ms)),now=Date.now}={}){
+export function verifiedPublicBundle(bundle,now=Date.now()){
+ for(const name of ['projectId','environmentId','databaseServiceId'])if(bundle?.[name]!==QA_RAILWAY[name])throw new Error('Certificados de un entorno ajeno a MAYORISTA-QA');
+ const chain=[bundle.ca,bundle.server].map(der=>new X509Certificate(Buffer.from(der,'base64')).toString()).join('\n');
+ const ca=verifiedPublicCA(chain,now);
+ if(ca.fingerprint!==bundle.fingerprint)throw new Error('Huella de CA QA no coincide con el bundle administrativo');
+ return ca;
+}
+export async function readPublicBundle(){return JSON.parse(await readFile(new URL('./qa-public-certificates.json',import.meta.url),'utf8'));}
+export async function provisionQA({run,budgetConfirmed=false,onStep=()=>{},request=fetch,persistCredentials=async()=>{},publicBundle=readPublicBundle,useSSH=false,sleep=ms=>new Promise(r=>setTimeout(r,ms)),now=Date.now}={}){
  if(budgetConfirmed!==true)throw new Error('Confirmar presupuesto total QA de hasta US$15 antes de activar');
  if(typeof run!=='function')throw new Error('Railway CLI requerido');
  const scope=['--service',API_SERVICE,'--environment',QA_RAILWAY.environmentId];
@@ -28,8 +36,8 @@ export async function provisionQA({run,budgetConfirmed=false,onStep=()=>{},reque
  if(!parsed||Array.isArray(parsed)||typeof parsed!=='object')throw new Error('Formato de variables Railway no reconocido');
  const existing=parsed;
  if(Object.hasOwn(existing,'MAYORISTA_BOOTSTRAP_COMPANY_ID'))throw new Error('Bootstrap ya configurado: no se reemplazan usuarios ni credenciales. Continuar verificación desde el servidor existente.');
- onStep('Obteniendo solo root.crt y server.crt por SSH administrativo');
- const ca=verifiedPublicCA(await run(['ssh','--project',QA_RAILWAY.projectId,'--environment',QA_RAILWAY.environmentId,'--service',QA_RAILWAY.databaseServiceId,'--','cat','/var/lib/postgresql/data/certs/root.crt','/var/lib/postgresql/data/certs/server.crt']));
+ onStep(useSSH?'Obteniendo solo certificados públicos por SSH administrativo':'Verificando bundle público QA obtenido de logs administrativos autenticados; sin SSH');
+ const ca=useSSH?verifiedPublicCA(await run(['ssh','--project',QA_RAILWAY.projectId,'--environment',QA_RAILWAY.environmentId,'--service',QA_RAILWAY.databaseServiceId,'--','cat','/var/lib/postgresql/data/certs/root.crt','/var/lib/postgresql/data/certs/server.crt'])):verifiedPublicBundle(await publicBundle(),now());
  const empresaId=randomUUID(),userId=randomUUID(),password='Aa1!'+randomBytes(32).toString('base64url'),email='gerencia-qa@example.invalid';
  const privateKey=generateKeyPairSync('ed25519').privateKey.export({type:'pkcs8',format:'pem'});
  const values={
@@ -90,18 +98,19 @@ async function main(){
  if(!process.argv.includes('--budget-confirmed'))throw new Error('Usar --budget-confirmed únicamente tras verificar que QA queda dentro de US$15/mes');
  const dir=await mkdtemp(path.join(tmpdir(),'mayorista-qa-cli-')),credentialsDir=await mkdtemp(path.join(tmpdir(),'mayorista-qa-login-'));
  const credentialFile=path.join(credentialsDir,'credenciales-qa.json');
- const run=async(args,input)=>{try{return execFileSync(process.platform==='win32'?'railway.cmd':'railway',args,{cwd:dir,env:{...process.env,RAILWAY_CALLER:'skill:use-railway@1.3.5',RAILWAY_AGENT_SESSION:'mayorista-qa-cli-'+process.pid},input,encoding:'utf8',timeout:180000,maxBuffer:1024*1024,shell:process.platform==='win32'});}catch(error){
-  const text=String(error.stdout??'')+String(error.stderr??'');
-  if(args[0]==='whoami'&&/NOT_AUTHENTICATED|not signed in|not authenticated|unauthorized/i.test(text)){
+ const invoke=createRailwayRunner({cwd:dir});
+ const run=async(args,input)=>{
+  try{return await invoke(args,input);}catch(error){
+   if(args[0]!=='whoami'||!error.message.startsWith('CLI_NOT_AUTHENTICATED:'))throw error;
    console.log('Railway necesita iniciar sesión. Completá OAuth en tu navegador; no compartas claves por chat.');
-   execFileSync(process.platform==='win32'?'railway.cmd':'railway',['login'],{cwd:dir,env:process.env,stdio:'inherit',timeout:600000,shell:process.platform==='win32'});
-   return execFileSync(process.platform==='win32'?'railway.cmd':'railway',args,{cwd:dir,env:process.env,encoding:'utf8',timeout:30000,shell:process.platform==='win32'});
+   await invoke(['login'],undefined,{interactive:true});
+   return invoke(args,input);
   }
-  throw new Error('Railway CLI falló en '+args[0]+'. No se imprimen salidas que puedan contener secretos.');
- }};
+ };
  try{
-  const result=await provisionQA({run,budgetConfirmed:true,onStep:s=>console.log(s),persistCredentials:async credentials=>{await writeFile(credentialFile,JSON.stringify(credentials,null,2),{mode:0o600,flag:'wx'});console.log('Credenciales QA guardadas SOLO en archivo privado local: '+credentialFile);}});
+  const result=await provisionQA({run,budgetConfirmed:true,useSSH:process.argv.includes('--ssh-public-certificates'),onStep:s=>console.log(s),persistCredentials:async credentials=>{await writeFile(credentialFile,JSON.stringify(credentials,null,2),{mode:0o600,flag:'wx'});console.log('Credenciales QA guardadas SOLO en archivo privado local: '+credentialFile);}});
   console.log(JSON.stringify(result,null,2));
  }finally{await rm(dir,{recursive:true,force:true});}
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(error=>{console.error(error.message);process.exitCode=1;});
+
