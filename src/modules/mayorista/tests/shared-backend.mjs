@@ -9,6 +9,7 @@ export async function prepareSharedBackendFixture(pool,{origin='https://shared.q
  const E='30000000-0000-4000-8000-000000000001',B='30000000-0000-4000-8000-000000000002',U='30000000-0000-4000-8000-000000000011',V=randomUUID(),R=randomUUID();
  const C=(await pool.query('SELECT id FROM public.clientes_sigo WHERE empresa_id=$1',[E])).rows[0].id,P=(await pool.query('SELECT id FROM public.productos WHERE empresa_id=$1',[E])).rows[0].id;
  await pool.query((await readFile(new URL('../../../../docs/mayorista/sql/007_lectura_compartida_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/mi,'').replace(/^rollback;$/mi,''));
+ await pool.query('UPDATE public.productos SET marca=$1,codigo_interno=$2,codigo_barras=$3 WHERE id=$4',['Marca SIGO','SIGO-001','7790012345678',P]);
  // SOLO el fixture QA usa la identidad nativa: ninguna función Auth de Supabase real se modifica.
  await pool.query('DROP TABLE auth.sessions; CREATE VIEW auth.sessions AS SELECT session_id AS id,user_id FROM mayorista_private.sesiones WHERE NOT revocada AND vence_en>now(); REVOKE ALL ON auth.sessions FROM public,anon,authenticated');
  await pool.query('INSERT INTO mayorista.empresas VALUES($1,$2,true),($3,$4,true)',[E,'Empresa compartida QA',B,'Empresa minorista QA']);
@@ -44,7 +45,7 @@ export async function verifySharedBackend(pool){
  assert.equal((await pool.query('SELECT nombre FROM public.clientes_sigo WHERE id=$1',[newCustomer])).rows[0].nombre,'Cliente existente sin asignar');
  assert.equal((await pool.query('SELECT nombre FROM mayorista.clientes WHERE cliente_id=$1',[newCustomer])).rows[0].nombre,'Cliente existente sin asignar');
  const seller=tokens.vendedor,owner=tokens.gerencia;
- const catalog=(await call('/catalog',{token:seller}));assert.equal(catalog.status,200);assert.equal(catalog.body.clientes.find(c=>c.id===C).nombre,'Cliente SIGO compartido');assert.equal(catalog.body.productos[0].nombre,'Producto SIGO compartido');assert.equal(Number(catalog.body.precios[0].precio),10);
+ const catalog=(await call('/catalog',{token:seller}));assert.equal(catalog.status,200);assert.equal(catalog.body.clientes.find(c=>c.id===C).nombre,'Cliente SIGO compartido');assert.equal(catalog.body.productos[0].nombre,'Producto SIGO compartido');assert.equal(Number(catalog.body.precios[0].precio),10);assert.equal(catalog.body.productos[0].ean,'7790012345678');assert.equal(catalog.body.productos[0].marca,'Marca SIGO');
  const pedido={pedidoId:randomUUID(),empresaId:E,vendedorId:V,clienteId:C,creadoEn:new Date().toISOString(),lineas:[{productoId:P,cantidad:1,precioUnitario:10}]};
  const receipt=await call('/orders',{token:seller,body:pedido});assert.equal(receipt.status,200);
  service=make();assert.deepEqual(await call('/orders',{token:seller,body:pedido}),receipt);

@@ -9,7 +9,7 @@ export async function verifySharedCommerceSQL(pool){
  const clean=s=>s.replace(/^begin;$/mi,'').replace(/^rollback;$/mi,'');
  await pool.query(`CREATE TABLE auth.sessions(id uuid primary key,user_id uuid);
  CREATE FUNCTION public.tiene_permiso_empresa(e uuid,p text) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $$ SELECT EXISTS(SELECT 1 FROM public.empresa_usuarios m WHERE m.empresa_id=e AND m.user_id=auth.uid() AND m.activo AND m.rol IN ('owner','admin')) $$;
- CREATE TABLE public.productos(id uuid primary key,empresa_id uuid,nombre text,precio_venta numeric(14,2),stock_actual numeric(14,3),activo boolean);`);
+ CREATE TABLE public.productos(id uuid primary key,empresa_id uuid,nombre text,precio_venta numeric(14,2),stock_actual numeric(14,3),activo boolean,marca text,codigo_interno text,codigo_barras text);`);
  const migrations=new URL('../../../../supabase/migrations/',import.meta.url);
  const ventas=(await readFile(new URL('20260911043000_ventas_caja_operativas.sql',migrations),'utf8')).split('create or replace function public.confirmar_venta_sigo')[0];
  const clientes=(await readFile(new URL('20260911062000_clientes_cuenta_corriente.sql',migrations),'utf8')).split('create or replace function public.registrar_cobro_cliente_sigo(')[0];

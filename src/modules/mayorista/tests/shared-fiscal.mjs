@@ -12,7 +12,7 @@ export async function verifySharedFiscal(pool,{exercise}={}){
  await pool.query(ddl.slice(ddl.indexOf('create table if not exists public.arca_comprobantes'),ddl.indexOf('create index if not exists arca_comprobantes_empresa_fecha_idx')));
  await pool.query(await readFile(new URL('20260914003500_arca_cae_preflight_guards.sql',migration),'utf8'));
  await pool.query('ALTER TABLE public.ventas_sigo ADD COLUMN anulada_at timestamptz');
- await pool.query('UPDATE public.clientes_sigo SET arca_doc_tipo=80,condicion_iva_receptor_id=6,documento=$1',['20123456789']);
+ await pool.query('UPDATE public.clientes_sigo SET arca_doc_tipo=80,condicion_iva_receptor_id=6,documento=$1 WHERE id=(SELECT cliente_id FROM public.ventas_sigo WHERE empresa_id=$2 ORDER BY created_at DESC LIMIT 1)',['20123456789',E]);
  await pool.query('INSERT INTO mayorista_private.sesiones(session_id,user_id,empresa_id,vence_en) VALUES($1,$2,$3,now()+interval \'1 hour\')',[S,U,E]);
  const operation=(await pool.query("SELECT comando_id,venta_id FROM public.sigo_mayorista_entregas_comerciales WHERE empresa_id=$1 AND estado='confirmado' ORDER BY recibido_en DESC LIMIT 1",[E])).rows[0];
  const originalFetch=globalThis.fetch,oldURL=process.env.SUPABASE_URL,oldKey=process.env.SUPABASE_ANON_KEY;
@@ -29,7 +29,7 @@ export async function verifySharedFiscal(pool,{exercise}={}){
   if(path.endsWith('/arca_puntos_venta'))return json([{id:randomUUID()}]);
   if(path.endsWith('/ventas_sigo'))return json((await pool.query('SELECT * FROM public.ventas_sigo WHERE empresa_id=$1 AND id=$2',[E,operation.venta_id])).rows);
   if(path.endsWith('/venta_items_sigo'))return json((await pool.query('SELECT producto_id,subtotal FROM public.venta_items_sigo WHERE empresa_id=$1 AND venta_id=$2',[E,operation.venta_id])).rows);
-  if(path.endsWith('/clientes_sigo'))return json((await pool.query('SELECT documento,arca_doc_tipo,condicion_iva_receptor_id FROM public.clientes_sigo WHERE empresa_id=$1',[E])).rows);
+  if(path.endsWith('/clientes_sigo'))return json((await pool.query('SELECT documento,arca_doc_tipo,condicion_iva_receptor_id FROM public.clientes_sigo WHERE empresa_id=$1 AND id=(SELECT cliente_id FROM public.ventas_sigo WHERE empresa_id=$1 AND id=$2)',[E,operation.venta_id])).rows);
   if(path.endsWith('/arca_comprobantes')){
    if(init.method==='POST')return json((await pool.query('INSERT INTO public.arca_comprobantes(empresa_id,venta_id,punto_venta,tipo_cbte,numero_cbte,resultado,observaciones,request_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',[body.empresa_id,body.venta_id,body.punto_venta,body.tipo_cbte,body.numero_cbte,body.resultado,JSON.stringify(body.observaciones),body.request_id])).rows);
    if(init.method==='PATCH'){if(loseAck){loseAck=false;throw Error('Acuse CAE perdido');}return json((await pool.query('UPDATE public.arca_comprobantes SET cae=$1,cae_vencimiento=$2,resultado=$3,observaciones=$4,emitido_at=$5 WHERE empresa_id=$6 AND venta_id=$7 RETURNING *',[body.cae,body.cae_vencimiento,body.resultado,JSON.stringify(body.observaciones),body.emitido_at,E,operation.venta_id])).rows);}
