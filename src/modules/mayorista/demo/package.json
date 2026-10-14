@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node build.mjs",
     "test": "node ../tests/browser.mjs",
-    "test:unit": "node ../tests/unit.mjs && node ../tests/product-search.mjs",
+    "test:unit": "node ../tests/unit.mjs && node ../tests/product-search.mjs && node ../tests/management-metrics.mjs",
     "test:security": "node ../tests/security.mjs && node ../tests/role-policy.mjs && node ../tests/railway-policy.mjs && node ../tests/railway-tls.mjs && node ../tests/startup-diagnostic.mjs && node ../tests/bootstrap-identity.mjs && node ../tests/provision-qa-cli.mjs && node ../tests/cli-runner.mjs && node ../tests/verify-existing-qa.mjs && node ../tests/prepare-or-check-qa.mjs",
     "typecheck": "node node_modules/typescript/bin/tsc -p tsconfig.mayorista.json",
     "test:admin": "node ../tests/admin.mjs && node ../tests/cargas.mjs && node ../tests/presentation-loads.mjs",

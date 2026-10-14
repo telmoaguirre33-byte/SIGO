@@ -1,4 +1,5 @@
 import {createUserDirectory} from '../commercial/user-directory.mjs';
+import {approvedOrigins} from '../api/origins.mjs';
 import {administrative} from '../security/company-roles.mjs';
 import {ApiError,createOrderReceiver} from '../api/receive-order.mjs';
 import {createOrderHttpHandler} from '../api/http-handler.mjs';
@@ -14,13 +15,13 @@ async function smallJson(request,limit=4096){
 
 /** Backend Mayorista: localhost QA o Railway QA explícito con TLS verificado. No monta rutas en SIGO.
  * Llaves Ed25519 y rate limiter son obligatorios; no contiene credenciales remotas. */
-export function createIsolatedService({enabled=false,pool,privateKey,publicKey,origin,issuer,rateLimit,inventoryRequired=false,accountsEnabled=false,databasePolicy,operational=false}={}){
+export function createIsolatedService({enabled=false,pool,privateKey,publicKey,origin,issuer,rateLimit,inventoryRequired=false,accountsEnabled=false,databasePolicy,operational=false,readSharedMetrics,integrationOrigins=[]}={}){
   if(databasePolicy&&!operational)throw new ApiError(503,'Railway requiere permisos operativos persistentes');
   if(enabled)(databasePolicy?.assertPool??assertIsolatedPool)(pool);
   const auth=createIsolatedAuth({enabled,pool,privateKey,publicKey,issuer,databasePolicy,operational});
   const directory=operational?createUserDirectory({pool,databasePolicy}):null;
-  const repository=createPostgresRepository({enabled,pool,inventoryRequired,accountsEnabled,databasePolicy,operational});
-  const orders=createOrderHttpHandler({enabled,allowedOrigin:origin,rateLimit,receive:createOrderReceiver({enabled,auth,repository})});
+  const repository=createPostgresRepository({enabled,pool,inventoryRequired,accountsEnabled,databasePolicy,operational,readSharedMetrics});
+  const orders=createOrderHttpHandler({enabled,allowedOrigin:origin,integrationOrigins,rateLimit,receive:createOrderReceiver({enabled,auth,repository})});
   return async request=>{
     const path=new URL(request.url).pathname;
     if(path==='/orders'&&request.method!=='GET')return orders(request);
@@ -28,11 +29,11 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
     const reply=(status,value)=>new Response(JSON.stringify(value),{status,headers});
     if(!enabled||!rateLimit)return reply(503,{error:'Backend aislado desactivado'});
     try{
-      const parsed=new URL(origin);if(parsed.protocol!=='https:'||parsed.origin!==origin)return reply(503,{error:'Origen no configurado'});
+      const origins=approvedOrigins(origin,integrationOrigins);
       let requestOrigin=request.headers.get('Origin');
       if(!requestOrigin&&request.method==='GET'){try{requestOrigin=new URL(request.headers.get('Referer')).origin;}catch{}}
-      if(requestOrigin!==origin)return reply(403,{error:'Origen no autorizado'});
-      headers['Access-Control-Allow-Origin']=origin;
+      if(!origins.has(requestOrigin))return reply(403,{error:'Origen no autorizado'});
+      headers['Access-Control-Allow-Origin']=requestOrigin;
       if(request.method==='OPTIONS')return new Response(null,{status:204,headers:{...headers,'Access-Control-Allow-Methods':'GET, POST','Access-Control-Allow-Headers':'Authorization, Content-Type'}});
       if(await rateLimit(request)!==true)return reply(429,{error:'Demasiados intentos'});
       if(path==='/auth/login'&&request.method==='POST'){
@@ -50,6 +51,12 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
       if(operational&&path==='/operations/loads'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const input=await smallJson(request);return reply(200,await repository.withPrincipal(principal,tx=>tx.publishLoad(input)));}
       if(operational&&path==='/operations/loads/commands'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const command=await smallJson(request,256*1024);return reply(200,await repository.withPrincipal(principal,tx=>tx.assignedLoadCommand(command)));}
       if(operational&&path==='/admin/reports'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.managementReport()));
+      if(operational&&path==='/admin/dashboard'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.dashboard(Object.fromEntries(new URL(request.url).searchParams))));
+      if(operational&&path==='/goals'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.goals()));
+      if(operational&&path==='/admin/goals/commands'&&request.method==='POST'){
+        if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');
+        const command=await smallJson(request);return reply(200,await repository.withPrincipal(principal,tx=>tx.goalCommand(command)));
+      }
       if(operational&&path==='/accounts/commands'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const command=await smallJson(request);return reply(200,await repository.withPrincipal(principal,tx=>tx.collectionCommand(command)));}
       if(operational&&path==='/admin/users'&&request.method==='GET')return reply(200,await directory.list(principal));
       if(operational&&path==='/admin/users/commands'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const command=await smallJson(request);return reply(200,await directory.command(principal,command));}

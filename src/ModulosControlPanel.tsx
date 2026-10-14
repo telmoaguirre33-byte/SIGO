@@ -1,4 +1,7 @@
+import MayoristaBusinessType, {type BusinessType} from "./modules/mayorista/integration/MayoristaBusinessType";
 import MayoristaAdministrarAccess from "./modules/mayorista/integration/MayoristaAdministrarAccess";
+import {createCompanyConfigProvider} from "./modules/mayorista/integration/company-config";
+import {supabase} from "./supabase";
 import { useEffect, useMemo, useState } from "react";
 import type { EmpresaOperativa } from "./tenant";
 import {
@@ -8,6 +11,20 @@ import {
   type ModuloEmpresa,
   type PresetModulo,
 } from "./modulosEmpresa";
+
+const obtenerConfigMayorista=createCompanyConfigProvider(async(empresaId,signal)=>{
+  const {data,error}=await supabase.rpc('obtener_acceso_mayorista_sigo',{p_empresa_id:empresaId}).abortSignal(signal);
+  if(error)throw new Error('No se pudo verificar Mayorista para esta empresa.');
+  return data;
+});
+
+const readBusinessType=async(empresaId:string,signal:AbortSignal):Promise<BusinessType>=>{
+ const {data,error}=await supabase.rpc('leer_tipo_negocio_sigo',{p_empresa_id:empresaId}).abortSignal(signal);
+ if(error||!['minorista','mayorista','mixto'].includes(data))throw new Error('Tipo de negocio no disponible');return data as BusinessType;
+};
+const writeBusinessType=async(empresaId:string,tipo:BusinessType)=>{
+ const {error}=await supabase.rpc('declarar_tipo_negocio_sigo',{p_empresa_id:empresaId,p_tipo:tipo});if(error)throw error;
+};
 
 const PRESETS: Array<{ clave: PresetModulo; nombre: string; detalle: string }> = [
   { clave: "kiosco", nombre: "Kiosco", detalle: "Venta rápida, stock, precios, scanner, clientes y ARCA." },
@@ -137,7 +154,10 @@ export default function ModulosControlPanel({ empresa }: { empresa: EmpresaOpera
         </div>
       </div>
 
-      <MayoristaAdministrarAccess key={empresa.empresa_id} empresaId={empresa.empresa_id} rol={empresa.rol} />
+      {puedeEditar && <MayoristaBusinessType key={empresa.empresa_id} empresaId={empresa.empresa_id} readType={readBusinessType} writeType={writeBusinessType} onChanged={cargar} />}
+
+      {modulos.some(m => m.clave === "mayorista_distribuidora" && m.habilitado) &&
+        <MayoristaAdministrarAccess key={empresa.empresa_id} empresaId={empresa.empresa_id} rol={empresa.rol} obtenerConfig={obtenerConfigMayorista} />}
 
       {error ? <div className="form-error" role="alert" style={{ marginBottom: 14 }}>{error}</div> : null}
       {mensaje ? <div className="sigo-matriz-success" style={{ marginBottom: 14 }}>{mensaje}</div> : null}

@@ -1,4 +1,5 @@
 import {ApiError} from './receive-order.mjs';
+import {approvedOrigins} from './origins.mjs';
 const LIMIT=256*1024;
 async function readBody(request){
   if(!request.body)throw new ApiError(422,'Pedido vacío');
@@ -9,14 +10,15 @@ async function readBody(request){
 }
 /** Adaptador Fetch independiente, sin montaje en SIGO ni servidor que escuche puertos.
  * enabled=false y sin rate limiter/receptor implica 503. No interpreta cookies SIGO. */
-export function createOrderHttpHandler({enabled=false,allowedOrigin,receive,rateLimit}={}){
+export function createOrderHttpHandler({enabled=false,allowedOrigin,integrationOrigins=[],receive,rateLimit}={}){
   return async request=>{
     const headers={'Cache-Control':'no-store','Content-Type':'application/json','X-Content-Type-Options':'nosniff','Vary':'Origin'};
     const reply=(status,body)=>new Response(JSON.stringify(body),{status,headers});
     if(!enabled || !receive || !rateLimit)return reply(503,{error:'Recepción Mayorista desactivada'});
-    let origin;try{origin=new URL(allowedOrigin);if(origin.protocol!=='https:'||origin.origin!==allowedOrigin)throw new Error();}catch{return reply(503,{error:'Origen no configurado'});}
-    if(request.headers.get('Origin')!==allowedOrigin)return reply(403,{error:'Origen no autorizado'});
-    headers['Access-Control-Allow-Origin']=allowedOrigin;
+    let origins;try{origins=approvedOrigins(allowedOrigin,integrationOrigins);}catch{return reply(503,{error:'Origen no configurado'});}
+    const requestOrigin=request.headers.get('Origin');
+    if(!origins.has(requestOrigin))return reply(403,{error:'Origen no autorizado'});
+    headers['Access-Control-Allow-Origin']=requestOrigin;
     if(request.method==='OPTIONS')return new Response(null,{status:204,headers:{...headers,'Access-Control-Allow-Methods':'POST','Access-Control-Allow-Headers':'Authorization, Content-Type'}});
     if(request.method!=='POST')return reply(405,{error:'Método no permitido'});
     if(request.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase()!=='application/json')return reply(415,{error:'Se requiere JSON'});

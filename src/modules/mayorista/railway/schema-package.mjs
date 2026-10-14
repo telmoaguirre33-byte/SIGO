@@ -4,6 +4,7 @@ import {readFile} from 'node:fs/promises';
 export async function schemaPackage(){
  const root=new URL('../',import.meta.url),docs=new URL('../../../../docs/mayorista/sql/',import.meta.url);
  const files=[new URL('002_seguridad_preparada_NO_APLICAR.sql',docs),new URL('003_flujo_administrativo_NO_APLICAR.sql',docs),new URL('004_administracion_NO_APLICAR.sql',docs),new URL('cargas/schema-qa.sql',root),new URL('commercial/visits-schema-qa.sql',root),new URL('commercial/inventory-schema-qa.sql',root),new URL('commercial/accounts-schema-qa.sql',root),new URL('railway/private-auth-schema.sql',root),new URL('commercial/roles-schema-qa.sql',root),new URL('commercial/master-schema-qa.sql',root),new URL('commercial/collections-schema-qa.sql',root)];
+ files.push(new URL('commercial/goals-schema-qa.sql',root));
  const parts=await Promise.all(files.map(async u=>(await readFile(u,'utf8')).replace(/^begin;.*$/gmi,'').replace(/^rollback;.*$/gmi,'')));
  return `DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon NOLOGIN; END IF;IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname in ('anon','authenticated') AND (rolcanlogin OR rolbypassrls OR rolsuper)) THEN RAISE EXCEPTION 'Roles QA no seguros'; END IF;END $$;CREATE SCHEMA auth;
  CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE SECURITY INVOKER AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;

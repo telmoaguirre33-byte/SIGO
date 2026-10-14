@@ -1,4 +1,6 @@
 import {createCollectionsTransaction} from '../commercial/collections.mjs';
+import {createDashboardTransaction} from '../commercial/dashboard.mjs';
+import {createGoalsTransaction} from '../commercial/goals.mjs';
 import {createReportTransaction} from '../commercial/reports.mjs';
 import {createMasterTransaction,offerPrice} from '../commercial/master-data.mjs';
 import {createAssignedLoadsTransaction} from '../commercial/assigned-loads.mjs';
@@ -17,7 +19,7 @@ export function assertIsolatedPool(pool){
 }
 const columns=`empresa_id as "empresaId",pedido_id as "pedidoId",vendedor_id as "vendedorId",cliente_id as "clienteId",creado_en as "creadoEn",recibido_en as "recibidoEn",lineas,huella as hash,estado`;
 function normalize(row){return row?{...row,creadoEn:row.creadoEn.toISOString(),recibidoEn:row.recibidoEn.toISOString()}:null;}
-export function createPostgresRepository({enabled=false,pool,inventoryRequired=false,accountsEnabled=false,databasePolicy,operational=false}={}){
+export function createPostgresRepository({enabled=false,pool,inventoryRequired=false,accountsEnabled=false,databasePolicy,operational=false,readSharedMetrics}={}){
   return {withPrincipal:async(principal,fn)=>{
     if(!enabled)throw new ApiError(503,'Persistencia desactivada');(databasePolicy?.assertPool??assertIsolatedPool)(pool);
     for(let attempt=0;attempt<4;attempt++){
@@ -85,7 +87,20 @@ export function createPostgresRepository({enabled=false,pool,inventoryRequired=f
       Object.assign(tx,createAccountsTransaction({query:(sql,args)=>c.query(sql,args),principal}));
       if(accountsEnabled){const apply=tx.cargasCommand;tx.cargasCommand=async command=>{const before=await tx.cargasState(),after=await apply(command);await tx.accountLoadChanges(before,after,command);return after;};}
       if(inventoryRequired){const apply=tx.cargasCommand;tx.cargasCommand=async command=>{const state=await apply(command);const tipo={verificar:'reserva',salir:'salida',cerrar:'devolucion'}[command.tipo];if(tipo)await tx.inventoryCommand({id:command.id,empresaId:principal.empresaId,tipo,input:{cargaId:command.input.cargaId}});return state;};}
-      if(operational)tx.accounts=tx.collectionsAccounts;
+      if(operational){
+        tx.accounts=tx.collectionsAccounts;
+        const query=(sql,args)=>c.query(sql,args);
+        Object.assign(tx,createDashboardTransaction({query,principal,readSharedMetrics}));
+        Object.assign(tx,createGoalsTransaction({query,principal,readMetricsData:tx.readMetricsData}));
+        const catalog=tx.catalog;
+        tx.catalog=async()=>{
+          const data=await catalog();
+          // Una ampliación pendiente no interrumpe el catálogo ni los pedidos ya aprobados.
+          const installed=(await query("SELECT to_regclass('mayorista.metas') AS metas")).rows[0]?.metas;
+          if(installed)data.metas=(await tx.goals()).objetivos;
+          return data;
+        };
+      }
       const result=await fn(tx);await c.query('COMMIT');return result;
     }catch(e){await c.query('ROLLBACK').catch(()=>{});if(!['40001','40P01','23505'].includes(e.code)||attempt===3)throw e;}finally{c.release();}
     }

@@ -5,3 +5,12 @@
 
 /* Buscador exclusivo del pedido del vendedor. */
 #product-picker{min-width:0}#product-picker .product-search-row{display:flex;gap:8px;align-items:center}#product-picker input{min-width:0;flex:1}#product-picker [role=listbox]{list-style:none;padding:0;margin:4px 0 8px;border:1px solid #d7e2d6;border-radius:9px;max-height:320px;overflow:auto;background:white}#product-picker [role=option]{padding:10px 12px;min-height:60px;cursor:pointer;border-bottom:1px solid #edf0e9;overflow-wrap:anywhere}#product-picker [role=option]:last-child{border-bottom:0}#product-picker [role=option][aria-selected=true]{background:#eaf3df;box-shadow:inset 4px 0 #176b5a}#product-picker [role=option] span,#product-picker [role=option] small{display:block;margin-top:3px}#product-picker [data-camera-status]:empty{display:none}#product-picker video{width:100%;max-height:260px;background:#173438}#product-picker [hidden]{display:none}#secure-app{max-width:720px;margin:auto}
+
+/* Indicadores Mayorista compactos, aislados del estilo SIGO compartido. */
+.management-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin:12px 0}
+.management-kpis .card{margin:0;padding:12px;display:grid;gap:6px;min-width:0}
+.management-kpis span{font-size:12px;color:#4b5563}.management-kpis strong{font-size:18px;overflow-wrap:anywhere}
+.management-filters{display:flex;flex-wrap:wrap;gap:10px;align-items:end}.management-filters label{flex:1 1 140px;min-width:0}
+.management-filters button{flex:0 0 auto}.management-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:10px}
+.management-table{overflow-x:auto}.management-table table{width:100%;border-collapse:collapse;font-size:13px}.management-table th,.management-table td{padding:8px;text-align:left;border-bottom:1px solid #e5e7eb}
+.management-bar{display:grid;grid-template-columns:minmax(80px,1fr) 1fr auto;gap:8px;align-items:center;font-size:12px;margin:10px 0}.management-bar span{overflow-wrap:anywhere}.management-bar meter{width:100%}.management-caption{font-size:12px;color:#4b5563}

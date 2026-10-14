@@ -1,0 +1,14 @@
+.sigo-mayorista-workspace{width:100%;min-width:0;font-size:14px}
+.sigo-mayorista-workspace .card{padding:12px;border:1px solid #e5e7eb;border-radius:8px;margin:10px 0;min-width:0}
+.sigo-mayorista-workspace h1{font-size:22px}.sigo-mayorista-workspace h2{font-size:18px}.sigo-mayorista-workspace h3{font-size:16px}
+.sigo-mayorista-workspace nav{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+.sigo-mayorista-workspace button{padding:7px 12px;font-size:13px;min-height:34px;width:auto;max-width:100%;margin:3px;border:1px solid #d1d5db;border-radius:6px;cursor:pointer}
+.sigo-mayorista-workspace label{display:grid;gap:4px;min-width:0;margin:6px 0}
+.sigo-mayorista-workspace input,.sigo-mayorista-workspace select{padding:7px;width:100%;box-sizing:border-box;min-width:0}
+.sigo-mayorista-workspace .management-filters{display:flex;flex-wrap:wrap;gap:10px;align-items:end}.sigo-mayorista-workspace .management-filters label{flex:1 1 140px}
+.sigo-mayorista-workspace .management-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+.sigo-mayorista-workspace .management-kpis .card{display:grid;gap:8px}.sigo-mayorista-workspace .management-kpis strong{font-size:18px;overflow-wrap:anywhere}
+.sigo-mayorista-workspace .management-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:10px}
+.sigo-mayorista-workspace .management-table{overflow-x:auto}.sigo-mayorista-workspace table{width:100%;border-collapse:collapse;font-size:13px}.sigo-mayorista-workspace th,.sigo-mayorista-workspace td{padding:8px;text-align:left;border-bottom:1px solid #e5e7eb}
+.sigo-mayorista-workspace .management-bar{display:grid;grid-template-columns:minmax(80px,1fr) 1fr auto;gap:8px;font-size:12px;margin:10px 0}.sigo-mayorista-workspace meter{width:100%}
+.sigo-mayorista-workspace .management-caption{font-size:12px;color:#4b5563}

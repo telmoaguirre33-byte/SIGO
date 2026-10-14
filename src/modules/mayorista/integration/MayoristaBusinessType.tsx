@@ -1,0 +1,9 @@
+import {useEffect,useId,useState} from 'react';
+export type BusinessType='minorista'|'mayorista'|'mixto';
+type Props={empresaId:string;readType:(id:string,signal:AbortSignal)=>Promise<BusinessType>;writeType:(id:string,type:BusinessType)=>Promise<void>;onChanged:()=>Promise<void>};
+export default function MayoristaBusinessType({empresaId,readType,writeType,onChanged}:Props){
+  const id=useId(),[type,setType]=useState<BusinessType>('minorista'),[busy,setBusy]=useState(true),[ready,setReady]=useState(false),[message,setMessage]=useState('');
+  useEffect(()=>{const c=new AbortController();setBusy(true);setReady(false);setMessage('');void readType(empresaId,c.signal).then(t=>{if(!c.signal.aborted){setType(t);setReady(true);}}).catch(()=>{if(!c.signal.aborted)setMessage('No se pudo consultar el tipo de negocio.');}).finally(()=>{if(!c.signal.aborted)setBusy(false);});return()=>c.abort();},[empresaId,readType]);
+  async function save(){if(busy||!ready)return;setBusy(true);setMessage('');try{await writeType(empresaId,type);await onChanged();setMessage('Tipo de negocio guardado.');}catch{setMessage('No se pudo guardar el tipo de negocio.');}finally{setBusy(false);}}
+  return <section className="panel"><h3>Operación de la empresa</h3><label htmlFor={id}>Tipo de negocio</label><select id={id} value={type} disabled={busy||!ready} onChange={e=>setType(e.target.value as BusinessType)}><option value="minorista">Minorista</option><option value="mayorista">Mayorista / Distribuidora</option><option value="mixto">Minorista + Mayorista</option></select><button type="button" className="admin-button" disabled={busy||!ready} onClick={()=>void save()}>Guardar tipo de negocio</button><p>Mayorista y Mixto habilitan el módulo automáticamente. Matriz conserva el control por empresa.</p>{message&&<p role="status">{message}</p>}</section>;
+}

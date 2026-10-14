@@ -16,12 +16,16 @@ test('no se transfieren tokens o claves en URLs',()=>{for(const key of ['access_
 test('rollback del flag retira los destinos',()=>{const result=resolveMayoristaAccess(context,{...config,habilitado:false});assert.equal(result.enabled,false);assert.equal(result.adminUrl,undefined);assert.equal(result.sellerUrl,undefined);});
 test('Administrar conserva exactamente el código previo salvo acceso nuevo',async()=>{
   const text=await readFile(new URL('../../../ModulosControlPanel.tsx',import.meta.url),'utf8');
-  const old=text.replace('import MayoristaAdministrarAccess from "./modules/mayorista/integration/MayoristaAdministrarAccess";\n','').replace('      <MayoristaAdministrarAccess key={empresa.empresa_id} empresaId={empresa.empresa_id} rol={empresa.rol} />\n\n','').trimEnd();
+  const cleaned=text.replace(/^import MayoristaBusinessType.*\n/m,'').replace(/^import \{createCompanyConfigProvider\}.*\n/m,'').replace(/^import \{supabase\}.*\n/m,'').replace(/const obtenerConfigMayorista=[\s\S]*?(?=const PRESETS:)/,'').replace(/      \{puedeEditar && <MayoristaBusinessType[^\n]*\n\n/m,'').replace(/      \{modulos\.some\(m =>[\s\S]*?obtenerConfig=\{obtenerConfigMayorista\} \/>\}\n\n/m,'');
+  const old=cleaned.replace('import MayoristaAdministrarAccess from "./modules/mayorista/integration/MayoristaAdministrarAccess";\n','').replace('      <MayoristaAdministrarAccess key={empresa.empresa_id} empresaId={empresa.empresa_id} rol={empresa.rol} />\n\n','').trimEnd();
   assert.equal(createHash('sha256').update(old).digest('hex'),'f23b7dd6fc208564c9d9fb21ba13efb38241a54e3ce6e4c4f26870db7119f695');
 });
-test('la entrada real no inyecta proveedor ni activa empresas',async()=>{
+test('entrada Mayorista obtiene configuración autenticada y permanece oculta sin flag',async()=>{
   const text=await readFile(new URL('../../../ModulosControlPanel.tsx',import.meta.url),'utf8');
-  assert.ok(text.includes('<MayoristaAdministrarAccess key={empresa.empresa_id} empresaId={empresa.empresa_id} rol={empresa.rol} />'));
+  assert.match(text,/modulos\.some\(m => m\.clave === \"mayorista_distribuidora\" && m\.habilitado\)/);
+  assert.match(text,/obtenerConfig=\{obtenerConfigMayorista\}/);
+  assert.match(text,/supabase\.rpc\('obtener_acceso_mayorista_sigo'/);
+  assert.ok(!text.includes('mayorista-api-qa-qa.up.railway.app'));
 });
 test('manifest PWA mantiene alcance independiente',async()=>{const manifest=JSON.parse(await readFile(new URL('../demo/manifest.webmanifest',import.meta.url),'utf8'));assert.equal(manifest.scope,'./');assert.equal(manifest.start_url,'./');assert.equal(manifest.display,'standalone');});
 test('iconos PNG de Android tienen dimensiones reales 192 y 512',async()=>{

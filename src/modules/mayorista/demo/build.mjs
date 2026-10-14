@@ -7,7 +7,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const out = path.join(root, 'dist');
 await rm(out, { recursive: true, force: true });
 await mkdir(out, { recursive: true });
-const sources = ['offline/pedidos-locales', 'offline/pedidos-indexeddb', 'offline/catalogo-indexeddb', 'sync/contrato-pedidos', 'sync/validacion-pedidos', 'integration/access-policy'];
+const sources = ['offline/pedidos-locales', 'offline/pedidos-indexeddb', 'offline/catalogo-indexeddb', 'sync/contrato-pedidos', 'sync/validacion-pedidos', 'integration/access-policy', 'integration/company-config'];
 for (const source of sources) {
   const ts = await readFile(path.join(root, '..', source + '.ts'), 'utf8');
   const js = stripTypeScriptTypes(ts, { mode: 'transform' }).replace(/(from\s+["'])(\.\.?\/[^"']+)(["'])/g, '$1$2.js$3');
@@ -28,5 +28,5 @@ await mkdir(path.join(out,'security'),{recursive:true});
 await cp(path.join(root,'../security/encrypted-workspace.mjs'),path.join(out,'security/encrypted-workspace.mjs'));
 await cp(path.join(root,'../offline/encrypted-orders.mjs'),path.join(out,'offline/encrypted-orders.mjs'));
 await cp(path.join(root,'../offline/encrypted-visits.mjs'),path.join(out,'offline/encrypted-visits.mjs'));
-console.log('Build Mayorista aislado: 6 módulos TypeScript transformados, App Vendedor y administración demo generadas; sin chequeo tsc.');
+console.log('Build Mayorista aislado: 7 módulos TypeScript transformados, App Vendedor y administración demo generadas; sin chequeo tsc.');
 

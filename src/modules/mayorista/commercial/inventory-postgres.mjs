@@ -22,7 +22,16 @@ export function createInventoryTransaction({query,principal,loads}){
    }else{
     const id=command.input.cargaId;if(!uuid.test(id))throw new ApiError(422,'Carga inválida');const state=await loads(),load=state.cargas[id];if(!load)throw new ApiError(404,'Carga no disponible');source=id;
     if(command.tipo==='reserva'&&load.estado!=='verificada'||command.tipo==='salida'&&load.estado!=='en_reparto'||command.tipo==='devolucion'&&load.estado!=='cerrada')throw new ApiError(409,'Estado de carga incompatible');
-    if(command.tipo==='devolucion'){const totals=new Map();for(const p of Object.values(load.pedidos))for(const l of p.lineas)totals.set(l.productoId,(totals.get(l.productoId)??0)+(l.devuelto??0));lines=[...totals].map(([productoId,cantidad])=>({productoId,cantidad}));}
+    if(command.tipo==='devolucion'){
+     const totals=new Map();for(const p of Object.values(load.pedidos))for(const l of p.lineas)totals.set(l.productoId,(totals.get(l.productoId)??0)+(l.devuelto??0));
+     lines=[...totals].map(([productoId,returned])=>{
+      const receipt=load.recepcionDevoluciones?.lineas.find(l=>l.productoId===productoId);
+      // Sin inspección explícita se conserva en revisión: jamás aumenta stock vendible.
+      const cantidad=receipt?.vendible??0;
+      if(!Number.isSafeInteger(cantidad)||cantidad<0||cantidad>returned)throw new ApiError(422,'Clasificación de devolución inválida');
+      return {productoId,cantidad};
+     });
+    }
     else lines=loadProducts(load).map(l=>({productoId:l.productoId,cantidad:l.preparado}));
    }
    if((await query('SELECT comando_id FROM mayorista.movimientos_inventario WHERE empresa_id=$1 AND tipo=$2 AND origen=$3',[principal.empresaId,command.tipo,source])).rows.length)throw new ApiError(409,'Origen ya contabilizado');

@@ -133,7 +133,12 @@ export function applyLoadCommand(state,command,actor,now=new Date().toISOString(
       if(!Array.isArray(i.lineas)||!i.lineas.length||new Set(i.lineas.map(l=>l.productoId)).size!==i.lineas.length)throw new Error('Detalle de devolución inválido');
       const expected=new Map();for(const p of Object.values(load.pedidos))for(const l of p.lineas)if(l.devuelto)expected.set(l.productoId,(expected.get(l.productoId)??0)+l.devuelto);
       if(i.lineas.length!==expected.size||i.lineas.some(l=>!expected.has(l.productoId)||integer(l.cantidad)!==expected.get(l.productoId)))throw new Error('La recepción física no concilia con lo devuelto');
-      load.recepcionDevoluciones={lineas:structuredClone(i.lineas),nota:note(i.nota),responsable:actor.userId,fecha:now};break;
+      const classified=i.lineas.map(l=>{
+        const vendible=integer(l.vendible??0),averiada=integer(l.averiada??0),revision=integer(l.revision??l.cantidad-vendible-averiada);
+        if(vendible+averiada+revision!==l.cantidad)throw new Error('Clasificá toda la devolución: vendible, averiada o revisión');
+        return {...structuredClone(l),vendible,averiada,revision};
+      });
+      load.recepcionDevoluciones={lineas:classified,nota:note(i.nota),responsable:actor.userId,fecha:now};break;
     }
     case 'cerrar':if(load?.requiereRecepcion&&Object.values(load.pedidos).some(p=>p.lineas.some(l=>l.devuelto>0))&&!load.recepcionDevoluciones)throw new Error('Falta confirmar recepción física de las devoluciones');
 if(load?.estado!=='en_reparto'||Object.values(load.pedidos).some(p=>p.estado==='pendiente'||p.rendicion?.estado!=='revisada'))throw new Error('Entregas/rendiciones pendientes');load.estado='cerrada';load.cierre={fecha:now,responsable:actor.userId};break;
