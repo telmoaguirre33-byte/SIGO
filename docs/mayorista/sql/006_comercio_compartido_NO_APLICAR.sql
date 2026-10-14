@@ -13,7 +13,7 @@ create table public.sigo_mayorista_entregas_comerciales (
  solicitud jsonb not null,huella text not null,estado text not null check(estado in ('recibido','requiere_autorizacion','aprobado','rechazado','confirmado')),
  detalle jsonb not null,total numeric(14,2) not null check(total>0),venta_id uuid references public.ventas_sigo(id),
  recibido_por uuid not null references auth.users(id),recibido_en timestamptz not null default now(),
- autorizado_por uuid references auth.users(id),autorizado_en timestamptz,motivo text,respuesta jsonb,
+ autorizado_por uuid references auth.users(id),autorizado_en timestamptz,motivo text,respuesta jsonb,historial jsonb not null default '[]',
  primary key(empresa_id,comando_id),check((estado='confirmado')=(venta_id is not null))
 );
 create index sigo_mayorista_entregas_pedido on public.sigo_mayorista_entregas_comerciales(empresa_id,pedido_id);
@@ -26,6 +26,21 @@ create table public.sigo_mayorista_cobros_vinculos (
 alter table public.sigo_mayorista_entregas_comerciales enable row level security;
 alter table public.sigo_mayorista_cobros_vinculos enable row level security;
 revoke all on public.sigo_mayorista_entregas_comerciales,public.sigo_mayorista_cobros_vinculos from public,anon,authenticated;
+create function public.sigo_mayorista_historial_comercial() returns trigger
+language plpgsql set search_path='' as $$
+begin
+ if TG_OP='INSERT' then
+  NEW.historial:=jsonb_build_array(jsonb_build_object('estado',NEW.estado,'usuario',auth.uid(),'fecha',now()));
+ else
+  NEW.historial:=OLD.historial;
+  if NEW.estado is distinct from OLD.estado then
+   NEW.historial:=OLD.historial||jsonb_build_array(jsonb_build_object('anterior',OLD.estado,'estado',NEW.estado,'usuario',auth.uid(),'fecha',now(),'motivo',NEW.motivo));
+  end if;
+ end if;
+ return NEW;
+end $$;
+revoke all on function public.sigo_mayorista_historial_comercial() from public,anon,authenticated;
+create trigger sigo_mayorista_historial_entrega before insert or update on public.sigo_mayorista_entregas_comerciales for each row execute function public.sigo_mayorista_historial_comercial();
 
 create function public.sigo_mayorista_operador_comercial(p_empresa_id uuid) returns text
 language plpgsql stable security definer set search_path='' as $$
@@ -111,7 +126,7 @@ begin
  else
   insert into public.caja_movimientos_sigo(empresa_id,venta_id,tipo,medio_pago,importe,concepto,created_by) values(p_empresa_id,v_venta,'ingreso',v_medio,v_total,'Entrega Mayorista '||v_pedido::text,auth.uid());
  end if;
- v_answer:=jsonb_build_object('estado','confirmado','empresaId',p_empresa_id,'pedidoId',v_pedido,'comandoId',p_comando_id,'ventaId',v_venta,'total',v_total,'facturacion','pendiente');
+ v_answer:=jsonb_build_object('estado','confirmado','empresaId',p_empresa_id,'pedidoId',v_pedido,'comandoId',p_comando_id,'ventaId',v_venta,'total',v_total,'medioPago',v_medio,'facturacion','pendiente');
  update public.sigo_mayorista_entregas_comerciales set estado='confirmado',venta_id=v_venta,respuesta=v_answer where empresa_id=p_empresa_id and comando_id=p_comando_id;
  return v_answer;
 end $$;
@@ -156,7 +171,7 @@ create function public.leer_comercio_mayorista_sigo(p_empresa_id uuid) returns j
 language plpgsql stable security definer set search_path='' as $$
 begin
  perform public.sigo_mayorista_operador_comercial(p_empresa_id);
- return jsonb_build_object('empresaId',p_empresa_id,'operaciones',coalesce((select jsonb_agg(jsonb_build_object('pedidoId',e.pedido_id,'comandoId',e.comando_id,'estado',e.estado,'resultado',coalesce(e.respuesta,jsonb_build_object('estado',e.estado,'comandoId',e.comando_id,'pedidoId',e.pedido_id)),'autorizadoPor',e.autorizado_por,'autorizadoEn',e.autorizado_en) order by e.recibido_en) from public.sigo_mayorista_entregas_comerciales e where e.empresa_id=p_empresa_id),'[]'::jsonb),
+ return jsonb_build_object('empresaId',p_empresa_id,'operaciones',coalesce((select jsonb_agg(jsonb_build_object('pedidoId',e.pedido_id,'comandoId',e.comando_id,'estado',e.estado,'resultado',coalesce(e.respuesta,jsonb_build_object('estado',e.estado,'comandoId',e.comando_id,'pedidoId',e.pedido_id))||jsonb_build_object('medioPago',e.solicitud->>'medioPago'),'historial',e.historial,'autorizadoPor',e.autorizado_por,'autorizadoEn',e.autorizado_en) order by e.recibido_en) from public.sigo_mayorista_entregas_comerciales e where e.empresa_id=p_empresa_id),'[]'::jsonb),
  'cuentas',coalesce((select jsonb_agg(jsonb_build_object('clienteId',c.id,'saldoCentavos',(c.saldo_actual*100)::bigint::text)) from public.clientes_sigo c where c.empresa_id=p_empresa_id and c.activo),'[]'::jsonb),
  'cobros',coalesce((select jsonb_agg(jsonb_build_object('clienteId',c.cliente_id,'comandoId',c.comando_id,'comprobante',c.comprobante,'resultado',c.respuesta,'fecha',c.fecha)) from public.sigo_mayorista_cobros_vinculos c where c.empresa_id=p_empresa_id),'[]'::jsonb));
 end $$;

@@ -47,6 +47,9 @@ export async function verifySharedCommerceSQL(pool){
   const source=(await act(()=>c.query('SELECT public.leer_comercio_mayorista_sigo($1) AS r',[E]))).rows[0].r;
   assert.equal(source.empresaId,E);assert.equal(source.cuentas[0].saldoCentavos,'2000');assert.equal(source.cobros.length,1);
   assert.equal(source.operaciones.filter(o=>o.estado==='confirmado').length,2);
+  const creditHistory=source.operaciones.find(o=>o.comandoId===overId);
+  assert.deepEqual(creditHistory.historial.map(h=>h.estado),['recibido','requiere_autorizacion','aprobado','confirmado']);
+  assert.equal(creditHistory.resultado.medioPago,'cuenta_corriente');assert.ok(creditHistory.historial.every(h=>h.usuario===U&&h.fecha));
   await assert.rejects(()=>act(()=>c.query('SELECT public.registrar_cobro_mayorista_sigo($1,$2,$3,$4,100,$5,$6)',[E,id,C,O,'efectivo','Conflicto de tipo'])),/IDEMPOTENCY_TYPE_CONFLICT/);
   for(const table of ['sigo_mayorista_comercio_fuente','sigo_mayorista_entregas_comerciales','sigo_mayorista_cobros_vinculos'])await assert.rejects(()=>act(()=>c.query(`SELECT * FROM public.${table}`)),e=>e.code==='42501');
   await assert.rejects(()=>act(()=>c.query('SELECT public.registrar_entrega_mayorista_sigo($1,$2,$3::jsonb)',[E,id,JSON.stringify(data)]),{exp:1}),/SESSION_EXPIRED/);
