@@ -2,7 +2,7 @@ import {ApiError} from '../api/receive-order.mjs';
 import {administrative} from '../security/company-roles.mjs';
 import {normalizeReportFilters,calculateManagementMetrics} from './management-metrics.mjs';
 /** Todas las lecturas usan la transacción y el principal RLS de la petición. */
-export function createDashboardTransaction({query,principal,readSharedMetrics}) {
+export function createDashboardTransaction({query,principal,readSharedMetrics,readSharedData}) {
   const E=principal.empresaId;
   const rows=async(sql,args=[E])=>(await query(sql,args)).rows;
   async function readMetricsData({personal=false}={}) {
@@ -30,6 +30,12 @@ export function createDashboardTransaction({query,principal,readSharedMetrics}) 
         if(!Array.isArray(shared[key])||shared[key].some(e=>e.empresaId!==E||personal&&e.vendedorId!==principal.vendedorId))throw new ApiError(403,'Datos compartidos fuera del ámbito');
         data[key]=shared[key];
       }
+    }
+    if(principal.fuenteComercial==='sigo'){
+      if(!readSharedData)throw new ApiError(503,'Métricas compartidas no conectadas');
+      const shared=await readSharedData(principal);
+      if(shared?.empresaId!==E||personal&&shared.sales.some(s=>s.vendedorId!==principal.vendedorId))throw new ApiError(403,'Métricas compartidas fuera del ámbito');
+      for(const key of ['sales','invoices','ledger','collections','inventory','customers','products'])if(shared[key]!==undefined)data[key]=shared[key];
     }
     return data;
   }

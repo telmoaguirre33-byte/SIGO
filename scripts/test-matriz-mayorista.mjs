@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+const matrix = await readFile("src/MatrizAdmin.tsx", "utf8");
+const sql = await readFile("supabase/migrations/20261013090000_mayorista_modulo_matriz.sql", "utf8");
+assert.match(matrix,/Agregar módulo Mayorista/);
+assert.match(matrix,/p_modulo_clave: "mayorista_distribuidora"/);
+assert.match(matrix,/p_empresa_id: empresa\.empresa_id/);
+assert.match(matrix,/disabled=\{!mayoristaDisponible \|\| workingId === empresa\.empresa_id\}/);
+assert.match(sql,/security definer[\s\S]*set search_path = public[\s\S]*AUTH_REQUIRED[\s\S]*SUPERADMIN_REQUIRED/);
+console.log("Integración de Matriz Mayorista: contrato de UI y guardas aprobado.");

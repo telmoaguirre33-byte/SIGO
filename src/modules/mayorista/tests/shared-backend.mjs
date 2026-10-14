@@ -63,6 +63,9 @@ export async function verifySharedBackend(pool){
  assert.equal(Number((await pool.query('SELECT count(*) FROM public.ventas_sigo WHERE empresa_id=$1',[E])).rows[0].count),salesBefore+1);
  assert.equal(Number((await pool.query('SELECT stock_actual FROM public.productos WHERE id=$1',[P])).rows[0].stock_actual),6);
  assert.equal(Number((await pool.query('SELECT count(*) FROM mayorista.movimientos_inventario WHERE empresa_id=$1',[E])).rows[0].count),0);
+ const dashboard=await call('/admin/dashboard',{token:owner});assert.equal(dashboard.status,200);assert.equal(dashboard.body.resumen.vendido,4000);assert.equal(dashboard.body.resumen.facturado,null);assert.equal(dashboard.body.resumen.cobrado,1000);assert.equal(dashboard.body.resumen.deudaPendiente,3000);
+ const ownGoal={id:randomUUID(),empresaId:E,version:0,input:{id:randomUUID(),vendedorId:V,metrica:'vendido',periodo:'diario',desde:new Date().toISOString().slice(0,10),hasta:new Date().toISOString().slice(0,10),objetivo:2000,activa:true}};
+ assert.equal((await call('/admin/goals/commands',{token:owner,body:ownGoal})).status,200);const own=await call('/goals',{token:seller});assert.equal(own.status,200);assert.equal(own.body.objetivos[0].real,1000);
  const minorista=await call('/auth/login',{body:{...creds.gerencia,empresaId:B}});assert.equal((await call('/me',{token:minorista.body.accessToken})).body.fuenteComercial,undefined);
  await call('/auth/logout',{token:owner,body:{}});assert.equal((await call('/shared/commerce',{token:owner})).status,401);
  console.log('PASS fuente compartida backend: catálogo SIGO, cinco roles, UUID recuperable, escritores QA bloqueados, crédito y aislamiento');

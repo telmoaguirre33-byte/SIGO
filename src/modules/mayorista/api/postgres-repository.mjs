@@ -90,7 +90,7 @@ export function createPostgresRepository({enabled=false,pool,inventoryRequired=f
       if(operational){
         tx.accounts=tx.collectionsAccounts;
         const query=(sql,args)=>c.query(sql,args);
-        Object.assign(tx,createDashboardTransaction({query,principal,readSharedMetrics}));
+        Object.assign(tx,createDashboardTransaction({query,principal,readSharedMetrics,readSharedData:principal.fuenteComercial==='sigo'?()=>tx.sharedMetrics():undefined}));
         Object.assign(tx,createGoalsTransaction({query,principal,readMetricsData:tx.readMetricsData}));
         const dashboard=tx.dashboard;
         tx.dashboard=async raw=>{

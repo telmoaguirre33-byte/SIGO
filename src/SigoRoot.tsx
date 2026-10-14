@@ -14,6 +14,7 @@ import {
   type EmpresaOperativa,
 } from "./tenant";
 import { supabase } from "./supabase";
+import { cerrarSesionConPushRevocado } from "./adminPush";
 import {
   etiquetaRol,
   type SigoWorkspace,
@@ -243,7 +244,7 @@ export default function SigoRoot() {
   }
 
   async function cambiarUsuario() {
-    await supabase.auth.signOut();
+    await cerrarSesionConPushRevocado();
   }
 
   const workspaceContent = empresaActiva ? (() => {

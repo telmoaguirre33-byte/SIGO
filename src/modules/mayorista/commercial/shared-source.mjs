@@ -37,13 +37,17 @@ export function createSharedSource({pool,databasePolicy}){
       const lines=event.input.lineas.filter(l=>l.entregado>0).map(l=>({productoId:l.productoId,cantidad:l.entregado,precioUnitario:p.lineas.find(x=>x.productoId===l.productoId)?.precioUnitario}));
       const normalized=x=>JSON.stringify(canonical([...(x??[])].sort((a,b)=>a.productoId.localeCompare(b.productoId))));
       if(!Array.isArray(d.lineas)||normalized(d.lineas)!==normalized(lines))throw new ApiError(409,'El detalle no coincide con la entrega');
-      return rpc('registrar_entrega_mayorista_sigo',[E,command.id,JSON.stringify(d)]);
+      const order=(await query('SELECT vendedor_id FROM mayorista.pedidos WHERE empresa_id=$1 AND pedido_id=$2',[E,d.pedidoId])).rows[0];
+      if(!order||d.vendedorId&&d.vendedorId!==order.vendedor_id||d.rutaId&&d.rutaId!==p.rutaId)throw new ApiError(409,'Atribución ajena a la entrega');
+      const trusted={pedidoId:d.pedidoId,clienteId:p.clienteId,vendedorId:order.vendedor_id,...(p.rutaId?{rutaId:p.rutaId}:{}),medioPago:d.medioPago,lineas:lines};
+      return rpc('registrar_entrega_mayorista_sigo',[E,command.id,JSON.stringify(trusted)]);
      }
      if(command.tipo==='credito')return rpc('autorizar_credito_mayorista_sigo',[E,command.id,command.aprobar,command.motivo]);
      if(command.tipo==='cobro'){const d=command.datos??{};return rpc('registrar_cobro_mayorista_sigo',[E,command.id,d.clienteId,d.pedidoId??null,d.centavos,d.medio,d.comprobante]);}
      throw new ApiError(422,'Operación compartida inválida');
     },
     sharedCatalog:async()=> (await query('SELECT public.leer_catalogo_mayorista_sigo($1) AS r',[E])).rows[0].r,
+    sharedMetrics:async()=> (await query('SELECT public.leer_metricas_mayorista_sigo($1) AS r',[E])).rows[0].r,
     sharedInventory:async()=>{admin();return (await query('SELECT public.leer_stock_mayorista_sigo($1) AS r',[E])).rows[0].r;},
    };
   }
