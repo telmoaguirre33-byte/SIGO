@@ -11,7 +11,8 @@ export async function verifySharedFiscal(pool){
  const ddl=await readFile(new URL('20260910021200_arca_config_segura.sql',migration),'utf8');
  await pool.query(ddl.slice(ddl.indexOf('create table if not exists public.arca_comprobantes'),ddl.indexOf('create index if not exists arca_comprobantes_empresa_fecha_idx')));
  await pool.query(await readFile(new URL('20260914003500_arca_cae_preflight_guards.sql',migration),'utf8'));
- await pool.query('ALTER TABLE public.ventas_sigo ADD COLUMN anulada_at timestamptz; UPDATE public.clientes_sigo SET arca_doc_tipo=80,condicion_iva_receptor_id=6,documento=$1',[ '20123456789']);
+ await pool.query('ALTER TABLE public.ventas_sigo ADD COLUMN anulada_at timestamptz');
+ await pool.query('UPDATE public.clientes_sigo SET arca_doc_tipo=80,condicion_iva_receptor_id=6,documento=$1',['20123456789']);
  await pool.query('INSERT INTO mayorista_private.sesiones(session_id,user_id,empresa_id,vence_en) VALUES($1,$2,$3,now()+interval \'1 hour\')',[S,U,E]);
  const operation=(await pool.query("SELECT comando_id,venta_id FROM public.sigo_mayorista_entregas_comerciales WHERE empresa_id=$1 AND estado='confirmado' ORDER BY recibido_en DESC LIMIT 1",[E])).rows[0];
  const originalFetch=globalThis.fetch,oldURL=process.env.SUPABASE_URL,oldKey=process.env.SUPABASE_ANON_KEY;
