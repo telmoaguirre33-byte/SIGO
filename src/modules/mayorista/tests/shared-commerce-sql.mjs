@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
+import {assertSharedFixture} from './shared-fixture-policy.mjs';
 /** Se ejecuta solo en la misma DB efímera que la declaración empresarial, nunca en SIGO real. */
 export async function verifySharedCommerceSQL(pool){
- if(pool.options.host!=='127.0.0.1'||pool.options.database!=='mayorista_package_ci')throw Error('SQL compartido fuera de fixture');
+ await assertSharedFixture(pool);
  const E='30000000-0000-4000-8000-000000000001',B='30000000-0000-4000-8000-000000000002',U='30000000-0000-4000-8000-000000000011',S=randomUUID(),C=randomUUID(),P=randomUUID(),O=randomUUID();
  const clean=s=>s.replace(/^begin;$/mi,'').replace(/^rollback;$/mi,'');
  await pool.query(`CREATE TABLE auth.sessions(id uuid primary key,user_id uuid);

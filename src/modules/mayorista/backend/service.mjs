@@ -5,6 +5,7 @@ import {ApiError,createOrderReceiver} from '../api/receive-order.mjs';
 import {createOrderHttpHandler} from '../api/http-handler.mjs';
 import {assertIsolatedPool,createPostgresRepository} from '../api/postgres-repository.mjs';
 import {createIsolatedAuth} from '../security/isolated-auth.mjs';
+import {createSharedSource} from '../commercial/shared-source.mjs';
 
 async function smallJson(request,limit=4096){
   // Límite real sobre stream, también sin Content-Length.
@@ -15,12 +16,14 @@ async function smallJson(request,limit=4096){
 
 /** Backend Mayorista: localhost QA o Railway QA explícito con TLS verificado. No monta rutas en SIGO.
  * Llaves Ed25519 y rate limiter son obligatorios; no contiene credenciales remotas. */
-export function createIsolatedService({enabled=false,pool,privateKey,publicKey,origin,issuer,rateLimit,inventoryRequired=false,accountsEnabled=false,databasePolicy,operational=false,readSharedMetrics,integrationOrigins=[]}={}){
+export function createIsolatedService({enabled=false,pool,privateKey,publicKey,origin,issuer,rateLimit,inventoryRequired=false,accountsEnabled=false,databasePolicy,operational=false,readSharedMetrics,integrationOrigins=[],sharedSourceEnabled=false}={}){
   if(databasePolicy&&!operational)throw new ApiError(503,'Railway requiere permisos operativos persistentes');
   if(enabled)(databasePolicy?.assertPool??assertIsolatedPool)(pool);
-  const auth=createIsolatedAuth({enabled,pool,privateKey,publicKey,issuer,databasePolicy,operational});
+  const sharedSource=enabled&&sharedSourceEnabled?createSharedSource({pool,databasePolicy:databasePolicy??{assertPool:assertIsolatedPool}}):null;
+  const nativeAuth=createIsolatedAuth({enabled,pool,privateKey,publicKey,issuer,databasePolicy,operational});
+  const auth={...nativeAuth,verify:async token=>{const p=await nativeAuth.verify(token);return sharedSource?sharedSource.identity(p):p;}};
   const directory=operational?createUserDirectory({pool,databasePolicy}):null;
-  const repository=createPostgresRepository({enabled,pool,inventoryRequired,accountsEnabled,databasePolicy,operational,readSharedMetrics});
+  const repository=createPostgresRepository({enabled,pool,inventoryRequired,accountsEnabled,databasePolicy,operational,readSharedMetrics,sharedSource});
   const orders=createOrderHttpHandler({enabled,allowedOrigin:origin,integrationOrigins,rateLimit,receive:createOrderReceiver({enabled,auth,repository})});
   return async request=>{
     const path=new URL(request.url).pathname;
@@ -46,6 +49,10 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
       const principal=await auth.verify(token);
       if(path==='/auth/logout'&&request.method==='POST'){await auth.signOut(token);return reply(200,{revoked:true});}
       if(path==='/me'&&request.method==='GET')return reply(200,principal);
+      if(path==='/shared/commerce'&&principal.fuenteComercial==='sigo'){
+        if(request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.sharedState()));
+        if(request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const command=await smallJson(request,256*1024);return reply(200,await repository.withPrincipal(principal,tx=>tx.sharedCommand(command)));}
+      }
       if(operational&&['armador','chofer'].includes(principal.rol)&&!path.startsWith('/operations/'))throw new ApiError(403,'Ruta fuera del rol operativo');
       if(operational&&path==='/operations/loads'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.assignedLoads()));
       if(operational&&path==='/operations/loads'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const input=await smallJson(request);return reply(200,await repository.withPrincipal(principal,tx=>tx.publishLoad(input)));}

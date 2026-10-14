@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
+import {assertSharedFixture} from './shared-fixture-policy.mjs';
 /** Solo se invoca en la segunda DB efímera de schema-package.mjs. */
 export async function verifyBusinessTypeSQL(pool){
- if(pool.options.host!=='127.0.0.1'||Number(pool.options.port)!==55471||pool.options.database!=='mayorista_package_ci')throw new Error('Fixture empresarial fuera de CI');
+ await assertSharedFixture(pool);
  const E='30000000-0000-4000-8000-000000000001',B='30000000-0000-4000-8000-000000000002',U='30000000-0000-4000-8000-000000000011',OTHER='30000000-0000-4000-8000-000000000012';
  const sql=(await readFile(new URL('../../../../docs/mayorista/sql/005_integracion_empresa_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/mi,'').replace(/^rollback;$/mi,'');
  await pool.query(`CREATE TABLE auth.users(id uuid primary key);CREATE TABLE public.empresas(id uuid primary key,activa boolean not null default true);

@@ -21,6 +21,8 @@ export function createMayoristaClient({enabled=false,baseUrl,fetchImpl=globalThi
     cargas:()=>request('/cargas'),
     cargasCommand:command=>request('/cargas/commands',command),
     catalog:()=>request('/catalog'),
+    sharedState:()=>request('/shared/commerce'),
+    sharedCommand:command=>request('/shared/commerce',command),
     users:()=>request('/admin/users'),
     userCommand:command=>request('/admin/users/commands',command),
     masterState:()=>request('/admin/catalog'),

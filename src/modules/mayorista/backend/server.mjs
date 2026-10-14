@@ -8,7 +8,7 @@ export function requestLimiter({now=Date.now,maxKeys=10000}={}){
 }
 export async function startRailwayServer(env=process.env){
  const config=railwayRuntime(env),pool=new pg.Pool(config.policy.config);try{await assertInstalledQA(pool);}catch(error){await pool.end();throw error;}
- const handler=createIsolatedService({enabled:true,pool,...config,origin:config.origin,databasePolicy:config.policy,operational:true,inventoryRequired:true,accountsEnabled:true,rateLimit:requestLimiter()});
+ const handler=createIsolatedService({enabled:true,pool,...config,origin:config.origin,databasePolicy:config.policy,operational:true,inventoryRequired:true,accountsEnabled:true,sharedSourceEnabled:env.MAYORISTA_SHARED_SOURCE_QA==='true',rateLimit:requestLimiter()});
  const sw=await readFile(path.join(root,'operational-sw.js'),'utf8'),assetNames=[...sw.matchAll(/'\.\/([^']+)'/g)].map(m=>'/'+m[1]);const allowed=new Set([...assetNames,'/operational-sw.js']);
  const server=createServer(async(req,res)=>{try{
   const url=new URL(req.url,config.origin),headers={'X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin','X-Frame-Options':'DENY','Strict-Transport-Security':'max-age=31536000'};
