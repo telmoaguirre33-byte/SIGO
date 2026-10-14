@@ -1,3 +1,4 @@
+import {verifySharedCreditNotes} from './shared-credit-notes.mjs';
 /** Chromium → HTTPS → backend real → PostgreSQL CI. Sin conexión a datos productivos. */
 import {createServer} from 'node:https';
 import {spawn} from 'node:child_process';
@@ -15,7 +16,7 @@ import {prepareActivationUi} from './activation-ui.mjs';
 import {verifySharedFiscal} from './shared-fiscal.mjs';
 const origin='https://localhost:4178',base=new pg.Pool({host:'127.0.0.1',port:55471,database:'mayorista_qa',user:'postgres',password:'mayorista_ci_only',max:2});
 const pool=acceptanceNamespace(new pg.Pool({...base.options,password:base.options.password,max:2}),'mayorista_acceptance_000000000002');
-let server,browser,socket,fixture,invoiceCall,created=false,seq=0;const pending=new Map(),errors=[],results=[],delay=ms=>new Promise(r=>setTimeout(r,ms));
+let server,browser,socket,fixture,invoiceCall,creditNoteCall,created=false,seq=0;const pending=new Map(),errors=[],results=[],delay=ms=>new Promise(r=>setTimeout(r,ms));
 const profile=await mkdtemp('/tmp/mayorista-ui-');
 function command(method,params={}){return new Promise((resolve,reject)=>{const id=++seq,timer=setTimeout(()=>{pending.delete(id);reject(Error('Timeout UI '+method));},20000);pending.set(id,{resolve:v=>{clearTimeout(timer);resolve(v);},reject:e=>{clearTimeout(timer);reject(e);}});socket.send(JSON.stringify({id,method,params}));});}
 async function evaluate(expression){const r=await command('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description??r.exceptionDetails.text);return r.result.value;}
@@ -24,7 +25,7 @@ async function submit(selector,values){await evaluate(`(()=>{const f=document.qu
 async function click(selector){await evaluate(`document.querySelector(${JSON.stringify(selector)})?.click()`);await delay(80);await wait("!document.querySelector('[aria-busy=true]')");}
 async function passed(name){results.push({name,status:'pass'});console.log('PASS UI '+name);}
 async function openPortal(role='gerencia',page='panel'){
- await evaluate(`(async()=>{document.body.innerHTML='<main id="ui" class="sigo-mayorista-workspace"></main>';const {mountOperationalPortal}=await import('./admin/operational-portal.mjs');window.portal=mountOperationalPortal(document.querySelector('#ui'),{enabled:true,baseUrl:location.origin+'/',integrated:true,expectedEmpresaId:${JSON.stringify(fixture.E)},initialPage:${JSON.stringify(page)},sharedCommerce:{invoice:async input=>{const r=await fetch('/__invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input)});const d=await r.json();if(!r.ok)throw Error(d.error??'Factura no confirmada');return d;}}});})()`);
+ await evaluate(`(async()=>{document.body.innerHTML='<main id="ui" class="sigo-mayorista-workspace"></main>';const {mountOperationalPortal}=await import('./admin/operational-portal.mjs');window.portal=mountOperationalPortal(document.querySelector('#ui'),{enabled:true,baseUrl:location.origin+'/',integrated:true,expectedEmpresaId:${JSON.stringify(fixture.E)},initialPage:${JSON.stringify(page)},sharedCommerce:{creditNote:async input=>{const r=await fetch('/__credit-note',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input)});const d=await r.json();if(!r.ok)throw Error(d.error??'NC no confirmada');return d;},invoice:async input=>{const r=await fetch('/__invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input)});const d=await r.json();if(!r.ok)throw Error(d.error??'Factura no confirmada');return d;}}});})()`);
  await submit('[data-form=login]',fixture.creds[role]);await wait("!!document.querySelector('nav')");
 }
 try{
@@ -37,6 +38,7 @@ try{
    const pathname=new URL(req.url,origin).pathname;
    if(await activation.handle(req,res))return;
    if(pathname==='/__activation.js'){res.writeHead(200,{'Content-Type':'text/javascript'});res.end(activation.bundle);return;}
+   if(pathname==='/__credit-note'){let raw='';for await(const chunk of req)raw+=chunk;if(!creditNoteCall)throw Error('Simulación NC no preparada');const output=await creditNoteCall(JSON.parse(raw));res.writeHead(output.status,{'Content-Type':'application/json'});res.end(JSON.stringify(output.body));return;}
    if(pathname==='/__invoice'){let raw='';for await(const chunk of req)raw+=chunk;const input=JSON.parse(raw);if(!invoiceCall)throw Error('Simulación aún no preparada');const output=await invoiceCall(input);res.writeHead(output.status,{'Content-Type':'application/json'});res.end(JSON.stringify(output.body));return;}
    if(pathname==='/'||/\.(html|css|mjs|js|png|webmanifest)$/.test(pathname)){
     const file=pathname==='/'?'portal.html':pathname.slice(1);if(file.includes('..'))throw Error('Ruta inválida');const body=await readFile(new URL('../demo/dist/'+file,import.meta.url));res.writeHead(200,{'Content-Type':/\.m?js$/.test(file)?'text/javascript':file.endsWith('.css')?'text/css':'text/html'});res.end(body);return;
@@ -85,6 +87,8 @@ try{
  const beforeReturn=Number((await pool.query('SELECT stock_actual FROM public.productos WHERE id=$1',[fixture.P])).rows[0].stock_actual);
  await submit('[data-form=shared-return]',{ventaItemId:saleItem,cantidad:1,disposicion:'revision',motivo:'Devolución UI pendiente de revisión'});await wait("document.body.innerText.includes('pendiente_homologacion')");
  assert.equal(Number((await pool.query('SELECT stock_actual FROM public.productos WHERE id=$1',[fixture.P])).rows[0].stock_actual),beforeReturn);await passed('Devolución SIGO no vendible conserva stock disponible y vínculo de nota de crédito');
+ const returnedId=(await pool.query('SELECT devolucion_id FROM public.sigo_mayorista_devoluciones_control WHERE empresa_id=$1',[fixture.E])).rows[0].devolucion_id;
+ await verifySharedCreditNotes(pool,{devolucionId:returnedId,exercise:async({call,request})=>{creditNoteCall=()=>call(request);await submit('[data-form=shared-credit-note]',{});await wait("document.body.innerText.includes('CAE 98765432109876')");}});await passed('Nota de crédito UI usa ARCA existente y concilia acuse perdido sin repetir stock ni cuenta');
  await openPortal('armador','deposito');assert.equal(await evaluate("!!document.querySelector('[data-tab=personal]')"),false);assert.equal(await evaluate("!!document.querySelector('[data-form=shared-inspect]')"),true);
  await submit('[data-form=shared-inspect]',{disposicion:'vendible',motivo:'Inspección UI mercadería vendible'});assert.equal(Number((await pool.query('SELECT stock_actual FROM public.productos WHERE id=$1',[fixture.P])).rows[0].stock_actual),beforeReturn+1);assert.equal(await evaluate("document.body.innerText.includes('pendiente_homologacion')"),false);await passed('Armador inspecciona su devolución sin acceso fiscal ni rentabilidad');
  await openPortal('chofer','entregas');assert.equal(await evaluate("!!document.querySelector('[data-tab=objetivos]')"),false);await submit('[data-form=direct-collection]',{importe:2,medio:'transferencia',comprobante:'UI-Chofer-Cobro'});await passed('Chofer autorizado cobra deuda SIGO desde su carga');

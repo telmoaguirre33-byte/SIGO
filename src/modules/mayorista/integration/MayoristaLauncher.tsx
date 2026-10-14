@@ -12,10 +12,10 @@ const readConfig=createCompanyConfigProvider(async(id,signal)=>{
  if(error)throw error;return data;
 });
 const commerceRpc=async(name:string,args:Record<string,unknown>)=>{
- if(name==='facturar_entrega_mayorista_sigo'){
+ if(['facturar_entrega_mayorista_sigo','emitir_nota_credito_mayorista_sigo'].includes(name)){
   const {data}=await supabase.auth.getSession(),token=data.session?.access_token;
   if(!token)throw Error('Volvé a ingresar a SIGO');
-  const response=await fetch('/api/mayorista/arca',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(args),signal:AbortSignal.timeout(60000)});
+  const response=await fetch(name==='emitir_nota_credito_mayorista_sigo'?'/api/mayorista/nota-credito':'/api/mayorista/arca',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(args),signal:AbortSignal.timeout(60000)});
   const result=await response.json();if(!response.ok)throw Error('Factura no confirmada. Conservamos la entrega para revisión.');return result;
  }
  if(!['leer_comercio_mayorista_sigo','registrar_entrega_mayorista_sigo','autorizar_credito_mayorista_sigo','registrar_cobro_mayorista_sigo'].includes(name))throw Error('Operación inválida');

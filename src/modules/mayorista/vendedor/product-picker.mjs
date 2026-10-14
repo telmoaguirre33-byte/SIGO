@@ -63,12 +63,13 @@ export function createProductPicker() {
     function fail(error) {if (cancelled) return; stopCamera(); status.textContent = error.name === 'NotAllowedError' ? 'Cámara sin permiso. Podés escribir el código o usar un lector.' : error.message; focus();}
   }
   function focus() {host?.querySelector('[data-product-query]')?.focus();}
-  function mount(element, {products = [], prices = [], orders = [], customerId = ''} = {}) {
+  function mount(element, {products = [], prices = [], orders = [], habituales = [], customerId = ''} = {}) {
     stopCamera(); host = element;
     if (!host) return;
     if (catalogRef !== products || pricesRef !== prices) {catalogRef = products; pricesRef = prices; index = buildProductIndex(products, prices); if (!selected()?.prices.some(p => p.id === priceId)) clear();}
     if (customer !== customerId) {customer = customerId; clear();}
     frequencies = customerFrequencies(orders, customerId);
+    for(const h of habituales)if(h.clienteId===customerId&&Number.isSafeInteger(h.compras)&&h.compras>0)frequencies.set(h.productoId,Math.max(frequencies.get(h.productoId)??0,h.compras));
     const capable = globalThis.isSecureContext && typeof globalThis.BarcodeDetector?.getSupportedFormats === 'function' && !!navigator.mediaDevices?.getUserMedia;
     host.innerHTML = `<label for="product-query">Producto</label><div class="product-search-row"><input id="product-query" data-product-query type="search" role="combobox" aria-autocomplete="list" aria-controls="product-results" aria-expanded="false" aria-describedby="product-search-status" autocomplete="off" placeholder="Nombre, marca, código o EAN">${capable ? '<button type="button" data-scan aria-label="Leer código de barras con cámara">Cámara</button>' : ''}</div><ul id="product-results" role="listbox" aria-label="Productos" hidden></ul><small id="product-search-status" data-search-status role="status"></small><p data-camera-status role="status"></p><div data-camera-panel hidden><video muted playsinline aria-label="Cámara de códigos de barras"></video><button type="button" data-stop-camera>Cerrar cámara</button></div><label>Presentación<select data-product-presentation name="precioId"></select></label>`;
     const input = host.querySelector('[data-product-query]');

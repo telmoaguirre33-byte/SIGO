@@ -1,3 +1,4 @@
+import {verifySharedCreditNotes} from './shared-credit-notes.mjs';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
@@ -58,6 +59,7 @@ export async function verifySharedFiscal(pool,{exercise}={}){
   assert.equal((await call({...request,empresaId:randomUUID()})).status,403);
   if(exercise)await exercise({call,request});
  }finally{globalThis.fetch=originalFetch;for(const [k,v] of [['SUPABASE_URL',oldURL],['SUPABASE_ANON_KEY',oldKey]])if(v===undefined)delete process.env[k];else process.env[k]=v;await pool.query('UPDATE mayorista_private.sesiones SET revocada=true WHERE session_id=$1',[S]);}
+ if(!exercise)await verifySharedCreditNotes(pool);
  console.log('PASS ARCA existente: entrega → venta → reserva → CAE simulado → conciliación persistente, sin duplicar stock ni factura; producción bloqueada');
  return [{name:'ARCA existente con reserva PostgreSQL y acuse perdido conciliado; WSFE simulado, producción bloqueada',status:'pass'}];
 }

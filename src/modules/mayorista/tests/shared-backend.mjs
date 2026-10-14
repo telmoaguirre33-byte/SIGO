@@ -13,6 +13,7 @@ export async function prepareSharedBackendFixture(pool,{origin='https://shared.q
  await pool.query(await readFile(new URL('../../../../supabase/migrations/20260913205500_carrito_devoluciones_anulaciones.sql',import.meta.url),'utf8'));
  await pool.query((await readFile(new URL('../../../../docs/mayorista/sql/008_operacion_comercial_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/mi,'').replace(/^rollback;$/mi,''));
  await pool.query((await readFile(new URL('../../../../docs/mayorista/sql/009_precios_compartidos_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/mi,'').replace(/^rollback;$/mi,''));
+ await pool.query((await readFile(new URL('../../../../docs/mayorista/sql/010_nota_credito_compartida_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/mi,'').replace(/^rollback;$/mi,''));
  // SOLO el fixture QA usa la identidad nativa: ninguna función Auth de Supabase real se modifica.
  await pool.query('DROP TABLE auth.sessions; CREATE VIEW auth.sessions AS SELECT session_id AS id,user_id FROM mayorista_private.sesiones WHERE NOT revocada AND vence_en>now(); REVOKE ALL ON auth.sessions FROM public,anon,authenticated');
  await pool.query('INSERT INTO mayorista.empresas VALUES($1,$2,true),($3,$4,true)',[E,'Empresa compartida QA',B,'Empresa minorista QA']);

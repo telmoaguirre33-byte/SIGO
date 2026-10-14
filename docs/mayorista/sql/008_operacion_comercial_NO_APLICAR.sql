@@ -1,13 +1,13 @@
 -- Ampliación Mayorista sobre 006/007. Solo propuestas y fixtures QA; no producción.
 begin;
-create table public.sigo_mayorista_cobradores(empresa_id uuid not null references public.empresas(id),user_id uuid not null references auth.users(id),activo boolean not null,limite_centavos bigint not null check(limite_centavos>0),autorizado_por uuid not null references auth.users(id),autorizado_en timestamptz not null default now(),primary key(empresa_id,user_id));
+create table public.sigo_mayorista_cobradores(empresa_id uuid not null references public.empresas(id),user_id uuid not null references auth.users(id),activo boolean not null,limite_centavos bigint not null check(limite_centavos>0),autorizado_por uuid not null references auth.users(id),autorizado_en timestamptz not null default now(),historial jsonb not null default '[]'::jsonb,primary key(empresa_id,user_id));
 alter table public.sigo_mayorista_cobradores enable row level security;
 revoke all on public.sigo_mayorista_cobradores from public,anon,authenticated;
 create function public.configurar_cobrador_mayorista_sigo(p_empresa_id uuid,p_usuario uuid,p_activo boolean,p_limite bigint) returns jsonb language plpgsql security definer set search_path='' as $$
 begin
  if public.sigo_mayorista_operador_comercial(p_empresa_id)<>'owner' then raise exception 'MANAGEMENT_REQUIRED';end if;
  if p_activo is null or p_limite is null or p_limite<=0 or p_limite>99999999999999 or not exists(select 1 from public.empresa_usuarios u join mayorista.miembros m on m.empresa_id=u.empresa_id and m.user_id=u.user_id where u.empresa_id=p_empresa_id and u.user_id=p_usuario and u.activo and m.activo and u.rol in ('vendedor','chofer') and m.rol=u.rol) then raise exception 'COLLECTOR_INVALID';end if;
- insert into public.sigo_mayorista_cobradores values(p_empresa_id,p_usuario,p_activo,p_limite,auth.uid(),now()) on conflict(empresa_id,user_id) do update set activo=excluded.activo,limite_centavos=excluded.limite_centavos,autorizado_por=excluded.autorizado_por,autorizado_en=now();
+ insert into public.sigo_mayorista_cobradores values(p_empresa_id,p_usuario,p_activo,p_limite,auth.uid(),now(),jsonb_build_array(jsonb_build_object('activo',p_activo,'limiteCentavos',p_limite,'responsable',auth.uid(),'fecha',now()))) on conflict(empresa_id,user_id) do update set activo=excluded.activo,limite_centavos=excluded.limite_centavos,autorizado_por=excluded.autorizado_por,autorizado_en=now(),historial=sigo_mayorista_cobradores.historial||excluded.historial where (sigo_mayorista_cobradores.activo,sigo_mayorista_cobradores.limite_centavos) is distinct from (excluded.activo,excluded.limite_centavos);
  return jsonb_build_object('usuario',p_usuario,'activo',p_activo,'limiteCentavos',p_limite,'responsable',auth.uid());
 end $$;
 create function public.sigo_mayorista_cliente_visible(p_empresa_id uuid,p_cliente uuid) returns text language plpgsql stable security definer set search_path='' as $$
@@ -66,7 +66,7 @@ create function public.permiso_cobro_mayorista_sigo(p_empresa_id uuid) returns j
 declare r text;g public.sigo_mayorista_cobradores%rowtype;
 begin
  r:=public.sigo_mayorista_lector(p_empresa_id);select * into g from public.sigo_mayorista_cobradores where empresa_id=p_empresa_id and user_id=auth.uid();
- return jsonb_build_object('autorizado',r in ('owner','admin') or (coalesce(g.activo,false) and r in ('vendedor','chofer')),'limiteCentavos',g.limite_centavos,'recibos',coalesce((select jsonb_agg(jsonb_build_object('id',comando_id,'clienteId',cliente_id,'centavos',(select importe*100 from public.cliente_movimientos_sigo where id=v.movimiento_id),'fecha',fecha,'comprobante',comprobante)) from public.sigo_mayorista_cobros_vinculos v where empresa_id=p_empresa_id and actor_id=auth.uid()),'[]'));
+ return jsonb_build_object('autorizado',r in ('owner','admin') or (coalesce(g.activo,false) and r in ('vendedor','chofer')),'limiteCentavos',g.limite_centavos,'delegaciones',case when r='owner' then coalesce((select jsonb_agg(jsonb_build_object('usuario',a.user_id,'activo',a.activo,'limiteCentavos',a.limite_centavos,'historial',a.historial)) from public.sigo_mayorista_cobradores a where a.empresa_id=p_empresa_id),'[]') else null end,'recibos',coalesce((select jsonb_agg(jsonb_build_object('id',comando_id,'clienteId',cliente_id,'centavos',(select importe*100 from public.cliente_movimientos_sigo where id=v.movimiento_id),'fecha',fecha,'comprobante',comprobante)) from public.sigo_mayorista_cobros_vinculos v where empresa_id=p_empresa_id and actor_id=auth.uid()),'[]'));
 end $$;
 revoke all on function public.permiso_cobro_mayorista_sigo(uuid) from public,anon;grant execute on function public.permiso_cobro_mayorista_sigo(uuid) to authenticated;
 revoke all on function public.configurar_cobrador_mayorista_sigo(uuid,uuid,boolean,bigint),public.leer_ficha_mayorista_sigo(uuid,uuid),public.cobrar_mayorista_autorizado_sigo(uuid,uuid,uuid,uuid,bigint,text,text) from public,anon;
