@@ -1,0 +1,1 @@
+export function createSharedCommerce(options:{empresaId:string;sourceMode:string;rpc:(name:string,args:Record<string,unknown>)=>Promise<any>}):{read:()=>Promise<any>;delivery:(load:any,pedidoId:string,medioPago:string)=>Promise<any>;authorize:(id:string,approve:boolean,motive:string)=>Promise<any>;collection:(input:any)=>Promise<any>};

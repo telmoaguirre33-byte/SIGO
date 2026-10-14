@@ -5,10 +5,11 @@ import {resolveMayoristaAccess, type CompanyAccessConfig} from "./access-policy"
 type Props = {
   empresaId: string;
   rol: string;
+  sharedRpc?: (name:string,args:Record<string,unknown>)=>Promise<any>;
   // Future isolated, authenticated feature API. Absent provider means disabled, with zero requests.
   obtenerConfig?: (empresaId: string, signal: AbortSignal) => Promise<CompanyAccessConfig | null>;
 };
-export default function MayoristaAdministrarAccess({empresaId, rol, obtenerConfig}: Props) {
+export default function MayoristaAdministrarAccess({empresaId, rol, obtenerConfig, sharedRpc}: Props) {
   const [config, setConfig] = useState<CompanyAccessConfig | null>(null);
   const [status, setStatus] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -31,7 +32,7 @@ export default function MayoristaAdministrarAccess({empresaId, rol, obtenerConfi
       aria-describedby={descriptionId} aria-expanded={expanded && decision.enabled}
       onClick={() => setExpanded(value => !value)}>Mayorista / Distribuidora</button>
     {expanded && decision.enabled ? <div style={{display:"flex",gap:12,flexWrap:"wrap",marginTop:12}}>
-      <MayoristaWorkspace origin={config!.origenAprobado} empresaId={empresaId}/>
+      <MayoristaWorkspace origin={config!.origenAprobado} empresaId={empresaId} sharedRpc={sharedRpc}/>
       <a className="admin-button" href={decision.sellerUrl} target="_blank" rel="noopener noreferrer">App Vendedor</a>
     </div> : null}
   </section>;

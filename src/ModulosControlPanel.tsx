@@ -12,6 +12,11 @@ import {
   type PresetModulo,
 } from "./modulosEmpresa";
 
+const sharedCommerceRpc=async(name:string,args:Record<string,unknown>)=>{
+ if(!['registrar_entrega_mayorista_sigo','autorizar_credito_mayorista_sigo','registrar_cobro_mayorista_sigo','leer_comercio_mayorista_sigo'].includes(name))throw new Error('Operación compartida inválida');
+ const {data,error}=await supabase.rpc(name,args);if(error)throw new Error('No se pudo registrar en SIGO. La operación Mayorista se conserva para revisión.');return data;
+};
+
 const obtenerConfigMayorista=createCompanyConfigProvider(async(empresaId,signal)=>{
   const {data,error}=await supabase.rpc('obtener_acceso_mayorista_sigo',{p_empresa_id:empresaId}).abortSignal(signal);
   if(error)throw new Error('No se pudo verificar Mayorista para esta empresa.');
@@ -157,7 +162,7 @@ export default function ModulosControlPanel({ empresa }: { empresa: EmpresaOpera
       {puedeEditar && <MayoristaBusinessType key={empresa.empresa_id} empresaId={empresa.empresa_id} readType={readBusinessType} writeType={writeBusinessType} onChanged={cargar} />}
 
       {modulos.some(m => m.clave === "mayorista_distribuidora" && m.habilitado) &&
-        <MayoristaAdministrarAccess key={empresa.empresa_id} empresaId={empresa.empresa_id} rol={empresa.rol} obtenerConfig={obtenerConfigMayorista} />}
+        <MayoristaAdministrarAccess key={empresa.empresa_id} empresaId={empresa.empresa_id} rol={empresa.rol} obtenerConfig={obtenerConfigMayorista} sharedRpc={sharedCommerceRpc} />}
 
       {error ? <div className="form-error" role="alert" style={{ marginBottom: 14 }}>{error}</div> : null}
       {mensaje ? <div className="sigo-matriz-success" style={{ marginBottom: 14 }}>{mensaje}</div> : null}
