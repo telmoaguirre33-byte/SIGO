@@ -45,8 +45,8 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Instalar driver PostgreSQL aislado, sin scripts
         run: npm ci --prefix ../backend --ignore-scripts --no-audit --no-fund
-      - name: Resolver dependencia fiscal existente sin instalar la aplicación Minorista
-        run: ln -s src/modules/mayorista/backend/node_modules ../../../../node_modules
+      - name: Instalar herramientas SIGO para probar componentes de activación reales
+        run: npm ci --prefix ../../../.. --ignore-scripts --no-audit --no-fund
       - name: Registrar lockfile público del backend
         run: node -e "console.log('MAYORISTA_BACKEND_LOCKFILE_JSON='+JSON.stringify(JSON.parse(require('fs').readFileSync('../backend/package-lock.json','utf8'))))"
       - name: Registrar lockfile público de herramientas
