@@ -92,6 +92,16 @@ export function createPostgresRepository({enabled=false,pool,inventoryRequired=f
         const query=(sql,args)=>c.query(sql,args);
         Object.assign(tx,createDashboardTransaction({query,principal,readSharedMetrics}));
         Object.assign(tx,createGoalsTransaction({query,principal,readMetricsData:tx.readMetricsData}));
+        const dashboard=tx.dashboard;
+        tx.dashboard=async raw=>{
+          const report=await dashboard(raw);
+          if((await query("SELECT to_regclass('mayorista.metas') AS metas")).rows[0]?.metas){
+            report.objetivos=(await tx.goals()).objetivos.filter(g=>g.activa&&g.desde<report.filtros.hastaExclusivo.slice(0,10)&&g.hasta>=report.filtros.desde.slice(0,10)&&(!report.filtros.vendedorId||g.vendedorId===report.filtros.vendedorId));
+            const below=new Set(report.objetivos.filter(g=>g.vendedorId&&g.real!==null&&g.real<g.objetivo).map(g=>g.vendedorId));
+            if(below.size)report.alertas.push({tipo:'objetivos_bajos',cantidad:below.size});
+          }
+          return report;
+        };
         const catalog=tx.catalog;
         tx.catalog=async()=>{
           const data=await catalog();
