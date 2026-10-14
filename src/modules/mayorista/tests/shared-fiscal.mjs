@@ -26,6 +26,7 @@ export async function verifySharedFiscal(pool,{exercise}={}){
   if(path==='/auth/v1/user')return json({id:U});
   if(path.endsWith('/rpc/tiene_permiso_empresa'))return json(true);
   if(path.endsWith('/rpc/leer_comercio_mayorista_sigo')){if(body.p_empresa_id!==E)return json({},403);return json((await act(c=>c.query('SELECT public.leer_comercio_mayorista_sigo($1) AS r',[E]))).rows[0].r);}
+  if(path.endsWith('/rpc/vincular_notas_credito_mayorista_sigo'))return json((await act(c=>c.query('SELECT public.vincular_notas_credito_mayorista_sigo($1,$2) AS r',[body.p_empresa_id,body.p_venta]))).rows[0].r);
   if(path.endsWith('/arca_config'))return json([{empresa_id:E,ambiente,cuit_emisor:'20123456789',certificado_ref:'fixture-private',certificado_vence:'2030-01-01',wsaa_service:'wsfe',wsfe_version:'WSFEv1',activo:true,ultima_prueba_ok:true}]);
   if(path.endsWith('/arca_puntos_venta'))return json([{id:randomUUID()}]);
   if(path.endsWith('/ventas_sigo'))return json((await pool.query('SELECT * FROM public.ventas_sigo WHERE empresa_id=$1 AND id=$2',[E,operation.venta_id])).rows);

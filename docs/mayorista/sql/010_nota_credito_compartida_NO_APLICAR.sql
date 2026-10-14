@@ -1,5 +1,15 @@
 -- Extensión Mayorista exclusivamente. Comprobantes en arca_comprobantes SIGO; no otro emisor.
 begin;
+create function public.vincular_notas_credito_mayorista_sigo(p_empresa_id uuid,p_venta uuid) returns boolean language plpgsql security definer set search_path='' as $$
+declare factura record;
+begin
+ perform public.sigo_mayorista_operador_comercial(p_empresa_id);
+ select * into factura from public.arca_comprobantes where empresa_id=p_empresa_id and venta_id=p_venta and cae is not null;
+ if not found or not exists(select 1 from public.sigo_mayorista_entregas_comerciales where empresa_id=p_empresa_id and venta_id=p_venta and estado='confirmado') then raise exception 'CREDIT_NOTE_INVOICE_REQUIRED';end if;
+ update public.sigo_mayorista_devoluciones_control set nota_credito=nota_credito||jsonb_build_object('estado','pendiente_homologacion','facturaId',factura.id,'caeOriginal',factura.cae,'tipoCbte',case factura.tipo_cbte when 1 then 3 when 6 then 8 when 11 then 13 end),historial=historial||jsonb_build_array(jsonb_build_object('tipo','factura_vinculada','facturaId',factura.id,'responsable',auth.uid(),'fecha',now())) where empresa_id=p_empresa_id and venta_id=p_venta and nota_credito->>'estado'='sin_factura_fiscal';
+ return true;
+end $$;
+revoke all on function public.vincular_notas_credito_mayorista_sigo(uuid,uuid) from public,anon;grant execute on function public.vincular_notas_credito_mayorista_sigo(uuid,uuid) to authenticated;
 create function public.leer_nota_credito_mayorista_sigo(p_empresa_id uuid,p_devolucion uuid) returns jsonb language plpgsql security definer set search_path='' as $$
 declare control record;factura record;datos jsonb;
 begin

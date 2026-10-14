@@ -127,11 +127,34 @@ begin
  update public.sigo_mayorista_devoluciones_control set lineas=nuevas,historial=historial||jsonb_build_array(jsonb_build_object('tipo','inspeccion','item',p_item,'disposicion',p_disposicion,'motivo',p_motivo,'responsable',auth.uid(),'fecha',now())) where empresa_id=p_empresa_id and comando_id=registro.comando_id;
  return jsonb_build_object('devolucionId',p_devolucion,'lineas',nuevas);
 end $$;
+create function public.conciliar_devolucion_carga_mayorista_sigo(p_empresa_id uuid,p_carga uuid,p_evento uuid,p_disposicion text,p_motivo text) returns jsonb language plpgsql security definer set search_path='' as $$
+declare evento jsonb;venta uuid;anterior record;lineas jsonb:='[]';restante numeric;disponible numeric;cantidad numeric;item record;datos jsonb;resultado jsonb;
+begin
+ perform public.sigo_mayorista_operador_comercial(p_empresa_id);
+ if p_disposicion is null or p_disposicion not in ('vendible','averiada','revision') or nullif(btrim(p_motivo),'') is null then raise exception 'RETURN_CLASSIFICATION_INVALID';end if;
+ select h.value into evento from mayorista.cargas_operativas l cross join lateral jsonb_array_elements(l.datos->'historial') h where l.empresa_id=p_empresa_id and l.carga_id=p_carga and h.value->>'id'=p_evento::text and h.value->>'tipo'='devolver';
+ if evento is null then raise exception 'RETURN_EVENT_FORBIDDEN';end if;
+ perform pg_advisory_xact_lock(hashtextextended(p_empresa_id::text||p_evento::text,0));
+ select * into anterior from public.sigo_mayorista_devoluciones_control where empresa_id=p_empresa_id and comando_id=p_evento;
+ if found then if anterior.solicitud->>'cargaId' is distinct from p_carga::text or anterior.solicitud->>'disposicionFisica' is distinct from p_disposicion or anterior.solicitud->>'motivoAdministrativo' is distinct from p_motivo then raise exception 'IDEMPOTENCY_CONFLICT';end if;return jsonb_build_object('devolucionId',anterior.devolucion_id,'lineas',anterior.lineas,'notaCredito',anterior.nota_credito);end if;
+ select venta_id into venta from public.sigo_mayorista_entregas_comerciales where empresa_id=p_empresa_id and pedido_id=(evento->'input'->>'pedidoId')::uuid and estado='confirmado';
+ if venta is null then raise exception 'RETURN_SALE_FORBIDDEN';end if;
+ restante:=(evento->'input'->>'cantidad')::numeric;
+ perform 1 from public.ventas_sigo where empresa_id=p_empresa_id and id=venta for update;
+ for item in select i.id,i.cantidad from public.venta_items_sigo i where i.empresa_id=p_empresa_id and i.venta_id=venta and i.producto_id=(evento->'input'->>'productoId')::uuid order by i.id loop
+  disponible:=item.cantidad-coalesce((select sum(d.cantidad) from public.devolucion_items_sigo d where d.empresa_id=p_empresa_id and d.venta_item_id=item.id),0);cantidad:=least(restante,greatest(disponible,0));
+  if cantidad>0 then lineas:=lineas||jsonb_build_array(jsonb_build_object('ventaItemId',item.id,'cantidad',cantidad,'disposicion',p_disposicion));restante:=restante-cantidad;end if;exit when restante=0;
+ end loop;
+ if restante<>0 or jsonb_array_length(lineas)=0 then raise exception 'RETURN_QUANTITY_CONFLICT';end if;
+ datos:=jsonb_build_object('ventaId',venta,'motivo',p_motivo,'lineas',lineas,'cargaId',p_carga,'eventoFisico',evento,'disposicionFisica',p_disposicion,'motivoAdministrativo',p_motivo);
+ resultado:=public.devolver_mayorista_sigo(p_empresa_id,p_evento,datos);return resultado;
+end $$;
+revoke all on function public.conciliar_devolucion_carga_mayorista_sigo(uuid,uuid,uuid,text,text) from public,anon;grant execute on function public.conciliar_devolucion_carga_mayorista_sigo(uuid,uuid,uuid,text,text) to authenticated;
 create function public.leer_recepciones_mayorista_sigo(p_empresa_id uuid) returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare r text;result jsonb;
 begin
  r:=public.sigo_mayorista_lector(p_empresa_id);if r not in ('owner','admin','armador') then raise exception 'WAREHOUSE_FORBIDDEN';end if;
- select coalesce(jsonb_agg(jsonb_build_object('devolucionId',d.devolucion_id,'pedidoId',e.pedido_id,'cliente',c.nombre,'lineas',(select jsonb_agg(l.value||jsonb_build_object('producto',p.nombre)) from jsonb_array_elements(d.lineas) l join public.venta_items_sigo i on i.empresa_id=p_empresa_id and i.id=(l.value->>'ventaItemId')::uuid join public.productos p on p.empresa_id=p_empresa_id and p.id=i.producto_id),'historial',d.historial)),'[]') into result from public.sigo_mayorista_devoluciones_control d join public.sigo_mayorista_entregas_comerciales e on e.empresa_id=d.empresa_id and e.venta_id=d.venta_id join public.clientes_sigo c on c.empresa_id=e.empresa_id and c.id=e.cliente_id where d.empresa_id=p_empresa_id and (r in ('owner','admin') or exists(select 1 from mayorista.cargas_operativas load where load.empresa_id=p_empresa_id and load.armador_user_id=auth.uid() and load.datos->'pedidos' ? e.pedido_id::text));
+ select coalesce(jsonb_agg(jsonb_build_object('devolucionId',d.devolucion_id,'eventoId',d.comando_id,'pedidoId',e.pedido_id,'cliente',c.nombre,'lineas',(select jsonb_agg(l.value||jsonb_build_object('producto',p.nombre)) from jsonb_array_elements(d.lineas) l join public.venta_items_sigo i on i.empresa_id=p_empresa_id and i.id=(l.value->>'ventaItemId')::uuid join public.productos p on p.empresa_id=p_empresa_id and p.id=i.producto_id),'historial',d.historial)),'[]') into result from public.sigo_mayorista_devoluciones_control d join public.sigo_mayorista_entregas_comerciales e on e.empresa_id=d.empresa_id and e.venta_id=d.venta_id join public.clientes_sigo c on c.empresa_id=e.empresa_id and c.id=e.cliente_id where d.empresa_id=p_empresa_id and (r in ('owner','admin') or exists(select 1 from mayorista.cargas_operativas load where load.empresa_id=p_empresa_id and load.armador_user_id=auth.uid() and load.datos->'pedidos' ? e.pedido_id::text));
  return jsonb_build_object('empresaId',p_empresa_id,'recepciones',result);
 end $$;
 revoke all on function public.leer_recepciones_mayorista_sigo(uuid) from public,anon;grant execute on function public.leer_recepciones_mayorista_sigo(uuid) to authenticated;

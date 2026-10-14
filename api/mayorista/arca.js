@@ -18,6 +18,10 @@ export default async function facturarEntrega(req,res){
   const configResponse=await fetch(url+`/rest/v1/arca_config?empresa_id=eq.${encodeURIComponent(empresaId)}&select=ambiente`,{headers,signal:AbortSignal.timeout(10000)});
   const config=configResponse.ok?(await configResponse.json())?.[0]:null;
   if(config?.ambiente!=='homologacion')return reply(res,409,{error:'MAYORISTA_HOMOLOGATION_ONLY'});
-  return emitirCae({...req,body:{empresaId,ventaId,puntoVenta,tipoCbte,condicionIvaReceptorId,confirmacion:'SOLICITAR_CAE_HOMOLOGACION'}},res);
+  let status,value;const captured={setHeader(){return this;},status(s){status=s;return this;},send(v){value=v;return this;}};
+  await emitirCae({...req,body:{empresaId,ventaId,puntoVenta,tipoCbte,condicionIvaReceptorId,confirmacion:'SOLICITAR_CAE_HOMOLOGACION'}},captured);
+  const result=JSON.parse(value);
+  if(status===200&&result.ok===true){const linked=await fetch(url+'/rest/v1/rpc/vincular_notas_credito_mayorista_sigo',{method:'POST',headers,body:JSON.stringify({p_empresa_id:empresaId,p_venta:ventaId}),signal:AbortSignal.timeout(10000)});if(!linked.ok)return reply(res,502,{error:'MAYORISTA_CREDIT_NOTE_LINK_RETRY',retryable:true});}
+  return reply(res,status,result);
  }catch{return reply(res,503,{error:'MAYORISTA_FISCAL_RETRY_CONSERVED'});}
 }
