@@ -17,6 +17,7 @@ for (const source of sources) {
 for (const name of ['index.html', 'offline-check.html', 'offline-check.mjs', 'admin.html', 'admin.mjs', 'cargas.html', 'cargas.mjs', 'connected.html', 'secure.html', 'portal.html', 'operational-sw.js', 'secure-config.mjs', 'secure.webmanifest', 'app.mjs', 'storage.mjs', 'sample.mjs', 'styles.css', 'sw.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-192.png', 'icon-maskable-512.png', 'favicon-32.png', 'apple-touch-icon.png', 'installation.mjs', 'seller-entry.mjs']) await cp(path.join(root, name), path.join(out, name));
 
 await cp(path.join(root,'../sync/http-client.mjs'),path.join(out,'sync/http-client.mjs'));
+await cp(path.join(root,'../integration/shared-commerce.mjs'),path.join(out,'integration/shared-commerce.mjs'));
 await cp(path.join(root,'../admin'),path.join(out,'admin'),{recursive:true});
 await cp(path.join(root,'../cargas'),path.join(out,'cargas'),{recursive:true,filter:p=>!p.endsWith('postgres.mjs')&&!p.endsWith('.sql')});
 await mkdir(path.join(out,'vendedor'),{recursive:true});

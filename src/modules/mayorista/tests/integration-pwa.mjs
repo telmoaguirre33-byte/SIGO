@@ -33,3 +33,11 @@ test('iconos PNG de Android tienen dimensiones reales 192 y 512',async()=>{
   for(const size of [192,512]){const icon=manifest.icons.find(i=>i.sizes===size+'x'+size);assert.equal(icon?.type,'image/png');const bytes=await readFile(new URL('../demo/'+icon.src.split('?')[0].slice(2),import.meta.url));assert.equal(bytes.subarray(0,8).toString('hex'),'89504e470d0a1a0a');assert.equal(bytes.readUInt32BE(16),size);assert.equal(bytes.readUInt32BE(20),size);}
 });
 test('shell offline incluye los iconos PNG propios',async()=>{const sw=await readFile(new URL('../demo/sw.js',import.meta.url),'utf8');assert.ok(sw.includes("'./icon-192.png'"));assert.ok(sw.includes("'./icon-512.png'"));});
+test('paquete operativo publica y cachea todos los imports de sus módulos, incluido comercio compartido',async()=>{
+ const root=new URL('../demo/dist/',import.meta.url),sw=await readFile(new URL('operational-sw.js',root),'utf8');
+ const assets=[...sw.matchAll(/'\.\/([^']+)'/g)].map(m=>new URL(m[1],root)),names=new Set(assets.map(u=>u.href));
+ for(const asset of assets){const content=await readFile(asset,'utf8');if(!/\.(mjs|js)$/.test(asset.pathname))continue;
+  for(const [, , path] of content.matchAll(/\b(?:from\s*|import\s*)(['"])(\.[^'"]+)\1/g))assert.ok(names.has(new URL(path,asset).href),'Import no servido/offline: '+path+' desde '+asset.pathname);
+ }
+ assert.ok(names.has(new URL('integration/shared-commerce.mjs',root).href));
+});
