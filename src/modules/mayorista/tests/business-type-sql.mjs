@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {assertSharedFixture} from './shared-fixture-policy.mjs';
-/** Solo se invoca en la segunda DB efímera de schema-package.mjs. */
+/** Solo se invoca en los esquemas aislados de schema-package.mjs. */
 export async function verifyBusinessTypeSQL(pool){
  await assertSharedFixture(pool);
  const E='30000000-0000-4000-8000-000000000001',B='30000000-0000-4000-8000-000000000002',U='30000000-0000-4000-8000-000000000011',OTHER='30000000-0000-4000-8000-000000000012';

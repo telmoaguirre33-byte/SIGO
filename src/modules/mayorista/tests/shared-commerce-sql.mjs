@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {assertSharedFixture} from './shared-fixture-policy.mjs';
-/** Se ejecuta solo en la misma DB efímera que la declaración empresarial, nunca en SIGO real. */
+/** Se ejecuta solo en esquemas aislados junto a la declaración empresarial, nunca en SIGO real. */
 export async function verifySharedCommerceSQL(pool){
  await assertSharedFixture(pool);
  const E='30000000-0000-4000-8000-000000000001',B='30000000-0000-4000-8000-000000000002',U='30000000-0000-4000-8000-000000000011',S=randomUUID(),C=randomUUID(),P=randomUUID(),O=randomUUID();
