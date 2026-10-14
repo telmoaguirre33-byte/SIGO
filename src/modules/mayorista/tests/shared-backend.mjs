@@ -4,7 +4,7 @@ import {randomUUID,randomBytes,generateKeyPairSync} from 'node:crypto';
 import {createIsolatedService} from '../backend/service.mjs';
 import {passwordRecord} from '../security/isolated-auth.mjs';
 import {assertSharedFixture} from './shared-fixture-policy.mjs';
-export async function verifySharedBackend(pool){
+export async function prepareSharedBackendFixture(pool,{origin='https://shared.qa.invalid'}={}){
  await assertSharedFixture(pool);
  const E='30000000-0000-4000-8000-000000000001',B='30000000-0000-4000-8000-000000000002',U='30000000-0000-4000-8000-000000000011',V=randomUUID(),R=randomUUID();
  const C=(await pool.query('SELECT id FROM public.clientes_sigo WHERE empresa_id=$1',[E])).rows[0].id,P=(await pool.query('SELECT id FROM public.productos WHERE empresa_id=$1',[E])).rows[0].id;
@@ -25,14 +25,26 @@ export async function verifySharedBackend(pool){
  }
  // Una empresa QA sin binding compartido permanece en su circuito aprobado.
  await pool.query("INSERT INTO mayorista.miembros(empresa_id,user_id,vendedor_id,rol) VALUES($1,$2,null,'gerencia')",[B,U]);
+ await pool.query('INSERT INTO mayorista.administracion(empresa_id,revision,datos) VALUES($1,0,$2)',[E,{empresaId:E,revision:0,vendedores:[{id:V,nombre:'Vendedor fuente compartida',zona:'Centro',activo:true}],rutas:[{id:R,nombre:'Ruta compartida',zona:'Centro'}],clientes:[{id:C,nombre:'Cliente SIGO compartido',direccion:'Sin dirección registrada',vendedorId:V,rutaId:R}],objetivos:[]}]);
  const {privateKey,publicKey}=generateKeyPairSync('ed25519');
  const policy={assertPool:p=>{assert.equal(p,pool);}};
- const make=()=>createIsolatedService({enabled:true,pool,privateKey,publicKey,issuer:'shared-qa-acceptance',origin:'https://shared.qa.invalid',rateLimit:async()=>true,operational:true,inventoryRequired:true,accountsEnabled:true,databasePolicy:policy,sharedSourceEnabled:true});
+ const make=()=>createIsolatedService({enabled:true,pool,privateKey,publicKey,issuer:'shared-qa-acceptance',origin,rateLimit:async()=>true,operational:true,inventoryRequired:true,accountsEnabled:true,databasePolicy:policy,sharedSourceEnabled:true});
+ return {E,B,U,V,R,C,P,creds,actors,make,origin};
+}
+export async function verifySharedBackend(pool){
+ const {E,B,U,V,R,C,P,creds,actors,make,origin}=await prepareSharedBackendFixture(pool);
  let service=make();
- const call=async(path,{token,body}={})=>{const res=await service(new Request('https://shared.qa.invalid'+path,{method:body?'POST':'GET',headers:{Origin:'https://shared.qa.invalid',...(token?{Authorization:'Bearer '+token}:{}),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})}));return {status:res.status,body:await res.json()};};
+ const call=async(path,{token,body}={})=>{const res=await service(new Request(origin+path,{method:body?'POST':'GET',headers:{Origin:origin,...(token?{Authorization:'Bearer '+token}:{}),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})}));return {status:res.status,body:await res.json()};};
  const tokens={};for(const role of Object.keys(creds)){const result=await call('/auth/login',{body:creds[role]});assert.equal(result.status,200);tokens[role]=result.body.accessToken;assert.equal((await call('/me',{token:tokens[role]})).body.fuenteComercial,'sigo');}
+ const newCustomer=randomUUID();await pool.query('INSERT INTO public.clientes_sigo(id,empresa_id,nombre,limite_credito,created_by) VALUES($1,$2,$3,0,$4)',[newCustomer,E,'Cliente existente sin asignar',U]);
+ const customerCommand={id:randomUUID(),empresaId:E,version:0,operacion:'cliente',input:{id:newCustomer,vendedorId:V,rutaId:R,nombre:'No sobrescribir ficha',direccion:'No sobrescribir dirección',habilitado:true}};
+ assert.equal((await call('/admin/commands',{token:tokens.gerencia,body:{...customerCommand,input:{...customerCommand.input,id:randomUUID()}}})).status,422);
+ // La operación inválida anterior no consume UUID ni revisión.
+ assert.equal((await call('/admin/commands',{token:tokens.gerencia,body:customerCommand})).status,200);
+ assert.equal((await pool.query('SELECT nombre FROM public.clientes_sigo WHERE id=$1',[newCustomer])).rows[0].nombre,'Cliente existente sin asignar');
+ assert.equal((await pool.query('SELECT nombre FROM mayorista.clientes WHERE cliente_id=$1',[newCustomer])).rows[0].nombre,'Cliente existente sin asignar');
  const seller=tokens.vendedor,owner=tokens.gerencia;
- const catalog=(await call('/catalog',{token:seller}));assert.equal(catalog.status,200);assert.equal(catalog.body.clientes[0].nombre,'Cliente SIGO compartido');assert.equal(catalog.body.productos[0].nombre,'Producto SIGO compartido');assert.equal(Number(catalog.body.precios[0].precio),10);
+ const catalog=(await call('/catalog',{token:seller}));assert.equal(catalog.status,200);assert.equal(catalog.body.clientes.find(c=>c.id===C).nombre,'Cliente SIGO compartido');assert.equal(catalog.body.productos[0].nombre,'Producto SIGO compartido');assert.equal(Number(catalog.body.precios[0].precio),10);
  const pedido={pedidoId:randomUUID(),empresaId:E,vendedorId:V,clienteId:C,creadoEn:new Date().toISOString(),lineas:[{productoId:P,cantidad:1,precioUnitario:10}]};
  const receipt=await call('/orders',{token:seller,body:pedido});assert.equal(receipt.status,200);
  service=make();assert.deepEqual(await call('/orders',{token:seller,body:pedido}),receipt);

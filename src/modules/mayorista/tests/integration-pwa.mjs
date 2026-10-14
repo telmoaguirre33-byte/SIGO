@@ -41,3 +41,14 @@ test('paquete operativo publica y cachea todos los imports de sus módulos, incl
  }
  assert.ok(names.has(new URL('integration/shared-commerce.mjs',root).href));
 });
+
+import {allowedPages,mayoristaPages} from '../integration/navigation.mjs';
+test('Diez páginas Mayorista reales con accesos propios de cada rol',()=>{
+ assert.equal(mayoristaPages.length,10);assert.ok(allowedPages('gerencia').includes('vendedores'));assert.deepEqual(allowedPages('armador'),['deposito','cargas']);assert.deepEqual(allowedPages('chofer'),['reparto','entregas','rendiciones']);assert.deepEqual(allowedPages('minorista'),[]);
+});
+test('Integración de menú es aditiva; entrada SIGO anterior permanece idéntica',async()=>{
+ const text=await readFile(new URL('../../../main.tsx',import.meta.url),'utf8');
+ const original=text.replace('import MayoristaLauncher from "./modules/mayorista/integration/MayoristaLauncher";\n','').replace('        <MayoristaLauncher />\n','');
+ assert.equal(createHash('sha256').update(original).digest('hex'),'61b48d95c56d78f8934ffbf83e48d0ef3ccf766a082ab82ecae466cefeb12361');
+ const launcher=await readFile(new URL('../integration/MayoristaLauncher.tsx',import.meta.url),'utf8');assert.match(launcher,/if\(!company\|\|!config\)return null/);assert.match(launcher,/sigo:empresa-activa-cambiada/);
+});

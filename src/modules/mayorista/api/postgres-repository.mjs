@@ -121,7 +121,16 @@ export function createPostgresRepository({enabled=false,pool,inventoryRequired=f
         tx.masterState=async()=>{if(!administrative(principal))throw new ApiError(403,'Administración requerida');const data=await tx.sharedCatalog();return {empresaId:principal.empresaId,revision:0,productos:data.productos.map(p=>({...p,activo:true})),listas:[],precios:data.precios,ofertas:data.ofertas};};
         const blocked=async()=>{throw new ApiError(409,'Usar la operación compartida SIGO; escritor QA bloqueado');};
         tx.inventoryCommand=blocked;tx.collectionCommand=blocked;tx.masterCommand=blocked;
-        const adminCommand=tx.adminCommand;tx.adminCommand=command=>command?.operacion==='cliente'?blocked():adminCommand(command);
+        const adminCommand=tx.adminCommand;
+        tx.adminCommand=async command=>{
+          if(command?.operacion!=='cliente')return adminCommand(command);
+          if(!administrative(principal)||command.empresaId!==principal.empresaId)throw new ApiError(403,'Sin permisos de asignación');
+          const customers=(await tx.sharedCatalog()).clientes,customer=customers.find(c=>c.id===command.input?.id);
+          if(!customer)throw new ApiError(422,'Seleccioná un cliente existente de SIGO de esta empresa');
+          if(command.input.listaId)throw new ApiError(422,'Lista especial compartida todavía no integrada');
+          // Solo asignaciones: nombre, dirección, saldo y crédito vienen de la ficha SIGO.
+          return adminCommand({...command,input:{...command.input,nombre:customer.nombre,direccion:customer.direccion||'Sin dirección registrada'}});
+        };
       }
       const result=await fn(tx);await c.query('COMMIT');return result;
     }catch(e){await c.query('ROLLBACK').catch(()=>{});if(!['40001','40P01','23505'].includes(e.code)||attempt===3)throw e;}finally{c.release();}

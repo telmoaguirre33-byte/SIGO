@@ -69,6 +69,8 @@ jobs:
         run: npm run test:rls
       - name: Autenticación firmada y API HTTP contra PostgreSQL aislado
         run: node ../tests/native-api.mjs
+      - name: Circuito visible Mayorista en Chromium y PostgreSQL aislado
+        run: node ../tests/operational-ui.mjs
       - name: IndexedDB en Chromium real
         run: npm test
       - name: Compilar imagen operativa independiente sin desplegar

@@ -1,1 +1,1 @@
-export function mountOperationalPortal(app:HTMLElement,options?:{enabled?:boolean;baseUrl?:string;integrated?:boolean;expectedEmpresaId?:string;sharedCommerce?:any}):{client:{logout:()=>Promise<void>}}|undefined;
+export function mountOperationalPortal(app:HTMLElement,options?:{enabled?:boolean;baseUrl?:string;integrated?:boolean;expectedEmpresaId?:string;sharedCommerce?:any;initialPage?:string}):{client:{logout:()=>Promise<void>};showPage:(page:string)=>void;destroy:()=>Promise<void>}|undefined;

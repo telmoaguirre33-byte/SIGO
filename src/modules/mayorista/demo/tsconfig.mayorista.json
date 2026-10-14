@@ -6,5 +6,6 @@
     "baseUrl":".", "paths":{"react":["./node_modules/@types/react"],"react/*":["./node_modules/@types/react/*"]},
     "typeRoots":["./node_modules/@types"]
   },
+  "exclude":["../integration/MayoristaLauncher.tsx","../integration/registration.ts"],
   "include":["../offline/**/*.ts","../sync/**/*.ts","../vendedor/**/*.tsx","../integration/**/*.ts","../integration/**/*.tsx"]
 }

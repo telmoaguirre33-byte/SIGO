@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 import emitir from '../../../../api/mayorista/arca.js';
 import {assertSharedFixture} from './shared-fixture-policy.mjs';
 /** PostgreSQL real + emisor ARCA EXISTENTE. Solo transporte externo sustituido; jamás WSFE real. */
-export async function verifySharedFiscal(pool){
+export async function verifySharedFiscal(pool,{exercise}={}){
  await assertSharedFixture(pool);
  const E='30000000-0000-4000-8000-000000000001',U='30000000-0000-4000-8000-000000000011',S=randomUUID();
  const migration=new URL('../../../../supabase/migrations/',import.meta.url);
@@ -56,6 +56,7 @@ export async function verifySharedFiscal(pool){
   assert.equal(Number((await pool.query('SELECT count(*) FROM public.arca_comprobantes WHERE empresa_id=$1',[E])).rows[0].count),1);
   assert.deepEqual((await pool.query('SELECT stock_actual FROM public.productos WHERE empresa_id=$1',[E])).rows,stockBefore);
   assert.equal((await call({...request,empresaId:randomUUID()})).status,403);
+  if(exercise)await exercise({call,request});
  }finally{globalThis.fetch=originalFetch;for(const [k,v] of [['SUPABASE_URL',oldURL],['SUPABASE_ANON_KEY',oldKey]])if(v===undefined)delete process.env[k];else process.env[k]=v;await pool.query('UPDATE mayorista_private.sesiones SET revocada=true WHERE session_id=$1',[S]);}
  console.log('PASS ARCA existente: entrega → venta → reserva → CAE simulado → conciliación persistente, sin duplicar stock ni factura; producción bloqueada');
  return [{name:'ARCA existente con reserva PostgreSQL y acuse perdido conciliado; WSFE simulado, producción bloqueada',status:'pass'}];

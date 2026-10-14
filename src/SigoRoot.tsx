@@ -1,3 +1,4 @@
+import {businessPreferenceKey,configureDeclaredBusiness} from "./modules/mayorista/integration/registration";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ClientesOperativos from "./ClientesOperativos";
 import ComprasOperativas from "./ComprasOperativas";
@@ -138,6 +139,10 @@ export default function SigoRoot() {
           setNuevaEmpresa(nombrePendiente);
         }
         empresaCreadaId = await crearEmpresaSigo(nombrePendiente);
+        if(user.user_metadata?.[businessPreferenceKey]){
+          try{await configureDeclaredBusiness(empresaCreadaId,user.user_metadata[businessPreferenceKey]);}
+          catch(e){if(!cancelled)setErrorEmpresa(e instanceof Error?e.message:"Tipo de negocio pendiente en Configuración");}
+        }
         const empresas = await cargarMisEmpresas();
         const creada = resolverEmpresaActiva(empresas, empresaCreadaId, user.id);
         if (!creada) throw new Error("EMPRESA_CREATED_NOT_VISIBLE");

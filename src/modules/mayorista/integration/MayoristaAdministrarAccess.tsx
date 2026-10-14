@@ -1,4 +1,5 @@
 import {useEffect, useId, useState} from "react";
+import {mayoristaPages} from './navigation.mjs';
 import MayoristaWorkspace from './MayoristaWorkspace';
 import {resolveMayoristaAccess, type CompanyAccessConfig} from "./access-policy";
 
@@ -12,6 +13,7 @@ type Props = {
 export default function MayoristaAdministrarAccess({empresaId, rol, obtenerConfig, sharedRpc}: Props) {
   const [config, setConfig] = useState<CompanyAccessConfig | null>(null);
   const [status, setStatus] = useState("");
+  const [page,setPage]=useState('panel');
   const [expanded, setExpanded] = useState(false);
   const descriptionId = useId();
   useEffect(() => {
@@ -25,14 +27,13 @@ export default function MayoristaAdministrarAccess({empresaId, rol, obtenerConfi
     return () => controller.abort();
   }, [empresaId, rol, obtenerConfig]);
   const decision = resolveMayoristaAccess({empresaId, rol}, obtenerConfig ? config : null);
+  if(!decision.enabled)return null;
   return <section className="panel" aria-label="Mayorista / Distribuidora">
     <h3>Mayorista / Distribuidora</h3>
     <p id={descriptionId}>{status || decision.reason}</p>
-    <button type="button" className="admin-button" disabled={!decision.enabled}
-      aria-describedby={descriptionId} aria-expanded={expanded && decision.enabled}
-      onClick={() => setExpanded(value => !value)}>Mayorista / Distribuidora</button>
+    <nav aria-label="Secciones Mayorista" className="mayorista-access-grid">{mayoristaPages.map(item=><button key={item.id} type="button" className="admin-button" aria-pressed={expanded&&page===item.id} onClick={()=>{setPage(item.id);setExpanded(true);}}>{item.label}</button>)}</nav>
     {expanded && decision.enabled ? <div style={{display:"flex",gap:12,flexWrap:"wrap",marginTop:12}}>
-      <MayoristaWorkspace origin={config!.origenAprobado} empresaId={empresaId} sharedRpc={sharedRpc}/>
+      <MayoristaWorkspace origin={config!.origenAprobado} empresaId={empresaId} page={page} sharedRpc={sharedRpc}/>
       <a className="admin-button" href={decision.sellerUrl} target="_blank" rel="noopener noreferrer">App Vendedor</a>
     </div> : null}
   </section>;
