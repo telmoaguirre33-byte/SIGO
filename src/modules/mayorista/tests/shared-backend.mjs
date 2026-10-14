@@ -139,7 +139,7 @@ export async function verifySharedBackend(pool){
  const sharedSub={id:deliveredId,empresaId:E,tipo:'entrega',datos:{pedidoId:variantOrder.pedidoId,clienteId:newCustomer,medioPago:'cuenta_corriente',lineas:[{productoId:substitute,cantidad:6,precioUnitario:3}]}};
  const substitutedSale=await call('/shared/commerce',{token:owner,body:sharedSub});assert.equal(substitutedSale.body.estado,'confirmado',JSON.stringify(substitutedSale));assert.deepEqual(await call('/shared/commerce',{token:owner,body:sharedSub}),substitutedSale);
  assert.equal(Number((await pool.query('SELECT stock_actual FROM public.productos WHERE id=$1',[P])).rows[0].stock_actual),before+1);assert.equal(Number((await pool.query('SELECT stock_actual FROM public.productos WHERE id=$1',[substitute])).rows[0].stock_actual),14);
- const subVenta=(await pool.query('SELECT tipo_pago,total FROM public.ventas_sigo WHERE id=$1',[substitutedSale.body.ventaId])).rows[0];assert.equal(subVenta.tipo_pago,'transferencia');assert.equal(Number(subVenta.total),18);
+ const subVenta=(await pool.query('SELECT medio_pago,total FROM public.ventas_sigo WHERE id=$1',[substitutedSale.body.ventaId])).rows[0];assert.equal(subVenta.medio_pago,'transferencia');assert.equal(Number(subVenta.total),18);
  await call('/auth/logout',{token:owner,body:{}});assert.equal((await call('/shared/commerce',{token:owner})).status,401);
  console.log('PASS fuente compartida backend: catálogo SIGO, cinco roles, UUID recuperable, escritores QA bloqueados, crédito y aislamiento');
  return [{name:'Backend conectado a fuente SIGO por empresa; cinco roles y escritores QA bloqueados',status:'pass'}];
