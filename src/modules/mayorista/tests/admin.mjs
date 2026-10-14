@@ -9,3 +9,8 @@ test('no desactivar vendedor con clientes asignados',()=>{const s=assignCustomer
 test('objetivos requieren vendedor activo y valores válidos',()=>{const s=fixture();assert.throws(()=>setGoal(s,{vendedorId:'v1',importe:-1,visitas:10}));assert.throws(()=>setGoal(s,{vendedorId:'v2',importe:100,visitas:10}));assert.equal(setGoal(s,{vendedorId:'v1',importe:100,visitas:10}).objetivos.length,1);});
 test('informe elimina duplicados y filtra otra empresa',()=>{const s=fixture();const p={id:'p',empresaId:s.empresaId,vendedorId:'v1',estado:'sincronizado',lineas:[{cantidad:2,precioUnitario:10}]};const r=managementReport(s,[p,p,{...p,id:'otro',empresaId:'empresa-b'}],[{empresaId:'empresa-b',vendedorId:'v1'}])[0];assert.equal(r.pedidos,1);assert.equal(r.importe,20);assert.equal(r.visitas,0);assert.equal(r.recibidosSimulador,1);});
 test('CSV neutraliza fórmulas y preserva comillas',()=>{const csv=reportCsv([{vendedor:'=HYPERLINK("malicioso")',zona:'@SUM(1)',importe:10}]);assert.ok(csv.startsWith('\uFEFF'));assert.ok(csv.includes("'="));assert.ok(csv.includes("'@"));assert.ok(csv.includes('""malicioso""'));});
+
+import {saveVehicle} from '../admin/model.mjs';
+test('Vehículo y calendario de ruta persisten como metadata sin otro stock',()=>{
+ let s=createAdminState('a');s=saveVehicle(s,{id:'v',nombre:'Camión',patente:'abc123',capacidad:1000,chofer:'Chofer',activo:true});assert.equal(s.vehiculos[0].patente,'ABC123');assert.throws(()=>saveVehicle(s,{id:'x',nombre:'X',patente:'X',capacidad:-1,chofer:'X'}));s=saveRoute(s,{id:'r',nombre:'Centro',zona:'Centro',dias:[5,1,1]});assert.deepEqual(s.rutas[0].dias,[1,5]);assert.throws(()=>saveRoute(s,{id:'x',nombre:'X',zona:'X',dias:[7]}));
+});

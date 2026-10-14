@@ -10,7 +10,7 @@ import {createInventoryTransaction} from '../commercial/inventory-postgres.mjs';
 import {createVisitsTransaction} from '../commercial/visits.mjs';
 import {createCargasTransaction} from '../cargas/postgres.mjs';
 import {createHash} from 'node:crypto';
-import {createAdminState,saveSeller,saveRoute,assignCustomer,setGoal} from '../admin/model.mjs';
+import {createAdminState,saveVehicle,saveSeller,saveRoute,assignCustomer,setGoal} from '../admin/model.mjs';
 import {createFulfillment,applyFulfillment} from '../admin/fulfillment.mjs';
 import {ApiError} from './receive-order.mjs';
 export function assertIsolatedPool(pool){
@@ -49,7 +49,7 @@ export function createPostgresRepository({enabled=false,pool,inventoryRequired=f
         },
         adminCommand:async(command)=>{
           if(!administrative(principal)||command.empresaId!==principal.empresaId)throw new ApiError(403,'Sin permisos administrativos');
-          const actions={vendedor:saveSeller,ruta:saveRoute,cliente:assignCustomer,objetivo:setGoal};
+          const actions={vehiculo:saveVehicle,vendedor:saveSeller,ruta:saveRoute,cliente:assignCustomer,objetivo:setGoal};
           if(!Object.hasOwn(actions,command.operacion)||!command.input||Array.isArray(command.input)||typeof command.input!=='object')throw new ApiError(422,'Operación inválida');
           const canonical=value=>value&&typeof value==='object'?(Array.isArray(value)?value.map(canonical):Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])]))):value;
           const hash=createHash('sha256').update(JSON.stringify(canonical({operacion:command.operacion,input:command.input}))).digest('hex');
