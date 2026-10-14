@@ -38,10 +38,10 @@ export default function MayoristaLauncher(){
   }catch{/* La ausencia del módulo no afecta la operación Minorista. */}
  },[]);
  useEffect(()=>{
-  void refresh();const update=()=>void refresh();const visible=()=>{if(document.visibilityState==='visible')update();};
-  window.addEventListener('sigo:empresa-activa-cambiada',update);window.addEventListener('sigo:mayorista-config-changed',update);document.addEventListener('visibilitychange',visible);
+  void refresh();const update=()=>void refresh();
+  window.addEventListener('sigo:empresa-activa-cambiada',update);window.addEventListener('sigo:mayorista-config-changed',update);
   const {data}=supabase.auth.onAuthStateChange(event=>{if(['SIGNED_OUT','SIGNED_IN'].includes(event))window.setTimeout(update,0);});
-  return()=>{generation.current++;controller.current?.abort();data.subscription.unsubscribe();window.removeEventListener('sigo:empresa-activa-cambiada',update);window.removeEventListener('sigo:mayorista-config-changed',update);document.removeEventListener('visibilitychange',visible);};
+  return()=>{generation.current++;controller.current?.abort();data.subscription.unsubscribe();window.removeEventListener('sigo:empresa-activa-cambiada',update);window.removeEventListener('sigo:mayorista-config-changed',update);};
  },[refresh]);
  useEffect(()=>{const find=()=>{const next=document.querySelector<HTMLElement>('.sigo-operation-only .sidebar .menu')??document.querySelector<HTMLElement>('.sigo-context-actions');setHost(old=>old===next?old:next);};find();const observer=new MutationObserver(find);observer.observe(document.body,{childList:true,subtree:true});return()=>observer.disconnect();},[]);
  useEffect(()=>{if(!page)return;const previous=document.activeElement as HTMLElement|null;dialog.current?.focus();const key=(e:KeyboardEvent)=>{if(e.key==='Escape')setPage(null);if(e.key==='Tab'){const items=dialog.current?.querySelectorAll<HTMLElement>('button,a,input,select,[tabindex="0"]');if(!items?.length)return;const first=items[0],last=items[items.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}};document.addEventListener('keydown',key);return()=>{document.removeEventListener('keydown',key);previous?.focus();};},[Boolean(page)]);
