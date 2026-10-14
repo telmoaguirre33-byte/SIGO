@@ -80,7 +80,7 @@ export async function verifyNativeBrowsers({handler,password,empresaId,vendedorI
     await a.command('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});
     let encryptedOrderId;
     await check('App segura crea borrador y pedido cifrados offline con UUID estable',async()=>{
-      assert.equal(await a.evaluate(`(async()=>{document.querySelector('#line').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));for(let n=0;n<100;n++){await new Promise(r=>setTimeout(r,50));if(document.body.textContent.includes('Borrador cifrado conservado.'))break;}document.querySelector('#save').click();for(let n=0;n<100;n++){await new Promise(r=>setTimeout(r,50));if(document.querySelector('[data-order-id]'))return document.body.textContent.includes('Pedido guardado:');}return false;})()`),true);
+      assert.equal(await a.evaluate(`(async()=>{const input=document.querySelector('[data-product-query]');input.value=${JSON.stringify(productoId)};input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));document.querySelector('#line').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));for(let n=0;n<100;n++){await new Promise(r=>setTimeout(r,50));if(document.body.textContent.includes('Borrador cifrado conservado.'))break;}document.querySelector('#save').click();for(let n=0;n<100;n++){await new Promise(r=>setTimeout(r,50));if(document.querySelector('[data-order-id]'))return document.body.textContent.includes('Pedido guardado:');}return false;})()`),true);
       encryptedOrderId=await a.evaluate("document.querySelector('[data-order-id]').dataset.orderId");
       await a.command('Browser.setPermission',{permission:{name:'geolocation'},setting:'denied',origin:'https://127.0.0.1:4181'});
       assert.equal(await a.evaluate(`(async()=>{document.querySelector('#visit').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));for(let n=0;n<100;n++){await new Promise(r=>setTimeout(r,50));if(document.body.textContent.includes('Visita conservada con resultado GPS.'))return document.body.textContent.includes('1 visitas conservadas');}return false;})()`),true);
@@ -106,3 +106,4 @@ export async function verifyNativeBrowsers({handler,password,empresaId,vendedorI
     await mkdir(new URL('./artifacts/',import.meta.url),{recursive:true});await writeFile(new URL('./artifacts/native-browser-result.json',import.meta.url),JSON.stringify({date:new Date().toISOString(),profiles:2,physicalDevices:false,gps:'emulated',results},null,2));
   }
 }
+
