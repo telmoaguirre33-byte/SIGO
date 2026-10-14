@@ -14,3 +14,7 @@
 .management-filters button{flex:0 0 auto}.management-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:10px}
 .management-table{overflow-x:auto}.management-table table{width:100%;border-collapse:collapse;font-size:13px}.management-table th,.management-table td{padding:8px;text-align:left;border-bottom:1px solid #e5e7eb}
 .management-bar{display:grid;grid-template-columns:minmax(80px,1fr) 1fr auto;gap:8px;align-items:center;font-size:12px;margin:10px 0}.management-bar span{overflow-wrap:anywhere}.management-bar meter{width:100%}.management-caption{font-size:12px;color:#4b5563}
+
+#portal nav{left:auto;bottom:auto;transform:none;width:100%}
+#portal .management-filters{display:flex;flex-wrap:wrap;align-items:end;gap:10px}
+#portal .card>button{width:auto}

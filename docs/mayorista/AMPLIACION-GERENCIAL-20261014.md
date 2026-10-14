@@ -51,3 +51,11 @@ Para ampliar QA, revisar y ejecutar `backend/upgrade-management-qa.mjs` con las 
 - Fixtures nuevos: API de panel/metas y RLS, calendario/activación automática/Matriz/auditoría en DB efímera. Sin consultas de escritura a la base comercial real.
 
 La única consulta a la base comercial fue lectura de nombres/tipos de columnas. No se ejecutaron migraciones remotas, bootstrap, `/health`, cambios de infraestructura, merge ni despliegue.
+
+## CI de la ampliación verificada
+
+Código `0f7a5f50d10a0d4d32e05a725646452bc8fe3568`: [CI Mayorista aprobada](https://github.com/telmoaguirre33-byte/SIGO/actions/runs/38606015047), TypeScript, build, pruebas Node, RLS, **89 controles API/PostgreSQL**, **53 pruebas Chromium**, compilación Docker y runtime desactivado por defecto. Incluye creación de objetivos y Panel Mayorista desde Chromium, y declaración/activación/Matriz/auditoría en la segunda base efímera. Estos grupos contienen controles solapados; no sumarlos como controles independientes.
+
+[Build SIGO aprobado](https://github.com/telmoaguirre33-byte/SIGO/actions/runs/38606015178). Compras conserva el fallo previo `150 !== null`, fuera del alcance. Esta evidencia no equivale a aplicación SQL, integración transaccional compartida ni aceptación Railway/Android.
+
+Revisión posterior: navegación anclada dentro del portal, sin desplazamiento horizontal; filtros compactos y botones de tamaño normal. La nueva prueba Chromium comprueba que todos los accesos quedan dentro del ancho móvil. Los resultados de CI de esa revisión se registran en el PR #72, sin reutilizar una aprobación de un commit distinto.
