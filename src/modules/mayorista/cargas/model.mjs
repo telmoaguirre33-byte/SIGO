@@ -31,6 +31,7 @@ function lines(load,pedidoId,productoId,clienteId){
   if(!out.length)throw new Error('Producto no pertenece al pedido/carga');return out;
 }
 function setCounts(list,total,verified){
+  if(list.some(l=>l.sustituciones?.length))throw new Error('Faltante con sustitución autorizada: no cambiar el producto solicitado');
   let remainder=total;
   for(const l of list){const qty=Math.min(l.cantidad,remainder);remainder-=qty;l.preparado=qty;l.escaneado=verified?qty:0;l.faltanteAutorizado=null;}
   if(remainder){list[0].preparado+=remainder;if(verified)list[0].escaneado+=remainder;}
@@ -40,7 +41,7 @@ export function loadProducts(load,pedidoId,clienteId){
   return [...map.values()];
 }
 export function orderBalance(order){
-  const totalCentavos=order.lineas.reduce((sum,l)=>sum+Math.round((l.totalCentavos??Math.round(l.precioUnitario*l.cantidad*100))*(l.entregado??0)/l.cantidad),0);
+  const totalCentavos=order.lineas.reduce((sum,l)=>{if(l.desglosePrecios?.some(p=>p.precioId)){let remaining=l.entregado??0,total=0;for(const p of l.desglosePrecios){const qty=Math.min(remaining,p.cantidad);total+=Math.round(qty*p.precioUnitario*100);remaining-=qty;}return sum+total;}return sum+Math.round((l.totalCentavos??Math.round(l.precioUnitario*l.cantidad*100))*(l.entregado??0)/l.cantidad);},0);
   const rendidoCentavos=order.rendicion?.centavos??0;return {totalCentavos,rendidoCentavos,saldoCentavos:totalCentavos-rendidoCentavos};
 }
 export function applyLoadCommand(state,command,actor,now=new Date().toISOString(),identity=command){
@@ -63,6 +64,10 @@ export function applyLoadCommand(state,command,actor,now=new Date().toISOString(
       if(i.pedido?.empresaId!==state.empresaId)throw new Error('Pedido de otra empresa');
       if(next.pedidos[i.pedido.pedidoId])throw new Error('Pedido ya aprobado');
       next.pedidos[i.pedido.pedidoId]={...approved(i.pedido),aprobadoPor:actor.userId,aprobadoEn:now};break;
+    }
+    case 'anular_pedido':{
+      const p=next.pedidos[i.pedidoId];if(!p||p.cargaId||p.estado!=='aprobado')throw new Error('Solo pedidos aprobados sin carga pueden anularse');
+      p.estado='anulado';p.anulacion={motivo:note(i.nota),responsable:actor.userId,fecha:now};break;
     }
     case 'crear':{
       const id=text(i.id,'Carga');if(next.cargas[id])throw new Error('Carga ya existente');
@@ -89,13 +94,31 @@ export function applyLoadCommand(state,command,actor,now=new Date().toISOString(
         if(count>list.reduce((s,l)=>s+l.preparado-l.escaneado,0))throw new Error('Escaneo excede lo preparado');
         let n=count;for(const l of list){const qty=Math.min(n,l.preparado-l.escaneado);l.escaneado+=qty;n-=qty;}
       }else if(i.modo==='picking'){
+        if(list.some(l=>l.sustituciones?.length))throw new Error('Prepará el sustituto autorizado; la cantidad original se conserva');
         let n=count;for(const l of list){const qty=Math.min(n,Math.max(0,l.cantidad-l.preparado));l.preparado+=qty;l.escaneado+=qty;l.faltanteAutorizado=null;n-=qty;}
         if(n){list[0].preparado+=n;list[0].escaneado+=n;list[0].faltanteAutorizado=null;}
       }else throw new Error('Elegí picking o verificación');for(const l of list){integer(l.preparado);integer(l.escaneado);}break;
     }
     case 'autorizar_faltante':{
-      if(load?.estado!=='picking'||!i.pedidoId)throw new Error('Elegí el pedido para autorizar faltantes');
-      for(const l of lines(load,i.pedidoId,i.productoId)){if(l.preparado>=l.cantidad)throw new Error('No hay faltante');l.faltanteAutorizado={cantidad:l.cantidad-l.preparado,motivo:note(i.nota),responsable:actor.userId};}break;
+      if(i.destino!==undefined&&!['pendiente','cancelado'].includes(i.destino))throw new Error('Destino del faltante inválido');if(load?.estado!=='picking'||!i.pedidoId)throw new Error('Elegí el pedido para autorizar faltantes');
+      for(const l of lines(load,i.pedidoId,i.productoId)){if(l.preparado>=l.cantidad)throw new Error('No hay faltante');l.faltanteAutorizado={cantidad:l.cantidad-l.preparado,motivo:note(i.nota),responsable:actor.userId,fecha:now,tipo:i.destino??'pendiente'};}break;
+    }
+    case 'sustituir':{
+      if(load?.estado!=='picking')throw new Error('Sustitución disponible durante preparación');
+      const p=load.pedidos[i.pedidoId],original=p?.lineas.find(l=>l.productoId===i.productoId);
+      if(!original||original.sustitucionDe||original.sustituciones?.length)throw new Error('Renglón no sustituible o autorización ya registrada');
+      const faltante=integer(i.faltante,1),cantidad=integer(i.cantidad,1);
+      if(faltante!==original.cantidad-original.preparado)throw new Error('La sustitución debe corresponder al faltante actual');
+      text(i.sustitutoId,'Sustituto');if(i.sustitutoId===i.productoId||p.lineas.some(l=>l.productoId===i.sustitutoId))throw new Error('Elegí un sustituto distinto que no esté en el pedido');
+      if(!Number.isFinite(i.precioUnitario)||i.precioUnitario<0)throw new Error('Precio de sustituto inválido');
+      const motivo=note(i.nota),trace={id:command.id,productoSolicitado:i.productoId,faltante,sustituto:i.sustitutoId,cantidad,autorizadoPor:actor.userId,fecha:now,motivo};
+      original.faltanteAutorizado={cantidad:faltante,motivo,responsable:actor.userId,fecha:now,tipo:'sustitucion'};original.sustituciones=[trace];
+      const cents=Math.round(cantidad*i.precioUnitario*100);if(!Number.isSafeInteger(cents))throw new Error('Importe de sustituto inválido');
+      p.lineas.push({productoId:i.sustitutoId,nombre:text(i.nombre,'Producto sustituto'),cantidad,precioUnitario:i.precioUnitario,totalCentavos:cents,desglosePrecios:[{cantidad,precioUnitario:i.precioUnitario,centavos:cents,...(i.precioId?{precioId:i.precioId}:{})}],preparado:0,escaneado:0,faltanteAutorizado:null,sustitucionDe:trace});break;
+    }
+    case 'cargar':{
+      if(load?.estado!=='verificada')throw new Error('Verificá la preparación antes de cargar');
+      load.estado='cargada';load.cargaConfirmada={fecha:now,responsable:actor.userId,comprobante:note(i.nota)};break;
     }
     case 'verificar':{
       if(load?.estado!=='picking')throw new Error('Carga fuera de picking');
@@ -104,7 +127,7 @@ export function applyLoadCommand(state,command,actor,now=new Date().toISOString(
       load.estado='verificada';load.verificadoPor=actor.userId;load.verificadoEn=now;break;
     }
     case 'salir':{
-      if(load?.estado!=='verificada')throw new Error('Verificá la carga antes de salir');
+      if(!['verificada','cargada'].includes(load?.estado))throw new Error('Verificá la carga antes de salir');
       if(Object.values(next.cargas).some(c=>c.id!==load.id&&c.estado==='en_reparto'&&(c.camion===load.camion||c.chofer===load.chofer)))throw new Error('Camión o chofer con reparto activo');
       load.estado='en_reparto';load.salida={fecha:now,responsable:actor.userId,comprobante:note(i.nota)};break;
     }
@@ -146,4 +169,18 @@ if(load?.estado!=='en_reparto'||Object.values(load.pedidos).some(p=>p.estado==='
     default:throw new Error('Operación de cargas inválida');
   }
   next.revision++;next.comandos.push({id:command.id,content,revision:next.revision});next.historial.push({id:command.id,tipo:command.tipo,input:structuredClone(i),responsable:actor.userId,fecha:now,revision:next.revision});return next;
+}
+
+/** Estado visible derivado de evidencia operativa; el acuse original nunca cambia. */
+export function orderState({order,approved,load,commercial}={}){
+ if(commercial?.estado==='requiere_autorizacion')return 'requiere_autorizacion';
+ if(approved?.estado==='anulado'||load?.estado==='cancelada')return 'anulado';
+ const p=load?.pedidos?.[order?.pedidoId];
+ if(load?.estado==='cerrada')return 'cerrado';
+ if(p?.entrega){if(p.lineas.every(l=>(l.entregado??0)===0)&&load.historial?.some(h=>h.tipo==='devolver'&&h.input.pedidoId===p.pedidoId))return 'devuelto';return {rechazado:'no_entregado',parcial:'parcial',entregado:'entregado'}[p.estado]??p.estado;}
+ if(load?.estado==='en_reparto')return 'despachado';
+ if(load?.estado==='cargada')return 'en_carga';
+ if(load?.estado==='verificada')return p?.lineas.some(l=>l.preparado<l.cantidad&&!l.sustituciones?.length)?'con_faltantes':'preparado';
+ if(load?.estado==='picking')return p?.lineas.some(l=>l.faltanteAutorizado)?'con_faltantes':'en_preparacion';
+ return approved?'aprobado':order?.estado??'pendiente';
 }

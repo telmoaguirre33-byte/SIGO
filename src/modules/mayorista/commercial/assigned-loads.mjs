@@ -3,10 +3,10 @@ import {ApiError} from '../api/receive-order.mjs';
 import {administrative} from '../security/company-roles.mjs';
 import {createLoadsState,applyLoadCommand,canonical} from '../cargas/model.mjs';
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const workerActions={armador:['iniciar','contar','escanear','autorizar_faltante','verificar','recibir_devoluciones'],chofer:['entregar','devolver','rendir']};
-export function createAssignedLoadsTransaction({query,principal,legacyLoads,onChange}){
+const workerActions={armador:['iniciar','contar','escanear','autorizar_faltante','verificar','cargar','recibir_devoluciones'],chofer:['entregar','devolver','rendir']};
+export function createAssignedLoadsTransaction({query,principal,legacyLoads,onChange,resolveSubstitute}){
  const barcodeTable=principal.fuenteComercial==='sigo'?'mayorista.codigos_compartidos':'mayorista.codigos_operativos';
- const project=row=>{const load=structuredClone(row.datos);if(principal.rol==='armador')for(const p of Object.values(load.pedidos)){delete p.rendicion;delete p.entrega;for(const l of p.lineas){delete l.precioUnitario;delete l.totalCentavos;delete l.desglosePrecios;}}return {cargaId:row.carga_id,version:row.version,load};};
+ const project=row=>{const load=structuredClone(row.datos);const redact=v=>{if(!v||typeof v!=='object')return;for(const k of Object.keys(v)){if(['precioUnitario','totalCentavos','desglosePrecios','centavos'].includes(k))delete v[k];else redact(v[k]);}};if(principal.rol==='armador')redact(load);if(principal.rol==='armador')for(const p of Object.values(load.pedidos)){delete p.rendicion;delete p.entrega;for(const l of p.lineas){delete l.precioUnitario;delete l.totalCentavos;delete l.desglosePrecios;}}return {cargaId:row.carga_id,version:row.version,load};};
  const one=async id=>(await query('SELECT carga_id,armador_user_id,chofer_user_id,version,datos FROM mayorista.cargas_operativas WHERE empresa_id=$1 AND carga_id=$2',[principal.empresaId,id])).rows[0];
  return {
   assignedLoads:async()=>({empresaId:principal.empresaId,cargas:(await query('SELECT carga_id,version,datos FROM mayorista.cargas_operativas WHERE empresa_id=$1 ORDER BY carga_id',[principal.empresaId])).rows.map(project)}),
@@ -30,10 +30,11 @@ export function createAssignedLoadsTransaction({query,principal,legacyLoads,onCh
    const previous=(await query('SELECT carga_id,huella,respuesta FROM mayorista.operaciones_carga WHERE empresa_id=$1 AND comando_id=$2',[principal.empresaId,command.id])).rows[0];
    if(previous){if(previous.carga_id!==row.carga_id||previous.huella!==hash)throw new ApiError(409,'UUID operativo reutilizado');return project({...row,...previous.respuesta});}
    if(command.version!==row.version)throw new ApiError(409,'Carga editada en otro dispositivo');
+   let effective=command;if(command.tipo==='sustituir'){if(!resolveSubstitute)throw new ApiError(503,'Cotización del sustituto no disponible');effective={...command,input:{...command.input,...await resolveSubstitute(row.datos.pedidos[command.input.pedidoId],command.input)}};}
    const base=createLoadsState(principal.empresaId);base.revision=row.version;base.cargas[row.carga_id]=row.datos;base.historial=row.datos.historial??[];
    for(const [id,p] of Object.entries(row.datos.pedidos))base.pedidos[id]={...p,cargaId:row.carga_id};
    for(const c of (await query(`SELECT codigo,producto_id,unidades_base FROM ${barcodeTable} WHERE empresa_id=$1`,[principal.empresaId])).rows)base.codigos[c.codigo]={productoId:c.producto_id,unidadesBase:c.unidades_base};
-   let next;try{next=applyLoadCommand(base,command,{...principal,rol:'administrador'});}catch(e){throw new ApiError(409,e.message);}
+   let next;try{next=applyLoadCommand(base,effective,{...principal,rol:'administrador'},new Date().toISOString(),command);}catch(e){throw new ApiError(409,e.message);}
    const data={...next.cargas[row.carga_id],historial:next.historial};
    const updated=await query('UPDATE mayorista.cargas_operativas SET version=$3,datos=$4::jsonb WHERE empresa_id=$1 AND carga_id=$2 AND version=$5 RETURNING carga_id,version,datos',[principal.empresaId,row.carga_id,next.revision,JSON.stringify(data),row.version]);if(updated.rows.length!==1)throw new ApiError(409,'Conflicto de carga');
    if(command.tipo==='cancelar'){const source=await legacyLoads(),rootCommand={...command,version:source.revision};let legacy;try{legacy=applyLoadCommand(source,rootCommand,{...principal,rol:'administrador'});}catch(e){throw new ApiError(409,e.message);}await query('UPDATE mayorista.cargas_estado SET revision=$2,datos=$3::jsonb WHERE empresa_id=$1',[principal.empresaId,legacy.revision,JSON.stringify(legacy)]);await query('DELETE FROM mayorista.cargas_asignaciones WHERE empresa_id=$1 AND carga_id=$2',[principal.empresaId,row.carga_id]);}
