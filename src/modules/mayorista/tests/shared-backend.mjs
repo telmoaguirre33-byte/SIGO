@@ -12,6 +12,7 @@ export async function prepareSharedBackendFixture(pool,{origin='https://shared.q
  await pool.query('UPDATE public.productos SET marca=$1,codigo_interno=$2,codigo_barras=$3 WHERE id=$4',['Marca SIGO','SIGO-001','7790012345678',P]);
  await pool.query(await readFile(new URL('../../../../supabase/migrations/20260913205500_carrito_devoluciones_anulaciones.sql',import.meta.url),'utf8'));
  await pool.query((await readFile(new URL('../../../../docs/mayorista/sql/008_operacion_comercial_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/mi,'').replace(/^rollback;$/mi,''));
+ await pool.query((await readFile(new URL('../../../../docs/mayorista/sql/009_precios_compartidos_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/mi,'').replace(/^rollback;$/mi,''));
  // SOLO el fixture QA usa la identidad nativa: ninguna función Auth de Supabase real se modifica.
  await pool.query('DROP TABLE auth.sessions; CREATE VIEW auth.sessions AS SELECT session_id AS id,user_id FROM mayorista_private.sesiones WHERE NOT revocada AND vence_en>now(); REVOKE ALL ON auth.sessions FROM public,anon,authenticated');
  await pool.query('INSERT INTO mayorista.empresas VALUES($1,$2,true),($3,$4,true)',[E,'Empresa compartida QA',B,'Empresa minorista QA']);
@@ -106,6 +107,20 @@ export async function verifySharedBackend(pool){
  assert.equal((await call('/shared/returns/inspect',{token:owner,body:inspection})).status,200);assert.equal((await call('/shared/returns/inspect',{token:owner,body:inspection})).status,200);
  assert.equal(Number((await pool.query('SELECT stock_actual FROM public.productos WHERE id=$1',[P])).rows[0].stock_actual),before+1);
  assert.equal((await call('/shared/customers/'+C,{token:owner})).body.devoluciones.length,1);
+ // Listas derivadas y presentaciones conservan el precio base SIGO y el UUID recibido.
+ const priceList=randomUUID(),pack=randomUUID();
+ assert.equal((await call('/shared/pricing',{token:seller,body:{empresaId:E,datos:{tipo:'lista',id:priceList,nombre:'Lista distribuidores',activa:true}}})).status,403);
+ assert.equal((await call('/shared/pricing',{token:owner,body:{empresaId:E,datos:{tipo:'lista',id:priceList,nombre:'Lista distribuidores',activa:true}}})).status,200);
+ assert.equal((await call('/shared/pricing',{token:owner,body:{empresaId:E,datos:{tipo:'presentacion',id:pack,productoId:P,listaId:priceList,presentacion:'pack',unidadesBase:6,ajustePorcentaje:-10,minUnidades:6,desde:new Date(Date.now()-60000).toISOString(),hasta:new Date(Date.now()+86400000).toISOString(),activa:true}}})).status,200);
+ const latestPlan=(await call('/admin/state',{token:owner})).body;
+ assert.equal((await call('/admin/commands',{token:owner,body:{id:randomUUID(),empresaId:E,version:latestPlan.revision,operacion:'cliente',input:{id:newCustomer,vendedorId:V,rutaId:R,listaId:priceList,habilitado:true}}})).status,200);
+ const updated=(await call('/catalog',{token:seller})).body;assert.equal(updated.clientes.find(c=>c.id===newCustomer).listaId,priceList);assert.equal(Number(updated.precios.find(p=>p.id===pack).precio),54);
+ assert.equal(Number((await pool.query('SELECT precio_venta FROM public.productos WHERE id=$1',[P])).rows[0].precio_venta),10);
+ const variantOrder={...pedido,pedidoId:randomUUID(),clienteId:newCustomer,lineas:[{productoId:P,precioId:pack,presentacion:'pack',unidadesBase:6,cantidad:6,precioUnitario:9,observacion:'Entregar pack cerrado'}],comerciales:{condicionPago:'transferencia',observacion:'Avisar antes de llegar'}};
+ const variantReceipt=await call('/orders',{token:seller,body:variantOrder});assert.equal(variantReceipt.status,200,JSON.stringify(variantReceipt));assert.deepEqual(await call('/orders',{token:seller,body:variantOrder}),variantReceipt);
+ const stored=(await pool.query('SELECT comerciales,lineas FROM mayorista.pedidos WHERE pedido_id=$1',[variantOrder.pedidoId])).rows[0];assert.equal(stored.comerciales.condicionPago,'transferencia');assert.equal(stored.lineas[0].precioId,pack);
+ assert.equal((await call('/orders',{token:seller,body:{...variantOrder,pedidoId:randomUUID(),lineas:[{...variantOrder.lineas[0],precioUnitario:8}]}})).status,409);
+ assert.equal((await call('/orders',{token:seller,body:{...variantOrder,pedidoId:randomUUID(),lineas:[{...variantOrder.lineas[0],cantidad:1}]}})).status,409);
  await call('/auth/logout',{token:owner,body:{}});assert.equal((await call('/shared/commerce',{token:owner})).status,401);
  console.log('PASS fuente compartida backend: catálogo SIGO, cinco roles, UUID recuperable, escritores QA bloqueados, crédito y aislamiento');
  return [{name:'Backend conectado a fuente SIGO por empresa; cinco roles y escritores QA bloqueados',status:'pass'}];

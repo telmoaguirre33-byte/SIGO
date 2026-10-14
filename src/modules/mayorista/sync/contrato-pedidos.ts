@@ -10,7 +10,8 @@ export type PedidoRemoto = {
   vendedorId: string;
   clienteId: string;
   creadoEn: string;
-  lineas: { productoId: string; cantidad: number; precioUnitario: number }[];
+  comerciales?:{condicionPago?:string;observacion?:string};
+  lineas: {precioId?:string;presentacion?:string;unidadesBase?:number;observacion?:string; productoId: string; cantidad: number; precioUnitario: number }[];
 };
 export type AcuseRemoto = {
   pedidoId: string;
@@ -28,6 +29,7 @@ export function construirSolicitud(pedido: PedidoLocal): PedidoRemoto {
     vendedorId: pedido.vendedorId,
     clienteId: pedido.clienteId,
     creadoEn: pedido.creadoEn,
+    ...(pedido.comerciales?{comerciales:pedido.comerciales}:{}),
     lineas: pedido.lineas.map(l => ({...l}))
   };
 }

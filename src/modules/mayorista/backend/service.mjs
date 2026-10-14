@@ -49,6 +49,9 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
       const principal=await auth.verify(token);
       if(path==='/auth/logout'&&request.method==='POST'){await auth.signOut(token);return reply(200,{revoked:true});}
       if(path==='/me'&&request.method==='GET')return reply(200,principal);
+      if(principal.fuenteComercial==='sigo'&&path==='/shared/pricing'&&request.method==='POST'){
+        if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const d=await smallJson(request,256*1024);return reply(200,await repository.withPrincipal(principal,tx=>tx.sharedPricing(d)));
+      }
       if(principal.fuenteComercial==='sigo'&&['/shared/returns','/shared/returns/inspect'].includes(path)&&request.method==='POST'){
         if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const d=await smallJson(request,256*1024);return reply(200,await repository.withPrincipal(principal,tx=>path.endsWith('/inspect')?tx.sharedInspection(d):tx.sharedReturn(d)));
       }

@@ -9,9 +9,12 @@ export function normalizeOrder(body) {
   const lineas = body.lineas.map(l => {
     if (!UUID.test(l?.productoId) || !Number.isSafeInteger(l?.cantidad) || l.cantidad <= 0 || l.cantidad > 1000000 ||
         !Number.isFinite(l?.precioUnitario) || l.precioUnitario < 0 || l.precioUnitario > 1000000000) throw new ApiError(422,'Renglón inválido');
-    return {productoId:l.productoId.toLowerCase(),cantidad:l.cantidad,precioUnitario:l.precioUnitario};
+    if(l.precioId!==undefined&&!UUID.test(l.precioId)||l.unidadesBase!==undefined&&(!Number.isSafeInteger(l.unidadesBase)||l.unidadesBase<1)||l.presentacion!==undefined&&(typeof l.presentacion!=='string'||l.presentacion.length>80)||l.observacion!==undefined&&(typeof l.observacion!=='string'||l.observacion.length>500))throw new ApiError(422,'Presentación u observación inválida');
+    return {productoId:l.productoId.toLowerCase(),cantidad:l.cantidad,precioUnitario:l.precioUnitario,...(l.precioId?{precioId:l.precioId.toLowerCase()}:{}),...(l.unidadesBase?{unidadesBase:l.unidadesBase}:{}),...(l.presentacion?{presentacion:l.presentacion}:{}),...(l.observacion?{observacion:l.observacion}:{})};
   });
-  return {pedidoId:body.pedidoId.toLowerCase(),empresaId:body.empresaId.toLowerCase(),vendedorId:body.vendedorId.toLowerCase(),clienteId:body.clienteId.toLowerCase(),creadoEn:new Date(body.creadoEn).toISOString(),lineas};
+  let comerciales;
+  if(body.comerciales!==undefined){const c=body.comerciales;if(!c||typeof c!=='object'||Array.isArray(c)||c.condicionPago!==undefined&&!['cuenta_corriente','efectivo','transferencia'].includes(c.condicionPago)||c.observacion!==undefined&&(typeof c.observacion!=='string'||c.observacion.length>1000))throw new ApiError(422,'Condiciones comerciales inválidas');comerciales={...(c.condicionPago?{condicionPago:c.condicionPago}:{}),...(c.observacion?{observacion:c.observacion}:{})};}
+  return {...(comerciales?{comerciales}:{}),pedidoId:body.pedidoId.toLowerCase(),empresaId:body.empresaId.toLowerCase(),vendedorId:body.vendedorId.toLowerCase(),clienteId:body.clienteId.toLowerCase(),creadoEn:new Date(body.creadoEn).toISOString(),lineas};
 }
 /** No se monta en ningún endpoint ni se conecta a SIGO. Disabled por defecto.
  * auth.verify debe comprobar firma, audiencia, emisor, sesión y revocación en servidor.

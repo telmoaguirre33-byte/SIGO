@@ -17,7 +17,7 @@ export function assertIsolatedPool(pool){
   const o=pool?.options;
   if(!o || o.host!=='127.0.0.1' || Number(o.port)!==55471 || o.database!=='mayorista_qa')throw new ApiError(503,'Solo se permite PostgreSQL local de pruebas');
 }
-const columns=`empresa_id as "empresaId",pedido_id as "pedidoId",vendedor_id as "vendedorId",cliente_id as "clienteId",creado_en as "creadoEn",recibido_en as "recibidoEn",lineas,huella as hash,estado`;
+const columns=`empresa_id as "empresaId",pedido_id as "pedidoId",vendedor_id as "vendedorId",cliente_id as "clienteId",creado_en as "creadoEn",recibido_en as "recibidoEn",lineas,huella as hash,estado,to_jsonb(pedidos)->'comerciales' as comerciales`;
 function normalize(row){return row?{...row,creadoEn:row.creadoEn.toISOString(),recibidoEn:row.recibidoEn.toISOString()}:null;}
 export function createPostgresRepository({enabled=false,pool,inventoryRequired=false,accountsEnabled=false,databasePolicy,operational=false,readSharedMetrics,sharedSource}={}){
   return {withPrincipal:async(principal,fn)=>{
@@ -40,7 +40,9 @@ export function createPostgresRepository({enabled=false,pool,inventoryRequired=f
           return issues;
         },
         insertOnce:async row=>{
-          const result=await c.query(`INSERT INTO mayorista.pedidos(empresa_id,pedido_id,vendedor_id,cliente_id,creado_en,recibido_en,lineas,huella,estado) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9) ON CONFLICT(empresa_id,pedido_id) DO NOTHING RETURNING ${columns}`,[row.empresaId,row.pedidoId,row.vendedorId,row.clienteId,row.creadoEn,row.recibidoEn,JSON.stringify(row.lineas),row.hash,row.estado]);
+          const commercial=!!row.comerciales;
+          if(commercial&&!(await c.query("SELECT 1 FROM pg_attribute WHERE attrelid='mayorista.pedidos'::regclass AND attname='comerciales' AND NOT attisdropped")).rows.length)throw new ApiError(503,'Condiciones comerciales requieren actualización Mayorista');
+          const result=await c.query(`INSERT INTO mayorista.pedidos(empresa_id,pedido_id,vendedor_id,cliente_id,creado_en,recibido_en,lineas,huella,estado${commercial?',comerciales':''}) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9${commercial?',$10::jsonb':''}) ON CONFLICT(empresa_id,pedido_id) DO NOTHING RETURNING ${columns}`,[row.empresaId,row.pedidoId,row.vendedorId,row.clienteId,row.creadoEn,row.recibidoEn,JSON.stringify(row.lineas),row.hash,row.estado,...(commercial?[JSON.stringify(row.comerciales)]:[])]);
           return normalize(result.rows[0])??tx.find(row.empresaId,row.pedidoId);
         },
         adminState:async()=>{
@@ -115,10 +117,10 @@ export function createPostgresRepository({enabled=false,pool,inventoryRequired=f
         if(!sharedSource)throw new ApiError(503,'Fuente compartida no instalada');
         Object.assign(tx,sharedSource.transaction({query:(sql,args)=>c.query(sql,args),principal}));
         tx.catalog=async()=>{const result=await tx.sharedCatalog();if((await c.query("SELECT to_regclass('mayorista.metas') AS metas")).rows[0]?.metas)result.metas=(await tx.goals()).objetivos;return result;};
-        tx.validateReferences=async order=>{const data=await tx.sharedCatalog();if(!data.clientes.some(x=>x.id===order.clienteId&&x.vendedorId===order.vendedorId))return ['cliente no asignado'];return order.lineas.flatMap(l=>!data.productos.some(p=>p.id===l.productoId)?['producto inactivo']:!data.precios.some(p=>p.productoId===l.productoId&&Math.abs(Number(p.precio)-l.precioUnitario)<0.000001)?['precio cambiado']:[]);};
+        tx.validateReferences=async order=>{const data=await tx.sharedCatalog();if(!data.clientes.some(x=>x.id===order.clienteId&&x.vendedorId===order.vendedorId))return ['cliente no asignado'];const quoted=await tx.sharedQuote(order.clienteId,order.lineas);return order.lineas.flatMap((l,n)=>!data.productos.some(p=>p.id===l.productoId)?['producto inactivo']:!Number.isFinite(Number(quoted[n]?.precioUnitario))||Math.abs(Number(quoted[n]?.precioUnitario)-l.precioUnitario)>0.000001?['precio cambiado']:[]);};
         tx.inventory=tx.sharedInventory;
         tx.accounts=async()=>{const data=await tx.sharedState();return {empresaId:principal.empresaId,cuentas:data.cuentas};};
-        tx.masterState=async()=>{if(!administrative(principal))throw new ApiError(403,'Administración requerida');const data=await tx.sharedCatalog();return {empresaId:principal.empresaId,revision:0,productos:data.productos.map(p=>({...p,activo:true})),listas:[],precios:data.precios,ofertas:data.ofertas};};
+        tx.masterState=async()=>{if(!administrative(principal))throw new ApiError(403,'Administración requerida');const data=await tx.sharedCatalog();return {empresaId:principal.empresaId,revision:0,productos:data.productos.map(p=>({...p,activo:true})),listas:data.listas??[],precios:data.precios,ofertas:data.ofertas};};
         const blocked=async()=>{throw new ApiError(409,'Usar la operación compartida SIGO; escritor QA bloqueado');};
         tx.inventoryCommand=blocked;tx.collectionCommand=blocked;tx.masterCommand=blocked;
         const adminCommand=tx.adminCommand;
@@ -127,7 +129,7 @@ export function createPostgresRepository({enabled=false,pool,inventoryRequired=f
           if(!administrative(principal)||command.empresaId!==principal.empresaId)throw new ApiError(403,'Sin permisos de asignación');
           const customers=(await tx.sharedCatalog()).clientes,customer=customers.find(c=>c.id===command.input?.id);
           if(!customer)throw new ApiError(422,'Seleccioná un cliente existente de SIGO de esta empresa');
-          if(command.input.listaId)throw new ApiError(422,'Lista especial compartida todavía no integrada');
+          if(command.input.listaId&&!(await tx.sharedCatalog()).listas?.some(l=>l.id===command.input.listaId&&l.activa))throw new ApiError(422,'Lista compartida no disponible');
           // Solo asignaciones: nombre, dirección, saldo y crédito vienen de la ficha SIGO.
           return adminCommand({...command,input:{...command.input,nombre:customer.nombre,direccion:customer.direccion||'Sin dirección registrada'}});
         };

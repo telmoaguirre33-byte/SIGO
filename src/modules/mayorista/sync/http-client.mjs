@@ -21,6 +21,7 @@ export function createMayoristaClient({enabled=false,baseUrl,fetchImpl=globalThi
     cargas:()=>request('/cargas'),
     cargasCommand:command=>request('/cargas/commands',command),
     catalog:()=>request('/catalog'),
+    configureSharedPricing:d=>request('/shared/pricing',d),
     sharedReturn:d=>request('/shared/returns',d),
     inspectReturn:d=>request('/shared/returns/inspect',d),
     customerProfile:id=>request('/shared/customers/'+encodeURIComponent(id)),

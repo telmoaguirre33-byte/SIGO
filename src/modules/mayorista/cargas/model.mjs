@@ -19,10 +19,10 @@ function approved(source){
   for(const l of source.lineas){integer(l.cantidad,1);text(l.productoId,'Producto');if(!Number.isFinite(l.precioUnitario)||l.precioUnitario<0)throw new Error('Precio inválido');
     const old=lines.get(l.productoId),amount=Math.round(l.cantidad*l.precioUnitario*100),cantidad=integer((old?.cantidad??0)+l.cantidad,1),totalCentavos=(old?.totalCentavos??0)+amount;
     if(!Number.isSafeInteger(amount)||!Number.isSafeInteger(totalCentavos))throw new Error('Importe fuera del rango permitido');
-    lines.set(l.productoId,{productoId:l.productoId,nombre:l.nombre??l.productoId,cantidad,precioUnitario:totalCentavos/100/cantidad,totalCentavos,desglosePrecios:[...(old?.desglosePrecios??[]),{cantidad:l.cantidad,precioUnitario:l.precioUnitario,centavos:amount}]});
+    lines.set(l.productoId,{productoId:l.productoId,nombre:l.nombre??l.productoId,cantidad,precioUnitario:totalCentavos/100/cantidad,totalCentavos,desglosePrecios:[...(old?.desglosePrecios??[]),{cantidad:l.cantidad,precioUnitario:l.precioUnitario,centavos:amount,...(l.precioId?{precioId:l.precioId}:{}),...(l.presentacion?{presentacion:l.presentacion}:{}),...(l.unidadesBase?{unidadesBase:l.unidadesBase}:{}),...(l.observacion?{observacion:l.observacion}:{})}]});
   }
   const total=[...lines.values()].reduce((s,l)=>s+l.totalCentavos,0);if(!Number.isSafeInteger(total))throw new Error('Importe fuera del rango permitido');
-  return {pedidoId:source.pedidoId,clienteId:source.clienteId,cliente:source.cliente??source.clienteId,estado:'aprobado',rutaId:source.rutaId??null,lineas:[...lines.values()]};
+  return {pedidoId:source.pedidoId,clienteId:source.clienteId,cliente:source.cliente??source.clienteId,estado:'aprobado',rutaId:source.rutaId??null,...(source.comerciales?{comerciales:source.comerciales}:{}),lineas:[...lines.values()]};
 }
 function lines(load,pedidoId,productoId,clienteId){
   if(pedidoId&&!load.pedidos[pedidoId])throw new Error('Pedido no pertenece a la carga');

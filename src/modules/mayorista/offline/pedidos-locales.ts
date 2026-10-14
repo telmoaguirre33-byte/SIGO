@@ -4,7 +4,7 @@
  * Los pedidos son borradores locales; NO constituyen ventas ni reservas de stock.
  */
 export type EstadoPedido = "pendiente" | "sincronizando" | "sincronizado" | "error";
-export type LineaPedido = { productoId: string; cantidad: number; precioUnitario: number };
+export type LineaPedido = { productoId: string; cantidad: number; precioUnitario: number; precioId?:string; presentacion?:string; unidadesBase?:number; observacion?:string };
 export type PedidoLocal = {
   id: string;
   empresaId: string;
@@ -15,6 +15,7 @@ export type PedidoLocal = {
   lineas: LineaPedido[];
   estado: EstadoPedido;
   intentos: number;
+  comerciales?:{condicionPago?:string;observacion?:string};
   error?: string;
   confirmadoEn?: string;
 };

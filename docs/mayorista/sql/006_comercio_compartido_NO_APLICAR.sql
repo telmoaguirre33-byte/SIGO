@@ -80,7 +80,7 @@ begin
  end if;
  select * into v_cliente from public.clientes_sigo where id=v_cliente_id and empresa_id=p_empresa_id and activo for update;
  if not found then raise exception 'CLIENT_NOT_FOUND';end if;
- if (select count(*) from jsonb_array_elements(p_datos->'lineas'))<>(select count(distinct value->>'productoId') from jsonb_array_elements(p_datos->'lineas')) then raise exception 'DELIVERY_DUPLICATE_PRODUCT';end if;
+ if (select count(*) from jsonb_array_elements(p_datos->'lineas'))<>(select count(distinct (value->>'productoId')||':'||coalesce(value->>'precioId','general')) from jsonb_array_elements(p_datos->'lineas')) then raise exception 'DELIVERY_DUPLICATE_PRODUCT';end if;
  -- Orden estable de bloqueos; stock se descuenta SOLO al confirmar esta entrega/venta.
  for v_line in select value from jsonb_array_elements(p_datos->'lineas') order by value->>'productoId' loop
   v_product_id:=(v_line->>'productoId')::uuid;v_qty:=(v_line->>'cantidad')::numeric;
@@ -88,10 +88,11 @@ begin
   select * into v_producto from public.productos where id=v_product_id and empresa_id=p_empresa_id and activo for update;
   if not found then raise exception 'PRODUCT_NOT_FOUND';end if;
   if v_producto.precio_venta is null or v_producto.precio_venta<=0 or v_producto.stock_actual is null then raise exception 'PRODUCT_NOT_READY';end if;
-  if v_producto.stock_actual<v_qty then v_faltante:=true;end if;
+  if v_producto.stock_actual<(select sum((value->>'cantidad')::numeric) from jsonb_array_elements(p_datos->'lineas') where (value->>'productoId')::uuid=v_product_id) then v_faltante:=true;end if;
   select descuento_porcentaje into v_discount from public.ofertas_productos_sigo where empresa_id=p_empresa_id and producto_id=v_product_id
    and fecha_inicio<=(now() at time zone 'America/Argentina/Cordoba')::date and fecha_fin>=(now() at time zone 'America/Argentina/Cordoba')::date limit 1 for share;
   v_price:=round(v_producto.precio_venta*(1-coalesce(v_discount,0)/100),2);
+  if to_regprocedure('public.precio_unitario_mayorista_sigo(uuid,uuid,uuid,uuid,numeric)') is not null then v_price:=public.precio_unitario_mayorista_sigo(p_empresa_id,v_cliente_id,v_product_id,nullif(v_line->>'precioId','')::uuid,v_qty);end if;
   -- El contrato no acepta un precio arbitrario: conserva el pedido y pide revisión si cambió.
   if (v_line->>'precioUnitario')::numeric is distinct from v_price then
    return jsonb_build_object('estado','requiere_revision','motivo','precio_cambiado','pedidoId',v_pedido,'comandoId',p_comando_id);
