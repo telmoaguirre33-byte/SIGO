@@ -73,6 +73,32 @@ revoke all on function public.configurar_cobrador_mayorista_sigo(uuid,uuid,boole
 grant execute on function public.configurar_cobrador_mayorista_sigo(uuid,uuid,boolean,bigint),public.leer_ficha_mayorista_sigo(uuid,uuid),public.cobrar_mayorista_autorizado_sigo(uuid,uuid,uuid,uuid,bigint,text,text) to authenticated;
 create table public.sigo_mayorista_devoluciones_control(empresa_id uuid not null references public.empresas(id),comando_id uuid not null,venta_id uuid not null references public.ventas_sigo(id),devolucion_id uuid not null references public.devoluciones_sigo(id),solicitud jsonb not null,huella text not null,lineas jsonb not null,nota_credito jsonb not null,historial jsonb not null,primary key(empresa_id,comando_id));
 alter table public.sigo_mayorista_devoluciones_control enable row level security;revoke all on public.sigo_mayorista_devoluciones_control from public,anon,authenticated;
+-- Caso exclusivo Mayorista no cubierto por la RPC Minorista: venta CC ya cobrada.
+-- Usa las mismas tablas; solo gerencia puede autorizar el saldo a favor. No altera registrar_devolucion_sigo.
+create function mayorista_private.devolucion_credito_autorizada(p_empresa uuid,p_venta uuid,p_items jsonb,p_motivo text,p_key text) returns uuid language plpgsql security definer set search_path='' as $$
+declare venta record;item record;l jsonb;cantidad numeric;v_total numeric:=0;devolucion uuid;saldo numeric;
+begin
+ if public.sigo_mayorista_operador_comercial(p_empresa)<>'owner' then raise exception 'MANAGEMENT_REQUIRED';end if;
+ select * into venta from public.ventas_sigo where empresa_id=p_empresa and id=p_venta for update;
+ if not found or venta.estado<>'confirmada' or venta.medio_pago<>'cuenta_corriente' or venta.cliente_id is null or nullif(btrim(p_motivo),'') is null then raise exception 'RETURN_SALE_FORBIDDEN';end if;
+ select saldo_actual into saldo from public.clientes_sigo where empresa_id=p_empresa and id=venta.cliente_id for update;
+ insert into public.devoluciones_sigo(empresa_id,venta_id,tipo,total,motivo,idempotency_key,created_by) values(p_empresa,p_venta,'parcial',0,p_motivo,p_key,auth.uid()) returning id into devolucion;
+ for l in select value from jsonb_array_elements(p_items) loop
+  select * into item from public.venta_items_sigo where empresa_id=p_empresa and venta_id=p_venta and id=(l->>'venta_item_id')::uuid for update;
+  cantidad:=(l->>'cantidad')::numeric;
+  if not found or cantidad is null or cantidad<=0 or cantidad::text in ('NaN','Infinity','-Infinity') or cantidad+coalesce((select sum(d.cantidad) from public.devolucion_items_sigo d where d.empresa_id=p_empresa and d.venta_item_id=item.id),0)>item.cantidad then raise exception 'RETURN_QUANTITY_CONFLICT';end if;
+  insert into public.devolucion_items_sigo(devolucion_id,empresa_id,venta_item_id,producto_id,cantidad,precio_unitario,subtotal) values(devolucion,p_empresa,item.id,item.producto_id,cantidad,item.precio_unitario,round(cantidad*item.precio_unitario,2));
+  update public.productos set stock_actual=stock_actual+cantidad where empresa_id=p_empresa and id=item.producto_id;
+  v_total:=v_total+round(cantidad*item.precio_unitario,2);
+ end loop;
+ if v_total<=0 then raise exception 'NOTHING_TO_RETURN';end if;
+ insert into public.cliente_movimientos_sigo(empresa_id,cliente_id,venta_id,devolucion_id,tipo,importe,concepto,created_by) values(p_empresa,venta.cliente_id,p_venta,devolucion,'haber',v_total,'Devolución Mayorista con saldo a favor autorizado',auth.uid());
+ update public.clientes_sigo set saldo_actual=saldo_actual-v_total,updated_at=now() where empresa_id=p_empresa and id=venta.cliente_id;
+ update public.devoluciones_sigo set total=v_total where id=devolucion;
+ if not exists(select 1 from public.venta_items_sigo i where i.empresa_id=p_empresa and i.venta_id=p_venta and i.cantidad>coalesce((select sum(d.cantidad) from public.devolucion_items_sigo d where d.empresa_id=p_empresa and d.venta_item_id=i.id),0)) then update public.devoluciones_sigo set tipo='total' where id=devolucion;update public.ventas_sigo set estado='anulada',anulada_at=now(),anulada_by=auth.uid(),motivo_anulacion=p_motivo where empresa_id=p_empresa and id=p_venta;end if;
+ return devolucion;
+end $$;
+revoke all on function mayorista_private.devolucion_credito_autorizada(uuid,uuid,jsonb,text,text) from public,anon,authenticated;
 create function public.devolver_mayorista_sigo(p_empresa_id uuid,p_comando uuid,p_datos jsonb) returns jsonb language plpgsql security definer set search_path='' as $$
 declare old public.sigo_mayorista_devoluciones_control%rowtype;linea jsonb;items jsonb:='[]';v_id uuid;v_venta uuid;h text;nc jsonb;v_producto uuid;v_precio numeric;
 begin
@@ -92,7 +118,12 @@ begin
   items:=items||jsonb_build_array(jsonb_build_object('venta_item_id',linea->>'ventaItemId','cantidad',linea->'cantidad'));
  end loop;
  -- RPC SIGO existente conserva cantidades, venta, cuenta y Caja originales.
- v_id:=public.registrar_devolucion_sigo(p_empresa_id,v_venta,items,p_datos->>'motivo','mayorista_devolucion:'||p_comando::text,false);
+ begin
+  v_id:=public.registrar_devolucion_sigo(p_empresa_id,v_venta,items,p_datos->>'motivo','mayorista_devolucion:'||p_comando::text,false);
+ exception when raise_exception then
+  if SQLERRM<>'ACCOUNT_RETURN_REQUIRES_MANUAL_REVIEW' or coalesce((p_datos->>'autorizarSaldoFavor')::boolean,false) is not true then raise;end if;
+  v_id:=mayorista_private.devolucion_credito_autorizada(p_empresa_id,v_venta,items,p_datos->>'motivo','mayorista_devolucion:'||p_comando::text);
+ end;
  for linea in select value from jsonb_array_elements(p_datos->'lineas') loop
   if linea->>'disposicion'<>'vendible' then
    update public.productos set stock_actual=stock_actual-(linea->>'cantidad')::numeric where empresa_id=p_empresa_id and id=(select producto_id from public.venta_items_sigo where empresa_id=p_empresa_id and venta_id=v_venta and id=(linea->>'ventaItemId')::uuid);
@@ -127,7 +158,7 @@ begin
  update public.sigo_mayorista_devoluciones_control set lineas=nuevas,historial=historial||jsonb_build_array(jsonb_build_object('tipo','inspeccion','item',p_item,'disposicion',p_disposicion,'motivo',p_motivo,'responsable',auth.uid(),'fecha',now())) where empresa_id=p_empresa_id and comando_id=registro.comando_id;
  return jsonb_build_object('devolucionId',p_devolucion,'lineas',nuevas);
 end $$;
-create function public.conciliar_devolucion_carga_mayorista_sigo(p_empresa_id uuid,p_carga uuid,p_evento uuid,p_disposicion text,p_motivo text) returns jsonb language plpgsql security definer set search_path='' as $$
+create function public.conciliar_devolucion_carga_mayorista_sigo(p_empresa_id uuid,p_carga uuid,p_evento uuid,p_disposicion text,p_motivo text,p_autorizar_saldo_favor boolean default false) returns jsonb language plpgsql security definer set search_path='' as $$
 declare evento jsonb;venta uuid;anterior record;lineas jsonb:='[]';restante numeric;disponible numeric;cantidad numeric;item record;datos jsonb;resultado jsonb;
 begin
  perform public.sigo_mayorista_operador_comercial(p_empresa_id);
@@ -146,10 +177,10 @@ begin
   if cantidad>0 then lineas:=lineas||jsonb_build_array(jsonb_build_object('ventaItemId',item.id,'cantidad',cantidad,'disposicion',p_disposicion));restante:=restante-cantidad;end if;exit when restante=0;
  end loop;
  if restante<>0 or jsonb_array_length(lineas)=0 then raise exception 'RETURN_QUANTITY_CONFLICT';end if;
- datos:=jsonb_build_object('ventaId',venta,'motivo',p_motivo,'lineas',lineas,'cargaId',p_carga,'eventoFisico',evento,'disposicionFisica',p_disposicion,'motivoAdministrativo',p_motivo);
+ datos:=jsonb_build_object('ventaId',venta,'motivo',p_motivo,'lineas',lineas,'cargaId',p_carga,'eventoFisico',evento,'disposicionFisica',p_disposicion,'motivoAdministrativo',p_motivo,'autorizarSaldoFavor',p_autorizar_saldo_favor);
  resultado:=public.devolver_mayorista_sigo(p_empresa_id,p_evento,datos);return resultado;
 end $$;
-revoke all on function public.conciliar_devolucion_carga_mayorista_sigo(uuid,uuid,uuid,text,text) from public,anon;grant execute on function public.conciliar_devolucion_carga_mayorista_sigo(uuid,uuid,uuid,text,text) to authenticated;
+revoke all on function public.conciliar_devolucion_carga_mayorista_sigo(uuid,uuid,uuid,text,text,boolean) from public,anon;grant execute on function public.conciliar_devolucion_carga_mayorista_sigo(uuid,uuid,uuid,text,text,boolean) to authenticated;
 create function public.leer_recepciones_mayorista_sigo(p_empresa_id uuid) returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare r text;result jsonb;
 begin
