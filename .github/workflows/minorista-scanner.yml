@@ -43,7 +43,7 @@ jobs:
       - name: Install PDF inspection tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y poppler-utils
+          sudo apt-get install -y poppler-utils zbar-tools
       - name: Test receipt integrity, PDF and authorized read-only fiscal recovery
         run: |
           node scripts/test-caja-comprobantes.mjs

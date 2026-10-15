@@ -59,7 +59,6 @@ test("PDF fiscal: CAE, vencimiento, numeración y QR original; reimpresión no e
 });
 test("QR del PDF fiscal se decodifica desde la página rasterizada y coincide con ARCA", { skip: !process.env.CI }, async () => {
   const { PNG } = require("pngjs");
-  const { RGBLuminanceSource, HybridBinarizer, BinaryBitmap, MultiFormatReader, DecodeHintType, BarcodeFormat } = require("@zxing/library");
   await inspect(fiscal(), "a4", "qr-decode");
   const result = spawnSync("pdftoppm", ["-f", "1", "-singlefile", "-scale-to", "2200", "-png", "test-results/qr-decode-a4.pdf", "test-results/qr-decode"], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
@@ -74,11 +73,8 @@ test("QR del PDF fiscal se decodifica desde la página rasterizada y coincide co
   const height = Math.ceil((Math.max(...rects.map(r => r[1] + r[3])) - Math.min(...rects.map(r => r[1]))) * scaleY) + 36;
   const cropped = new PNG({ width, height }); PNG.bitblt(image, cropped, x, y, width, height, 0, 0);
   fs.writeFileSync("test-results/qr-crop.png", PNG.sync.write(cropped));
-  const pixels = new Uint8ClampedArray(width * height);
-  for (let i = 0; i < pixels.length; i++) pixels[i] = (cropped.data[i * 4] + 2 * cropped.data[i * 4 + 1] + cropped.data[i * 4 + 2]) / 4;
-  const bitmap = new BinaryBitmap(new HybridBinarizer(new RGBLuminanceSource(pixels, width, height)));
-  const hints = new Map([[DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]], [DecodeHintType.TRY_HARDER, true], [DecodeHintType.PURE_BARCODE, true]]);
-  try { assert.equal(new MultiFormatReader().decode(bitmap, hints).getText(), urlQrFiscal(fiscal())); }
+  const decoded = spawnSync("zbarimg", ["--quiet", "--raw", "test-results/qr-crop.png"], { encoding: "utf8" });
+  try { assert.equal(decoded.status, 0, decoded.stderr); assert.equal(decoded.stdout.trim(), urlQrFiscal(fiscal())); }
   catch (error) { console.log("QR_DIAGNOSTIC_PNG:" + PNG.sync.write(cropped).toString("base64")); throw error; }
 });
 test("PDF multipágina conserva todas las líneas sin perder el total", async () => {
