@@ -201,27 +201,35 @@ test("Autorización exitosa y CAE sin guardar: F11/F12/WhatsApp bloquean sustitu
     for (const name of ["Descargar PDF", "Compartir PDF por WhatsApp", "Imprimir comprobante", "Autorizar factura de esta venta"])
       await expect(dialog(page).getByRole("button", { name, exact: true })).toHaveCount(0);
     await expect(dialog(page)).not.toContainText("Ticket comercial");
+    await expect(dialog(page).getByRole("button", { name: "Recuperar comprobante original" })).toBeEnabled();
     await noDuplicates(page, 1);
+  }
+  async function close() {
+    await expect(dialog(page).getByRole("button", { name: "Volver a Caja" })).toBeEnabled();
+    await page.keyboard.press("Escape");
+    await expect(dialog(page)).toHaveCount(0);
+    await expect(field(page)).toBeFocused();
   }
   await blocked();
   await dialog(page).getByRole("button", { name: "Recuperar comprobante original" }).click();
   await blocked();
-  await page.keyboard.press("Escape"); await page.keyboard.press("F12"); await blocked();
-  await page.keyboard.press("Escape");
+  await close(); await page.keyboard.press("F12");
+  await expect(dialog(page)).toHaveAccessibleName("Reimprimir último comprobante"); await blocked();
+  await close();
   await page.getByRole("button", { name: "WhatsApp", exact: true }).click(); await blocked();
-  await page.keyboard.press("Escape"); await page.keyboard.press("F11"); await blocked();
+  await close(); await page.keyboard.press("F11"); await blocked();
   await page.evaluate(() => { window.minoristaTest.recoveryBlocked = false; });
   await dialog(page).getByRole("button", { name: "Recuperar comprobante original" }).click();
   await expect(dialog(page)).toContainText("12345678901234");
   await expect(dialog(page).getByRole("alert")).toHaveCount(0);
-  await page.keyboard.press("Escape"); await page.keyboard.press("F12");
+  await close(); await page.keyboard.press("F12");
   const fiscal = await downloadedPdf(page, dialog(page).getByRole("button", { name: "Descargar PDF" }), "reconciled-original");
   expect(fiscal).toContain("0001-00000042"); expect(fiscal).toContain("12345678901234"); expect(fiscal).not.toContain("NO FISCAL");
-  await page.keyboard.press("Escape");
+  await close();
   await page.getByRole("button", { name: "WhatsApp", exact: true }).click();
   const shared = await downloadedPdf(page, dialog(page).getByRole("button", { name: "Compartir PDF por WhatsApp" }), "reconciled-whatsapp");
   expect(shared).toContain("12345678901234");
-  await page.keyboard.press("Escape"); await page.keyboard.press("F11");
+  await close(); await page.keyboard.press("F11");
   await expect(dialog(page)).toContainText("12345678901234"); await noDuplicates(page, 1);
   expect(await page.evaluate(() => window.minoristaTest.receipts.length)).toBe(1);
   expect(await page.evaluate(() => window.minoristaTest.recoveryRequests)).toBe(2);
