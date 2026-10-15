@@ -24,7 +24,10 @@ export async function prepareActivationUi(pool,fixture,backend){
  return {bundle:js.text,styles:bundle.outputFiles.find(f=>f.path.endsWith('.css'))?.text??'',async handle(req,res){
   if(req.url!=='/__activation/rpc')return false;
   let actor;try{actor=await fixture.verifyRootToken((req.headers.authorization??'').replace(/^Bearer /,''));}catch{res.writeHead(401);res.end('{}');return true;}
-  let raw='';for await(const part of req)raw+=part;if(raw.length>10000)throw Error('Solicitud inválida');const {name,args={}}=JSON.parse(raw),connection=await pool.connect();
+  let raw='';for await(const part of req)raw+=part;if(raw.length>10000)throw Error('Solicitud inválida');const {name,args={}}=JSON.parse(raw);
+  // Resolver membresía antes de reservar la conexión transaccional: launcher y drawer leen en paralelo.
+  const memberships=name==='mis_empresas_sigo'?(await pool.query("SELECT empresa_id,'lapizcito5 · fixture aislado' AS nombre,rol FROM public.empresa_usuarios WHERE empresa_id=$1 AND user_id=$2 AND activo",[B,actor.userId])).rows:null;
+  const connection=await pool.connect();
   try{await connection.query('BEGIN');await connection.query('SET LOCAL ROLE authenticated');await connection.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[actor.userId]);let value;
    const functions={matriz_leer_destino_predeterminado_mayorista_sigo:['',[]],matriz_configurar_destino_predeterminado_mayorista_sigo:['$1,$2',[args.p_origen,args.p_disponible]],leer_tipo_negocio_sigo:['$1',[args.p_empresa_id]],declarar_tipo_negocio_sigo:['$1,$2',[args.p_empresa_id,args.p_tipo]],obtener_acceso_mayorista_sigo:['$1',[args.p_empresa_id]],matriz_actualizar_modulo_empresa_sigo:['$1,$2,$3',[args.p_empresa_id,args.p_modulo_clave,args.p_habilitado]]};
    if(name==='__legacy_config'){accessMissing=args.missing===true;value=true;}
@@ -32,7 +35,7 @@ export async function prepareActivationUi(pool,fixture,backend){
    else if(name==='__user')value={id:actor.userId};
    else if(name==='listar_modulos_empresa_sigo'&&args.p_empresa_id===B)value=(await connection.query('SELECT * FROM public.listar_modulos_empresa_sigo($1)',[B])).rows;
    else if(name==='matriz_listar_mayorista_modulos_sigo')value=(await connection.query('SELECT * FROM public.matriz_listar_mayorista_modulos_sigo()')).rows;
-   else if(name==='mis_empresas_sigo')value=(await pool.query("SELECT empresa_id,'lapizcito5 · fixture aislado' AS nombre,rol FROM public.empresa_usuarios WHERE empresa_id=$1 AND user_id=$2 AND activo",[B,actor.userId])).rows;
+   else if(name==='mis_empresas_sigo')value=memberships;
    else if(Object.hasOwn(functions,name)&&(args.p_empresa_id===B||name.includes('destino_predeterminado'))){const [params,values]=functions[name],rows=(await connection.query(name==='obtener_acceso_mayorista_sigo'?'SELECT * FROM public.'+name+'('+params+')':'SELECT public.'+name+'('+params+') AS r',values)).rows;value=name==='obtener_acceso_mayorista_sigo'?rows:rows[0]?.r;}
    else throw Error('RPC no permitida');await connection.query('COMMIT');res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify(value));
   }catch{await connection.query('ROLLBACK');res.writeHead(403,{'Content-Type':'application/json'});res.end(JSON.stringify({message:'RPC rechazada'}));}finally{connection.release();}return true;
