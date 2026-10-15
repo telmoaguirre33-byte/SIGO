@@ -30,6 +30,6 @@ Se ejecuta la batería existente de TypeScript, build SIGO/Mayorista, RLS/API Po
 
 ## Alcance operativo
 
-Solo archivos Mayorista y esta documentación. Sin migraciones comerciales nuevas, sin cambios a Minorista/Compras/SOVI/Prospección, main o producción. Se conservan namespace y empresa QA sintéticos persistentes. ARCA simulada, sin credenciales productivas.
+Solo archivos Mayorista y esta documentación. Sin migraciones comerciales nuevas, sin cambios a Minorista/Compras ni otros proyectos, main o producción. Se conservan namespace y empresa QA sintéticos persistentes. ARCA simulada, sin credenciales productivas.
 
 Al actualizar el único backend QA existente debe aplicarse el nuevo SHA y el origen exacto del nuevo Preview READY en `MAYORISTA_SIGO_ORIGIN`. No se amplía CORS por wildcard ni se agregan servicios, bases o proyectos. Verificar SUCCESS, health/readiness con el nuevo SHA, `/portal.html` y sus recursos y repetir ingreso real PC/Android. La etapa UX queda separada y no se declara apto para producción.
