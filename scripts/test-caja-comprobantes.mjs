@@ -64,11 +64,22 @@ test("QR del PDF fiscal se decodifica desde la página rasterizada y coincide co
   const result = spawnSync("pdftoppm", ["-f", "1", "-singlefile", "-scale-to", "2200", "-png", "test-results/qr-decode-a4.pdf", "test-results/qr-decode"], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   const image = PNG.sync.read(fs.readFileSync("test-results/qr-decode.png"));
-  const pixels = new Uint8ClampedArray(image.width * image.height);
-  for (let i = 0; i < pixels.length; i++) pixels[i] = (image.data[i * 4] + 2 * image.data[i * 4 + 1] + image.data[i * 4 + 2]) / 4;
-  const bitmap = new BinaryBitmap(new HybridBinarizer(new RGBLuminanceSource(pixels, image.width, image.height)));
-  const reader = new MultiFormatReader(); reader.setHints(new Map([[DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]]]));
-  assert.equal(reader.decode(bitmap).getText(), urlQrFiscal(fiscal()));
+  const raw = fs.readFileSync("test-results/qr-decode-a4.pdf", "utf8");
+  const rects = [...raw.matchAll(/([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re f/g)].map(m => m.slice(1).map(Number));
+  assert.ok(rects.length > 100, "El PDF debe contener la matriz QR real");
+  const scaleX = image.width / 595.28, scaleY = image.height / 841.89;
+  const x = Math.floor(Math.min(...rects.map(r => r[0])) * scaleX) - 18;
+  const y = Math.floor((841.89 - Math.max(...rects.map(r => r[1] + r[3]))) * scaleY) - 18;
+  const width = Math.ceil((Math.max(...rects.map(r => r[0] + r[2])) - Math.min(...rects.map(r => r[0]))) * scaleX) + 36;
+  const height = Math.ceil((Math.max(...rects.map(r => r[1] + r[3])) - Math.min(...rects.map(r => r[1]))) * scaleY) + 36;
+  const cropped = new PNG({ width, height }); PNG.bitblt(image, cropped, x, y, width, height, 0, 0);
+  fs.writeFileSync("test-results/qr-crop.png", PNG.sync.write(cropped));
+  const pixels = new Uint8ClampedArray(width * height);
+  for (let i = 0; i < pixels.length; i++) pixels[i] = (cropped.data[i * 4] + 2 * cropped.data[i * 4 + 1] + cropped.data[i * 4 + 2]) / 4;
+  const bitmap = new BinaryBitmap(new HybridBinarizer(new RGBLuminanceSource(pixels, width, height)));
+  const hints = new Map([[DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]], [DecodeHintType.TRY_HARDER, true], [DecodeHintType.PURE_BARCODE, true]]);
+  try { assert.equal(new MultiFormatReader().decode(bitmap, hints).getText(), urlQrFiscal(fiscal())); }
+  catch (error) { console.log("QR_DIAGNOSTIC_PNG:" + PNG.sync.write(cropped).toString("base64")); throw error; }
 });
 test("PDF multipágina conserva todas las líneas sin perder el total", async () => {
   const doc = base(); doc.items = Array.from({ length: 160 }, (_, i) => ({ nombre: `ARTÍCULO ${i + 1}`, cantidad: 1, precio_unitario: 2, subtotal: 2 })); doc.venta.total = 320;
