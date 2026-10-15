@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import {generateKeyPairSync,randomUUID,createHash} from 'node:crypto';
 import pg from '../backend/node_modules/pg/lib/index.js';
+import {selectQaHandler} from '../backend/server.mjs';
 import {interactiveQa} from '../backend/interactive-qa.mjs';
 import {QA_RAILWAY} from '../railway/database-policy.mjs';
 /** SQL real en CI. Solo el transporte de Pool privado Railway se sustituye por localhost. */
 export async function verifyInteractiveQa(base){
+ const ordinary=()=>{},isolated=()=>{};assert.equal(selectQaHandler(new Headers({Origin:'https://preview.qa.invalid'}),['https://preview.qa.invalid'],ordinary,isolated),isolated);assert.equal(selectQaHandler(new Headers({Origin:'https://backend.qa.invalid'}),['https://preview.qa.invalid'],ordinary,isolated),ordinary);assert.equal(selectQaHandler(new Headers({Origin:'https://other.qa.invalid'}),['https://preview.qa.invalid'],ordinary,isolated),ordinary);
  assert.equal(base.options.host,'127.0.0.1');assert.equal(Number(base.options.port),55471);assert.equal(base.options.database,'mayorista_qa');
  const external=randomUUID(),authOrigin='https://identity.qa.invalid',namespace='mayorista_acceptance_'+createHash('sha256').update('interactive-qa-v1:'+external+':'+authOrigin).digest('hex').slice(0,12),opened=[];
  const rootBinding='SELECT project_id,environment_id,schema_version FROM mayorista_private.infrastructure_binding WHERE id=true';

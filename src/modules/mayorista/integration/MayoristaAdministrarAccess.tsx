@@ -36,7 +36,7 @@ export default function MayoristaAdministrarAccess({empresaId, rol, obtenerConfi
     {expanded && !decision.enabled && <p role="alert">Mayorista está activo. Falta configurar la conexión operativa de este entorno en Matriz. {decision.reason}</p>}
     {expanded && decision.enabled ? <div style={{display:"flex",gap:12,flexWrap:"wrap",marginTop:12}}>
       <MayoristaWorkspace origin={config!.origenAprobado} empresaId={empresaId} page={page} sharedRpc={config!.qaAislado?undefined:sharedRpc} qaAislado={config!.qaAislado} getSigoToken={getSigoToken}/>
-      <a className="admin-button" href={decision.sellerUrl} target="_blank" rel="noopener noreferrer">App Vendedor</a>
+      {!config!.qaAislado&&<a className="admin-button" href={decision.sellerUrl} target="_blank" rel="noopener noreferrer">App Vendedor</a>}
     </div> : null}
   </section>;
 }
