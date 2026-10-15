@@ -69,6 +69,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   const [descuentoAbierto,setDescuentoAbierto]=useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState(nuevaClaveVenta);
   const empresaActivaRef = useRef(empresaId);
+  const confirmacionEnCursoRef = useRef<object | null>(null);
   const buscarRef = useRef<HTMLInputElement | null>(null);
   const productosEncontradosRef = useRef<ProductoSigo[]>([]);
   const productoSeleccionadoIdRef = useRef<string|null>(null);
@@ -88,6 +89,8 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   useEffect(() => {
     let cancelled = false;
     empresaActivaRef.current = empresaId;
+    confirmacionEnCursoRef.current = null;
+    setConfirmando(false);
     setItems([]);
     setCatalogo([]);
     setOfertas([]);
@@ -369,7 +372,9 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     });
 
   async function confirmar(imprimirDespues = false) {
-    if (!puedeConfirmar || confirmando) return;
+    if (!puedeConfirmar || confirmando || confirmacionEnCursoRef.current) return;
+    const operacion = {};
+    confirmacionEnCursoRef.current = operacion;
     const empresaConfirmacion = empresaId;
     setConfirmando(true);
     setError("");
@@ -452,7 +457,10 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         setError(err instanceof Error ? err.message : "No se pudo confirmar la venta.");
       }
     } finally {
-      if (empresaActivaRef.current === empresaConfirmacion) setConfirmando(false);
+      if (confirmacionEnCursoRef.current === operacion) {
+        confirmacionEnCursoRef.current = null;
+        if (empresaActivaRef.current === empresaConfirmacion) setConfirmando(false);
+      }
     }
   }
 
@@ -463,7 +471,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       if (!["F1", "F2", "F6", "F9", "F10", "F11", "F12"].includes(event.key)) return;
       event.preventDefault();
       if (event.key === "F1") vaciar();
-      if (event.key === "F2") buscarRef.current?.focus();
+      if (event.key === "F2") document.querySelector<HTMLInputElement>(".sigo-pos-scan .barcode-entry-row input")?.focus();
       if (event.key === "F6") setDescuentoAbierto((value) => !value);
       if (event.key === "F9") void confirmar();
       if (event.key === "F10") void confirmar(true);
@@ -487,14 +495,14 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       <header className="sigo-pos-title"><div><strong>🛒 CAJA - VENTA</strong><span>Escaneá, buscá o agregá productos. Todo en una sola pantalla.</span></div><button className="admin-button" disabled={!items.length||confirmando} onClick={vaciar}>Vaciar</button></header>
       <div className="sigo-pos-toolbar">
         <button type="button" onClick={vaciar}>▣ <strong>NUEVA VENTA</strong><small>F1</small></button>
-        <button type="button" onClick={()=>buscarRef.current?.focus()}>⌕ <strong>BUSCAR PRODUCTO</strong><small>F2</small></button>
+        <button type="button" onClick={()=>document.querySelector<HTMLInputElement>(".sigo-pos-scan .barcode-entry-row input")?.focus()}>⌕ <strong>BUSCAR PRODUCTO</strong><small>F2</small></button>
         <button type="button" onClick={()=>document.querySelector<HTMLElement>(".barcode-camera-button")?.click()}>📷 <strong>CÁMARA</strong><small>F3</small></button>
         <button type="button" onClick={()=>document.getElementById("sigo-pos-cliente")?.focus()}>👤 <strong>CLIENTE</strong><small>F8</small></button>
         <button type="button" onClick={()=>setDescuentoAbierto(v=>!v)}>◇ <strong>DESCUENTO</strong><small>F6 · {descuentoPct}%</small></button>
       </div>
       {descuentoAbierto&&<div className="sigo-pos-discount"><strong>Descuento</strong>{[0,5,10,15,20].map(n=><button type="button" className={descuentoPct===n?"active":""} onClick={()=>{setDescuentoPct(n);setDescuentoAbierto(false)}} key={n}>{n}%</button>)}<label>Otro % <input type="number" min="0" max="99.99" step="0.01" value={descuentoPct} onChange={e=>setDescuentoPct(Math.max(0,Math.min(99.99,Number(e.target.value)||0)))}/></label></div>}
       <div className="sigo-pos-scan">
-        <BarcodeScanner key={scannerInstanceKey} empresaId={empresaId} action="vender" onCachedCode={(code)=>{const encontrados=catalogo.filter((p)=>p.empresa_id===empresaId&&(normalizeBarcode(p.codigo_barras??"")===code||normalizeBarcode(p.codigo_interno??"")===code));return encontrados.length?encontrados:null}} onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null)}} onManualQuery={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null);return !/^\\d{6,}$/.test(query.trim())}} onProductSearchKeyDown={manejarTeclaBusquedaProducto}/>
+        <BarcodeScanner key={scannerInstanceKey} empresaId={empresaId} action="vender" onCachedCode={(code)=>{const encontrados=catalogo.filter((p)=>p.empresa_id===empresaId&&(normalizeBarcode(p.codigo_barras??"")===code||normalizeBarcode(p.codigo_interno??"")===code));return encontrados.length?encontrados:null}} onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null)}} onManualQuery={(query)=>{const codigo=normalizeBarcode(query);if(/^\d+$/.test(codigo)||catalogo.some(p=>normalizeBarcode(p.codigo_barras??"")===codigo||normalizeBarcode(p.codigo_interno??"")===codigo))return false;setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null);return true}} onProductSearchKeyDown={manejarTeclaBusquedaProducto}/>
         
         {busquedaProducto.trim()&&productosEncontrados.length>0&&<div className="sigo-pos-results">{productosEncontrados.map((p)=><button type="button" data-pos-suggestion="" data-product-id={p.id} aria-selected={p.id===productoSeleccionadoVisibleId} className={p.id===productoSeleccionadoVisibleId?"active":""} key={p.id} onMouseEnter={()=>{productoSeleccionadoIdRef.current=p.id;setProductoSeleccionadoId(p.id)}} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}{Number(p.stock_actual??0)<=0?" · SIN STOCK":""}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} · Stock {p.stock_actual??0}</span></button>)}</div>}{busquedaProducto.trim()&&productosEncontrados.length===0&&!catalogoError&&<div className="sigo-pos-results"><div className="table-empty">No encontré productos. Probá con nombre, marca, código interno o EAN.</div></div>}
       </div>
@@ -518,3 +526,4 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     </div>
   );
 }
+
