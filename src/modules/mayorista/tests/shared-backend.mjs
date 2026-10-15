@@ -100,7 +100,7 @@ export async function verifySharedBackend(pool){
  const cobro=await call('/shared/collections',{token:seller,body:delegated});assert.equal(cobro.status,200);assert.deepEqual(await call('/shared/collections',{token:seller,body:delegated}),cobro);
  assert.equal(Number((await pool.query('SELECT saldo_actual FROM public.clientes_sigo WHERE id=$1',[newCustomer])).rows[0].saldo_actual),1);
  assert.equal((await call('/shared/collections',{token:tokens.chofer,body:delegated})).status,403);
- const collectedGoal={id:randomUUID(),empresaId:E,version:1,input:{...ownGoal.input,id:randomUUID(),metrica:'cobrado',objetivo:200}};assert.equal((await call('/admin/goals/commands',{token:owner,body:collectedGoal})).status,200);assert.equal((await call('/goals',{token:seller})).body.objetivos.find(g=>g.metrica==='cobrado').real,100);
+ const collectedGoal={id:randomUUID(),empresaId:E,version:0,input:{...ownGoal.input,id:randomUUID(),metrica:'cobrado',objetivo:200}};assert.equal((await call('/admin/goals/commands',{token:owner,body:collectedGoal})).status,200);assert.equal((await call('/goals',{token:seller})).body.objetivos.find(g=>g.metrica==='cobrado').real,100);
  const original=ficha.body.compras.find(v=>v.lineas.some(l=>Number(l.cantidad)===2)),item=original.lineas[0],before=Number((await pool.query('SELECT stock_actual FROM public.productos WHERE id=$1',[P])).rows[0].stock_actual);
  const returned={id:randomUUID(),empresaId:E,datos:{ventaId:original.id,motivo:'Revisión de mercadería QA',lineas:[{ventaItemId:item.id,cantidad:1,disposicion:'revision'}]}};
  assert.equal((await call('/shared/returns',{token:seller,body:returned})).status,403);
@@ -125,6 +125,11 @@ export async function verifySharedBackend(pool){
  const stored=(await pool.query('SELECT comerciales,lineas FROM mayorista.pedidos WHERE pedido_id=$1',[variantOrder.pedidoId])).rows[0];assert.equal(stored.comerciales.condicionPago,'transferencia');assert.equal(stored.lineas[0].precioId,pack);
  assert.equal((await call('/orders',{token:seller,body:{...variantOrder,pedidoId:randomUUID(),lineas:[{...variantOrder.lineas[0],precioUnitario:8}]}})).status,409);
  assert.equal((await call('/orders',{token:seller,body:{...variantOrder,pedidoId:randomUUID(),lineas:[{...variantOrder.lineas[0],cantidad:1}]}})).status,409);
+ // Ofertas SIGO vigentes combinan su descuento con la política comercial; no se copia otro precio base.
+ await pool.query('INSERT INTO public.ofertas_productos_sigo VALUES($1,$2,10,current_date-1,current_date+1)',[E,P]);
+ const offered=(await call('/catalog',{token:seller})).body;assert.equal(Number(offered.precios.find(p=>p.id===pack).precio),48.6);assert.equal(offered.ofertas.length,1);assert.deepEqual(await call('/orders',{token:seller,body:variantOrder}),variantReceipt);
+ const offeredOrder={...variantOrder,pedidoId:randomUUID(),lineas:[{...variantOrder.lineas[0],precioUnitario:8.1}]};assert.equal((await call('/orders',{token:seller,body:offeredOrder})).status,200);
+ await pool.query('UPDATE public.ofertas_productos_sigo SET fecha_fin=current_date-2 WHERE empresa_id=$1 AND producto_id=$2',[E,P]);assert.equal((await call('/catalog',{token:seller})).body.ofertas.length,0);assert.deepEqual((await call('/orders',{token:seller,body:offeredOrder})).status,200);assert.equal((await call('/orders',{token:seller,body:{...offeredOrder,pedidoId:randomUUID()}})).status,409);
  // Sustitución con cotización servidor, faltante original conservado y stock del sustituto una vez.
  const substitute=randomUUID(),subPrice=randomUUID();
  await pool.query('INSERT INTO public.productos(id,empresa_id,nombre,precio_venta,stock_actual,activo) VALUES($1,$2,$3,3,20,true)',[substitute,E,'Sustituto SIGO QA']);
