@@ -62,3 +62,10 @@ test('devoluciones sin inspección quedan en revisión; solo clasificación expl
  const explicit=applyLoadCommand(state,{...command,input:{...command.input,lineas:[{productoId:'x',cantidad:1,vendible:1}]}},actor);assert.equal(explicit.cargas.l.recepcionDevoluciones.lineas[0].vendible,1);
  assert.throws(()=>applyLoadCommand(state,{...command,input:{...command.input,lineas:[{productoId:'x',cantidad:1,vendible:1,averiada:1}]}},actor));
 });
+
+test('devolución canónica, crédito de cuenta y NC no inflan cobranza ni duplican devolución física',()=>{
+ const confirmedReturns=[{id:'return',eventoId:'d',pedidoId:'p',clienteId:'c',vendedorId:'v',rutaId:'r',fecha:when,tipo:'devolucion',centavos:33,unidades:1,lineas:[{productoId:'x',unidades:1,centavos:33}]}];
+ const ledger=[{clienteId:'c',tipo:'debito',centavos:100,fecha:when},{clienteId:'c',tipo:'credito_devolucion',centavos:-33,fecha:when},{clienteId:'c',tipo:'cobranza',centavos:-20,fecha:when}];
+ const invoices=[{pedidoId:'p',fecha:when,estado:'confirmada',centavos:100},{pedidoId:'p',fecha:when,estado:'confirmada',centavos:-33}];
+ const r=calculateManagementMetrics({...source,confirmedReturns,ledger,invoices},filters).resumen;assert.equal(r.devoluciones,1);assert.equal(r.unidadesDevueltas,1);assert.equal(r.cobrado,20);assert.equal(r.facturado,67);assert.equal(r.deudaPendiente,47);assert.equal(r.importeEntregado,67);
+});

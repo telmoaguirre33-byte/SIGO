@@ -6,6 +6,7 @@ import {
 } from "./operationalReadiness";
 import { supabase } from "./supabase";
 import AdminNotifications from "./AdminNotifications";
+const rpcDestinoMayorista=async(name:string,args?:Record<string,unknown>)=>await supabase.rpc(name,args);
 
 type EmpresaMatriz = {
   empresa_id: string;
@@ -406,7 +407,7 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
           </div>
 
           {error ? <div className="form-error">{error}</div> : null}
-          <MayoristaMatrizDestino />
+          <MayoristaMatrizDestino rpc={rpcDestinoMayorista} />
           {mayoristaError ? <div className="empty-state" role="status">{mayoristaError}</div> : null}
           {mensaje ? <div className="sigo-matriz-success">{mensaje}</div> : null}
 
