@@ -19,7 +19,7 @@ Código funcional `7ce32e8e2418119549d39476b1e5fa19d3408667`:
 - [CI Mayorista 38662325161](https://github.com/telmoaguirre33-byte/SIGO/actions/runs/38662325161): SUCCESS. TypeScript estricto, build Mayorista, Node, RLS, 92 grupos de controles API/PostgreSQL, 42 controles UI operativos, 53 pruebas Chromium, Docker y runtime sin red/desactivado por defecto.
 - [Build SIGO 38662325167](https://github.com/telmoaguirre33-byte/SIGO/actions/runs/38662325167): SUCCESS.
 - [Matriz Mayorista 38662325162](https://github.com/telmoaguirre33-byte/SIGO/actions/runs/38662325162): SUCCESS.
-- El hash del código previo de Administrar se conserva al retirar exclusivamente las adiciones Mayorista; mismo control para el punto de entrada SIGO. Los 25 controles críticos existentes aprueban. SOVI, PROSPECCIÓN, Compras y los flujos Minoristas no se modifican.
+- El hash del código previo de Administrar se conserva al retirar exclusivamente las adiciones Mayorista; mismo control para el punto de entrada SIGO. Los 25 controles críticos existentes aprueban. Los proyectos externos, Compras y los flujos Minoristas no se modifican.
 - Compras conserva su fallo previo del workflow aislado; no se lo atribuye a Mayorista ni se lo corrige en esta tarea.
 
 Los grupos se solapan; no sumar 92 + 42 + 53 como casos únicos. Los controles adicionales de precio, cobradores, devolución, bridge SIGO y nota de crédito se ejecutan dentro de esos grupos y quedan identificados en los logs.
