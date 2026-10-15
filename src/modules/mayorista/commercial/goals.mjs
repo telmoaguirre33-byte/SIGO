@@ -24,7 +24,7 @@ export function createGoalsTransaction({query,principal,readMetricsData}) {
         const filters=normalizeReportFilters({periodo:'personalizado',desde:row.desde,hasta:row.hasta,vendedorId:row.vendedorId??''});
         const metrics=calculateManagementMetrics(data,filters).resumen;
         // Personal no tiene acceso al libro de otros roles; no confundir ausencia de acceso con cero cobrado.
-        const actual=principal.rol==='vendedor'&&['cobrado','deuda_recuperada'].includes(row.metrica)?null:metrics[row.metrica];
+        const actual=principal.rol==='vendedor'&&data.personalLedgerAvailable!==true&&['cobrado','deuda_recuperada'].includes(row.metrica)?null:metrics[row.metrica];
         return {...row,objetivo:Number(row.objetivo),nombre:METRICS[row.metrica],...goalProgress(Number(row.objetivo),actual)};
       });
       return {empresaId:E,objetivos};

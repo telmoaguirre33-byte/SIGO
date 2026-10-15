@@ -7,7 +7,7 @@ export const METRICS = Object.freeze({
 });
 export const MONEY_METRICS = new Set(['vendido', 'facturado', 'cobrado', 'deuda_recuperada']);
 const instant = v => v instanceof Date ? v.getTime() : Date.parse(v);
-const sum = (items, field) => items.reduce((s, i) => {const next=s+signed(i[field]);if(!Number.isSafeInteger(next))throw new Error('Total fuera de rango');return next;}, 0);
+const sum = (items, field) => items.reduce((s, i) => {const value=field==='unidades'?Number(i[field]??0):signed(i[field]),next=s+value;if(!Number.isFinite(next)||Math.abs(next)>Number.MAX_SAFE_INTEGER||field!=='unidades'&&!Number.isSafeInteger(next))throw new Error('Total fuera de rango');return next;}, 0);
 const unique = (items, field) => new Set(items.map(i => i[field]).filter(Boolean));
 const signed = v => { const n = Number(v ?? 0); if (!Number.isSafeInteger(n)) throw new Error('Importe fuera de rango'); return n; };
 export function normalizeReportFilters(raw = {}, now = new Date()) {
@@ -58,7 +58,7 @@ export function goalProgress(target, actual) {
   if (actual === null) return { objetivo: target, real: null, cumplimiento: null, falta: null };
   return { objetivo: target, real: actual, cumplimiento: Math.round(actual * 10000 / target) / 100, falta: Math.max(0, target - actual) };
 }
-export function calculateManagementMetrics({ empresaId, orders = [], customers = [], sellers = [], routes = [], visits = [], loads = [], ledger = [], collections = [], products = [], inventory = [], sales = null, invoices = null, costs = null, dueBalances = null, goals = [] }, filters, now = new Date()) {
+export function calculateManagementMetrics({ empresaId, orders = [], customers = [], sellers = [], routes = [], visits = [], loads = [], ledger = [], collections = [], confirmedReturns = [], products = [], inventory = [], sales = null, invoices = null, costs = null, dueBalances = null, goals = [] }, filters, now = new Date()) {
   const from = instant(filters.desde), to = instant(filters.hastaExclusivo), routeMap = new Map(routes.map(r => [r.id, r]));
   const customerMap = new Map(customers.map(c => [c.id, c])), orderMap = new Map(orders.map(o => [o.pedidoId, o]));
   const inPeriod = e => instant(e.fecha) >= from && instant(e.fecha) < to;
@@ -67,7 +67,7 @@ export function calculateManagementMetrics({ empresaId, orders = [], customers =
     const route = e.rutaId ?? o?.rutaId ?? c?.rutaId;
     return (!filters.vendedorId || seller === filters.vendedorId) && (!filters.rutaId || route === filters.rutaId) && (!filters.zona || routeMap.get(route)?.zona === filters.zona);
   };
-  const allEvents = loadCommercialEvents(loads, orders), events = allEvents.filter(e => inPeriod(e) && matches(e));
+  const nativeEvents=loadCommercialEvents(loads,orders),allEvents=[...nativeEvents.filter(e=>e.tipo!=='devolucion'||!confirmedReturns.some(r=>r.pedidoId===e.pedidoId&&r.eventoId&&e.id.endsWith(':'+r.eventoId+':devolver'))),...confirmedReturns], events = allEvents.filter(e => inPeriod(e) && matches(e));
   const delivered = events.filter(e => e.tipo === 'entrega'), returns = events.filter(e => e.tipo === 'devolucion');
   const effective = delivered.filter(e => e.unidades > 0);
   const receipts = orders.filter(o => matches(o) && inPeriod({ fecha: o.recibidoEn }));

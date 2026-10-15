@@ -57,7 +57,7 @@ end $$;
 revoke all on function public.sigo_mayorista_lector(uuid) from public,anon,authenticated;
 create function public.leer_metricas_mayorista_sigo(p_empresa_id uuid) returns jsonb
 language plpgsql stable security definer set search_path='' as $$
-declare v_rol text;v_vendedor uuid;v_catalogo jsonb;v_facturas jsonb:=null;v_ledger jsonb:='[]';v_stock jsonb:='[]';
+declare v_rol text;v_vendedor uuid;v_catalogo jsonb;v_facturas jsonb:=null;v_ledger jsonb:='[]';v_stock jsonb:='[]';v_devoluciones jsonb:='[]';
 begin
  v_rol:=public.sigo_mayorista_lector(p_empresa_id);
  if v_rol not in ('owner','admin','vendedor') then raise exception 'METRICS_FORBIDDEN';end if;
@@ -67,13 +67,17 @@ begin
   from public.arca_comprobantes a join public.sigo_mayorista_entregas_comerciales e on e.empresa_id=a.empresa_id and e.venta_id=a.venta_id join public.ventas_sigo v on v.id=a.venta_id and v.empresa_id=a.empresa_id
   where a.empresa_id=p_empresa_id and a.cae~'^[0-9]{14}$' and a.resultado='A' and (v_rol<>'vendedor' or e.vendedor_id=v_vendedor);
  end if;
- if v_rol in ('owner','admin') then
-  select coalesce(jsonb_agg(jsonb_build_object('clienteId',m.cliente_id,'tipo',case when m.tipo='haber' then 'cobranza' else 'debito' end,'centavos',(m.importe*100*(case when m.tipo='haber' then -1 else 1 end))::bigint,'fecha',m.created_at)),'[]') into v_ledger
-  from public.cliente_movimientos_sigo m where m.empresa_id=p_empresa_id and exists(select 1 from mayorista.clientes c where c.empresa_id=p_empresa_id and c.cliente_id=m.cliente_id and c.habilitado);
-  v_stock:=public.leer_stock_mayorista_sigo(p_empresa_id)->'productos';
+ if v_rol in ('owner','admin','vendedor') then
+  select coalesce(jsonb_agg(jsonb_build_object('clienteId',m.cliente_id,'tipo',case when m.tipo='haber' and nullif(to_jsonb(m)->>'devolucion_id','') is null then case when v_rol<>'vendedor' or m.created_by=auth.uid() then 'cobranza' else 'cobranza_otro' end when m.tipo='haber' then 'credito_devolucion' else 'debito' end,'centavos',(m.importe*100*(case when m.tipo='haber' then -1 else 1 end))::bigint,'fecha',m.created_at)),'[]') into v_ledger
+  from public.cliente_movimientos_sigo m where m.empresa_id=p_empresa_id and exists(select 1 from mayorista.clientes c where c.empresa_id=p_empresa_id and c.cliente_id=m.cliente_id and c.habilitado and (v_rol<>'vendedor' or c.vendedor_id=v_vendedor));
+  if v_rol in ('owner','admin') then v_stock:=public.leer_stock_mayorista_sigo(p_empresa_id)->'productos';end if;
  end if;
- return jsonb_build_object('empresaId',p_empresa_id,'customers',v_catalogo->'clientes','products',v_catalogo->'productos','invoices',v_facturas,'ledger',v_ledger,'collections','[]'::jsonb,'inventory',v_stock,
- 'sales',coalesce((select jsonb_agg(jsonb_build_object('empresaId',p_empresa_id,'pedidoId',e.pedido_id,'clienteId',e.cliente_id,'vendedorId',e.vendedor_id,'rutaId',e.ruta_id,'fecha',v.created_at,'estado',v.estado,'centavos',(v.total*100)::bigint,'unidades',(select sum(i.cantidad) from public.venta_items_sigo i where i.empresa_id=p_empresa_id and i.venta_id=v.id)))
+ if to_regclass('public.devoluciones_sigo') is not null then
+  select coalesce(jsonb_agg(jsonb_build_object('id',d.id,'eventoId',control.comando_id,'empresaId',p_empresa_id,'pedidoId',e.pedido_id,'clienteId',e.cliente_id,'vendedorId',e.vendedor_id,'rutaId',e.ruta_id,'fecha',d.created_at,'tipo','devolucion','centavos',(d.total*100)::bigint,'unidades',(select sum(i.cantidad) from public.devolucion_items_sigo i where i.empresa_id=p_empresa_id and i.devolucion_id=d.id),'lineas',(select jsonb_agg(jsonb_build_object('productoId',i.producto_id,'unidades',i.cantidad,'centavos',(i.subtotal*100)::bigint)) from public.devolucion_items_sigo i where i.empresa_id=p_empresa_id and i.devolucion_id=d.id))),'[]') into v_devoluciones from public.devoluciones_sigo d join public.sigo_mayorista_entregas_comerciales e on e.empresa_id=d.empresa_id and e.venta_id=d.venta_id left join public.sigo_mayorista_devoluciones_control control on control.empresa_id=d.empresa_id and control.devolucion_id=d.id where d.empresa_id=p_empresa_id and (v_rol<>'vendedor' or e.vendedor_id=v_vendedor);
+  if v_facturas is not null then select v_facturas||coalesce(jsonb_agg(jsonb_build_object('empresaId',p_empresa_id,'pedidoId',e.pedido_id,'clienteId',e.cliente_id,'vendedorId',e.vendedor_id,'rutaId',e.ruta_id,'fecha',a.emitido_at,'estado','confirmada','centavos',(-d.total*100)::bigint)),'[]') into v_facturas from public.arca_comprobantes a join public.sigo_mayorista_devoluciones_control control on control.empresa_id=a.empresa_id and (control.nota_credito->>'comprobanteId')::uuid=a.id join public.devoluciones_sigo d on d.empresa_id=control.empresa_id and d.id=control.devolucion_id join public.sigo_mayorista_entregas_comerciales e on e.empresa_id=control.empresa_id and e.venta_id=control.venta_id where a.empresa_id=p_empresa_id and a.cae~'^[0-9]{14}$' and a.resultado='A' and (v_rol<>'vendedor' or e.vendedor_id=v_vendedor);end if;
+ end if;
+ return jsonb_build_object('empresaId',p_empresa_id,'customers',v_catalogo->'clientes','products',v_catalogo->'productos','personalLedgerAvailable',v_rol='vendedor','confirmedReturns',v_devoluciones,'invoices',v_facturas,'ledger',v_ledger,'collections','[]'::jsonb,'inventory',v_stock,
+ 'sales',coalesce((select jsonb_agg(jsonb_build_object('empresaId',p_empresa_id,'pedidoId',e.pedido_id,'clienteId',e.cliente_id,'vendedorId',e.vendedor_id,'rutaId',e.ruta_id,'fecha',v.created_at,'estado',v.estado,'centavos',((v.total-coalesce((select sum(d.total) from public.devoluciones_sigo d where d.empresa_id=p_empresa_id and d.venta_id=v.id),0))*100)::bigint,'unidades',(select sum(i.cantidad-coalesce((select sum(d.cantidad) from public.devolucion_items_sigo d where d.empresa_id=p_empresa_id and d.venta_item_id=i.id),0)) from public.venta_items_sigo i where i.empresa_id=p_empresa_id and i.venta_id=v.id)))
  from public.sigo_mayorista_entregas_comerciales e join public.ventas_sigo v on v.id=e.venta_id and v.empresa_id=e.empresa_id where e.empresa_id=p_empresa_id and e.estado='confirmado' and (v_rol<>'vendedor' or e.vendedor_id=v_vendedor)),'[]'::jsonb));
 end $$;
 revoke all on function public.leer_metricas_mayorista_sigo(uuid) from public,anon;

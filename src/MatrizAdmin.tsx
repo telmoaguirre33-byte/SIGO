@@ -1,3 +1,4 @@
+import MayoristaMatrizDestino from './modules/mayorista/integration/MayoristaMatrizDestino';
 import { useEffect, useMemo, useState } from "react";
 import {
   validarReadinessSigoAdministracion,
@@ -405,6 +406,7 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
           </div>
 
           {error ? <div className="form-error">{error}</div> : null}
+          <MayoristaMatrizDestino />
           {mayoristaError ? <div className="empty-state" role="status">{mayoristaError}</div> : null}
           {mensaje ? <div className="sigo-matriz-success">{mensaje}</div> : null}
 

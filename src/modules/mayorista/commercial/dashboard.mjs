@@ -35,7 +35,7 @@ export function createDashboardTransaction({query,principal,readSharedMetrics,re
       if(!readSharedData)throw new ApiError(503,'Métricas compartidas no conectadas');
       const shared=await readSharedData(principal);
       if(shared?.empresaId!==E||personal&&shared.sales.some(s=>s.vendedorId!==principal.vendedorId))throw new ApiError(403,'Métricas compartidas fuera del ámbito');
-      for(const key of ['sales','invoices','ledger','collections','inventory','customers','products'])if(shared[key]!==undefined)data[key]=shared[key];
+      for(const key of ['sales','invoices','ledger','collections','inventory','customers','products','confirmedReturns','personalLedgerAvailable'])if(shared[key]!==undefined)data[key]=shared[key];
     }
     return data;
   }
