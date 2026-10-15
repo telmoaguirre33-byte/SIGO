@@ -14,7 +14,7 @@ export async function verifySharedCommerceSQL(pool){
  const ventas=(await readFile(new URL('20260911043000_ventas_caja_operativas.sql',migrations),'utf8')).split('create or replace function public.confirmar_venta_sigo')[0];
  const clientes=(await readFile(new URL('20260911062000_clientes_cuenta_corriente.sql',migrations),'utf8')).split('create or replace function public.registrar_cobro_cliente_sigo(')[0];
  await pool.query(ventas+clientes+`ALTER TABLE public.ventas_sigo ADD request_fingerprint text;
- CREATE TABLE public.ofertas_productos_sigo(empresa_id uuid,producto_id uuid,descuento_porcentaje numeric,fecha_inicio date,fecha_fin date);`);
+ CREATE TABLE public.ofertas_productos_sigo(empresa_id uuid,producto_id uuid,descuento_porcentaje numeric check(descuento_porcentaje>0 and descuento_porcentaje<100),fecha_inicio date,fecha_fin date,check(fecha_fin>=fecha_inicio));`);
  await pool.query(await readFile(new URL('20260911112000_cobros_cuenta_corriente_caja.sql',migrations),'utf8'));
  await pool.query(clean(await readFile(new URL('../../../../docs/mayorista/sql/006_comercio_compartido_NO_APLICAR.sql',import.meta.url),'utf8')));
  await pool.query('INSERT INTO auth.sessions VALUES($1,$2)',[S,U]);await pool.query('INSERT INTO public.productos VALUES($1,$2,$3,10,10,true)',[P,E,'Producto SIGO compartido']);

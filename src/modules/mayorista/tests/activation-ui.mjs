@@ -18,7 +18,7 @@ export async function prepareActivationUi(pool,fixture,backend){
  const js=bundle.outputFiles.find(f=>f.path.endsWith('.js'))??bundle.outputFiles[0];
  return {bundle:js.text,async handle(req,res){
   if(req.url!=='/__activation/rpc')return false;
-  const verified=await backend(new Request(origin+'/me',{headers:{Origin:origin,Authorization:req.headers.authorization??''}}));if(!verified.ok){res.writeHead(401);res.end('{}');return true;}const actor=await verified.json();
+  let actor;try{actor=await fixture.verifyRootToken((req.headers.authorization??'').replace(/^Bearer /,''));}catch{res.writeHead(401);res.end('{}');return true;}
   let raw='';for await(const part of req)raw+=part;if(raw.length>10000)throw Error('Solicitud inválida');const {name,args={}}=JSON.parse(raw),connection=await pool.connect();
   try{await connection.query('BEGIN');await connection.query('SET LOCAL ROLE authenticated');await connection.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[actor.userId]);let value;
    const functions={matriz_leer_destino_predeterminado_mayorista_sigo:['',[]],matriz_configurar_destino_predeterminado_mayorista_sigo:['$1,$2',[args.p_origen,args.p_disponible]],leer_tipo_negocio_sigo:['$1',[args.p_empresa_id]],declarar_tipo_negocio_sigo:['$1,$2',[args.p_empresa_id,args.p_tipo]],obtener_acceso_mayorista_sigo:['$1',[args.p_empresa_id]],matriz_actualizar_modulo_empresa_sigo:['$1,$2,$3',[args.p_empresa_id,args.p_modulo_clave,args.p_habilitado]]};

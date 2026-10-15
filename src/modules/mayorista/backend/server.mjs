@@ -1,14 +1,15 @@
+import {trustedSigoVerifier} from '../security/sigo-bridge.mjs';
 import {startupDiagnostic} from './startup-diagnostic.mjs';
 import pg from 'pg';import {createServer} from 'node:http';import {readFile} from 'node:fs/promises';import {fileURLToPath} from 'node:url';import path from 'node:path';import {createHash} from 'node:crypto';
 import {createIsolatedService} from './service.mjs';import {railwayRuntime,assertInstalledQA} from './railway-runtime.mjs';
 const root=fileURLToPath(new URL('../demo/dist/',import.meta.url));
 /** Límite acotado de memoria. No usa Railway Agent ni servicios auxiliares. */
 export function requestLimiter({now=Date.now,maxKeys=10000}={}){
- const entries=new Map();return async request=>{const key=request.headers.get('x-mayorista-peer')??'local',login=new URL(request.url).pathname==='/auth/login',bucket=(login?'login:':'api:')+key,time=now(),entry=entries.get(bucket);if(entry&&entry.until>time){entry.count++;return entry.count<=(login?30:600);}if(entries.size>=maxKeys){for(const [k,v] of entries)if(v.until<=time)entries.delete(k);if(entries.size>=maxKeys)return false;}entries.set(bucket,{count:1,until:time+60000});return true;};
+ const entries=new Map();return async request=>{const key=request.headers.get('x-mayorista-peer')??'local',login=new URL(request.url).pathname.startsWith('/auth/'),bucket=(login?'login:':'api:')+key,time=now(),entry=entries.get(bucket);if(entry&&entry.until>time){entry.count++;return entry.count<=(login?30:600);}if(entries.size>=maxKeys){for(const [k,v] of entries)if(v.until<=time)entries.delete(k);if(entries.size>=maxKeys)return false;}entries.set(bucket,{count:1,until:time+60000});return true;};
 }
 export async function startRailwayServer(env=process.env){
  const config=railwayRuntime(env),pool=new pg.Pool(config.policy.config);try{await assertInstalledQA(pool);}catch(error){await pool.end();throw error;}
- const handler=createIsolatedService({enabled:true,pool,...config,origin:config.origin,databasePolicy:config.policy,operational:true,inventoryRequired:true,accountsEnabled:true,sharedSourceEnabled:env.MAYORISTA_SHARED_SOURCE_QA==='true',rateLimit:requestLimiter()});
+ const handler=createIsolatedService({enabled:true,pool,...config,origin:config.origin,databasePolicy:config.policy,operational:true,inventoryRequired:true,accountsEnabled:true,sharedSourceEnabled:env.MAYORISTA_SHARED_SOURCE_QA==='true',rateLimit:requestLimiter(),authenticateSigo:trustedSigoVerifier(env)});
  const sw=await readFile(path.join(root,'operational-sw.js'),'utf8'),assetNames=[...sw.matchAll(/'\.\/([^']+)'/g)].map(m=>'/'+m[1]);const allowed=new Set([...assetNames,'/operational-sw.js']);
  const server=createServer(async(req,res)=>{try{
   const url=new URL(req.url,config.origin),headers={'X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin','X-Frame-Options':'DENY','Strict-Transport-Security':'max-age=31536000'};

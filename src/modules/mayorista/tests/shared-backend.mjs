@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {randomUUID,randomBytes,generateKeyPairSync} from 'node:crypto';
 import {createIsolatedService} from '../backend/service.mjs';
-import {passwordRecord} from '../security/isolated-auth.mjs';
+import {createIsolatedAuth,passwordRecord} from '../security/isolated-auth.mjs';
 import {assertSharedFixture} from './shared-fixture-policy.mjs';
 export async function prepareSharedBackendFixture(pool,{origin='https://shared.qa.invalid'}={}){
  await assertSharedFixture(pool);
@@ -15,8 +15,8 @@ export async function prepareSharedBackendFixture(pool,{origin='https://shared.q
  await pool.query((await readFile(new URL('../../../../docs/mayorista/sql/009_precios_compartidos_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/mi,'').replace(/^rollback;$/mi,''));
  await pool.query((await readFile(new URL('../../../../docs/mayorista/sql/010_nota_credito_compartida_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/mi,'').replace(/^rollback;$/mi,''));
  await pool.query((await readFile(new URL('../../../../docs/mayorista/sql/011_destino_predeterminado_NO_APLICAR.sql',import.meta.url),'utf8')).replace(/^begin;$/mi,'').replace(/^rollback;$/mi,''));
- // SOLO el fixture QA usa la identidad nativa: ninguna función Auth de Supabase real se modifica.
- await pool.query('DROP TABLE auth.sessions; CREATE VIEW auth.sessions AS SELECT session_id AS id,user_id FROM mayorista_private.sesiones WHERE NOT revocada AND vence_en>now(); REVOKE ALL ON auth.sessions FROM public,anon,authenticated');
+ // Sesiones Supabase y Mayorista permanecen separadas; ambas se validan sin reemplazar Auth SIGO.
+ assert.equal((await pool.query("SELECT relkind FROM pg_class WHERE oid='auth.sessions'::regclass")).rows[0].relkind,'r');
  await pool.query('INSERT INTO mayorista.empresas VALUES($1,$2,true),($3,$4,true)',[E,'Empresa compartida QA',B,'Empresa minorista QA']);
  await pool.query('INSERT INTO mayorista.vendedores VALUES($1,$2,$3,true)',[E,V,'Vendedor fuente compartida']);
  await pool.query('INSERT INTO mayorista.rutas VALUES($1,$2,$3,$4)',[E,R,'Ruta compartida','Centro']);
@@ -34,11 +34,12 @@ export async function prepareSharedBackendFixture(pool,{origin='https://shared.q
  await pool.query('INSERT INTO mayorista.administracion(empresa_id,revision,datos) VALUES($1,1,$2)',[E,{empresaId:E,revision:1,vendedores:[{id:V,nombre:'Vendedor fuente compartida',zona:'Centro',activo:true}],rutas:[{id:R,nombre:'Ruta compartida',zona:'Centro'}],clientes:[{id:C,nombre:'Cliente SIGO compartido',direccion:'Sin dirección registrada',vendedorId:V,rutaId:R}],objetivos:[]}]);
  const {privateKey,publicKey}=generateKeyPairSync('ed25519');
  const policy={assertPool:p=>{assert.equal(p,pool);}};
- const make=()=>createIsolatedService({enabled:true,pool,privateKey,publicKey,issuer:'shared-qa-acceptance',origin,rateLimit:async()=>true,operational:true,inventoryRequired:true,accountsEnabled:true,databasePolicy:policy,sharedSourceEnabled:true});
- return {E,B,U,V,R,C,P,creds,actors,make,origin};
+ const make=(options={})=>createIsolatedService({enabled:true,pool,privateKey,publicKey,issuer:'shared-qa-acceptance',origin,rateLimit:async()=>true,operational:true,inventoryRequired:true,accountsEnabled:true,databasePolicy:policy,sharedSourceEnabled:true,...options});
+ const rootAuth=createIsolatedAuth({enabled:true,pool,privateKey,publicKey,issuer:'shared-qa-acceptance',databasePolicy:policy,operational:true});
+ return {E,B,U,V,R,C,P,creds,actors,make,origin,verifyRootToken:rootAuth.verify};
 }
 export async function verifySharedBackend(pool){
- const {E,B,U,V,R,C,P,creds,actors,make,origin}=await prepareSharedBackendFixture(pool);
+ const {E,B,U,V,R,C,P,creds,actors,make,origin,verifyRootToken}=await prepareSharedBackendFixture(pool);
  let service=make();
  const call=async(path,{token,body}={})=>{const res=await service(new Request(origin+path,{method:body?'POST':'GET',headers:{Origin:origin,...(token?{Authorization:'Bearer '+token}:{}),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})}));return {status:res.status,body:await res.json()};};
  const tokens={};for(const role of Object.keys(creds)){const result=await call('/auth/login',{body:creds[role]});assert.equal(result.status,200);tokens[role]=result.body.accessToken;assert.equal((await call('/me',{token:tokens[role]})).body.fuenteComercial,'sigo');}
@@ -129,7 +130,7 @@ export async function verifySharedBackend(pool){
  await pool.query('INSERT INTO public.ofertas_productos_sigo VALUES($1,$2,10,current_date-1,current_date+1)',[E,P]);
  const offered=(await call('/catalog',{token:seller})).body;assert.equal(Number(offered.precios.find(p=>p.id===pack).precio),48.6);assert.equal(offered.ofertas.length,1);assert.deepEqual(await call('/orders',{token:seller,body:variantOrder}),variantReceipt);
  const offeredOrder={...variantOrder,pedidoId:randomUUID(),lineas:[{...variantOrder.lineas[0],precioUnitario:8.1}]};assert.equal((await call('/orders',{token:seller,body:offeredOrder})).status,200);
- await pool.query('UPDATE public.ofertas_productos_sigo SET fecha_fin=current_date-2 WHERE empresa_id=$1 AND producto_id=$2',[E,P]);assert.equal((await call('/catalog',{token:seller})).body.ofertas.length,0);assert.deepEqual((await call('/orders',{token:seller,body:offeredOrder})).status,200);assert.equal((await call('/orders',{token:seller,body:{...offeredOrder,pedidoId:randomUUID()}})).status,409);
+ await pool.query('UPDATE public.ofertas_productos_sigo SET fecha_inicio=current_date-4,fecha_fin=current_date-2 WHERE empresa_id=$1 AND producto_id=$2',[E,P]);assert.equal((await call('/catalog',{token:seller})).body.ofertas.length,0);assert.deepEqual((await call('/orders',{token:seller,body:offeredOrder})).status,200);assert.equal((await call('/orders',{token:seller,body:{...offeredOrder,pedidoId:randomUUID()}})).status,409);
  // Sustitución con cotización servidor, faltante original conservado y stock del sustituto una vez.
  const substitute=randomUUID(),subPrice=randomUUID();
  await pool.query('INSERT INTO public.productos(id,empresa_id,nombre,precio_venta,stock_actual,activo) VALUES($1,$2,$3,3,20,true)',[substitute,E,'Sustituto SIGO QA']);
@@ -170,6 +171,13 @@ export async function verifySharedBackend(pool){
  assert.equal((await call('/admin/users/commands',{token:owner,body:permissions})).status,200);
  const reassigned=await call('/auth/login',{body:creds.armador});assert.equal(reassigned.status,200);assert.equal((await call('/me',{token:reassigned.body.accessToken})).body.rol,'chofer');assert.equal((await pool.query('SELECT rol FROM public.empresa_usuarios WHERE empresa_id=$1 AND user_id=$2',[E,actors.armador])).rows[0].rol,'warehouse');
  assert.equal((await call('/admin/users/commands',{token:owner,body:{...permissions,id:randomUUID(),input:{...permissions.input,rol:'armador'}}})).status,200);
+ // Primer ingreso desde SIGO: reutiliza identidad canónica y crea únicamente metadata del módulo.
+ const freshCompany=randomUUID();await pool.query('INSERT INTO public.empresas VALUES($1,true)',[freshCompany]);await pool.query("INSERT INTO public.empresa_usuarios VALUES($1,$2,true,'owner')",[freshCompany,U]);const connection=await pool.connect();try{await connection.query('BEGIN');await connection.query('SET LOCAL ROLE authenticated');await connection.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[U]);await connection.query('SELECT public.declarar_tipo_negocio_sigo($1,$2)',[freshCompany,'mayorista']);await connection.query('COMMIT');}finally{connection.release();}
+ service=make({sourceRevision:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',authenticateSigo:async token=>{const root=await verifyRootToken(token);return {id:root.userId,email:creds.gerencia.email};}});
+ const forgedBridge=await call('/auth/sigo',{token:seller,body:{empresaId:freshCompany,userId:U,rol:'gerencia'}});assert.equal(forgedBridge.status,403);
+ const direct=await call('/auth/sigo',{token:owner,body:{empresaId:freshCompany}});assert.equal(direct.status,200,JSON.stringify(direct));const directPrincipal=(await call('/me',{token:direct.body.accessToken})).body;assert.equal(directPrincipal.userId,U);assert.equal(directPrincipal.rol,'gerencia');assert.equal(directPrincipal.fuenteComercial,'sigo');assert.equal((await call('/catalog',{token:direct.body.accessToken})).body.productos.length,0);assert.equal((await pool.query('SELECT count(*) FROM mayorista.miembros WHERE empresa_id=$1 AND user_id=$2',[freshCompany,U])).rows[0].count,'1');
+ const directAgain=await call('/auth/sigo',{token:owner,body:{empresaId:freshCompany}});assert.equal(directAgain.status,200);assert.equal((await pool.query('SELECT count(*) FROM mayorista.miembros WHERE empresa_id=$1',[freshCompany])).rows[0].count,'1');
+ await pool.query('UPDATE public.sigo_empresa_modulos SET habilitado=false WHERE empresa_id=$1',[freshCompany]);assert.equal((await call('/auth/sigo',{token:owner,body:{empresaId:freshCompany}})).status,403);assert.equal((await call('/auth/logout',{token:direct.body.accessToken,body:{}})).status,200);
  await call('/auth/logout',{token:owner,body:{}});assert.equal((await call('/shared/commerce',{token:owner})).status,401);
  console.log('PASS fuente compartida backend: catálogo SIGO, cinco roles, UUID recuperable, escritores QA bloqueados, crédito y aislamiento');
  return [{name:'Backend conectado a fuente SIGO por empresa; cinco roles y escritores QA bloqueados',status:'pass'}];

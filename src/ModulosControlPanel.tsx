@@ -12,6 +12,7 @@ import {
   type PresetModulo,
 } from "./modulosEmpresa";
 
+const getSigoTokenMayorista=async()=>{const {data}=await supabase.auth.getSession();const token=data.session?.access_token;if(!token)throw Error('Volvé a ingresar a SIGO');return token;};
 const sharedCommerceRpc=async(name:string,args:Record<string,unknown>)=>{
  if(['facturar_entrega_mayorista_sigo','emitir_nota_credito_mayorista_sigo'].includes(name)){
   const {data}=await supabase.auth.getSession();const token=data.session?.access_token;if(!token)throw new Error('Volvé a ingresar a SIGO');
@@ -167,7 +168,7 @@ export default function ModulosControlPanel({ empresa }: { empresa: EmpresaOpera
       {puedeEditar && <MayoristaBusinessType key={empresa.empresa_id} empresaId={empresa.empresa_id} readType={readBusinessType} writeType={writeBusinessType} onChanged={cargar} />}
 
       {modulos.some(m => m.clave === "mayorista_distribuidora" && m.habilitado) &&
-        <MayoristaAdministrarAccess key={empresa.empresa_id} empresaId={empresa.empresa_id} rol={empresa.rol} obtenerConfig={obtenerConfigMayorista} sharedRpc={sharedCommerceRpc} />}
+        <MayoristaAdministrarAccess key={empresa.empresa_id} empresaId={empresa.empresa_id} rol={empresa.rol} obtenerConfig={obtenerConfigMayorista} sharedRpc={sharedCommerceRpc} getSigoToken={getSigoTokenMayorista} />}
 
       {error ? <div className="form-error" role="alert" style={{ marginBottom: 14 }}>{error}</div> : null}
       {mensaje ? <div className="sigo-matriz-success" style={{ marginBottom: 14 }}>{mensaje}</div> : null}

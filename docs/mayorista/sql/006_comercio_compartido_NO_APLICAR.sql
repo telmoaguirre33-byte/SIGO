@@ -48,7 +48,7 @@ declare v_rol text;v_session uuid;perfil record;
 begin
  if auth.uid() is null or coalesce((auth.jwt()->>'is_anonymous')::boolean,false) then raise exception 'AUTH_REQUIRED';end if;
  v_session:=nullif(auth.jwt()->>'session_id','')::uuid;
- if v_session is null or not exists(select 1 from auth.sessions s where s.id=v_session and s.user_id=auth.uid()) then raise exception 'SESSION_REVOKED';end if;
+ if v_session is null or not (exists(select 1 from auth.sessions s where s.id=v_session and s.user_id=auth.uid()) or exists(select 1 from mayorista_private.sesiones s join mayorista_private.usuarios u on u.user_id=s.user_id and u.activo where s.session_id=v_session and s.user_id=auth.uid() and s.empresa_id=p_empresa_id and not s.revocada and s.vence_en>now())) then raise exception 'SESSION_REVOKED';end if;
  if coalesce((auth.jwt()->>'exp')::bigint,0)<=extract(epoch from now()) then raise exception 'SESSION_EXPIRED';end if;
  select eu.rol into v_rol from public.empresa_usuarios eu join public.empresas e on e.id=eu.empresa_id
  where eu.empresa_id=p_empresa_id and eu.user_id=auth.uid() and eu.activo and e.activa and eu.rol in ('owner','admin');

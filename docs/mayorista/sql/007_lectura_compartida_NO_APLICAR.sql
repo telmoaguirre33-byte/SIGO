@@ -19,7 +19,7 @@ language plpgsql stable security definer set search_path='' as $$
 declare v_rol text;perfil record;
 begin
  if auth.uid() is null then raise exception 'AUTH_REQUIRED';end if;
- if not exists(select 1 from auth.sessions s where s.id=nullif(auth.jwt()->>'session_id','')::uuid and s.user_id=auth.uid()) then raise exception 'SESSION_REVOKED';end if;
+ if not (exists(select 1 from auth.sessions s where s.id=nullif(auth.jwt()->>'session_id','')::uuid and s.user_id=auth.uid()) or exists(select 1 from mayorista_private.sesiones s join mayorista_private.usuarios u on u.user_id=s.user_id and u.activo where s.session_id=nullif(auth.jwt()->>'session_id','')::uuid and s.user_id=auth.uid() and s.empresa_id=p_empresa_id and not s.revocada and s.vence_en>now())) then raise exception 'SESSION_REVOKED';end if;
  if coalesce((auth.jwt()->>'exp')::bigint,0)<=extract(epoch from now()) then raise exception 'SESSION_EXPIRED';end if;
  select u.rol into v_rol from public.empresa_usuarios u join public.empresas e on e.id=u.empresa_id and e.activa
  where u.empresa_id=p_empresa_id and u.user_id=auth.uid() and u.activo;

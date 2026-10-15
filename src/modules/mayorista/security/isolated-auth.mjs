@@ -15,6 +15,12 @@ export function createIsolatedAuth({enabled=false,pool,privateKey,publicKey,issu
     const m=await member(claims.sub,claims.empresaId);if(!m)throw new ApiError(403,'Membresía revocada');
     return {userId:claims.sub,sessionId:claims.sid,empresaId:claims.empresaId,vendedorId:m.vendedor_id,rol:m.rol,...(operational?{nombre:session.nombre||m.nombre||session.email,empresaNombre:m.empresaNombre}:{}),expiresAt:claims.exp*1000,permissions:[...(m.rol==='vendedor'||!operational&&m.rol==='administrador'?['pedidos:crear','catalogo:leer']:[]),...(administrative(m)?['admin:gestionar']:[])]};
   };
+  async function issue(userId,empresaId){
+      const sid=randomUUID(),exp=Math.floor(now()/1000)+3600;
+      await pool.query('INSERT INTO mayorista_private.sesiones(session_id,user_id,empresa_id,vence_en) VALUES($1,$2,$3,$4)',[sid,userId,empresaId,new Date(exp*1000)]);
+      const header=encode({alg:'EdDSA',typ:'JWT'}),payload=encode({iss:issuer,aud:'sigo-mayorista-isolated',sub:userId,sid,empresaId,iat:Math.floor(now()/1000),exp});const signing=header+'.'+payload;
+      return {accessToken:signing+'.'+sign(null,Buffer.from(signing),privateKey).toString('base64url'),expiresAt:exp*1000};
+  }
   const api={
     signIn:async({email,password,empresaId})=>{
       gate();if(typeof email!=='string'||email.length>160||typeof password!=='string'||password.length>256||!UUID.test(empresaId))throw new ApiError(401,'Credenciales inválidas');
@@ -22,11 +28,9 @@ export function createIsolatedAuth({enabled=false,pool,privateKey,publicKey,issu
       const candidate=await derive(password,u?.salt??'cuenta-inexistente',64);const expected=Buffer.from(u?.password_hash??'0'.repeat(128),'hex');
       if(!u||expected.length!==candidate.length||!timingSafeEqual(candidate,expected))throw new ApiError(401,'Credenciales inválidas');
       if(!await member(u.user_id,empresaId))throw new ApiError(403,'Empresa no autorizada');
-      const sid=randomUUID(),exp=Math.floor(now()/1000)+3600;
-      await pool.query('INSERT INTO mayorista_private.sesiones(session_id,user_id,empresa_id,vence_en) VALUES($1,$2,$3,$4)',[sid,u.user_id,empresaId,new Date(exp*1000)]);
-      const header=encode({alg:'EdDSA',typ:'JWT'}),payload=encode({iss:issuer,aud:'sigo-mayorista-isolated',sub:u.user_id,sid,empresaId,iat:Math.floor(now()/1000),exp});const signing=header+'.'+payload;
-      return {accessToken:signing+'.'+sign(null,Buffer.from(signing),privateKey).toString('base64url'),expiresAt:exp*1000};
+      return issue(u.user_id,empresaId);
     },
+    signInTrustedIdentity:async(userId,empresaId)=>{gate();if(!UUID.test(userId)||!UUID.test(empresaId)||!await member(userId,empresaId)||!(await pool.query('SELECT user_id FROM mayorista_private.usuarios WHERE user_id=$1 AND activo',[userId])).rows.length)throw new ApiError(403,'Identidad no autorizada');return issue(userId,empresaId);},
     verify:async token=>{
       gate();if(typeof token!=='string'||token.length>16000)throw new ApiError(401,'Token inválido');
       const parts=token.split('.');let h,c;try{if(parts.length!==3||!verify(null,Buffer.from(parts[0]+'.'+parts[1]),publicKey,Buffer.from(parts[2],'base64url')))throw new Error();h=JSON.parse(Buffer.from(parts[0],'base64url'));c=JSON.parse(Buffer.from(parts[1],'base64url'));}catch{throw new ApiError(401,'Token inválido');}
