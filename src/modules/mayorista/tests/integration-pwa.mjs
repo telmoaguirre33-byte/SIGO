@@ -16,7 +16,7 @@ test('no se transfieren tokens o claves en URLs',()=>{for(const key of ['access_
 test('rollback del flag retira los destinos',()=>{const result=resolveMayoristaAccess(context,{...config,habilitado:false});assert.equal(result.enabled,false);assert.equal(result.adminUrl,undefined);assert.equal(result.sellerUrl,undefined);});
 test('Administrar conserva exactamente el código previo salvo acceso nuevo',async()=>{
   const text=await readFile(new URL('../../../ModulosControlPanel.tsx',import.meta.url),'utf8');
-  const cleaned=text.replace(/^import MayoristaBusinessType.*\n/m,'').replace(/^import \{createCompanyConfigProvider\}.*\n/m,'').replace(/^import \{supabase\}.*\n/m,'').replace(/const (?:getSigoTokenMayorista|sharedCommerceRpc|obtenerConfigMayorista)=[\s\S]*?(?=const PRESETS:)/,'').replace(/      \{puedeEditar && <MayoristaBusinessType[^\n]*\n\n/m,'').replace(/      \{modulos\.some\(m =>[\s\S]*?obtenerConfig=\{obtenerConfigMayorista\}(?: sharedRpc=\{sharedCommerceRpc\})?(?: getSigoToken=\{getSigoTokenMayorista\})? \/>\}\n\n/m,'');
+  const cleaned=text.replace(/^import MayoristaBusinessType.*\n/m,'').replace(/^import \{previewQaConfig\}.*\n/m,'').replace(/^import \{createCompanyConfigProvider\}.*\n/m,'').replace(/^import \{supabase\}.*\n/m,'').replace(/const (?:getSigoTokenMayorista|sharedCommerceRpc|obtenerConfigMayorista)=[\s\S]*?(?=const PRESETS:)/,'').replace(/      \{puedeEditar && <MayoristaBusinessType[^\n]*\n\n/m,'').replace(/      \{modulos\.some\(m =>[\s\S]*?obtenerConfig=\{obtenerConfigMayorista\}(?: sharedRpc=\{sharedCommerceRpc\})?(?: getSigoToken=\{getSigoTokenMayorista\})? \/>\}\n\n/m,'');
   const old=cleaned.replace('import MayoristaAdministrarAccess from "./modules/mayorista/integration/MayoristaAdministrarAccess";\n','').replace('      <MayoristaAdministrarAccess key={empresa.empresa_id} empresaId={empresa.empresa_id} rol={empresa.rol} />\n\n','').trimEnd();
   assert.equal(createHash('sha256').update(old).digest('hex'),'f23b7dd6fc208564c9d9fb21ba13efb38241a54e3ce6e4c4f26870db7119f695');
 });
@@ -73,4 +73,14 @@ test('fallo o revocación al leer flag nunca habilita por caché/destino',async(
 test('destino de otra empresa no habilita conexión ni hereda permisos',async()=>{
  const read=createCompanyConfigProvider(async()=>({empresa_id:'empresa-b',habilitado:true,aplicacion_disponible:true}),async()=>[{clave:MAYORISTA_FEATURE,habilitado:true}]);
  const value=await read('empresa-a',new AbortController().signal);assert.equal(isMayoristaEnabled(context,value),true);assert.equal(resolveMayoristaAccess(context,value).enabled,false);
+});
+
+import {previewQaConfig} from '../demo/dist/integration/preview-qa-config.js';
+test('Preview QA requiere opt-in y empresa exacta; no altera empresas ni dominios normales',()=>{
+ const env={VITE_MAYORISTA_QA_MODE:'isolated',VITE_MAYORISTA_QA_EMPRESA_ID:'empresa-a',VITE_MAYORISTA_QA_API_ORIGIN:'https://api.qa.invalid'};
+ assert.equal(previewQaConfig('empresa-a',undefined,'https://preview.vercel.app'),null);
+ assert.equal(previewQaConfig('empresa-b',env,'https://preview.vercel.app'),null);
+ assert.equal(previewQaConfig('empresa-a',env,'https://sigo.example.com'),null);
+ assert.equal(previewQaConfig('empresa-a',env,'https://preview.vercel.app').qa_aislado,true);
+ assert.equal(previewQaConfig('empresa-a',{...env,VITE_MAYORISTA_QA_API_ORIGIN:'http://api.qa.invalid'},'https://preview.vercel.app'),null);
 });

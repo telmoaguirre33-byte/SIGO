@@ -1,5 +1,6 @@
 import MayoristaBusinessType, {type BusinessType} from "./modules/mayorista/integration/MayoristaBusinessType";
 import MayoristaAdministrarAccess from "./modules/mayorista/integration/MayoristaAdministrarAccess";
+import {previewQaConfig} from "./modules/mayorista/integration/preview-qa-config";
 import {createCompanyConfigProvider} from "./modules/mayorista/integration/company-config";
 import {supabase} from "./supabase";
 import { useEffect, useMemo, useState } from "react";
@@ -24,6 +25,7 @@ const sharedCommerceRpc=async(name:string,args:Record<string,unknown>)=>{
 };
 
 const obtenerConfigMayorista=createCompanyConfigProvider(async(empresaId,signal)=>{
+  const qa=previewQaConfig(empresaId,import.meta.env,location.origin);if(qa)return qa;
   const {data,error}=await supabase.rpc('obtener_acceso_mayorista_sigo',{p_empresa_id:empresaId}).abortSignal(signal);
   if(error)throw new Error('No se pudo verificar Mayorista para esta empresa.');
   return data;

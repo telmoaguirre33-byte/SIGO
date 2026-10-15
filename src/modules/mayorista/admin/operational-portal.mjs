@@ -9,11 +9,11 @@ const field=(name,label,type='text',value='')=>`<label>${label}<input name="${na
 const choose=(name,label,items)=>`<label>${label}<select name="${name}">${items.map(([v,l])=>`<option value="${esc(v)}">${esc(l)}</option>`).join('')}</select></label>`;
 const form=(name,title,body)=>`<form data-form="${name}" class="card"><h2>${title}</h2>${body}<button>Guardar</button></form>`;
 /** Portal operativo: autenticación real y lectura/escritura exclusivamente por API. */
-export function mountOperationalPortal(app,{enabled=false,baseUrl,integrated=false,expectedEmpresaId,sharedCommerce,initialPage='panel',getSigoToken}={}){
+export function mountOperationalPortal(app,{enabled=false,baseUrl,integrated=false,expectedEmpresaId,sharedCommerce,initialPage='panel',getSigoToken,qaAislado=false}={}){
  if(!enabled){app.textContent='Mayorista / Distribuidora pendiente de habilitación.';return;}
  if(!integrated&&new URL(baseUrl).origin!==location.origin)throw new Error('Origen independiente inválido');
- const client=createMayoristaClient({enabled:true,baseUrl});let identity,tab=initialPage,data={},message='',busy=false,sharedResults={},profile=null,collectionPermission=null,filters={periodo:'mes'};
- const hostCommerce=sharedCommerce;
+ const client=createMayoristaClient({enabled:true,baseUrl,qaAislado});let identity,tab=initialPage,data={},message='',busy=false,sharedResults={},profile=null,collectionPermission=null,filters={periodo:'mes'};
+ const hostCommerce=qaAislado?undefined:sharedCommerce;sharedCommerce=hostCommerce;
  const pendingIds=new Map();let operationKey='',operationSlot=0;
  const newId=()=>{if(!operationKey)return crypto.randomUUID();const key=operationKey+':'+operationSlot++;if(!pendingIds.has(key))pendingIds.set(key,crypto.randomUUID());return pendingIds.get(key);};
  const beginOperation=key=>{operationKey=key;operationSlot=0;};
@@ -22,7 +22,7 @@ export function mountOperationalPortal(app,{enabled=false,baseUrl,integrated=fal
  const options=items=>items.map(i=>[i.id,i.nombre??i.email??i.id]);
  const loadStep=async(cargaId,tipo,input={})=>{const current=data.assigned.cargas.find(c=>c.cargaId===cargaId);await client.loadCommand({id:newId(),empresaId:identity.empresaId,version:current.version,tipo,input:{cargaId,...input}});};
  const legacy=async(tipo,input)=>{data.loads=await client.cargasCommand({id:newId(),empresaId:identity.empresaId,version:data.loads.revision,tipo,input});};
- async function acceptIdentity(verified){if(expectedEmpresaId&&verified.empresaId!==expectedEmpresaId){await client.logout();throw Error('Ingresá con la empresa activa de SIGO');}if(!adminRole(verified.rol)&&!['armador','chofer'].includes(verified.rol)){await client.logout();throw Error('Usá la App Vendedor para este acceso');}identity=verified;
+ async function acceptIdentity(verified){const qaMatch=qaAislado&&verified.qaAislado===true&&verified.sigoEmpresaId===expectedEmpresaId;if(expectedEmpresaId&&verified.empresaId!==expectedEmpresaId&&!qaMatch){await client.logout();throw Error('Ingresá con la empresa activa de SIGO');}if(qaAislado&&!qaMatch){await client.logout();throw Error('El backend no confirmó el vínculo QA aislado');}if(!adminRole(verified.rol)&&!['armador','chofer'].includes(verified.rol)){await client.logout();throw Error('Usá la App Vendedor para este acceso');}identity=verified;
    if(identity.fuenteComercial==='sigo')sharedCommerce=createSharedCommerce({empresaId:identity.empresaId,sourceMode:'sigo',rpc:async(name,a)=>{if(name==='leer_comercio_mayorista_sigo')return client.sharedState();const tipo={registrar_entrega_mayorista_sigo:'entrega',autorizar_credito_mayorista_sigo:'credito',registrar_cobro_mayorista_sigo:'cobro'}[name];if(!tipo)throw new Error('Operación compartida inválida');return client.sharedCommand({id:a.p_comando_id,empresaId:a.p_empresa_id,tipo,...(tipo==='entrega'?{datos:a.p_datos}:tipo==='credito'?{aprobar:a.p_aprobar,motivo:a.p_motivo}:{datos:{clienteId:a.p_cliente_id,pedidoId:a.p_pedido_id,centavos:a.p_centavos,medio:a.p_medio,comprobante:a.p_comprobante}})});}});
    tab=allowedPages(identity.rol).includes(tab)?tab:allowedPages(identity.rol)[0];
  }

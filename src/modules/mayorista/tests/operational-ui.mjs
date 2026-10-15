@@ -1,3 +1,4 @@
+import {createQaSigoLink} from '../security/qa-sigo-link.mjs';
 import {verifySharedCreditNotes} from './shared-credit-notes.mjs';
 /** Chromium → HTTPS → backend real → PostgreSQL CI. Sin conexión a datos productivos. */
 import {createServer} from 'node:https';
@@ -16,7 +17,7 @@ import {prepareActivationUi} from './activation-ui.mjs';
 import {verifySharedFiscal} from './shared-fiscal.mjs';
 const origin='https://localhost:4178',base=new pg.Pool({host:'127.0.0.1',port:55471,database:'mayorista_qa',user:'postgres',password:'mayorista_ci_only',max:2});
 const pool=acceptanceNamespace(new pg.Pool({...base.options,password:base.options.password,max:2}),'mayorista_acceptance_000000000002');
-let server,browser,socket,fixture,invoiceCall,creditNoteCall,created=false,seq=0;const pending=new Map(),errors=[],results=[],delay=ms=>new Promise(r=>setTimeout(r,ms));
+let server,browser,socket,fixture,invoiceCall,creditNoteCall,qaBackend,created=false,seq=0;const pending=new Map(),errors=[],results=[],delay=ms=>new Promise(r=>setTimeout(r,ms));
 const profile=await mkdtemp('/tmp/mayorista-ui-');
 function command(method,params={}){return new Promise((resolve,reject)=>{const id=++seq,timer=setTimeout(()=>{pending.delete(id);reject(Error('Timeout UI '+method));},20000);pending.set(id,{resolve:v=>{clearTimeout(timer);resolve(v);},reject:e=>{clearTimeout(timer);reject(e);}});socket.send(JSON.stringify({id,method,params}));});}
 async function evaluate(expression){const r=await command('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description??r.exceptionDetails.text);return r.result.value;}
@@ -44,7 +45,7 @@ try{
    if(pathname==='/'||/\.(html|css|mjs|js|png|webmanifest)$/.test(pathname)){
     const file=pathname==='/'?'portal.html':pathname.slice(1);if(file.includes('..'))throw Error('Ruta inválida');const body=await readFile(new URL('../demo/dist/'+file,import.meta.url));res.writeHead(200,{'Content-Type':/\.m?js$/.test(file)?'text/javascript':file.endsWith('.css')?'text/css':'text/html'});res.end(body);return;
    }
-   const chunks=[];for await(const c of req)chunks.push(c);const body=Buffer.concat(chunks);const response=await backend(new Request(origin+req.url,{method:req.method,headers:{...req.headers,origin},...(['GET','HEAD'].includes(req.method)?{}:{body})}));res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()));
+   const chunks=[];for await(const c of req)chunks.push(c);const body=Buffer.concat(chunks);const response=await (qaBackend??backend)(new Request(origin+req.url,{method:req.method,headers:{...req.headers,origin},...(['GET','HEAD'].includes(req.method)?{}:{body})}));res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()));
   }catch(error){res.writeHead(500,{'Content-Type':'application/json'});res.end(JSON.stringify({error:error.message}));}
  });await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(4178,'127.0.0.1',resolve);});
  browser=spawn(process.env.CHROMIUM_PATH??'/usr/bin/chromium',['--headless','--no-sandbox','--disable-dev-shm-usage','--ignore-certificate-errors','--remote-debugging-port=9226','--user-data-dir='+profile,'about:blank'],{stdio:['ignore','ignore','ignore']});
@@ -164,6 +165,20 @@ try{
  assert.equal((await pool.query('SELECT count(*) FROM public.clientes_sigo')).rows[0].count,customersBefore);
  await passed('Desactivar retira accesos desktop/móvil y conserva datos; lectura canónica compartida con Matriz');
  await command('Emulation.clearDeviceMetricsOverride');
+ // Vínculo de identidad externa a empresa QA distinta: los diez formularios usan PostgreSQL QA.
+ await evaluate('window.activationModule.matrizOverride(true)');await wait("!!document.querySelector('.mayorista-menu-section')");
+ await pool.query('CREATE TABLE mayorista_private.qa_interactive_scope(id boolean primary key,external_empresa_id uuid,qa_empresa_id uuid);CREATE TABLE mayorista_private.qa_link_audit(external_empresa_id uuid,qa_empresa_id uuid,user_id uuid,rol text)');
+ await pool.query('INSERT INTO mayorista_private.qa_interactive_scope VALUES(true,$1,$2)',[fixture.B,fixture.E]);
+ const rootResponse=await backend(new Request(origin+'/auth/login',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({...fixture.creds.gerencia,empresaId:fixture.B})}));assert.equal(rootResponse.status,200);const rootToken=(await rootResponse.json()).accessToken;
+ const qaLink=createQaSigoLink({pool,externalEmpresaId:fixture.B,qaEmpresaId:fixture.E,verifyRemote:async(token,companyId)=>{const actor=await fixture.verifyRootToken(token);assert.equal(actor.empresaId,companyId);const membership=(await pool.query('SELECT rol FROM public.empresa_usuarios WHERE empresa_id=$1 AND user_id=$2 AND activo',[companyId,actor.userId])).rows[0];assert.equal((await pool.query('SELECT habilitado FROM public.sigo_empresa_modulos WHERE empresa_id=$1',[companyId])).rows[0].habilitado,true);return {user:{id:actor.userId,email:fixture.creds.gerencia.email},company:{empresa_id:companyId,rol:membership.rol}};}});
+ qaBackend=fixture.make({qaSigoLink:qaLink});
+ await evaluate(`(async()=>{window.activationModule.unmountActivation();document.body.innerHTML='<main id="qa-ui" class="sigo-mayorista-workspace"></main>';const {mountOperationalPortal}=await import('./admin/operational-portal.mjs');window.portal=mountOperationalPortal(document.querySelector('#qa-ui'),{enabled:true,baseUrl:location.origin+'/',integrated:true,qaAislado:true,sharedCommerce:{invoice:()=>{throw Error('Transporte productivo prohibido');},creditNote:()=>{throw Error('Transporte productivo prohibido');}},expectedEmpresaId:${JSON.stringify(fixture.B)},getSigoToken:async()=>${JSON.stringify(rootToken)}});})()`);
+ await wait("!!document.querySelector('nav [data-tab=panel]')&&!document.querySelector('[aria-busy=true]')");
+ for(const id of ['panel','vendedores','objetivos','pedidos','administracion','deposito','cargas','reparto','entregas','rendiciones']){await evaluate(`window.portal.showPage(${JSON.stringify(id)})`);await wait("!document.querySelector('[aria-busy=true]')");assert.equal(await evaluate(`document.querySelector('nav [aria-current=page]').dataset.tab`),id);assert.equal(await evaluate("document.body.innerText.includes('Falta configurar')"),false);}
+ await evaluate("window.portal.showPage('vendedores')");await wait("!!document.querySelector('[data-form=seller]')");await submit('[data-form=seller]',{id:'new',nombre:'Vendedor vínculo QA persistente',zona:'QA aislado',activo:'true'});await wait("document.body.innerText.includes('Vendedor vínculo QA persistente')");
+ assert.equal((await pool.query("SELECT count(*) FROM mayorista.vendedores WHERE empresa_id=$1 AND nombre=$2",[fixture.E,'Vendedor vínculo QA persistente'])).rows[0].count,'1');
+ assert.equal((await pool.query("SELECT count(*) FROM mayorista.vendedores WHERE empresa_id=$1 AND nombre=$2",[fixture.B,'Vendedor vínculo QA persistente'])).rows[0].count,'0');
+ await passed('Sesión SIGO externa → identidad QA distinta: diez páginas funcionales y alta persistida solo en QA');
  assert.deepEqual(errors,[]);await mkdir(new URL('./artifacts/',import.meta.url),{recursive:true});await writeFile(new URL('./artifacts/operational-ui.json',import.meta.url),JSON.stringify({scope:'Chromium HTTPS y PostgreSQL CI; WSFE simulado',results},null,2));console.log(results.length+' controles UI operativos aprobados. No ejecución contra Railway ni empresas productivas.');
 }finally{
  if(socket?.readyState===1)await command('Browser.close').catch(()=>{});socket?.close();browser?.kill('SIGTERM');if(server)await new Promise(r=>server.close(r));await pool.end();if(created)for(const schema of Object.values(pool.schemas))await base.query('DROP SCHEMA '+schema+' CASCADE');await base.end();await rm(profile,{recursive:true,force:true});

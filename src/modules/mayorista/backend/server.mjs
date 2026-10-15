@@ -1,4 +1,5 @@
 import {trustedSigoVerifier} from '../security/sigo-bridge.mjs';
+import {interactiveQa} from './interactive-qa.mjs';
 import {startupDiagnostic} from './startup-diagnostic.mjs';
 import pg from 'pg';import {createServer} from 'node:http';import {readFile} from 'node:fs/promises';import {fileURLToPath} from 'node:url';import path from 'node:path';import {createHash} from 'node:crypto';
 import {createIsolatedService} from './service.mjs';import {railwayRuntime,assertInstalledQA} from './railway-runtime.mjs';
@@ -9,7 +10,8 @@ export function requestLimiter({now=Date.now,maxKeys=10000}={}){
 }
 export async function startRailwayServer(env=process.env){
  const config=railwayRuntime(env),pool=new pg.Pool(config.policy.config);try{await assertInstalledQA(pool);}catch(error){await pool.end();throw error;}
- const handler=createIsolatedService({enabled:true,pool,...config,origin:config.origin,databasePolicy:config.policy,operational:true,inventoryRequired:true,accountsEnabled:true,sharedSourceEnabled:env.MAYORISTA_SHARED_SOURCE_QA==='true',rateLimit:requestLimiter(),authenticateSigo:trustedSigoVerifier(env)});
+ const interactive=await interactiveQa(env);
+ const handler=createIsolatedService({enabled:true,pool:interactive?.pool??pool,...config,origin:config.origin,databasePolicy:config.policy,operational:true,inventoryRequired:true,accountsEnabled:true,sharedSourceEnabled:env.MAYORISTA_SHARED_SOURCE_QA==='true',rateLimit:requestLimiter(),authenticateSigo:trustedSigoVerifier(env),qaSigoLink:interactive?.link});
  const sw=await readFile(path.join(root,'operational-sw.js'),'utf8'),assetNames=[...sw.matchAll(/'\.\/([^']+)'/g)].map(m=>'/'+m[1]);const allowed=new Set([...assetNames,'/operational-sw.js']);
  const server=createServer(async(req,res)=>{try{
   const url=new URL(req.url,config.origin),headers={'X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin','X-Frame-Options':'DENY','Strict-Transport-Security':'max-age=31536000'};
@@ -17,7 +19,7 @@ export async function startRailwayServer(env=process.env){
   if(url.pathname==='/readiness'&&req.method==='GET'){
    const installed=(await pool.query("SELECT to_regclass('mayorista_private.acceptance_runs') AS runs")).rows[0]?.runs;
    const report=installed?(await pool.query('SELECT report FROM mayorista_private.acceptance_runs WHERE revision=$1',[env.RAILWAY_GIT_COMMIT_SHA])).rows[0]?.report:null;
-   res.writeHead(report?200:503,{...headers,'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(report??{status:'acceptance_pending',productionActivation:false}));return;
+   res.writeHead(report?200:503,{...headers,'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(report?{...report,interactiveQa:interactive?{enabled:true,empresaSigo:interactive.externalEmpresaId,empresaQA:interactive.qaEmpresaId,source:'synthetic_railway_qa_only'}:{enabled:false}}:{status:'acceptance_pending',productionActivation:false}));return;
   }
   if(url.pathname==='/'&&req.method==='GET'){res.writeHead(302,{...headers,Location:'/portal.html'});res.end();return;}
   if(req.method==='GET'&&allowed.has(url.pathname)){
@@ -30,6 +32,6 @@ export async function startRailwayServer(env=process.env){
   const ownHeaders=new Headers(req.headers);ownHeaders.set('x-mayorista-peer',req.socket.remoteAddress??'unknown');const response=await handler(new Request(url,{method:req.method,headers:ownHeaders,...(['GET','HEAD'].includes(req.method)?{}:{body:req,duplex:'half'})}));res.writeHead(response.status,{...headers,...Object.fromEntries(response.headers)});res.end(Buffer.from(await response.arrayBuffer()));
  }catch{res.writeHead(503,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end('{"error":"Servicio no disponible"}');}});
  const port=Number(env.PORT??8080);if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Puerto inválido');await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'0.0.0.0',resolve)});
- return {server,pool,close:async()=>{await new Promise(resolve=>server.close(resolve));await pool.end();}};
+ return {server,pool,close:async()=>{await new Promise(resolve=>server.close(resolve));if(interactive)await interactive.pool.end();await pool.end();}};
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))startRailwayServer().then(app=>{console.log('Mayorista QA iniciado');for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>app.close().then(()=>process.exit(0)));}).catch(error=>{console.error(JSON.stringify(startupDiagnostic(error,process.env)));process.exitCode=1;});

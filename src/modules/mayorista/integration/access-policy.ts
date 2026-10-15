@@ -7,6 +7,7 @@ export type CompanyAccessConfig = {
   origenAprobado: string;
   administracionUrl: string;
   vendedorUrl: string;
+  qaAislado?: boolean;
 };
 export type AccessDecision = { enabled: boolean; reason: string; adminUrl?: string; sellerUrl?: string };
 

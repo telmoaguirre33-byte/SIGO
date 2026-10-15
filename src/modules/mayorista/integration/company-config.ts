@@ -9,6 +9,7 @@ export function createCompanyConfigProvider(readConfig:(empresaId:string,signal:
   const row=(Array.isArray(data)?data[0]:data) as Record<string,unknown>|null;
   if(signal.aborted||(!row&&enabled!==true))return null;
   const config:CompanyAccessConfig={empresaId:enabled===true?empresaId:String(row?.empresa_id??''),habilitado:enabled??row?.habilitado===true,aplicacionDisponible:row?.empresa_id===empresaId&&row.aplicacion_disponible===true,origenAprobado:String(row?.origen_aprobado??''),administracionUrl:String(row?.administracion_url??''),vendedorUrl:String(row?.vendedor_url??'')};
+  if(row?.qa_aislado===true)config.qaAislado=true;
   if(!isMayoristaEnabled({empresaId,rol:'owner'},config))return null;
   return config;
  };
