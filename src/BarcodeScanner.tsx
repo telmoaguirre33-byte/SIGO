@@ -207,6 +207,7 @@ export default function BarcodeScanner({
   }
 
   async function resolveCode(raw: string, source: ScanSource = "manual") {
+    const normalized = normalizeBarcode(raw);
     // Enter/Tab de pistola o teclado cierra siempre la lectura actual antes de resolverla.
     // Evita que una segunda lectura se concatene aunque el callback de búsqueda manual la intercepte.
     if (source !== "camera") {
@@ -214,9 +215,8 @@ export default function BarcodeScanner({
       setCode("");
       callbacksRef.current.onQueryChange?.("");
       focusScanner();
-      if (source === "manual" && callbacksRef.current.onManualQuery?.(raw)) return;
+      if (source === "manual" && !/^\d+$/.test(normalized) && callbacksRef.current.onManualQuery?.(raw)) return;
     }
-    const normalized = normalizeBarcode(raw);
     if (!normalized) return;
     const empresaOperacion = empresaId;
     const actionOperacion = action;
@@ -413,15 +413,17 @@ export default function BarcodeScanner({
       const active = document.activeElement as HTMLElement | null;
       const isScannerInput = active === inputRef.current;
       const isEditable = active?.tagName === "INPUT" || active?.tagName === "TEXTAREA" || active?.tagName === "SELECT" || active?.isContentEditable;
-      if (isEditable && !isScannerInput) return;
-      if (isScannerInput) return;
+      if (isEditable || isScannerInput) {
+        wedgeBufferRef.current = "";
+        return;
+      }
 
       // Enter/Tab delimita el código. Una pausa entre teclas no puede descartar su prefijo.
 
       if (isLikelyScannerSubmit(event.key)) {
         const buffered = normalizeBarcode(wedgeBufferRef.current);
         wedgeBufferRef.current = "";
-        if (buffered.length >= 4) {
+        if (buffered) {
           event.preventDefault();
           void resolveCode(buffered, "wedge");
         }
@@ -498,7 +500,7 @@ export default function BarcodeScanner({
           placeholder="Código de barras, interno o nombre del producto"
           aria-label="Código de barras, código interno o nombre del producto"
         />
-        <button className="admin-button" type="button" disabled={busy || !code.trim()} onClick={() => void resolveCode(code, "manual")}>
+        <button className="admin-button" type="button" disabled={busy || !code.trim()} onClick={() => void resolveCode(inputRef.current?.value ?? code, "manual")}>
           {busy ? "Procesando…" : "Buscar"}
         </button>
         {cameraOpen ? (

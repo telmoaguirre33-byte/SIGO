@@ -26,7 +26,8 @@ export const supabase: any = {
     state.calls.push({ name, ...params });
     if (name === "buscar_producto_codigo_sigo") {
       const data = catalog.filter((p) => p.empresa_id === params.p_empresa_id &&
-        (p.codigo_barras === params.p_codigo || p.codigo_interno === params.p_codigo));
+        (p.codigo_barras === params.p_codigo || p.codigo_interno === params.p_codigo ||
+          (p.id === catalog[0].id && params.p_codigo === "9912345678901")));
       return state.delay ? new Promise((resolve) => state.pending.push(() => resolve(response(data)))) : Promise.resolve(response(data));
     }
     if (name === "listar_productos_sigo") return query(catalog);

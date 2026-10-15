@@ -70,6 +70,8 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   const [idempotencyKey, setIdempotencyKey] = useState(nuevaClaveVenta);
   const empresaActivaRef = useRef(empresaId);
   const confirmacionEnCursoRef = useRef<object | null>(null);
+  const ultimaVentaTicketRef = useRef(ultimaVentaTicket);
+  ultimaVentaTicketRef.current = ultimaVentaTicket;
   const buscarRef = useRef<HTMLInputElement | null>(null);
   const productosEncontradosRef = useRef<ProductoSigo[]>([]);
   const productoSeleccionadoIdRef = useRef<string|null>(null);
@@ -477,7 +479,8 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       if (event.key === "F10") void confirmar(true);
       if (event.key === "F11") {
         event.stopPropagation();
-        if (ultimaVentaTicket) window.dispatchEvent(new CustomEvent("sigo:arca:venta", { detail: { empresaId, ventaId: ultimaVentaTicket } }));
+        const ventaId = ultimaVentaTicketRef.current;
+        if (ventaId) window.dispatchEvent(new CustomEvent("sigo:arca:venta", { detail: { empresaId, ventaId } }));
         else setError("Primero confirmá la venta para emitir la factura fiscal.");
       }
       if (event.key === "F12") {

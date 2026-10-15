@@ -81,6 +81,18 @@ for (const section of ["Productos", "Stock", "Ventas"]) {
     await expect(page.locator("tbody")).toContainText("CÓDIGO CON CEROS");
     await expect(input(page)).toHaveValue("");
   });
+
+  test(`${section}: código alternativo por pistola y botón Buscar usa el mismo servicio`, async ({ page }) => {
+    await open(page, section);
+    await scan(page, "9912345678901", "Tab");
+    await expect(page.locator("tbody")).toContainText(products[0].name);
+    await input(page).fill("9912345678901");
+    await page.getByRole("button", { name: "Buscar", exact: true }).click();
+    await expect(input(page)).toHaveValue("");
+    await expect(page.locator("tbody")).toContainText(products[0].name);
+    const codes = await page.evaluate(() => window.minoristaTest.calls.filter((c) => c.name === "buscar_producto_codigo_sigo").map((c) => c.p_codigo));
+    expect(codes).toEqual(["9912345678901", "9912345678901"]);
+  });
 }
 
 test("Stock: respuesta tardía preserva prefijo y resultado, cola en orden", async ({ page }) => {
@@ -121,5 +133,5 @@ test("Caja: F2, selección manual con flechas y Escape, F9 único y F11 sobre ve
   await page.evaluate(() => window.minoristaTest.release());
   await expect(page.getByText("Venta confirmada", { exact: true })).toBeVisible();
   await page.keyboard.press("F11");
-  expect(await page.evaluate(() => window.minoristaTest.fiscalEvents)).toEqual([{ empresaId: "00000000-0000-4000-8000-000000000001", ventaId: "00000000-0000-4000-8000-000000000099" }]);
+  await expect.poll(() => page.evaluate(() => window.minoristaTest.fiscalEvents)).toEqual([{ empresaId: "00000000-0000-4000-8000-000000000001", ventaId: "00000000-0000-4000-8000-000000000099" }]);
 });
