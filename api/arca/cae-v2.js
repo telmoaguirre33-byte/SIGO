@@ -56,7 +56,7 @@ function fechaSql(value) {
   return /^\d{8}$/.test(clean) ? `${clean.slice(0, 4)}-${clean.slice(4, 6)}-${clean.slice(6, 8)}` : null;
 }
 
-async function rest(sesion, path, init = {}) {
+export async function rest(sesion, path, init = {}) {
   const response = await fetch(`${sesion.url}/rest/v1/${path}`, {
     ...init,
     headers: {
@@ -86,7 +86,7 @@ async function permiso(sesion, empresaId, nombre) {
   return response.ok && (await response.json().catch(() => false)) === true;
 }
 
-async function sesionUsuario(req, empresaId) {
+export async function sesionUsuario(req, empresaId) {
   const { url, anonKey } = env();
   const auth = String(req.headers.authorization || "");
   if (!url || !anonKey || !auth.startsWith("Bearer ")) return null;
@@ -162,7 +162,7 @@ async function ultimoAutorizado(sesion, ambiente, ticket, cuit, puntoVenta, tipo
   return numero;
 }
 
-async function consultarComprobante(sesion, ambiente, ticket, cuit, puntoVenta, tipoCbte, numeroCbte) {
+export async function consultarComprobante(sesion, ambiente, ticket, cuit, puntoVenta, tipoCbte, numeroCbte) {
   const { body, errors } = await soapBridge(
     sesion,
     ambiente,
@@ -181,6 +181,12 @@ async function consultarComprobante(sesion, ambiente, ticket, cuit, puntoVenta, 
     cae,
     caeVencimiento: fechaSql(extraer(result, "FchVto")),
     resultado: extraer(result, "Resultado") || "A",
+    fecha: fechaSql(extraer(result, "CbteFch")),
+    importe: Number(extraer(result, "ImpTotal")),
+    tipoDocRec: Number(extraer(result, "DocTipo")),
+    nroDocRec: digits(extraer(result, "DocNro")),
+    moneda: extraer(result, "MonId"),
+    ctz: Number(extraer(result, "MonCotiz")),
   };
 }
 
@@ -402,3 +408,4 @@ export default async function handler(req, res) {
     return json(res, safe.status, { error: safe.code, stage, retryable: Boolean(reserva), observaciones: observations });
   }
 }
+

@@ -133,5 +133,8 @@ test("Caja: F2, selección manual con flechas y Escape, F9 único y F11 sobre ve
   await page.evaluate(() => window.minoristaTest.release());
   await expect(page.getByText("Venta confirmada", { exact: true })).toBeVisible();
   await page.keyboard.press("F11");
-  await expect.poll(() => page.evaluate(() => window.minoristaTest.fiscalEvents)).toEqual([{ empresaId: "00000000-0000-4000-8000-000000000001", ventaId: "00000000-0000-4000-8000-000000000099" }]);
+  await expect(page.getByRole("dialog", { name: "Factura fiscal de la última venta" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Autorizar factura de esta venta" })).toBeVisible();
+  expect(await page.evaluate(() => window.minoristaTest.fiscalEvents)).toEqual([]);
+  await expect(page.getByRole("dialog", { name: "Facturación ARCA", exact: true })).toHaveCount(0);
 });

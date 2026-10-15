@@ -7,6 +7,13 @@ on:
       - 'src/SigoApp.tsx'
       - 'src/VentaRapidaOperativa.tsx'
       - 'src/barcode.ts'
+      - 'src/comprobanteCaja.ts'
+      - 'src/comprobantePdf.ts'
+      - 'src/ComprobanteCajaPanel.tsx'
+      - 'api/arca/comprobante.js'
+      - 'api/arca/cae-v2.js'
+      - 'scripts/test-caja-comprobantes.mjs'
+      - 'scripts/test-caja-fiscal-read.mjs'
       - 'scripts/test-minorista-scanner.mjs'
       - 'tests/minorista/**'
       - '.github/workflows/minorista-scanner.yml'
@@ -30,9 +37,15 @@ jobs:
         run: node scripts/test-minorista-scanner.mjs
       - name: Verify existing scanner and sale guards
         run: node scripts/verify-scanner-queue-and-sale-readback.mjs
+      - name: Test receipt integrity, PDF and authorized read-only fiscal recovery
+        run: |
+          node scripts/test-caja-comprobantes.mjs
+          node --experimental-vm-modules scripts/test-caja-fiscal-read.mjs
       - name: Install isolated browser test runner
         run: npm install --no-save --package-lock=false --no-audit --no-fund @playwright/test@1.56.1
       - run: npx playwright install --with-deps chromium
+      - name: Install PDF inspection tools
+        run: sudo apt-get install -y poppler-utils
       - name: Test Products, Stock and Caja in Chromium with isolated data
         run: npx playwright test --config tests/minorista/playwright.config.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

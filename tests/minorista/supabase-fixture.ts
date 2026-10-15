@@ -10,14 +10,20 @@ export const catalog = [
   { ...base, id: "00000000-0000-4000-8000-000000000013", nombre: "CÓDIGO CON CEROS", codigo_barras: "000012340009", codigo_interno: "QA-A001" },
 ];
 export const state = { calls: [] as any[], pending: [] as (() => void)[], delay: false, confirmations: [] as any[], fiscalEvents: [] as any[],
+  sales: [] as any[], items: [] as any[], receipts: [] as any[], fiscalRequests: [] as any[],
   release() { this.pending.shift()?.(); } };
 
 function response(data: any) { return { data, error: null }; }
 function query(data: any) {
+  let filtered = [...data];
   const result: any = {};
-  for (const key of ["select", "eq", "in", "order", "limit", "range", "gte", "lte", "is"]) result[key] = () => result;
-  result.maybeSingle = result.single = () => Promise.resolve(response(null));
-  result.then = (yes: any, no: any) => Promise.resolve(response(data)).then(yes, no);
+  result.eq = (key: string, value: any) => { filtered = filtered.filter((r: any) => r[key] === value); return result; };
+  result.in = (key: string, values: any[]) => { filtered = filtered.filter((r: any) => values.includes(r[key])); return result; };
+  result.limit = (n: number) => { filtered = filtered.slice(0, n); return result; };
+  result.order = (key: string, opts: any = {}) => { filtered.sort((a: any, b: any) => (String(a[key]) > String(b[key]) ? 1 : -1) * (opts.ascending === false ? -1 : 1)); return result; };
+  for (const key of ["select", "range", "gte", "lte", "is"]) result[key] = () => result;
+  result.maybeSingle = result.single = () => Promise.resolve(response(filtered[0] ?? null));
+  result.then = (yes: any, no: any) => Promise.resolve(response(filtered)).then(yes, no);
   for (const key of ["insert", "update", "upsert", "delete"]) result[key] = () => { throw new Error("REAL_WRITES_FORBIDDEN_IN_TEST"); };
   return result;
 }
@@ -33,10 +39,29 @@ export const supabase: any = {
     if (name === "listar_productos_sigo") return query(catalog);
     if (name === "confirmar_venta_sigo_v2") {
       state.confirmations.push(params);
-      return new Promise((resolve) => state.pending.push(() => resolve(response("00000000-0000-4000-8000-000000000099"))));
+      return new Promise((resolve) => state.pending.push(() => {
+        const id = "00000000-0000-4000-8000-000000000099";
+        const items = params.p_items.map((i: any) => {
+          const product = catalog.find((p) => p.id === i.producto_id)!;
+          return { empresa_id, venta_id: id, producto_id: product.id, productos: { nombre: product.nombre }, cantidad: i.cantidad,
+            precio_unitario: 100 * (1 - (params.p_descuento_pct || 0) / 100), subtotal: i.cantidad * 100 * (1 - (params.p_descuento_pct || 0) / 100) };
+        });
+        state.items.push(...items);
+        state.sales.push({ id, empresa_id, numero: 123, estado: "confirmada", anulada_at: null, cliente_id: null,
+          medio_pago: params.p_medio_pago, created_at: "2026-10-15T12:30:00Z", total: items.reduce((n: number, i: any) => n + i.subtotal, 0) });
+        resolve(response(id));
+      }));
     }
     if (name.startsWith("listar_")) return Promise.resolve(response([]));
     throw new Error(`UNEXPECTED_RPC_IN_ISOLATED_TEST:${name}`);
   },
-  from(table: string) { return query(table === "productos" ? catalog : []); },
+  auth: { getSession: async () => ({ data: { session: { access_token: "isolated-fixture-token" } }, error: null }) },
+  from(table: string) {
+    const data: Record<string, any[]> = { productos: catalog, ventas_sigo: state.sales, venta_items_sigo: state.items,
+      arca_comprobantes: state.receipts, empresas: [{ id: empresa_id, nombre: "QA AISLADA", razon_social: "COMERCIO QA" }],
+      configuracion_ticket_sigo: [{ empresa_id, nombre_negocio: "COMERCIO QA", direccion: "Calle QA 123" }],
+      arca_config: [{ empresa_id, ambiente: "produccion", activo: true, ultima_prueba_ok: true }],
+      arca_puntos_venta: [{ empresa_id, ambiente: "produccion", activo: true, numero: 1 }] };
+    return query(data[table] || []);
+  },
 };

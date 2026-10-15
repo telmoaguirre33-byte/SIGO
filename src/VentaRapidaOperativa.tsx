@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import BarcodeScanner from "./BarcodeScanner";
-import { imprimirTicketVenta } from "./ticketVenta";
+import { imprimirComercialCaja as imprimirTicketVenta } from "./comprobantePdf";
+import ComprobanteCajaPanel, { type AccionComprobante } from "./ComprobanteCajaPanel";
+import type { FormatoComprobante } from "./comprobanteCaja";
 import { isLegacyDuplicateProduct, normalizeBarcode, type BarcodeProduct } from "./barcode";
 import { listarClientesSigo, type ClienteSigo } from "./clientes";
 import { guardarProductoSigo, listarProductosSigo, type ProductoSigo } from "./productos";
@@ -62,6 +64,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   const [error, setError] = useState("");
   const [exito, setExito] = useState("");
   const [ultimaVentaTicket, setUltimaVentaTicket] = useState<string | null>(null);
+  const [comprobanteAbierto, setComprobanteAbierto] = useState<{ ventaId: string; accion: AccionComprobante; formato?: FormatoComprobante } | null>(null);
   const [advertencia, setAdvertencia] = useState("");
   const [descuentoPct,setDescuentoPct]=useState(0);
   const [productoSeleccionadoId,setProductoSeleccionadoId]=useState<string|null>(null);
@@ -110,6 +113,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     setError("");
     setExito("");
     setUltimaVentaTicket(null);
+    setComprobanteAbierto(null);
     setAdvertencia("");
     setIdempotencyKey(nuevaClaveVenta());
 
@@ -443,6 +447,8 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       setScannerInstanceKey((key)=>key+1);
       setClienteId("");
       setMedioPago("efectivo");
+      setDescuentoPct(0);
+      setDescuentoAbierto(false);
       setIdempotencyKey(nuevaClaveVenta());
       void listarClientesSigo(empresaConfirmacion)
         .then((data) => {
@@ -467,8 +473,19 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   }
 
   const unidades = items.reduce((n,item)=>n+item.cantidad,0);
+  function abrirComprobante(accion: AccionComprobante, formato?: FormatoComprobante) {
+    if (confirmacionEnCursoRef.current || confirmando) { setError("Esperá a que termine la confirmación de la venta."); return; }
+    const ventaId = ultimaVentaTicketRef.current;
+    if (!ventaId) { setError("Primero confirmá la venta para emitir la factura fiscal."); return; }
+    setComprobanteAbierto({ ventaId, accion, formato });
+  }
+  function cerrarComprobante() {
+    setComprobanteAbierto(null);
+    window.setTimeout(() => document.querySelector<HTMLInputElement>(".sigo-pos-scan .barcode-entry-row input")?.focus(), 0);
+  }
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
+      if (comprobanteAbierto) return;
       if (event.repeat) return;
       if (!["F1", "F2", "F6", "F9", "F10", "F11", "F12"].includes(event.key)) return;
       event.preventDefault();
@@ -479,14 +496,11 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       if (event.key === "F10") void confirmar(true);
       if (event.key === "F11") {
         event.stopPropagation();
-        const ventaId = ultimaVentaTicketRef.current;
-        if (ventaId) window.dispatchEvent(new CustomEvent("sigo:arca:venta", { detail: { empresaId, ventaId } }));
-        else setError("Primero confirmá la venta para emitir la factura fiscal.");
+        abrirComprobante("fiscal");
       }
       if (event.key === "F12") {
         event.stopPropagation();
-        if (ultimaVentaTicket) void imprimirTicketVenta(empresaId, ultimaVentaTicket, "80", true)
-          .catch((err) => setError(err instanceof Error ? err.message : "No se pudo reimprimir el ticket."));
+        abrirComprobante("reimprimir");
       }
     };
     window.addEventListener("keydown", key);
@@ -495,6 +509,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
 
   return (
     <div className="sigo-pos">
+      {comprobanteAbierto && <ComprobanteCajaPanel key={`${empresaId}:${comprobanteAbierto.ventaId}:${comprobanteAbierto.accion}`} empresaId={empresaId} ventaId={comprobanteAbierto.ventaId} accion={comprobanteAbierto.accion} formatoInicial={comprobanteAbierto.formato} onCerrar={cerrarComprobante} />}
       <header className="sigo-pos-title"><div><strong>🛒 CAJA - VENTA</strong><span>Escaneá, buscá o agregá productos. Todo en una sola pantalla.</span></div><button className="admin-button" disabled={!items.length||confirmando} onClick={vaciar}>Vaciar</button></header>
       <div className="sigo-pos-toolbar">
         <button type="button" onClick={vaciar}>▣ <strong>NUEVA VENTA</strong><small>F1</small></button>
@@ -521,11 +536,12 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
           <label><span>Cliente</span><select id="sigo-pos-cliente" value={clienteId} onChange={e=>setClienteId(e.target.value)}><option value="">Consumidor final / sin cliente</option>{clientes.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>
           <button className="sigo-pos-action cobrar" disabled={!puedeConfirmar||confirmando} onClick={()=>void confirmar()}>💳 COBRAR <kbd>F9</kbd></button>
           <button className="sigo-pos-action ticket" disabled={!puedeConfirmar||confirmando} onClick={()=>void confirmar(true)}>🖨 COBRAR + TICKET <kbd>F10</kbd></button>
-          <button className="sigo-pos-action fiscal" type="button" onClick={()=>{if(ultimaVentaTicket)window.dispatchEvent(new CustomEvent("sigo:arca:venta",{detail:{empresaId,ventaId:ultimaVentaTicket}}));else setError("Primero confirmá la venta para emitir la factura fiscal.");}}>▤ FACTURA FISCAL <kbd>F11</kbd></button>
-          <button className="sigo-pos-action reprint" disabled={!ultimaVentaTicket||confirmando} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir el ticket."));}}>🖨 REIMPRIMIR <kbd>F12</kbd></button>
-          <div className="sigo-pos-mini-actions"><button type="button" disabled={!ultimaVentaTicket} onClick={()=>{const m=encodeURIComponent("Ticket SIGO · Total $ "+total.toLocaleString("es-AR"));window.open("https://wa.me/?text="+m,"_blank","noopener,noreferrer")}}>WhatsApp</button><button type="button" disabled={!ultimaVentaTicket} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket,"a4").catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir A4."));}}>A4</button><button type="button" disabled={!ultimaVentaTicket} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir el ticket."));}}>Ticket 58/80</button><button type="button" onClick={()=>document.querySelector<HTMLElement>(".arca-launcher")?.click()}>ARCA</button></div>
+          <button className="sigo-pos-action fiscal" type="button" onClick={()=>abrirComprobante("fiscal")}>▤ FACTURA FISCAL <kbd>F11</kbd></button>
+          <button className="sigo-pos-action reprint" disabled={!ultimaVentaTicket||confirmando} onClick={()=>abrirComprobante("reimprimir")}>🖨 REIMPRIMIR <kbd>F12</kbd></button>
+          <div className="sigo-pos-mini-actions"><button type="button" disabled={!ultimaVentaTicket} onClick={()=>abrirComprobante("whatsapp")}>WhatsApp</button><button type="button" disabled={!ultimaVentaTicket} onClick={()=>abrirComprobante("reimprimir","a4")}>A4</button><button type="button" disabled={!ultimaVentaTicket} onClick={()=>abrirComprobante("reimprimir")}>Ticket 58/80</button><button type="button" onClick={()=>document.querySelector<HTMLElement>(".arca-launcher")?.click()}>ARCA</button></div>
         </aside>
       </div>
+      {ventasRecientes.length > 0 && <section className="panel"><h3>Recuperar una venta confirmada</h3>{ventasRecientes.map((venta) => <button type="button" key={venta.id} onClick={() => { setUltimaVentaTicket(venta.id); ultimaVentaTicketRef.current = venta.id; setComprobanteAbierto({ ventaId: venta.id, accion: "reimprimir" }); }}>Venta Nº {venta.numero} · $ {venta.total.toLocaleString("es-AR")}</button>)}</section>}
     </div>
   );
 }
