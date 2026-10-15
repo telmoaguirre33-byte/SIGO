@@ -7,7 +7,20 @@ export function createSigoReadOnlyVerifier({origin,anonKey,fetcher=fetch}){
  const url=new URL(origin);if(url.protocol!=='https:'||url.origin!==origin||!anonKey)throw Error('Auth SIGO de QA no configurado');
  return async(token,empresaId)=>{
   const headers={apikey:anonKey,Authorization:'Bearer '+token,'Content-Type':'application/json'};
-  const read=async(path,body)=>{const r=await fetcher(origin+path,{method:body?'POST':'GET',headers,...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(10000)});if(!r.ok)throw new ApiError(401,'No se pudo verificar el acceso SIGO');return r.json();};
+  const budget=AbortSignal.timeout(15000);
+  const read=async(path,body)=>{
+   // Solo lecturas canónicas: un reintento acotado ante red/timeout/5xx/429.
+   // Nunca usar permisos almacenados si la fuente de identidad no responde.
+   for(let attempt=0;attempt<2;attempt++){
+    let r;
+    try{r=await fetcher(origin+path,{method:body?'POST':'GET',headers,...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.any([budget,AbortSignal.timeout(4000)])});}
+    catch{if(!attempt&&!budget.aborted)continue;throw new ApiError(503,'Verificación SIGO temporalmente no disponible');}
+    if(r.status===401||r.status===403)throw new ApiError(r.status,'No se pudo verificar el acceso SIGO');
+    if(r.status===429||r.status>=500){if(!attempt&&!budget.aborted)continue;throw new ApiError(503,'Verificación SIGO temporalmente no disponible');}
+    if(!r.ok)throw new ApiError(503,'Respuesta de verificación SIGO no disponible');
+    try{return await r.json();}catch{throw new ApiError(503,'Respuesta de verificación SIGO inválida');}
+   }
+  };
   const user=await read('/auth/v1/user');if(!UUID.test(user?.id)||typeof user.email!=='string'||!/^\S+@\S+\.\S+$/.test(user.email))throw new ApiError(401,'Identidad SIGO inválida');
   const companies=await read('/rest/v1/rpc/mis_empresas_sigo',{}),company=Array.isArray(companies)?companies.find(c=>c.empresa_id===empresaId):null;
   if(!company||!['owner','admin'].includes(company.rol))throw new ApiError(403,'La sesión no administra la empresa SIGO autorizada');

@@ -31,23 +31,23 @@ const commerceRpc=async(name:string,args:Record<string,unknown>)=>{
 export default function MayoristaLauncher(){
  const [company,setCompany]=useState<EmpresaOperativa|null>(null),[config,setConfig]=useState<CompanyAccessConfig|null>(null),[hosts,setHosts]=useState<{desktop:HTMLElement|null;mobile:HTMLElement|null}>({desktop:null,mobile:null}),[page,setPage]=useState<string|null>(null);
  const generation=useRef(0),controller=useRef<AbortController|null>(null),dialog=useRef<HTMLDivElement>(null);
- const refresh=useCallback(async()=>{
+ const refresh=useCallback(async(reset=false)=>{
   const g=++generation.current;controller.current?.abort();const c=new AbortController();controller.current=c;
-  setCompany(null);setConfig(null);setPage(null);
+  const clear=()=>{if(g===generation.current){setCompany(null);setConfig(null);setPage(null);}};if(reset)clear();
   try{
-   const {data,error}=await supabase.auth.getUser();if(error||!data.user)return;
+   const {data,error}=await supabase.auth.getUser();if(error||!data.user){clear();return;}
    const companies=await cargarMisEmpresas(),active=resolverEmpresaActiva(companies,leerEmpresaActivaGuardada(data.user.id),data.user.id);
-   if(!active||!['owner','admin'].includes(active.rol))return;
+   if(!active||!['owner','admin'].includes(active.rol)){clear();return;}
    const settings=await readConfig(active.empresa_id,c.signal);
-   if(g!==generation.current||c.signal.aborted||!isMayoristaEnabled({empresaId:active.empresa_id,rol:active.rol},settings))return;
+   if(g!==generation.current||c.signal.aborted)return;if(!isMayoristaEnabled({empresaId:active.empresa_id,rol:active.rol},settings)){clear();return;}
    setCompany(active);setConfig(settings);
-  }catch{/* La ausencia del módulo no afecta la operación Minorista. */}
+  }catch{clear();/* Fallo cerrado: no afecta la operación Minorista. */}
  },[]);
  useEffect(()=>{
-  void refresh();const update=()=>void refresh();
+  void refresh();const update=()=>void refresh(true);
   window.addEventListener('sigo:empresa-activa-cambiada',update);window.addEventListener('sigo:mayorista-config-changed',update);
-  const resume=()=>{if(document.visibilityState==='visible')update();};window.addEventListener('focus',resume);document.addEventListener('visibilitychange',resume);
-  const {data}=supabase.auth.onAuthStateChange(event=>{if(['SIGNED_OUT','SIGNED_IN'].includes(event))window.setTimeout(update,0);});
+  const resume=()=>{if(document.visibilityState==='visible')void refresh();};window.addEventListener('focus',resume);document.addEventListener('visibilitychange',resume);
+  const {data}=supabase.auth.onAuthStateChange(event=>{if(['SIGNED_OUT','SIGNED_IN'].includes(event))window.setTimeout(()=>void refresh(event==='SIGNED_OUT'),0);});
   return()=>{generation.current++;controller.current?.abort();data.subscription.unsubscribe();window.removeEventListener('sigo:empresa-activa-cambiada',update);window.removeEventListener('sigo:mayorista-config-changed',update);window.removeEventListener('focus',resume);document.removeEventListener('visibilitychange',resume);};
  },[refresh]);
  useEffect(()=>{const find=()=>{const desktop=document.querySelector<HTMLElement>('.sigo-operation-only .sidebar .menu')??document.querySelector<HTMLElement>('.sigo-context-actions'),mobile=document.querySelector<HTMLElement>('.sigo-mobile-drawer-nav');setHosts(old=>old.desktop===desktop&&old.mobile===mobile?old:{desktop,mobile});};find();const observer=new MutationObserver(find);observer.observe(document.body,{childList:true,subtree:true});return()=>observer.disconnect();},[]);

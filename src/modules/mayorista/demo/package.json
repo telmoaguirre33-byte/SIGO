@@ -12,7 +12,7 @@
     "test:admin": "node ../tests/admin.mjs && node ../tests/cargas.mjs && node ../tests/presentation-loads.mjs",
     "test:recovery": "node ../tests/recovery-unit.mjs",
     "test:integration-pwa": "node ../tests/integration-pwa.mjs",
-    "test:http-auth": "node ../tests/http-auth.mjs",
+    "test:http-auth": "node ../tests/http-auth.mjs && node ../tests/session-stability.mjs",
     "test:rendiciones": "node ../tests/rendiciones.mjs",
     "test:rls": "node ../tests/rls-ci.mjs"
   },
