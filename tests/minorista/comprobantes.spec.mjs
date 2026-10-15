@@ -7,8 +7,8 @@ const empresaId = "00000000-0000-4000-8000-000000000001", ventaId = "00000000-00
 const field = page => page.getByRole("textbox", { name: "Código de barras, código interno o nombre del producto", exact: true });
 const dialog = page => page.getByRole("dialog");
 
-test.beforeEach(async ({ page }) => {
-  await page.route("**/*", async route => {
+test.beforeEach(async ({ page, context }) => {
+  await context.route("**/*", async route => {
     const url = new URL(route.request().url());
     if (url.hostname !== "127.0.0.1") return route.abort("blockedbyclient");
     if (url.pathname === "/api/arca/cae-v2") {
@@ -105,6 +105,24 @@ test("Venta confirmada → WhatsApp descarga PDF correcto y facilita adjunto man
   expect(text).toContain("NO FISCAL");
   await expect(dialog(page)).toContainText("Adjuntar → Documento");
   await expect(dialog(page)).toContainText("confirmá el envío");
+  await noDuplicates(page, 0);
+});
+
+test("WhatsApp compatible recibe un archivo PDF real con el total persistido, sin envío automático", async ({ page }) => {
+  await confirmSale(page);
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "canShare", { configurable: true, value: () => true });
+    Object.defineProperty(navigator, "share", { configurable: true, value: async data => {
+      window.sharedReceipt = { text: data.text, name: data.files[0].name, type: data.files[0].type, bytes: [...new Uint8Array(await data.files[0].arrayBuffer())] };
+    } });
+  });
+  await page.getByRole("button", { name: "WhatsApp", exact: true }).click();
+  await dialog(page).getByRole("button", { name: "Compartir PDF por WhatsApp" }).click();
+  await expect(dialog(page)).toContainText("PDF preparado para compartir.");
+  const shared = await page.evaluate(() => window.sharedReceipt);
+  expect(shared.type).toBe("application/pdf"); expect(shared.text).toContain("200,00"); expect(shared.name).toMatch(/\.pdf$/);
+  const filePath = path.resolve("test-results/browser-share-sheet.pdf"); fs.writeFileSync(filePath, Buffer.from(shared.bytes));
+  const parsed = spawnSync("pdftotext", [filePath, "-"], { encoding: "utf8" }); expect(parsed.status).toBe(0); expect(parsed.stdout).toContain("200,00");
   await noDuplicates(page, 0);
 });
 
