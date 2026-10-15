@@ -23,7 +23,7 @@ for (const [needle, label] of [
 
 for (const [needle, label] of [
   ['ScanSource = "manual" | "wedge" | "camera"', 'three scanner input modes'],
-  ['resolveCode(code, "manual")', 'manual lookup path'],
+  ['resolveCode(inputRef.current?.value ?? code, "manual")', 'manual lookup from complete input value'],
   ['resolveCode(buffered, "wedge")', 'USB/Bluetooth keyboard-wedge lookup path'],
   ['resolveCode(found, "camera")', 'mobile camera lookup path'],
   ['(actionOperacion === "vender" || actionOperacion === "ingresar") && isLegacyDuplicateProduct(producto)', 'operational LEGACY-DUP block'],
@@ -35,3 +35,4 @@ for (const [needle, label] of [
 }
 
 console.log('Barcode legacy safety guard OK: manual, USB/Bluetooth wedge and camera share a single tenant/action-safe lookup path, while unresolved LEGACY-DUP identities are blocked from sales and stock entry');
+

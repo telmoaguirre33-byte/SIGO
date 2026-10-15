@@ -41,9 +41,8 @@ for (const token of [
   'SOLICITAR_CAE_HOMOLOGACION',
   'request_id: requestId',
   'alreadyIssued: true',
-  'reconciled: true',
+  'if (reserva) return json(res, 409, { error: "ARCA_FISCAL_RECONCILIATION_PENDING" });',
   'leerTicketWsaa',
-  'ARCA_SALE_RESERVED_WITH_OTHER_FISCAL_IDENTITY',
   'ARCA_PRODUCT_FISCAL_DATA_REQUIRED',
   'ARCA_INVOICE_A_CLIENT_REQUIRED',
   'ARCA_CAE_TRANSPORT_FAILED',
@@ -51,6 +50,15 @@ for (const token of [
   'Cache-Control',
 ]) {
   if (!apiV2.includes(token)) throw new Error(`ARCA CAE v2 safeguard missing: ${token}`);
+}
+
+const recovery = fs.readFileSync("api/arca/comprobante.js", "utf8");
+for (const token of ['consultarComprobante(session', 'cae=is.null', 'ARCA_FISCAL_RECONCILIATION_PENDING',
+  'empresa_id=eq.${empresaId}&venta_id=eq.${ventaId}&id=eq.', 'saved[0].cae !== original.cae']) {
+  if (!recovery.includes(token)) throw new Error(`ARCA original recovery safeguard missing: ${token}`);
+}
+for (const forbidden of ['solicitarCae(', 'ultimoAutorizado(', 'method: "POST"', 'SUPABASE_SERVICE_ROLE_KEY']) {
+  if (recovery.includes(forbidden)) throw new Error(`ARCA recovery must never issue or reserve: ${forbidden}`);
 }
 
 if (!autoTicketCore.includes('ARCA_TICKET_AUTO_REFRESH_REQUIRES_ADMIN')) {
