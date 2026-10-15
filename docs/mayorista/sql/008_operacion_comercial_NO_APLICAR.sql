@@ -102,6 +102,7 @@ revoke all on function mayorista_private.devolucion_credito_autorizada(uuid,uuid
 create function public.devolver_mayorista_sigo(p_empresa_id uuid,p_comando uuid,p_datos jsonb) returns jsonb language plpgsql security definer set search_path='' as $$
 declare old public.sigo_mayorista_devoluciones_control%rowtype;linea jsonb;items jsonb:='[]';v_id uuid;v_venta uuid;h text;nc jsonb;v_producto uuid;v_precio numeric;
 begin
+ if coalesce((p_datos->>'autorizarSaldoFavor')::boolean,false) and public.sigo_mayorista_operador_comercial(p_empresa_id)<>'owner' then raise exception 'MANAGEMENT_REQUIRED';end if;
  perform public.sigo_mayorista_operador_comercial(p_empresa_id);
  if p_comando is null or jsonb_typeof(p_datos) is distinct from 'object' or jsonb_typeof(p_datos->'lineas') is distinct from 'array' or jsonb_array_length(p_datos->'lineas') not between 1 and 200 then raise exception 'RETURN_INVALID';end if;
  v_venta:=(p_datos->>'ventaId')::uuid;
@@ -167,7 +168,7 @@ begin
  if evento is null then raise exception 'RETURN_EVENT_FORBIDDEN';end if;
  perform pg_advisory_xact_lock(hashtextextended(p_empresa_id::text||p_evento::text,0));
  select * into anterior from public.sigo_mayorista_devoluciones_control where empresa_id=p_empresa_id and comando_id=p_evento;
- if found then if anterior.solicitud->>'cargaId' is distinct from p_carga::text or anterior.solicitud->>'disposicionFisica' is distinct from p_disposicion or anterior.solicitud->>'motivoAdministrativo' is distinct from p_motivo then raise exception 'IDEMPOTENCY_CONFLICT';end if;return jsonb_build_object('devolucionId',anterior.devolucion_id,'lineas',anterior.lineas,'notaCredito',anterior.nota_credito);end if;
+ if found then if anterior.solicitud->>'cargaId' is distinct from p_carga::text or anterior.solicitud->>'disposicionFisica' is distinct from p_disposicion or anterior.solicitud->>'motivoAdministrativo' is distinct from p_motivo or coalesce((anterior.solicitud->>'autorizarSaldoFavor')::boolean,false) is distinct from p_autorizar_saldo_favor then raise exception 'IDEMPOTENCY_CONFLICT';end if;return jsonb_build_object('devolucionId',anterior.devolucion_id,'lineas',anterior.lineas,'notaCredito',anterior.nota_credito);end if;
  select venta_id into venta from public.sigo_mayorista_entregas_comerciales where empresa_id=p_empresa_id and pedido_id=(evento->'input'->>'pedidoId')::uuid and estado='confirmado';
  if venta is null then raise exception 'RETURN_SALE_FORBIDDEN';end if;
  restante:=(evento->'input'->>'cantidad')::numeric;
