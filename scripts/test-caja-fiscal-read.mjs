@@ -16,7 +16,7 @@ async function harness(options = {}) {
       if (url.includes("/rest/v1/ventas_sigo")) return Response.json([{ id: ventaId, total: 250, estado: "confirmada", anulada_at: null }]);
       const body = JSON.parse(init.body || "{}");
       assert.equal(body.action, "FECompConsultar", "La recuperación nunca debe solicitar CAE ni reservar numeración");
-      return Response.json({ ok: true, body: `<ResultGet><Resultado>A</Resultado><CodAutorizacion>12345678901234</CodAutorizacion><FchVto>20261025</FchVto><CbteFch>${options.oldDate ? "20260901" : "20261015"}</CbteFch><ImpTotal>${options.mismatch ? 251 : 250}</ImpTotal><DocTipo>99</DocTipo><DocNro>0</DocNro><MonId>PES</MonId><MonCotiz>1</MonCotiz></ResultGet>` });
+      return Response.json({ ok: true, body: `<ResultGet><Resultado>A</Resultado><CodAutorizacion>12345678901234</CodAutorizacion><FchVto>20261025</FchVto><CbteFch>${options.oldDate ? "20260901" : "20261015"}</CbteFch><ImpTotal>${options.mismatch ? 251 : 250}</ImpTotal><ImpNeto>250</ImpNeto><ImpIVA>0</ImpIVA><ImpOpEx>0</ImpOpEx><ImpTotConc>0</ImpTotConc><ImpTrib>0</ImpTrib><DocTipo>99</DocTipo><DocNro>0</DocNro><MonId>PES</MonId><MonCotiz>1</MonCotiz></ResultGet>` });
     } });
   const extraer = (xml, tag) => new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`).exec(xml)?.[1] || "";
   const values = { WSFE: { produccion: "fake", homologacion: "fake" }, WSAA: {}, escapeXml: String, decodeXml: String,

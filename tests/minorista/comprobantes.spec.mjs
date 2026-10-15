@@ -25,7 +25,7 @@ test.beforeEach(async ({ page }) => {
     }
     if (url.pathname === "/api/arca/comprobante") {
       const data = await page.evaluate(() => ({ receipt: window.minoristaTest.receipts[0], total: window.minoristaTest.sales[0].total }));
-      return route.fulfill({ json: { ok: true, comprobante: data.receipt, emisor: { cuit: "20123456789", nombre: "COMERCIO QA", ambiente: "produccion" },
+      return route.fulfill({ json: { ok: true, comprobante: data.receipt, importes: { neto: data.total, iva: 0, exento: 0, noGravado: 0, tributos: 0 }, emisor: { cuit: "20123456789", nombre: "COMERCIO QA", ambiente: "produccion" },
         qr: { ver: 1, fecha: "2026-10-15", cuit: 20123456789, ptoVta: data.receipt.punto_venta, tipoCmp: data.receipt.tipo_cbte,
           nroCmp: 42, importe: data.total, moneda: "PES", ctz: 1, tipoDocRec: 99, nroDocRec: 0, tipoCodAut: "E", codAut: 12345678901234 } } });
     }

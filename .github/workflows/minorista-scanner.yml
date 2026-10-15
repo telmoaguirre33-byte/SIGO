@@ -37,6 +37,10 @@ jobs:
         run: node scripts/test-minorista-scanner.mjs
       - name: Verify existing scanner and sale guards
         run: node scripts/verify-scanner-queue-and-sale-readback.mjs
+      - name: Install PDF inspection tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
       - name: Test receipt integrity, PDF and authorized read-only fiscal recovery
         run: |
           node scripts/test-caja-comprobantes.mjs
@@ -44,8 +48,6 @@ jobs:
       - name: Install isolated browser test runner
         run: npm install --no-save --package-lock=false --no-audit --no-fund @playwright/test@1.56.1
       - run: npx playwright install --with-deps chromium
-      - name: Install PDF inspection tools
-        run: sudo apt-get install -y poppler-utils
       - name: Test Products, Stock and Caja in Chromium with isolated data
         run: npx playwright test --config tests/minorista/playwright.config.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

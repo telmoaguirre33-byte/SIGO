@@ -187,6 +187,8 @@ export async function consultarComprobante(sesion, ambiente, ticket, cuit, punto
     nroDocRec: digits(extraer(result, "DocNro")),
     moneda: extraer(result, "MonId"),
     ctz: Number(extraer(result, "MonCotiz")),
+    importes: { neto: Number(extraer(result, "ImpNeto")), iva: Number(extraer(result, "ImpIVA")),
+      exento: Number(extraer(result, "ImpOpEx")), noGravado: Number(extraer(result, "ImpTotConc")), tributos: Number(extraer(result, "ImpTrib")) },
   };
 }
 

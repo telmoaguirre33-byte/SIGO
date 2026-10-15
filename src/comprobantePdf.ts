@@ -46,6 +46,12 @@ export async function crearPdfComprobante(doc: DocumentoCaja, formato: FormatoCo
     line(`${item.cantidad} x ${dineroComprobante(item.precio_unitario)} = ${dineroComprobante(item.subtotal)}`);
   }
   line("--------------------------------");
+  if (doc.importes) {
+    line(`Neto ${dineroComprobante(doc.importes.neto)} - IVA ${dineroComprobante(doc.importes.iva)}`);
+    if (doc.importes.exento) line(`Exento ${dineroComprobante(doc.importes.exento)}`);
+    if (doc.importes.noGravado) line(`No gravado ${dineroComprobante(doc.importes.noGravado)}`);
+    if (doc.importes.tributos) line(`Otros tributos ${dineroComprobante(doc.importes.tributos)}`);
+  }
   line(`TOTAL ${dineroComprobante(doc.venta.total)}`);
   if (doc.fiscal) {
     line(`CAE: ${doc.fiscal.cae}`);

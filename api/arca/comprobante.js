@@ -31,9 +31,11 @@ export default async function handler(req, res) {
     if (!original || original.resultado !== "A" || original.cae !== receipt.cae || !original.fecha ||
       !Number.isFinite(original.importe) || original.importe <= 0 || Math.abs(original.importe - Number(sale.total)) > .01 ||
       !Number.isInteger(original.tipoDocRec) || !original.nroDocRec || !original.moneda || !(original.ctz > 0) ||
-      !/^\d{11}$/.test(config.cuit_emisor) || !original.caeVencimiento) return json(res, 409, { error: "ARCA_ORIGINAL_RECEIPT_MISMATCH" });
+      !/^\d{11}$/.test(config.cuit_emisor) || !original.caeVencimiento ||
+      !Object.values(original.importes).every(n => Number.isFinite(n) && n >= 0) ||
+      Math.abs(Object.values(original.importes).reduce((n, value) => n + value, 0) - original.importe) > .01) return json(res, 409, { error: "ARCA_ORIGINAL_RECEIPT_MISMATCH" });
     return json(res, 200, { ok: true, comprobante: { ...receipt, cae_vencimiento: original.caeVencimiento },
-      emisor: { cuit: config.cuit_emisor, nombre: config.razon_social, ambiente: config.ambiente },
+      emisor: { cuit: config.cuit_emisor, nombre: config.razon_social, ambiente: config.ambiente }, importes: original.importes,
       qr: { ver: 1, fecha: original.fecha, cuit: Number(config.cuit_emisor), ptoVta: receipt.punto_venta,
         tipoCmp: receipt.tipo_cbte, nroCmp: Number(receipt.numero_cbte), importe: original.importe,
         moneda: original.moneda, ctz: original.ctz, tipoDocRec: original.tipoDocRec,

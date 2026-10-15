@@ -5,11 +5,15 @@ export type VentaComprobante = { id: string; empresa_id: string; numero: number;
 export type LineaComprobante = { nombre: string; cantidad: number; precio_unitario: number; subtotal: number };
 export type FiscalComprobante = { id: string; empresa_id: string; venta_id: string; punto_venta: number; tipo_cbte: number; numero_cbte: number; cae: string; cae_vencimiento: string; resultado: string };
 export type DocumentoCaja = { venta: VentaComprobante; items: LineaComprobante[]; comercio: string; direccion: string;
-  fiscal: FiscalComprobante | null; qr: Record<string, string | number> | null; ambiente?: string; cuit?: string };
+  fiscal: FiscalComprobante | null; qr: Record<string, string | number> | null; ambiente?: string; cuit?: string;
+  importes?: { neto: number; iva: number; exento: number; noGravado: number; tributos: number } };
 export type OpcionesFiscal = { ambiente: string; activo: boolean; ultima_prueba_ok: boolean; puntos: number[]; cliente: { nombre: string; documento: string; condicion_iva_receptor_id: number; arca_doc_tipo: number } | null };
 
 export const dineroComprobante = (n: number) => `$ ${n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-export const tipoFactura = (n: number) => ({ 1: "Factura A", 6: "Factura B", 11: "Factura C" }[n] || `Comprobante ${n}`);
+export const tipoFactura = (n: number) => {
+  const labels: Record<number, string> = { 1: "Factura A", 6: "Factura B", 11: "Factura C" };
+  return labels[n] || `Comprobante ${n}`;
+};
 
 export function validarDocumento(doc: DocumentoCaja) {
   if (!doc.venta.id || doc.venta.estado !== "confirmada" || doc.venta.anulada_at || !doc.comercio.trim() ||
@@ -19,6 +23,8 @@ export function validarDocumento(doc: DocumentoCaja) {
       item.cantidad <= 0 || item.precio_unitario < 0 || item.subtotal < 0) throw new Error("El detalle del comprobante es inválido.");
   }
   if (Math.abs(doc.items.reduce((n, i) => n + i.subtotal, 0) - doc.venta.total) > .01) throw new Error("El total persistido no coincide con el detalle. No se generó el comprobante.");
+  if (doc.importes && (!Object.values(doc.importes).every(n => Number.isFinite(n) && n >= 0) ||
+    Math.abs(Object.values(doc.importes).reduce((n, value) => n + value, 0) - doc.venta.total) > .01)) throw new Error("Los importes fiscales no coinciden con la venta.");
   if (doc.fiscal && (!doc.qr || doc.fiscal.venta_id !== doc.venta.id || doc.fiscal.empresa_id !== doc.venta.empresa_id ||
     doc.fiscal.resultado !== "A" || !/^\d{14}$/.test(doc.fiscal.cae) || !doc.fiscal.cae_vencimiento ||
     Number(doc.qr.codAut) !== Number(doc.fiscal.cae) || Number(doc.qr.importe) !== doc.venta.total ||
@@ -30,7 +36,10 @@ export function validarDocumento(doc: DocumentoCaja) {
 async function apiFiscal(path: string, init?: RequestInit) {
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session?.access_token) throw new Error("Iniciá sesión para recuperar el comprobante fiscal.");
-  const response = await fetch(path, { ...init, headers: { Authorization: `Bearer ${data.session.access_token}`, "Content-Type": "application/json", ...init?.headers } });
+  const headers = new Headers(init?.headers);
+  headers.set("Authorization", `Bearer ${data.session.access_token}`);
+  headers.set("Content-Type", "application/json");
+  const response = await fetch(path, { ...init, headers });
   const body = await response.json();
   if (!response.ok || body.ok !== true) {
     const message = body.error === "ARCA_TICKET_REFRESH_REQUIRED" ? "La autorización fiscal venció. Un administrador debe renovarla antes de recuperar el original." :
@@ -60,6 +69,7 @@ export async function recuperarDocumentoCaja(empresaId: string, ventaId: string,
     if (issued?.cae) {
       const body = await apiFiscal(`/api/arca/comprobante?empresaId=${encodeURIComponent(empresaId)}&ventaId=${encodeURIComponent(ventaId)}`);
       doc.fiscal = body.comprobante; doc.qr = body.qr; doc.cuit = body.emisor.cuit; doc.ambiente = body.emisor.ambiente;
+      doc.importes = body.importes;
       doc.comercio = body.emisor.nombre || doc.comercio;
     }
   }
