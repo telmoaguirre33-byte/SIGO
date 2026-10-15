@@ -27,7 +27,8 @@ export async function interactiveQa(env,{Pool=pg.Pool}={}){
    try{
     await installAcceptanceNamespace(initializer,await schemaPackage(),[QA_RAILWAY.projectId,QA_RAILWAY.environmentId]);
     await verifyBusinessTypeSQL(initializer);await verifySharedCommerceSQL(initializer);await prepareSharedBackendFixture(initializer,{origin:config.origin});
-    await initializer.query("UPDATE mayorista_private.usuarios SET activo=false;UPDATE mayorista_private.sesiones SET revocada=true;UPDATE mayorista.empresas SET nombre='lapizcito5 · QA AISLADO' WHERE empresa_id=$1",[QA_COMPANY]);
+    await initializer.query('UPDATE mayorista_private.usuarios SET activo=false;UPDATE mayorista_private.sesiones SET revocada=true');
+    await initializer.query("UPDATE mayorista.empresas SET nombre='lapizcito5 · QA AISLADO' WHERE empresa_id=$1",[QA_COMPANY]);
     await initializer.query(`CREATE TABLE mayorista_private.qa_interactive_scope(id boolean primary key default true check(id),external_empresa_id uuid not null,qa_empresa_id uuid not null,auth_origin text not null,created_at timestamptz not null default now());
      CREATE TABLE mayorista_private.qa_link_audit(id bigint generated always as identity primary key,external_empresa_id uuid not null,qa_empresa_id uuid not null,user_id uuid not null,rol text not null,fecha timestamptz not null default now());
      ALTER TABLE mayorista_private.qa_interactive_scope ENABLE ROW LEVEL SECURITY;ALTER TABLE mayorista_private.qa_link_audit ENABLE ROW LEVEL SECURITY;REVOKE ALL ON mayorista_private.qa_interactive_scope,mayorista_private.qa_link_audit FROM public,anon,authenticated;`);
