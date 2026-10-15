@@ -19,11 +19,22 @@ test.beforeEach(async ({ page, context }) => {
         resultado: "A", tipo_cbte: request.tipoCbte, punto_venta: request.puntoVenta, numero_cbte: 42, cae: "12345678901234", cae_vencimiento: "2026-10-25" };
       await page.evaluate(({ request, receipt }) => {
         window.minoristaTest.fiscalRequests.push(request);
-        if (!window.minoristaTest.receipts.length) window.minoristaTest.receipts.push(receipt);
+        if (!window.minoristaTest.receipts.length) window.minoristaTest.receipts.push(window.minoristaTest.failCaeSave ? { ...receipt, cae: null, resultado: "reservado" } : receipt);
       }, { request, receipt });
+      if (await page.evaluate(() => window.minoristaTest.failCaeSave)) return route.fulfill({ status: 502, json: { error: "ARCA_CAE_FAILED" } });
       return route.fulfill({ json: { ok: true, comprobante: receipt } });
     }
     if (url.pathname === "/api/arca/comprobante") {
+      if (route.request().method() === "POST") {
+        const blocked = await page.evaluate(() => {
+          const state = window.minoristaTest;
+          state.recoveryRequests = (state.recoveryRequests || 0) + 1;
+          if (state.recoveryBlocked) return true;
+          Object.assign(state.receipts[0], { cae: "12345678901234", cae_vencimiento: "2026-10-25", resultado: "A" });
+          return false;
+        });
+        if (blocked) return route.fulfill({ status: 409, json: { error: "ARCA_FISCAL_RECONCILIATION_PENDING" } });
+      }
       const data = await page.evaluate(() => ({ receipt: window.minoristaTest.receipts[0], total: window.minoristaTest.sales[0].total }));
       return route.fulfill({ json: { ok: true, comprobante: data.receipt, importes: { neto: data.total, iva: 0, exento: 0, noGravado: 0, tributos: 0 }, emisor: { cuit: "20123456789", nombre: "COMERCIO QA", ambiente: "produccion" },
         qr: { ver: 1, fecha: "2026-10-15", cuit: 20123456789, ptoVta: data.receipt.punto_venta, tipoCmp: data.receipt.tipo_cbte,
@@ -176,4 +187,42 @@ test("Recupera comprobante desde ventas confirmadas sin requerir una venta nueva
   await page.getByRole("button", { name: /Venta Nº 123/ }).click();
   await expect(dialog(page)).toContainText("Total $ 200,00");
   await noDuplicates(page, 0);
+});
+
+test("Autorización exitosa y CAE sin guardar: F11/F12/WhatsApp bloquean sustitutos y recuperan el original", async ({ page }) => {
+  await confirmSale(page);
+  await page.evaluate(() => { window.minoristaTest.failCaeSave = true; window.minoristaTest.recoveryBlocked = true; });
+  await page.keyboard.press("F11");
+  const confirmation = page.waitForEvent("dialog");
+  const click = dialog(page).getByRole("button", { name: "Autorizar factura de esta venta" }).click();
+  await (await confirmation).accept(); await click;
+  async function blocked() {
+    await expect(dialog(page).getByRole("alert")).toContainText("Estado fiscal pendiente de conciliación");
+    for (const name of ["Descargar PDF", "Compartir PDF por WhatsApp", "Imprimir comprobante", "Autorizar factura de esta venta"])
+      await expect(dialog(page).getByRole("button", { name, exact: true })).toHaveCount(0);
+    await expect(dialog(page)).not.toContainText("Ticket comercial");
+    await noDuplicates(page, 1);
+  }
+  await blocked();
+  await dialog(page).getByRole("button", { name: "Recuperar comprobante original" }).click();
+  await blocked();
+  await page.keyboard.press("Escape"); await page.keyboard.press("F12"); await blocked();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "WhatsApp", exact: true }).click(); await blocked();
+  await page.keyboard.press("Escape"); await page.keyboard.press("F11"); await blocked();
+  await page.evaluate(() => { window.minoristaTest.recoveryBlocked = false; });
+  await dialog(page).getByRole("button", { name: "Recuperar comprobante original" }).click();
+  await expect(dialog(page)).toContainText("12345678901234");
+  await expect(dialog(page).getByRole("alert")).toHaveCount(0);
+  await page.keyboard.press("Escape"); await page.keyboard.press("F12");
+  const fiscal = await downloadedPdf(page, dialog(page).getByRole("button", { name: "Descargar PDF" }), "reconciled-original");
+  expect(fiscal).toContain("0001-00000042"); expect(fiscal).toContain("12345678901234"); expect(fiscal).not.toContain("NO FISCAL");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "WhatsApp", exact: true }).click();
+  const shared = await downloadedPdf(page, dialog(page).getByRole("button", { name: "Compartir PDF por WhatsApp" }), "reconciled-whatsapp");
+  expect(shared).toContain("12345678901234");
+  await page.keyboard.press("Escape"); await page.keyboard.press("F11");
+  await expect(dialog(page)).toContainText("12345678901234"); await noDuplicates(page, 1);
+  expect(await page.evaluate(() => window.minoristaTest.receipts.length)).toBe(1);
+  expect(await page.evaluate(() => window.minoristaTest.recoveryRequests)).toBe(2);
 });

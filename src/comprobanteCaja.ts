@@ -34,6 +34,15 @@ export function validarDocumento(doc: DocumentoCaja) {
     !/^\d{4}-\d{2}-\d{2}$/.test(String(doc.qr.fecha)) || doc.qr.tipoCodAut !== "E")) throw new Error("No se pudo verificar el comprobante fiscal original.");
 }
 
+export class ConciliacionFiscalPendiente extends Error {
+  constructor() { super("Estado fiscal pendiente de conciliación"); this.name = "ConciliacionFiscalPendiente"; }
+}
+
+export async function conciliarComprobanteCaja(empresaId: string, ventaId: string) {
+  await apiFiscal(`/api/arca/comprobante?empresaId=${encodeURIComponent(empresaId)}&ventaId=${encodeURIComponent(ventaId)}`, { method: "POST" });
+  return recuperarDocumentoCaja(empresaId, ventaId);
+}
+
 async function apiFiscal(path: string, init?: RequestInit) {
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session?.access_token) throw new Error("Iniciá sesión para recuperar el comprobante fiscal.");
@@ -43,6 +52,7 @@ async function apiFiscal(path: string, init?: RequestInit) {
   const response = await fetch(path, { ...init, headers });
   const body = await response.json();
   if (!response.ok || body.ok !== true) {
+    if (body.error === "ARCA_FISCAL_RECONCILIATION_PENDING") throw new ConciliacionFiscalPendiente();
     const message = body.error === "ARCA_TICKET_REFRESH_REQUIRED" ? "La autorización fiscal venció. Un administrador debe renovarla antes de recuperar el original." :
       body.error === "ARCA_NUMBER_RESERVATION_CONFLICT" ? "Otra emisión tomó ese número. Volvé a consultar antes de reintentar." :
       body.error === "ARCA_TIMEOUT" ? "ARCA no respondió a tiempo. Volvé a recuperar la venta; SIGO conciliará antes de emitir." :
@@ -64,10 +74,11 @@ export async function recuperarDocumentoCaja(empresaId: string, ventaId: string,
     direccion: config?.direccion || "", items: (rows ?? []).map((r: any) => ({ nombre: (Array.isArray(r.productos) ? r.productos[0] : r.productos)?.nombre || "",
       cantidad: Number(r.cantidad), precio_unitario: Number(r.precio_unitario), subtotal: Number(r.subtotal) })), fiscal: null, qr: null };
   validarDocumento(doc);
-  if (!soloComercial) {
+  {
     const { data: issued, error } = await supabase.from("arca_comprobantes").select("id,cae,resultado").eq("empresa_id", empresaId).eq("venta_id", ventaId).maybeSingle();
     if (error) throw new Error("No se pudo comprobar si la venta ya tiene factura. No se generó un ticket sustituto.");
-    if (issued?.cae) {
+    if (issued && (!issued.cae || issued.resultado !== "A")) throw new ConciliacionFiscalPendiente();
+    if (issued?.cae && !soloComercial) {
       const body = await apiFiscal(`/api/arca/comprobante?empresaId=${encodeURIComponent(empresaId)}&ventaId=${encodeURIComponent(ventaId)}`);
       doc.fiscal = body.comprobante; doc.qr = body.qr; doc.cuit = body.emisor.cuit; doc.ambiente = body.emisor.ambiente;
       doc.importes = body.importes;
@@ -98,8 +109,14 @@ export async function emitirFacturaCaja(empresaId: string, ventaId: string, opci
   const current = await recuperarDocumentoCaja(empresaId, ventaId);
   if (current.fiscal) return current;
   if (!opciones.puntos.includes(puntoVenta)) throw new Error("Seleccioná un punto de venta activo.");
-  await apiFiscal("/api/arca/cae-v2", { method: "POST", body: JSON.stringify({ empresaId, ventaId, puntoVenta, tipoCbte,
-    condicionIvaReceptorId: condicionIva, confirmacion: opciones.ambiente === "produccion" ? "EMITIR_CAE_PRODUCCION" : "SOLICITAR_CAE_HOMOLOGACION" }) });
+  try {
+    await apiFiscal("/api/arca/cae-v2", { method: "POST", body: JSON.stringify({ empresaId, ventaId, puntoVenta, tipoCbte,
+      condicionIvaReceptorId: condicionIva, confirmacion: opciones.ambiente === "produccion" ? "EMITIR_CAE_PRODUCCION" : "SOLICITAR_CAE_HOMOLOGACION" }) });
+  } catch (error) {
+    const recovered = await recuperarDocumentoCaja(empresaId, ventaId);
+    if (recovered.fiscal) return recovered;
+    throw error;
+  }
   const result = await recuperarDocumentoCaja(empresaId, ventaId);
   if (!result.fiscal) throw new Error("La emisión no pudo verificarse. Recuperá el comprobante antes de reintentar.");
   return result;

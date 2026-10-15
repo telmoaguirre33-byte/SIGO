@@ -349,23 +349,13 @@ export default async function handler(req, res) {
     const requestId = `sigo:${empresaId}:${ventaId}:${puntoVenta}:${tipoCbte}`;
     reserva = first(await rest(sesion, `arca_comprobantes?empresa_id=eq.${encodeURIComponent(empresaId)}&venta_id=eq.${encodeURIComponent(ventaId)}&select=id,venta_id,punto_venta,tipo_cbte,numero_cbte,cae,cae_vencimiento,resultado,request_id`));
     if (reserva?.cae) return json(res, 200, { ok: true, alreadyIssued: true, ambiente: config.ambiente, comprobante: reserva });
-    if (reserva && (Number(reserva.punto_venta) !== puntoVenta || Number(reserva.tipo_cbte) !== tipoCbte || reserva.request_id !== requestId)) return json(res, 409, { error: "ARCA_SALE_RESERVED_WITH_OTHER_FISCAL_IDENTITY" });
+    if (reserva) return json(res, 409, { error: "ARCA_FISCAL_RECONCILIATION_PENDING" });
 
     const ticket = await leerTicketWsaa(sesion, empresaId, config.ambiente, config.cuit_emisor);
     if (!ticket) return json(res, 409, { error: "ARCA_TICKET_REFRESH_REQUIRED" });
 
     stage = "conciliacion";
-    if (reserva) {
-      const recovered = await consultarComprobante(sesion, config.ambiente, ticket, config.cuit_emisor, reserva.punto_venta, reserva.tipo_cbte, Number(reserva.numero_cbte));
-      if (recovered) {
-        const persisted = first(await rest(sesion, `arca_comprobantes?id=eq.${encodeURIComponent(reserva.id)}`, {
-          method: "PATCH",
-          headers: { Prefer: "return=representation" },
-          body: JSON.stringify({ cae: recovered.cae, cae_vencimiento: recovered.caeVencimiento, resultado: recovered.resultado, observaciones: [], emitido_at: new Date().toISOString() }),
-        }));
-        return json(res, 200, { ok: true, reconciled: true, ambiente: config.ambiente, comprobante: persisted });
-      }
-    } else {
+    {
       const ultimo = await ultimoAutorizado(sesion, config.ambiente, ticket, config.cuit_emisor, puntoVenta, tipoCbte);
       const numeroCbte = ultimo + 1;
       try {

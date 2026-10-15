@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { dineroComprobante, emitirFacturaCaja, leerOpcionesFiscal, recuperarDocumentoCaja, tipoFactura, type DocumentoCaja, type FormatoComprobante, type OpcionesFiscal } from "./comprobanteCaja";
+import { ConciliacionFiscalPendiente, conciliarComprobanteCaja, dineroComprobante, emitirFacturaCaja, leerOpcionesFiscal, recuperarDocumentoCaja, tipoFactura, type DocumentoCaja, type FormatoComprobante, type OpcionesFiscal } from "./comprobanteCaja";
 import { compartirPdfWhatsApp, crearPdfComprobante, descargarPdf, imprimirPdf } from "./comprobantePdf";
 
 export type AccionComprobante = "fiscal" | "reimprimir" | "whatsapp";
@@ -10,8 +10,25 @@ export default function ComprobanteCajaPanel({ empresaId, ventaId, accion, onCer
   const [formato, setFormato] = useState<FormatoComprobante>(formatoInicial);
   const [file, setFile] = useState<File | null>(null); const [busy, setBusy] = useState(true);
   const [error, setError] = useState(""); const [notice, setNotice] = useState("");
+  const [pending, setPending] = useState(false);
   const lock = useRef(false), active = useRef(true), generation = useRef(0);
   const panelRef = useRef<HTMLElement | null>(null);
+  function fail(e: unknown) {
+    if (!active.current) return;
+    generation.current++; setDoc(null); setFile(null); setOptions(null);
+    setPending(e instanceof ConciliacionFiscalPendiente);
+    setError(e instanceof Error ? e.message : "No se pudo verificar el comprobante.");
+  }
+  async function conciliar() {
+    if (busy || lock.current) return;
+    lock.current = true; setBusy(true);
+    try {
+      const recovered = await conciliarComprobanteCaja(empresaId, ventaId);
+      if (active.current) { setDoc(recovered); setPending(false); setError(""); setNotice("Se recuperó el comprobante original, sin nueva autorización."); }
+    } catch (e) {
+      fail(e); if (active.current) { setPending(true); setError("Estado fiscal pendiente de conciliación. No se pudo verificar y guardar el original. Reintentá la recuperación; no se emitió otra factura."); }
+    } finally { lock.current = false; if (active.current) setBusy(false); }
+  }
   useEffect(() => { panelRef.current?.focus(); }, []);
   useEffect(() => {
     if (!busy && panelRef.current && !panelRef.current.contains(document.activeElement)) panelRef.current.focus();
@@ -29,7 +46,7 @@ export default function ComprobanteCajaPanel({ empresaId, ventaId, accion, onCer
           setOptions(opts); setPunto(opts.puntos[0] ? String(opts.puntos[0]) : "");
           setCondicion(String(opts.cliente?.condicion_iva_receptor_id || 5));
         }
-      } catch (e) { if (active.current) setError(e instanceof Error ? e.message : "No se pudo recuperar el comprobante."); }
+      } catch (e) { fail(e); }
       finally { if (active.current) setBusy(false); }
     }
     void load(); return () => { active.current = false; generation.current++; };
@@ -51,7 +68,7 @@ export default function ComprobanteCajaPanel({ empresaId, ventaId, accion, onCer
     try {
       const next = await emitirFacturaCaja(empresaId, ventaId, options, Number(punto), Number(tipo), Number(condicion));
       if (active.current) { setDoc(next); setNotice("Factura autorizada. Elegí el formato e imprimí el original."); }
-    } catch (e) { if (active.current) setError(e instanceof Error ? e.message : "La emisión no pudo verificarse. Recuperá el comprobante antes de reintentar."); }
+    } catch (e) { fail(e); }
     finally { lock.current = false; if (active.current) setBusy(false); }
   }
   async function compartir() {
@@ -75,6 +92,8 @@ export default function ComprobanteCajaPanel({ empresaId, ventaId, accion, onCer
     <h2>{heading}</h2><button type="button" autoFocus disabled={busy} onClick={onCerrar}>Volver a Caja</button>
     {busy && <p role="status">Recuperando o autorizando comprobante…</p>}
     {error && <p role="alert">{error}</p>}
+    {pending && <><p>El comprobante queda bloqueado hasta verificar el resultado original en ARCA. Recuperar no solicita otra autorización fiscal.</p>
+      <button type="button" disabled={busy} onClick={() => void conciliar()}>Recuperar comprobante original</button></>}
     {doc && <><p><strong>{doc.comercio}</strong> · Venta Nº {doc.venta.numero} · <strong>Total {dineroComprobante(doc.venta.total)}</strong></p>
       {doc.fiscal ? <p>{tipoFactura(doc.fiscal.tipo_cbte)} {String(doc.fiscal.punto_venta).padStart(4, "0")}-{String(doc.fiscal.numero_cbte).padStart(8, "0")} · CAE {doc.fiscal.cae} · Vencimiento {doc.fiscal.cae_vencimiento}</p> : <p>Ticket comercial · Comprobante no fiscal.</p>}
       {options && !doc.fiscal && <fieldset disabled={busy}><legend>Confirmar factura de esta venta</legend>
