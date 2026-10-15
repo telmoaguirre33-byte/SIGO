@@ -14,6 +14,9 @@ export default function ComprobanteCajaPanel({ empresaId, ventaId, accion, onCer
   const panelRef = useRef<HTMLElement | null>(null);
   useEffect(() => { panelRef.current?.focus(); }, []);
   useEffect(() => {
+    if (!busy && panelRef.current && !panelRef.current.contains(document.activeElement)) panelRef.current.focus();
+  }, [busy, doc?.fiscal?.id, file]);
+  useEffect(() => {
     active.current = true;
     async function load() {
       try {
@@ -75,13 +78,13 @@ export default function ComprobanteCajaPanel({ empresaId, ventaId, accion, onCer
     {doc && <><p><strong>{doc.comercio}</strong> · Venta Nº {doc.venta.numero} · <strong>Total {dineroComprobante(doc.venta.total)}</strong></p>
       {doc.fiscal ? <p>{tipoFactura(doc.fiscal.tipo_cbte)} {String(doc.fiscal.punto_venta).padStart(4, "0")}-{String(doc.fiscal.numero_cbte).padStart(8, "0")} · CAE {doc.fiscal.cae} · Vencimiento {doc.fiscal.cae_vencimiento}</p> : <p>Ticket comercial · Comprobante no fiscal.</p>}
       {options && !doc.fiscal && <fieldset disabled={busy}><legend>Confirmar factura de esta venta</legend>
-        <label>Punto de venta <select value={punto} onChange={(e) => setPunto(e.target.value)}>{options.puntos.map((p) => <option key={p}>{p}</option>)}</select></label>
-        <label>Tipo de factura <select value={tipo} onChange={(e) => setTipo(e.target.value)}><option value="11">Factura C</option><option value="6">Factura B</option><option value="1">Factura A</option></select></label>
-        <label>Condición IVA receptor <select disabled={Boolean(options.cliente)} value={condicion} onChange={(e) => setCondicion(e.target.value)}><option value="5">Consumidor final</option><option value="1">Responsable inscripto</option><option value="6">Monotributo</option><option value="4">Exento</option></select></label>
+        <label>Punto de venta <select aria-label="Punto de venta" value={punto} onChange={(e) => setPunto(e.target.value)}>{options.puntos.map((p) => <option key={p}>{p}</option>)}</select></label>
+        <label>Tipo de factura <select aria-label="Tipo de factura" value={tipo} onChange={(e) => setTipo(e.target.value)}><option value="11">Factura C</option><option value="6">Factura B</option><option value="1">Factura A</option></select></label>
+        <label>Condición IVA receptor <select aria-label="Condición IVA receptor" disabled={Boolean(options.cliente)} value={condicion} onChange={(e) => setCondicion(e.target.value)}><option value="5">Consumidor final</option><option value="1">Responsable inscripto</option><option value="6">Monotributo</option><option value="4">Exento</option></select></label>
         {options.cliente && <p>Cliente registrado: {options.cliente.nombre} · Documento {options.cliente.documento}</p>}
         <button type="button" disabled={!punto || busy} onClick={() => void emitir()}>Autorizar factura de esta venta</button>
       </fieldset>}
-      {!(accion === "fiscal" && !doc.fiscal) && <><label>Formato <select value={formato} onChange={(e) => setFormato(e.target.value as FormatoComprobante)}><option value="58">Ticket 58 mm</option><option value="80">Ticket 80 mm</option><option value="a4">A4</option></select></label>
+      {!(accion === "fiscal" && !doc.fiscal) && <><label>Formato <select aria-label="Formato" value={formato} onChange={(e) => setFormato(e.target.value as FormatoComprobante)}><option value="58">Ticket 58 mm</option><option value="80">Ticket 80 mm</option><option value="a4">A4</option></select></label>
         <button type="button" disabled={!file || busy} onClick={() => { if (file) void imprimirPdf(file); }}>Imprimir comprobante</button>
         <button type="button" disabled={!file || busy} onClick={() => { if (file) descargarPdf(file); }}>Descargar PDF</button>
         <button type="button" disabled={!file || busy} onClick={() => void compartir().catch((e) => setError(e.message))}>Compartir PDF por WhatsApp</button>

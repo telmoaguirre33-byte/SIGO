@@ -17,7 +17,8 @@ export const tipoFactura = (n: number) => {
 
 export function validarDocumento(doc: DocumentoCaja) {
   if (!doc.venta.id || doc.venta.estado !== "confirmada" || doc.venta.anulada_at || !doc.comercio.trim() ||
-    !Number.isFinite(doc.venta.total) || doc.venta.total <= 0 || !doc.items.length) throw new Error("La venta no tiene un comprobante completo y confirmado.");
+    !Number.isFinite(doc.venta.total) || doc.venta.total <= 0 || !doc.items.length ||
+    !Number.isFinite(Date.parse(doc.venta.created_at))) throw new Error("La venta no tiene un comprobante completo y confirmado.");
   for (const item of doc.items) {
     if (!item.nombre.trim() || ![item.cantidad, item.precio_unitario, item.subtotal].every(Number.isFinite) ||
       item.cantidad <= 0 || item.precio_unitario < 0 || item.subtotal < 0) throw new Error("El detalle del comprobante es inválido.");
