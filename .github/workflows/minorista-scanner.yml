@@ -19,6 +19,9 @@ on:
       - '.github/workflows/minorista-scanner.yml'
 permissions:
   contents: read
+concurrency:
+  group: minorista-scanner-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 jobs:
   scanner:
     runs-on: ubuntu-latest

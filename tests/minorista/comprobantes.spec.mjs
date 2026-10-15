@@ -50,8 +50,8 @@ async function issue(page) {
   await expect(dialog(page)).toHaveAccessibleName("Factura fiscal de la última venta");
   await expect(dialog(page)).toContainText("Total $ 200,00");
   const confirmation = page.waitForEvent("dialog");
-  await dialog(page).getByRole("button", { name: "Autorizar factura de esta venta" }).click();
-  const prompt = await confirmation; expect(prompt.message()).toContain("REAL"); await prompt.accept();
+  const click = dialog(page).getByRole("button", { name: "Autorizar factura de esta venta" }).click();
+  const prompt = await confirmation; expect(prompt.message()).toContain("REAL"); await prompt.accept(); await click;
   await expect(dialog(page)).toContainText("12345678901234");
   await expect(dialog(page).getByRole("button", { name: "Descargar PDF" })).toBeEnabled();
 }
@@ -136,9 +136,9 @@ test("Circuito completo con teclado; cancelar confirmación fiscal no emite", as
   await expect(dialog(page).getByRole("button", { name: "Autorizar factura de esta venta" })).toBeEnabled();
   await page.keyboard.press("Tab");
   for (let i = 0; i < 8 && !(await dialog(page).getByRole("button", { name: "Autorizar factura de esta venta" }).evaluate(el => el === document.activeElement)); i++) await page.keyboard.press("Tab");
-  const prompt = page.waitForEvent("dialog"); await page.keyboard.press("Enter"); (await prompt).dismiss();
+  const prompt = page.waitForEvent("dialog"); const enter = page.keyboard.press("Enter"); await (await prompt).dismiss(); await enter;
   await noDuplicates(page, 0);
-  const confirmed = page.waitForEvent("dialog"); await page.keyboard.press("Enter"); (await confirmed).accept();
+  const confirmed = page.waitForEvent("dialog"); const secondEnter = page.keyboard.press("Enter"); await (await confirmed).accept(); await secondEnter;
   await expect(dialog(page)).toContainText("12345678901234");
   await page.keyboard.press("Escape"); await page.keyboard.press("F12"); await expect(dialog(page)).toContainText("12345678901234");
   await noDuplicates(page, 1);

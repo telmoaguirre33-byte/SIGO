@@ -57,6 +57,19 @@ test("PDF fiscal: CAE, vencimiento, numeración y QR original; reimpresión no e
   const qr = JSON.parse(atob(new URL(urlQrFiscal(fiscal())).searchParams.get("p")));
   assert.equal(qr.importe, 250); assert.equal(qr.codAut, 12345678901234); assert.equal(qr.fecha, "2026-10-15");
 });
+test("QR del PDF fiscal se decodifica desde la página rasterizada y coincide con ARCA", { skip: !process.env.CI }, async () => {
+  const { PNG } = require("pngjs");
+  const { RGBLuminanceSource, HybridBinarizer, BinaryBitmap, MultiFormatReader, DecodeHintType, BarcodeFormat } = require("@zxing/library");
+  await inspect(fiscal(), "a4", "qr-decode");
+  const result = spawnSync("pdftoppm", ["-f", "1", "-singlefile", "-scale-to", "2200", "-png", "test-results/qr-decode-a4.pdf", "test-results/qr-decode"], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  const image = PNG.sync.read(fs.readFileSync("test-results/qr-decode.png"));
+  const pixels = new Uint8ClampedArray(image.width * image.height);
+  for (let i = 0; i < pixels.length; i++) pixels[i] = (image.data[i * 4] + 2 * image.data[i * 4 + 1] + image.data[i * 4 + 2]) / 4;
+  const bitmap = new BinaryBitmap(new HybridBinarizer(new RGBLuminanceSource(pixels, image.width, image.height)));
+  const reader = new MultiFormatReader(); reader.setHints(new Map([[DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]]]));
+  assert.equal(reader.decode(bitmap).getText(), urlQrFiscal(fiscal()));
+});
 test("PDF multipágina conserva todas las líneas sin perder el total", async () => {
   const doc = base(); doc.items = Array.from({ length: 160 }, (_, i) => ({ nombre: `ARTÍCULO ${i + 1}`, cantidad: 1, precio_unitario: 2, subtotal: 2 })); doc.venta.total = 320;
   const { text } = await inspect(doc, "a4", "multipage");
