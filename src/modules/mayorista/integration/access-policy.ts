@@ -10,6 +10,12 @@ export type CompanyAccessConfig = {
 };
 export type AccessDecision = { enabled: boolean; reason: string; adminUrl?: string; sellerUrl?: string };
 
+/** Mismo flag persistente que Matriz. La conexión operativa es un estado separado. */
+export function isMayoristaEnabled(context: AccessContext, config?: CompanyAccessConfig | null): boolean {
+  return !!context.empresaId && ['owner','admin'].includes(context.rol) &&
+    config?.empresaId === context.empresaId && config.habilitado === true;
+}
+
 function safeUrl(value: string, approvedOrigin: string): string | null {
   try {
     const origin = new URL(approvedOrigin);

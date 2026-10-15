@@ -3,13 +3,16 @@ import {createPortal} from 'react-dom';
 import {supabase} from '../../../supabase';
 import {cargarMisEmpresas,leerEmpresaActivaGuardada,resolverEmpresaActiva,type EmpresaOperativa} from '../../../tenant';
 import {createCompanyConfigProvider} from './company-config';
-import {type CompanyAccessConfig,resolveMayoristaAccess} from './access-policy';
+import {type CompanyAccessConfig,isMayoristaEnabled,resolveMayoristaAccess} from './access-policy';
 import {mayoristaPages} from './navigation.mjs';
 import MayoristaWorkspace from './MayoristaWorkspace';
 import './workspace.css';
 const getSigoToken=async()=>{const {data}=await supabase.auth.getSession();const token=data.session?.access_token;if(!token)throw Error('Volvé a ingresar a SIGO');return token;};
 const readConfig=createCompanyConfigProvider(async(id,signal)=>{
  const {data,error}=await supabase.rpc('obtener_acceso_mayorista_sigo',{p_empresa_id:id}).abortSignal(signal);
+ if(error)throw error;return data;
+},async(id,signal)=>{
+ const {data,error}=await supabase.rpc('listar_modulos_empresa_sigo',{p_empresa_id:id}).abortSignal(signal);
  if(error)throw error;return data;
 });
 const commerceRpc=async(name:string,args:Record<string,unknown>)=>{
@@ -24,7 +27,7 @@ const commerceRpc=async(name:string,args:Record<string,unknown>)=>{
 };
 /** Acceso añadido al menú; sin acceso confirmado no renderiza elementos Mayorista. */
 export default function MayoristaLauncher(){
- const [company,setCompany]=useState<EmpresaOperativa|null>(null),[config,setConfig]=useState<CompanyAccessConfig|null>(null),[host,setHost]=useState<HTMLElement|null>(null),[page,setPage]=useState<string|null>(null);
+ const [company,setCompany]=useState<EmpresaOperativa|null>(null),[config,setConfig]=useState<CompanyAccessConfig|null>(null),[hosts,setHosts]=useState<{desktop:HTMLElement|null;mobile:HTMLElement|null}>({desktop:null,mobile:null}),[page,setPage]=useState<string|null>(null);
  const generation=useRef(0),controller=useRef<AbortController|null>(null),dialog=useRef<HTMLDivElement>(null);
  const refresh=useCallback(async()=>{
   const g=++generation.current;controller.current?.abort();const c=new AbortController();controller.current=c;
@@ -34,18 +37,22 @@ export default function MayoristaLauncher(){
    const companies=await cargarMisEmpresas(),active=resolverEmpresaActiva(companies,leerEmpresaActivaGuardada(data.user.id),data.user.id);
    if(!active||!['owner','admin'].includes(active.rol))return;
    const settings=await readConfig(active.empresa_id,c.signal);
-   if(g!==generation.current||c.signal.aborted||!resolveMayoristaAccess({empresaId:active.empresa_id,rol:active.rol},settings).enabled)return;
+   if(g!==generation.current||c.signal.aborted||!isMayoristaEnabled({empresaId:active.empresa_id,rol:active.rol},settings))return;
    setCompany(active);setConfig(settings);
   }catch{/* La ausencia del módulo no afecta la operación Minorista. */}
  },[]);
  useEffect(()=>{
   void refresh();const update=()=>void refresh();
   window.addEventListener('sigo:empresa-activa-cambiada',update);window.addEventListener('sigo:mayorista-config-changed',update);
+  const resume=()=>{if(document.visibilityState==='visible')update();};window.addEventListener('focus',resume);document.addEventListener('visibilitychange',resume);
   const {data}=supabase.auth.onAuthStateChange(event=>{if(['SIGNED_OUT','SIGNED_IN'].includes(event))window.setTimeout(update,0);});
-  return()=>{generation.current++;controller.current?.abort();data.subscription.unsubscribe();window.removeEventListener('sigo:empresa-activa-cambiada',update);window.removeEventListener('sigo:mayorista-config-changed',update);};
+  return()=>{generation.current++;controller.current?.abort();data.subscription.unsubscribe();window.removeEventListener('sigo:empresa-activa-cambiada',update);window.removeEventListener('sigo:mayorista-config-changed',update);window.removeEventListener('focus',resume);document.removeEventListener('visibilitychange',resume);};
  },[refresh]);
- useEffect(()=>{const find=()=>{const next=document.querySelector<HTMLElement>('.sigo-operation-only .sidebar .menu')??document.querySelector<HTMLElement>('.sigo-context-actions');setHost(old=>old===next?old:next);};find();const observer=new MutationObserver(find);observer.observe(document.body,{childList:true,subtree:true});return()=>observer.disconnect();},[]);
+ useEffect(()=>{const find=()=>{const desktop=document.querySelector<HTMLElement>('.sigo-operation-only .sidebar .menu')??document.querySelector<HTMLElement>('.sigo-context-actions'),mobile=document.querySelector<HTMLElement>('.sigo-mobile-drawer-nav');setHosts(old=>old.desktop===desktop&&old.mobile===mobile?old:{desktop,mobile});};find();const observer=new MutationObserver(find);observer.observe(document.body,{childList:true,subtree:true});return()=>observer.disconnect();},[]);
  useEffect(()=>{if(!page)return;const previous=document.activeElement as HTMLElement|null;dialog.current?.focus();const key=(e:KeyboardEvent)=>{if(e.key==='Escape')setPage(null);if(e.key==='Tab'){const items=dialog.current?.querySelectorAll<HTMLElement>('button,a,input,select,[tabindex="0"]');if(!items?.length)return;const first=items[0],last=items[items.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}};document.addEventListener('keydown',key);return()=>{document.removeEventListener('keydown',key);previous?.focus();};},[Boolean(page)]);
  if(!company||!config)return null;
- return <>{host&&createPortal(<details className="mayorista-menu-section"><summary>MAYORISTA / DISTRIBUIDORA</summary><nav aria-label="Mayorista / Distribuidora">{mayoristaPages.map(item=><button key={item.id} className="menu-item" type="button" onClick={()=>setPage(item.id)}>{item.label}</button>)}</nav></details>,host)}{page&&<div className="mayorista-page-overlay" role="dialog" aria-modal="true" aria-label="Mayorista / Distribuidora" tabIndex={-1} ref={dialog}><header className="mayorista-page-header"><button type="button" className="admin-button" onClick={()=>setPage(null)}>← Volver a SIGO</button><strong>{company.empresa_nombre}</strong><a className="admin-button" href={config.vendedorUrl} target="_blank" rel="noopener noreferrer">App Vendedor</a></header><main className="mayorista-page-content"><MayoristaWorkspace key={company.empresa_id} origin={config.origenAprobado} empresaId={company.empresa_id} page={page} sharedRpc={commerceRpc} getSigoToken={getSigoToken}/></main></div>}</>;
+ const decision=resolveMayoristaAccess({empresaId:company.empresa_id,rol:company.rol},config);
+ const open=(id:string)=>{document.querySelector<HTMLButtonElement>('.sigo-mobile-drawer-backdrop')?.click();setPage(id);};
+ const buttons=(mobile=false)=>mayoristaPages.map(item=><button key={item.id} className={mobile?'sigo-mobile-drawer-item':'menu-item'} type="button" onClick={()=>open(item.id)}>{item.label}</button>);
+ return <>{hosts.desktop&&createPortal(<details className="mayorista-menu-section"><summary>MAYORISTA / DISTRIBUIDORA</summary><nav aria-label="Mayorista / Distribuidora">{buttons()}</nav></details>,hosts.desktop)}{hosts.mobile&&createPortal(<section className="mayorista-mobile-section" aria-label="Mayorista / Distribuidora"><h3>MAYORISTA / DISTRIBUIDORA</h3>{buttons(true)}</section>,hosts.mobile)}{page&&<div className="mayorista-page-overlay" role="dialog" aria-modal="true" aria-label="Mayorista / Distribuidora" tabIndex={-1} ref={dialog}><header className="mayorista-page-header"><button type="button" className="admin-button" onClick={()=>setPage(null)}>← Volver a SIGO</button><strong>{company.empresa_nombre}</strong>{decision.sellerUrl&&<a className="admin-button" href={decision.sellerUrl} target="_blank" rel="noopener noreferrer">App Vendedor</a>}</header><main className="mayorista-page-content">{decision.enabled?<MayoristaWorkspace key={company.empresa_id} origin={config.origenAprobado} empresaId={company.empresa_id} page={page} sharedRpc={commerceRpc} getSigoToken={getSigoToken}/>:<section role="alert"><h2>{mayoristaPages.find(item=>item.id===page)?.label}</h2><p>Mayorista está activo para {company.empresa_nombre}. Falta configurar la conexión operativa de este entorno en Matriz.</p><p>{decision.reason}</p><button type="button" className="admin-button" onClick={()=>void refresh()}>Volver a verificar conexión</button></section>}</main></div>}</>;
 }

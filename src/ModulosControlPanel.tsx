@@ -27,6 +27,9 @@ const obtenerConfigMayorista=createCompanyConfigProvider(async(empresaId,signal)
   const {data,error}=await supabase.rpc('obtener_acceso_mayorista_sigo',{p_empresa_id:empresaId}).abortSignal(signal);
   if(error)throw new Error('No se pudo verificar Mayorista para esta empresa.');
   return data;
+},async(empresaId,signal)=>{
+  const {data,error}=await supabase.rpc('listar_modulos_empresa_sigo',{p_empresa_id:empresaId}).abortSignal(signal);
+  if(error)throw error;return data;
 });
 
 const readBusinessType=async(empresaId:string,signal:AbortSignal):Promise<BusinessType>=>{

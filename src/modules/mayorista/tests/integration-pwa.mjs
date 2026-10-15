@@ -52,3 +52,25 @@ test('Integración de menú es aditiva; entrada SIGO anterior permanece idéntic
  assert.equal(createHash('sha256').update(original).digest('hex'),'61b48d95c56d78f8934ffbf83e48d0ef3ccf766a082ab82ecae466cefeb12361');
  const launcher=await readFile(new URL('../integration/MayoristaLauncher.tsx',import.meta.url),'utf8');assert.match(launcher,/if\(!company\|\|!config\)return null/);assert.match(launcher,/sigo:empresa-activa-cambiada/);
 });
+
+import {isMayoristaEnabled} from '../demo/dist/integration/access-policy.js';
+import {createCompanyConfigProvider} from '../demo/dist/integration/company-config.js';
+test('Matriz activo no depende de RPC de destinos ni tipo de negocio migrado',async()=>{
+ const read=createCompanyConfigProvider(async()=>{throw {code:'PGRST202'};},async()=>[{clave:MAYORISTA_FEATURE,habilitado:true}]);
+ const value=await read('empresa-a',new AbortController().signal);
+ for(const rol of ['owner','admin'])assert.equal(isMayoristaEnabled({...context,rol},value),true);
+ for(const rol of ['seller','warehouse','client','chofer','superadmin',''])assert.equal(isMayoristaEnabled({...context,rol},value),false);
+ assert.equal(resolveMayoristaAccess(context,value).enabled,false); // Operación exige destino seguro; menú reconoce flag.
+});
+test('override canónico desactivado prevalece sobre destino activo o tipo mixto',async()=>{
+ let calls=0;const read=createCompanyConfigProvider(async()=>{calls++;return {empresa_id:'empresa-a',habilitado:true};},async()=>[{clave:MAYORISTA_FEATURE,habilitado:false}]);
+ assert.equal(await read('empresa-a',new AbortController().signal),null);assert.equal(calls,0);
+});
+test('fallo o revocación al leer flag nunca habilita por caché/destino',async()=>{
+ const read=createCompanyConfigProvider(async()=>({empresa_id:'empresa-a',habilitado:true}),async()=>{throw Error('FORBIDDEN');});
+ await assert.rejects(()=>read('empresa-a',new AbortController().signal),/FORBIDDEN/);
+});
+test('destino de otra empresa no habilita conexión ni hereda permisos',async()=>{
+ const read=createCompanyConfigProvider(async()=>({empresa_id:'empresa-b',habilitado:true,aplicacion_disponible:true}),async()=>[{clave:MAYORISTA_FEATURE,habilitado:true}]);
+ const value=await read('empresa-a',new AbortController().signal);assert.equal(isMayoristaEnabled(context,value),true);assert.equal(resolveMayoristaAccess(context,value).enabled,false);
+});

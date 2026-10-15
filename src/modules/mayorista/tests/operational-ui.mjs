@@ -37,6 +37,7 @@ try{
   try{
    const pathname=new URL(req.url,origin).pathname;
    if(await activation.handle(req,res))return;
+   if(pathname==='/__activation.css'){res.writeHead(200,{'Content-Type':'text/css'});res.end(activation.styles);return;}
    if(pathname==='/__activation.js'){res.writeHead(200,{'Content-Type':'text/javascript'});res.end(activation.bundle);return;}
    if(pathname==='/__credit-note'){let raw='';for await(const chunk of req)raw+=chunk;if(!creditNoteCall)throw Error('Simulación NC no preparada');const output=await creditNoteCall(JSON.parse(raw));res.writeHead(output.status,{'Content-Type':'application/json'});res.end(JSON.stringify(output.body));return;}
    if(pathname==='/__invoice'){let raw='';for await(const chunk of req)raw+=chunk;const input=JSON.parse(raw);if(!invoiceCall)throw Error('Simulación aún no preparada');const output=await invoiceCall(input);res.writeHead(output.status,{'Content-Type':'application/json'});res.end(JSON.stringify(output.body));return;}
@@ -140,6 +141,29 @@ try{
  await changeType('mixto');await wait("!!document.querySelector('.mayorista-menu-section')");assert.equal(await evaluate("document.querySelector('.sidebar .menu span').textContent.includes('Caja · Ventas · Stock')"),true);await passed('UI real Mixto conserva accesos comunes y habilita Mayorista');
  await evaluate(`(()=>{window.matrizPassword=${JSON.stringify(fixture.creds.gerencia.password)};const b=document.createElement('button');b.id='matriz-override';b.textContent='Desactivar Mayorista en Matriz';b.onclick=()=>window.activationModule.matrizOverride(false);document.body.append(b);})()`);await click('#matriz-override');await wait("!document.querySelector('.mayorista-menu-section')");
  await changeType('mixto');assert.equal((await pool.query('SELECT habilitado FROM public.sigo_empresa_modulos WHERE empresa_id=$1',[fixture.B])).rows[0].habilitado,false);assert.equal((await pool.query('SELECT tipo FROM public.sigo_empresa_tipo_negocio WHERE empresa_id=$1',[fixture.B])).rows[0].tipo,'mixto');await passed('Override Matriz persiste ante guardado repetido; tipo y módulo separados');
+ // Reproduce el dato real observado sin copiar usuarios, sesiones ni datos productivos.
+ await pool.query("UPDATE public.empresa_usuarios SET rol='admin' WHERE empresa_id=$1 AND user_id=$2",[fixture.B,fixture.actors.gerencia]);
+ await evaluate(`window.activationModule.matrizOverride(true)`);await wait("!!document.querySelector('.mayorista-menu-section')");
+ const matrixSession=await pool.connect();let matrixRows;try{await matrixSession.query('BEGIN');await matrixSession.query("SELECT set_config('request.jwt.claim.sub','30000000-0000-4000-8000-000000000012',true)");matrixRows=(await matrixSession.query('SELECT * FROM public.matriz_listar_mayorista_modulos_sigo()')).rows;await matrixSession.query('ROLLBACK');}finally{matrixSession.release();}
+ assert.equal(matrixRows.find(row=>row.empresa_id===fixture.B).mayorista_habilitado,true);
+ await evaluate(`window.activationModule.mountActivation(${JSON.stringify({...fixture.creds.gerencia,empresaId:fixture.B})},{missingConfig:true})`);
+ await wait("document.querySelectorAll('.mayorista-menu-section nav button').length===10");
+ await passed('Regresión lapizcito5: Matriz activo → administrador entra → diez accesos aun con RPC de destino ausente');
+ await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+ await click('[aria-label="Abrir menú de SIGO"]');await wait("document.querySelectorAll('.sigo-mobile-drawer .mayorista-mobile-section button').length===10");
+ assert.equal(await evaluate("getComputedStyle(document.querySelector('.sigo-mobile-drawer-layer')).display==='none'"),false);
+ for(const label of ['Panel Mayorista','Vendedores','Objetivos y métricas','Pedidos','Administración Mayorista','Depósito','Armado de cargas','Reparto','Entregas','Cobranzas / Rendiciones']){
+  await evaluate(`(()=>{const button=[...document.querySelectorAll('.mayorista-mobile-section button')].find(b=>b.textContent===${JSON.stringify(label)});button.click();})()`);
+  await wait("!!document.querySelector('.mayorista-page-overlay [role=alert]')");assert.equal(await evaluate("!!document.querySelector('.sigo-mobile-drawer-layer')"),false);
+  assert.equal(await evaluate("document.querySelector('.mayorista-page-content h2').textContent"),label);
+  await click('.mayorista-page-header button');await click('[aria-label="Abrir menú de SIGO"]');await wait("document.querySelectorAll('.mayorista-mobile-section button').length===10");
+ }
+ await passed('Menú móvil React real: diez rutas abren, cierran drawer y explican conexión pendiente sin ocultar flag');
+ const customersBefore=(await pool.query('SELECT count(*) FROM public.clientes_sigo')).rows[0].count;
+ await evaluate('window.activationModule.matrizOverride(false)');await wait("!document.querySelector('.mayorista-menu-section')&&!document.querySelector('.mayorista-mobile-section')");
+ assert.equal((await pool.query('SELECT count(*) FROM public.clientes_sigo')).rows[0].count,customersBefore);
+ await passed('Desactivar retira accesos desktop/móvil y conserva datos; lectura canónica compartida con Matriz');
+ await command('Emulation.clearDeviceMetricsOverride');
  assert.deepEqual(errors,[]);await mkdir(new URL('./artifacts/',import.meta.url),{recursive:true});await writeFile(new URL('./artifacts/operational-ui.json',import.meta.url),JSON.stringify({scope:'Chromium HTTPS y PostgreSQL CI; WSFE simulado',results},null,2));console.log(results.length+' controles UI operativos aprobados. No ejecución contra Railway ni empresas productivas.');
 }finally{
  if(socket?.readyState===1)await command('Browser.close').catch(()=>{});socket?.close();browser?.kill('SIGTERM');if(server)await new Promise(r=>server.close(r));await pool.end();if(created)for(const schema of Object.values(pool.schemas))await base.query('DROP SCHEMA '+schema+' CASCADE');await base.end();await rm(profile,{recursive:true,force:true});
