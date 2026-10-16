@@ -1,4 +1,5 @@
 import pg from 'pg';
+import {installQaLocalAccounts} from './qa-local-accounts.mjs';
 import {createHash} from 'node:crypto';
 import {railwayRuntime,assertInstalledQA} from './railway-runtime.mjs';
 import {acceptanceNamespace,installAcceptanceNamespace} from '../railway/acceptance-namespace.mjs';
@@ -38,6 +39,8 @@ export async function interactiveQa(env,{Pool=pg.Pool}={}){
   const binding=(await pool.query('SELECT * FROM mayorista_private.qa_interactive_scope WHERE id=true')).rows[0];
   if(binding?.external_empresa_id!==externalEmpresaId||binding.qa_empresa_id!==QA_COMPANY||binding.auth_origin!==origin)throw Error('Namespace QA existente no conciliado; no se sobrescribe');
   await assertInstalledQA(pool);
-  return {pool,namespace:name,externalEmpresaId,qaEmpresaId:QA_COMPANY,link:createQaSigoLink({pool,externalEmpresaId,qaEmpresaId:QA_COMPANY,verifyRemote})};
+  await installQaLocalAccounts(pool);
+  return {pool,namespace:name,externalEmpresaId,qaEmpresaId:QA_COMPANY,link:createQaSigoLink({pool,externalEmpresaId,qaEmpresaId:QA_COMPANY,verifyRemote,allowLocalAccounts:true})};
  }catch(e){failed=true;throw e;}finally{await lock.query("SELECT pg_advisory_unlock(hashtext('mayorista-interactive-qa-v1'))").catch(()=>{});lock.release();if(failed)await pool.end().catch(()=>{});}
 }
+

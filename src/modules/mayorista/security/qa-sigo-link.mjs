@@ -31,12 +31,25 @@ export function createSigoReadOnlyVerifier({origin,anonKey,fetcher=fetch}){
 }
 /** Vínculo explícito y reversible. Token SIGO solo en memoria; reinicio exige nuevo ingreso.
  * Cada solicitud verifica identidad/rol/flag en origen; nunca escribe allí. */
-export function createQaSigoLink({pool,externalEmpresaId,qaEmpresaId,verifyRemote,now=Date.now}){
+export function createQaSigoLink({pool,externalEmpresaId,qaEmpresaId,verifyRemote,allowLocalAccounts=false,now=Date.now}){
  if(!UUID.test(externalEmpresaId)||!UUID.test(qaEmpresaId)||typeof verifyRemote!=='function')throw Error('Vínculo QA inválido');
  const sessions=new Map(),inFlight=new Map();
  const scope=async()=>{const r=(await pool.query('SELECT external_empresa_id,qa_empresa_id FROM mayorista_private.qa_interactive_scope WHERE id=true')).rows[0];if(r?.external_empresa_id!==externalEmpresaId||r.qa_empresa_id!==qaEmpresaId)throw new ApiError(503,'Binding QA no verificado');};
  const access=async(token)=>{await scope();if(inFlight.has(token))return inFlight.get(token);const promise=verifyRemote(token,externalEmpresaId).finally(()=>inFlight.delete(token));inFlight.set(token,promise);return promise;};
  return {
+  signInLocal:async(input,auth)=>{
+   if(!allowLocalAccounts)throw new ApiError(403,'Acceso local QA no habilitado');
+   await scope();
+   if(input?.empresaId!==qaEmpresaId)throw new ApiError(403,'Empresa fuera del vínculo QA');
+   const result=await auth.signIn(input);
+   try{
+    const p=await auth.verify(result.accessToken);
+    const allowed=(await pool.query('SELECT user_id FROM mayorista_private.qa_local_accounts WHERE user_id=$1 AND empresa_id=$2 AND activo',[p.userId,qaEmpresaId])).rows[0];
+    if(!allowed)throw new ApiError(403,'Cuenta local fuera de la demostración QA');
+    await pool.query('INSERT INTO mayorista_private.qa_local_sessions(session_id,user_id,empresa_id) VALUES($1,$2,$3)',[p.sessionId,p.userId,qaEmpresaId]);
+    return result;
+   }catch(e){await auth.signOut(result.accessToken).catch(()=>{});throw e;}
+  },
   signIn:async(request,id,auth)=>{
    if(id!==externalEmpresaId)throw new ApiError(403,'Esta empresa no está vinculada al QA');
    const token=request.headers.get('Authorization')?.match(/^Bearer (\S+)$/)?.[1];if(!token||token.length>16000)throw new ApiError(401,'Sesión SIGO requerida');
@@ -62,7 +75,13 @@ export function createQaSigoLink({pool,externalEmpresaId,qaEmpresaId,verifyRemot
   },
   verify:async principal=>{
    if(principal.empresaId!==qaEmpresaId)throw new ApiError(403,'Empresa fuera del vínculo QA');
-   const session=sessions.get(principal.sessionId);if(!session||session.until<=now()||session.userId!==principal.userId)throw new ApiError(401,'Volvé a ingresar desde SIGO para abrir QA');
+   const session=sessions.get(principal.sessionId);
+   if(!session&&allowLocalAccounts){
+    await scope();
+    const local=(await pool.query('SELECT s.session_id FROM mayorista_private.qa_local_sessions s JOIN mayorista_private.qa_local_accounts a ON a.user_id=s.user_id AND a.empresa_id=s.empresa_id AND a.activo WHERE s.session_id=$1 AND s.user_id=$2 AND s.empresa_id=$3',[principal.sessionId,principal.userId,qaEmpresaId])).rows[0];
+    if(local)return {...principal,qaAislado:true,sigoEmpresaId:externalEmpresaId};
+   }
+   if(!session||session.until<=now()||session.userId!==principal.userId)throw new ApiError(401,'Volvé a ingresar desde SIGO para abrir QA');
    const {user,company}=await access(session.token),role=company.rol==='owner'?'gerencia':'administracion';
    if(user.id!==principal.userId||principal.rol!==role||session.role!==role)throw new ApiError(403,'Permisos SIGO modificados; volvé a ingresar');
    return {...principal,qaAislado:true,sigoEmpresaId:externalEmpresaId};
@@ -70,3 +89,4 @@ export function createQaSigoLink({pool,externalEmpresaId,qaEmpresaId,verifyRemot
   forget:principal=>sessions.delete(principal.sessionId)
  };
 }
+

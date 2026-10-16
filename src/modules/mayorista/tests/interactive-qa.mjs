@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import {generateKeyPairSync,randomUUID,createHash} from 'node:crypto';
 import pg from '../backend/node_modules/pg/lib/index.js';
-import {selectQaHandler} from '../backend/server.mjs';
+import {operationalContext} from '../backend/server.mjs';
 import {interactiveQa} from '../backend/interactive-qa.mjs';
 import {QA_RAILWAY} from '../railway/database-policy.mjs';
+import {verifyDemoScale} from './demo-scale.mjs';
 /** SQL real en CI. Solo el transporte de Pool privado Railway se sustituye por localhost. */
 export async function verifyInteractiveQa(base){
- const ordinary=()=>{},isolated=()=>{};assert.equal(selectQaHandler(new Headers({Origin:'https://preview.qa.invalid'}),['https://preview.qa.invalid'],ordinary,isolated),isolated);assert.equal(selectQaHandler(new Headers({Origin:'https://backend.qa.invalid'}),['https://preview.qa.invalid'],ordinary,isolated),ordinary);assert.equal(selectQaHandler(new Headers({Origin:'https://other.qa.invalid'}),['https://preview.qa.invalid'],ordinary,isolated),ordinary);
+ const ordinary={},isolated={pool:{},link:{}};
+ assert.deepEqual(operationalContext(ordinary,isolated),{pool:isolated.pool,qaSigoLink:isolated.link});
+ assert.deepEqual(operationalContext(ordinary,null),{pool:ordinary});
  assert.equal(base.options.host,'127.0.0.1');assert.equal(Number(base.options.port),55471);assert.equal(base.options.database,'mayorista_qa');
  const external=randomUUID(),authOrigin='https://identity.qa.invalid',namespace='mayorista_acceptance_'+createHash('sha256').update('interactive-qa-v1:'+external+':'+authOrigin).digest('hex').slice(0,12),opened=[];
  const rootBinding='SELECT project_id,environment_id,schema_version FROM mayorista_private.infrastructure_binding WHERE id=true';
@@ -18,10 +21,12 @@ export async function verifyInteractiveQa(base){
   assert.equal(await interactiveQa({}),null);
   const first=await interactiveQa(env,{Pool:LocalPool});opened.push(first);assert.equal(first.namespace,namespace);assert.equal(first.externalEmpresaId,external);
   assert.equal((await first.pool.query('SELECT count(*) FROM mayorista_private.usuarios WHERE activo')).rows[0].count,'0');
+  const scaleResults=await verifyDemoScale(first.pool,{externalEmpresaId:external});
   const id=randomUUID();await first.pool.query('INSERT INTO mayorista.vendedores(empresa_id,vendedor_id,nombre,activo) VALUES($1,$2,$3,true)',[first.qaEmpresaId,id,'Persistencia de vínculo QA']);
   const second=await interactiveQa(env,{Pool:LocalPool});opened.push(second);assert.equal((await second.pool.query('SELECT nombre FROM mayorista.vendedores WHERE empresa_id=$1 AND vendedor_id=$2',[second.qaEmpresaId,id])).rows[0].nombre,'Persistencia de vínculo QA');
   assert.equal((await second.pool.query('SELECT relrowsecurity FROM pg_class WHERE oid=$1::regclass',[namespace+'_private.qa_interactive_scope'])).rows[0].relrowsecurity,true);
   console.log('PASS QA interactivo: bootstrap dentro de misma DB, cuentas fixture desactivadas, binding exacto e idempotencia sin reset');
-  return [{name:'Vínculo interactivo aislado en misma PostgreSQL: bootstrap y reinicio preservan datos',status:'pass'}];
+  return [...scaleResults,{name:'Vínculo interactivo aislado en misma PostgreSQL: bootstrap y reinicio preservan datos',status:'pass'}];
  }finally{for(const entry of opened)await entry.pool.end();for(const suffix of ['public','module','private','auth'])await base.query('DROP SCHEMA IF EXISTS '+namespace+'_'+suffix+' CASCADE');}
 }
+

@@ -5,9 +5,9 @@ import {readFile} from 'node:fs/promises';
 import emitir from '../../../../api/mayorista/arca.js';
 import {assertSharedFixture} from './shared-fixture-policy.mjs';
 /** PostgreSQL real + emisor ARCA EXISTENTE. Solo transporte externo sustituido; jamás WSFE real. */
-export async function verifySharedFiscal(pool,{exercise}={}){
+export async function verifySharedFiscal(pool,{exercise,ownerUserId='30000000-0000-4000-8000-000000000011'}={}){
  await assertSharedFixture(pool);
- const E='30000000-0000-4000-8000-000000000001',U='30000000-0000-4000-8000-000000000011',S=randomUUID();
+ const E='30000000-0000-4000-8000-000000000001',U=ownerUserId,S=randomUUID();
  const migration=new URL('../../../../supabase/migrations/',import.meta.url);
  const ddl=await readFile(new URL('20260910021200_arca_config_segura.sql',migration),'utf8');
  await pool.query(ddl.slice(ddl.indexOf('create table if not exists public.arca_comprobantes'),ddl.indexOf('create index if not exists arca_comprobantes_empresa_fecha_idx')));
@@ -64,3 +64,4 @@ export async function verifySharedFiscal(pool,{exercise}={}){
  console.log('PASS ARCA existente: entrega → venta → reserva → CAE simulado → conciliación persistente, sin duplicar stock ni factura; producción bloqueada');
  return [{name:'ARCA existente con reserva PostgreSQL y acuse perdido conciliado; WSFE simulado, producción bloqueada',status:'pass'}];
 }
+
