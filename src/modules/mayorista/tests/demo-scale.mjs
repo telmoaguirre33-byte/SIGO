@@ -8,10 +8,12 @@ import {createQaSigoLink} from '../security/qa-sigo-link.mjs';
 import {prepareDemoCompany,DEMO_COMPANY} from '../backend/demo-company.mjs';
 import {buildProductIndex,searchProducts} from '../vendedor/product-search.mjs';
 import {verifySharedFiscal} from './shared-fiscal.mjs';
+import {requestLimiter} from '../backend/server.mjs';
 /** HTTP y PostgreSQL reales. Identidad SIGO externa sustituida explícitamente.
  * El pool recibido debe ser un namespace de CI, nunca una empresa comercial real. */
-export async function verifyDemoScale(pool,{externalEmpresaId}){
- const password='qa-'+randomUUID(),E=DEMO_COMPANY,origin='https://backend.qa.invalid',preview='https://preview.qa.invalid';
+export async function verifyDemoScale(pool,{externalEmpresaId,password='qa-'+randomUUID()}){
+ if(pool.options.host!=='127.0.0.1'||Number(pool.options.port)!==55471||pool.options.database!=='mayorista_qa')throw Error('Prueba con identidad sustituida limitada a PostgreSQL CI local');
+ const E=DEMO_COMPANY,origin='https://backend.qa.invalid',preview='https://preview.qa.invalid';
  const evidence={date:new Date().toISOString(),target:'CI PostgreSQL local',externalIdentity:'stub',fiscalTransport:'simulated_wsfe',concurrency:8,samples:[],errors:[],productionActivation:false};
  const cpu=process.cpuUsage(),memoryBefore=process.memoryUsage(),start=performance.now();let server;
  try{
@@ -22,7 +24,8 @@ export async function verifyDemoScale(pool,{externalEmpresaId}){
   const keys=generateKeyPairSync('ed25519'),sigoUser=randomUUID();
   const makeLink=()=>createQaSigoLink({pool,externalEmpresaId,qaEmpresaId:E,allowLocalAccounts:true,verifyRemote:async()=>({user:{id:sigoUser,email:'sigo-owner@qa.invalid'},company:{rol:'owner'}})});
   let link=makeLink();
-  const make=()=>createIsolatedService({enabled:true,pool,...keys,issuer:'p0-scale-ci',origin,integrationOrigins:[preview],rateLimit:async()=>true,operational:true,inventoryRequired:true,accountsEnabled:true,databasePolicy:{assertPool:p=>assert.equal(p,pool)},sharedSourceEnabled:true,qaSigoLink:link});
+  const limiter=requestLimiter();
+  const make=()=>createIsolatedService({enabled:true,pool,...keys,issuer:'p0-scale-ci',origin,integrationOrigins:[preview],rateLimit:limiter,operational:true,inventoryRequired:true,accountsEnabled:true,databasePolicy:{assertPool:p=>assert.equal(p,pool)},sharedSourceEnabled:true,qaSigoLink:link});
   let service=make();
   server=createServer(async(req,res)=>{try{const response=await service(new Request(origin+req.url,{method:req.method,headers:req.headers,...(['GET','HEAD'].includes(req.method)?{}:{body:req,duplex:'half'})}));res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()));}catch(e){res.writeHead(500);res.end(JSON.stringify({error:e.message}));}});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const base='http://127.0.0.1:'+server.address().port;

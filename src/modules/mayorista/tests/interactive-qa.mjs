@@ -5,6 +5,7 @@ import {operationalContext} from '../backend/server.mjs';
 import {interactiveQa} from '../backend/interactive-qa.mjs';
 import {QA_RAILWAY} from '../railway/database-policy.mjs';
 import {verifyDemoScale} from './demo-scale.mjs';
+import {prepareDemoQA} from '../backend/prepare-demo-qa.mjs';
 /** SQL real en CI. Solo el transporte de Pool privado Railway se sustituye por localhost. */
 export async function verifyInteractiveQa(base){
  const ordinary={},isolated={pool:{},link:{}};
@@ -21,7 +22,10 @@ export async function verifyInteractiveQa(base){
   assert.equal(await interactiveQa({}),null);
   const first=await interactiveQa(env,{Pool:LocalPool});opened.push(first);assert.equal(first.namespace,namespace);assert.equal(first.externalEmpresaId,external);
   assert.equal((await first.pool.query('SELECT count(*) FROM mayorista_private.usuarios WHERE activo')).rows[0].count,'0');
-  const scaleResults=await verifyDemoScale(first.pool,{externalEmpresaId:external});
+  env.MAYORISTA_BOOTSTRAP_PASSWORD='qa-'+randomUUID();
+  const prepared=await prepareDemoQA(env,{Pool:LocalPool});
+  assert.equal(prepared.persistence.poolReopened,true);assert.equal(prepared.persistence.counts.products,5000);
+  const scaleResults=await verifyDemoScale(first.pool,{externalEmpresaId:external,password:env.MAYORISTA_BOOTSTRAP_PASSWORD});
   const id=randomUUID();await first.pool.query('INSERT INTO mayorista.vendedores(empresa_id,vendedor_id,nombre,activo) VALUES($1,$2,$3,true)',[first.qaEmpresaId,id,'Persistencia de vínculo QA']);
   const second=await interactiveQa(env,{Pool:LocalPool});opened.push(second);assert.equal((await second.pool.query('SELECT nombre FROM mayorista.vendedores WHERE empresa_id=$1 AND vendedor_id=$2',[second.qaEmpresaId,id])).rows[0].nombre,'Persistencia de vínculo QA');
   assert.equal((await second.pool.query('SELECT relrowsecurity FROM pg_class WHERE oid=$1::regclass',[namespace+'_private.qa_interactive_scope'])).rows[0].relrowsecurity,true);
