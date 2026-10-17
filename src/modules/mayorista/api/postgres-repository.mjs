@@ -85,10 +85,10 @@ export function createPostgresRepository({enabled=false,pool,inventoryRequired=f
         orderPage:async raw=>{
           const limit=Number(raw.limit??50),before=raw.before??'',id=raw.id??'';
           if(!Number.isSafeInteger(limit)||limit<1||limit>100||!!before!==!!id||before&&(!Number.isFinite(Date.parse(before))||!/^[a-f0-9-]{36}$/i.test(id)))throw new ApiError(422,'Historial inválido');
-          const items=(await q(`SELECT ${columns} FROM mayorista.pedidos WHERE empresa_id=$1 ${before?'AND (recibido_en,pedido_id)<($3::timestamptz,$4::uuid)':''} ORDER BY recibido_en DESC,pedido_id DESC LIMIT $2`,[principal.empresaId,limit+1,...(before?[before,id]:[])])).rows.map(normalize),hasMore=items.length>limit;
+          const items=(await q(`SELECT ${columns},to_char(recibido_en AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorFecha" FROM mayorista.pedidos WHERE empresa_id=$1 ${before?'AND (recibido_en,pedido_id)<($3::timestamptz,$4::uuid)':''} ORDER BY recibido_en DESC,pedido_id DESC LIMIT $2`,[principal.empresaId,limit+1,...(before?[before,id]:[])])).rows.map(normalize),hasMore=items.length>limit;
           return {items:items.slice(0,limit),hasMore};
         },
-        list:async()=> (await q(`SELECT ${columns} FROM mayorista.pedidos WHERE empresa_id=$1 ORDER BY recibido_en DESC LIMIT 500`,[principal.empresaId])).rows.map(normalize)
+        list:async()=> (await q(`SELECT ${columns},to_char(recibido_en AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorFecha" FROM mayorista.pedidos WHERE empresa_id=$1 ORDER BY recibido_en DESC,pedido_id DESC LIMIT 500`,[principal.empresaId])).rows.map(normalize)
       };
       Object.assign(tx,createVisitsTransaction({query:(sql,args)=>q(sql,args),principal}));
       Object.assign(tx,createCargasTransaction({query:(sql,args)=>q(sql,args),principal,findOrder:tx.find,fulfillment:tx.fulfillment,readCatalog:principal.fuenteComercial==='sigo'?()=>tx.sharedCatalog():undefined}));

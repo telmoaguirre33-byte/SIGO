@@ -2,13 +2,16 @@
 CREATE TABLE mayorista.puesta_marcha(empresa_id uuid PRIMARY KEY REFERENCES mayorista.empresas(empresa_id),version integer NOT NULL DEFAULT 0,datos jsonb NOT NULL DEFAULT '{}',actualizado_por uuid NOT NULL,actualizado_en timestamptz NOT NULL DEFAULT now());
 ALTER TABLE mayorista.puesta_marcha ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mayorista.puesta_marcha FORCE ROW LEVEL SECURITY;
-CREATE POLICY puesta_marcha_admin ON mayorista.puesta_marcha FOR ALL TO authenticated USING(mayorista.operador(empresa_id,array['gerencia','administracion'])) WITH CHECK(mayorista.operador(empresa_id,array['gerencia','administracion']) AND actualizado_por=auth.uid());
+CREATE POLICY puesta_marcha_read ON mayorista.puesta_marcha FOR SELECT TO authenticated USING(mayorista.operador(empresa_id,array['gerencia','administracion']));
+CREATE POLICY puesta_marcha_write ON mayorista.puesta_marcha FOR ALL TO authenticated USING(mayorista.operador(empresa_id,array['gerencia'])) WITH CHECK(mayorista.operador(empresa_id,array['gerencia']) AND actualizado_por=auth.uid());
 GRANT SELECT,INSERT,UPDATE ON mayorista.puesta_marcha TO authenticated;
 CREATE TABLE mayorista.importaciones(empresa_id uuid NOT NULL REFERENCES mayorista.empresas(empresa_id),importacion_id uuid NOT NULL,tipo text NOT NULL CHECK(tipo IN ('clientes','productos','stock','precios')),huella text NOT NULL,estado text NOT NULL DEFAULT 'preparada',creado_por uuid NOT NULL,creado_en timestamptz NOT NULL DEFAULT now(),PRIMARY KEY(empresa_id,importacion_id),UNIQUE(empresa_id,tipo,huella));
 CREATE TABLE mayorista.importacion_filas(empresa_id uuid NOT NULL,importacion_id uuid NOT NULL,fila integer NOT NULL,datos jsonb NOT NULL,estado text NOT NULL DEFAULT 'pendiente' CHECK(estado IN ('pendiente','error','aplicada')),resultado jsonb,PRIMARY KEY(empresa_id,importacion_id,fila),FOREIGN KEY(empresa_id,importacion_id) REFERENCES mayorista.importaciones(empresa_id,importacion_id));
 ALTER TABLE mayorista.importaciones ENABLE ROW LEVEL SECURITY;ALTER TABLE mayorista.importaciones FORCE ROW LEVEL SECURITY;
 ALTER TABLE mayorista.importacion_filas ENABLE ROW LEVEL SECURITY;ALTER TABLE mayorista.importacion_filas FORCE ROW LEVEL SECURITY;
-CREATE POLICY importaciones_admin ON mayorista.importaciones FOR ALL TO authenticated USING(mayorista.operador(empresa_id,array['gerencia','administracion'])) WITH CHECK(mayorista.operador(empresa_id,array['gerencia','administracion']) );
+CREATE POLICY importaciones_read ON mayorista.importaciones FOR SELECT TO authenticated USING(mayorista.operador(empresa_id,array['gerencia','administracion']));
+CREATE POLICY importaciones_insert ON mayorista.importaciones FOR INSERT TO authenticated WITH CHECK(mayorista.operador(empresa_id,array['gerencia','administracion']) AND creado_por=auth.uid());
+CREATE POLICY importaciones_update ON mayorista.importaciones FOR UPDATE TO authenticated USING(mayorista.operador(empresa_id,array['gerencia','administracion'])) WITH CHECK(mayorista.operador(empresa_id,array['gerencia','administracion']));
 CREATE POLICY importacion_filas_admin ON mayorista.importacion_filas FOR ALL TO authenticated USING(mayorista.operador(empresa_id,array['gerencia','administracion'])) WITH CHECK(mayorista.operador(empresa_id,array['gerencia','administracion']));
 GRANT SELECT,INSERT ON mayorista.importaciones TO authenticated;GRANT UPDATE(estado) ON mayorista.importaciones TO authenticated;GRANT SELECT,INSERT,UPDATE ON mayorista.importacion_filas TO authenticated;
 CREATE TABLE mayorista.identidades_importacion(empresa_id uuid NOT NULL,tipo text NOT NULL,clave text NOT NULL,registro_id uuid NOT NULL,PRIMARY KEY(empresa_id,tipo,clave));
@@ -131,3 +134,36 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION mayorista.fichas_asignacion(uuid,uuid[]) FROM public,anon;
 GRANT EXECUTE ON FUNCTION mayorista.fichas_asignacion(uuid,uuid[]) TO authenticated;
+
+-- El panel no necesita cotizar 5.000 productos: conserva la proyección y guard del lector de métricas.
+create or replace function public.leer_metricas_mayorista_sigo(p_empresa_id uuid) returns jsonb
+language plpgsql stable security definer set search_path='' as $$
+declare v_rol text;v_vendedor uuid;v_catalogo jsonb;v_facturas jsonb:=null;v_ledger jsonb:='[]';v_stock jsonb:='[]';v_devoluciones jsonb:='[]';
+begin
+ v_rol:=public.sigo_mayorista_lector(p_empresa_id);
+ if v_rol not in ('owner','admin','vendedor') then raise exception 'METRICS_FORBIDDEN';end if;
+ select m.vendedor_id into v_vendedor from mayorista.miembros m where m.empresa_id=p_empresa_id and m.user_id=auth.uid() and m.activo;
+ if v_rol='vendedor' and v_vendedor is null then raise exception 'SELLER_REQUIRED';end if;
+ v_catalogo:=jsonb_build_object('clientes',coalesce((select jsonb_agg(jsonb_build_object('id',c.id,'nombre',c.nombre,'direccion',c.direccion,'vendedorId',a.vendedor_id,'rutaId',a.ruta_id,'listaId',a.lista_id,'latitud',a.latitud,'longitud',a.longitud,'habilitado',coalesce(a.habilitado,false),'orden',coalesce(meta.orden,0),'telefono',c.telefono,'documento',c.documento,'limiteCredito',c.limite_credito,'saldo',c.saldo_actual)) from public.clientes_sigo c left join (select x.id,x.orden from mayorista.administracion plan cross join lateral jsonb_to_recordset(plan.datos->'clientes') x(id uuid,orden integer) where plan.empresa_id=p_empresa_id) meta on meta.id=c.id left join mayorista.clientes a on a.empresa_id=c.empresa_id and a.cliente_id=c.id where c.empresa_id=p_empresa_id and c.activo and (v_rol<>'vendedor' or (a.habilitado and a.vendedor_id=v_vendedor))),'[]'::jsonb),
+ 'productos',coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'nombre',p.nombre,'marca',to_jsonb(p)->>'marca','codigoInterno',to_jsonb(p)->>'codigo_interno','ean',to_jsonb(p)->>'codigo_barras')) from public.productos p where p.empresa_id=p_empresa_id and p.activo and p.precio_venta>0),'[]'::jsonb));
+ if to_regclass('public.arca_comprobantes') is not null then
+  select coalesce(jsonb_agg(jsonb_build_object('empresaId',p_empresa_id,'pedidoId',e.pedido_id,'clienteId',e.cliente_id,'vendedorId',e.vendedor_id,'rutaId',e.ruta_id,'fecha',a.emitido_at,'estado','confirmada','centavos',(v.total*100)::bigint)),'[]') into v_facturas
+  from public.arca_comprobantes a join public.sigo_mayorista_entregas_comerciales e on e.empresa_id=a.empresa_id and e.venta_id=a.venta_id join public.ventas_sigo v on v.id=a.venta_id and v.empresa_id=a.empresa_id
+  where a.empresa_id=p_empresa_id and a.cae~'^[0-9]{14}$' and a.resultado='A' and (v_rol<>'vendedor' or e.vendedor_id=v_vendedor);
+ end if;
+ if v_rol in ('owner','admin','vendedor') then
+  select coalesce(jsonb_agg(jsonb_build_object('clienteId',m.cliente_id,'tipo',case when m.tipo='haber' and nullif(to_jsonb(m)->>'devolucion_id','') is null then case when v_rol<>'vendedor' or m.created_by=auth.uid() then 'cobranza' else 'cobranza_otro' end when m.tipo='haber' then 'credito_devolucion' else 'debito' end,'centavos',(m.importe*100*(case when m.tipo='haber' then -1 else 1 end))::bigint,'fecha',m.created_at)),'[]') into v_ledger
+  from public.cliente_movimientos_sigo m where m.empresa_id=p_empresa_id and exists(select 1 from mayorista.clientes c where c.empresa_id=p_empresa_id and c.cliente_id=m.cliente_id and c.habilitado and (v_rol<>'vendedor' or c.vendedor_id=v_vendedor));
+  if v_rol in ('owner','admin') then v_stock:=public.leer_stock_mayorista_sigo(p_empresa_id)->'productos';end if;
+ end if;
+ if to_regclass('public.devoluciones_sigo') is not null then
+  select coalesce(jsonb_agg(jsonb_build_object('id',d.id,'eventoId',control.comando_id,'empresaId',p_empresa_id,'pedidoId',e.pedido_id,'clienteId',e.cliente_id,'vendedorId',e.vendedor_id,'rutaId',e.ruta_id,'fecha',d.created_at,'tipo','devolucion','centavos',(d.total*100)::bigint,'unidades',(select sum(i.cantidad) from public.devolucion_items_sigo i where i.empresa_id=p_empresa_id and i.devolucion_id=d.id),'lineas',(select jsonb_agg(jsonb_build_object('productoId',i.producto_id,'unidades',i.cantidad,'centavos',(i.subtotal*100)::bigint)) from public.devolucion_items_sigo i where i.empresa_id=p_empresa_id and i.devolucion_id=d.id))),'[]') into v_devoluciones from public.devoluciones_sigo d join public.sigo_mayorista_entregas_comerciales e on e.empresa_id=d.empresa_id and e.venta_id=d.venta_id left join public.sigo_mayorista_devoluciones_control control on control.empresa_id=d.empresa_id and control.devolucion_id=d.id where d.empresa_id=p_empresa_id and (v_rol<>'vendedor' or e.vendedor_id=v_vendedor);
+  if v_facturas is not null then select v_facturas||coalesce(jsonb_agg(jsonb_build_object('empresaId',p_empresa_id,'pedidoId',e.pedido_id,'clienteId',e.cliente_id,'vendedorId',e.vendedor_id,'rutaId',e.ruta_id,'fecha',a.emitido_at,'estado','confirmada','centavos',(-d.total*100)::bigint)),'[]') into v_facturas from public.arca_comprobantes a join public.sigo_mayorista_devoluciones_control control on control.empresa_id=a.empresa_id and (control.nota_credito->>'comprobanteId')::uuid=a.id join public.devoluciones_sigo d on d.empresa_id=control.empresa_id and d.id=control.devolucion_id join public.sigo_mayorista_entregas_comerciales e on e.empresa_id=control.empresa_id and e.venta_id=control.venta_id where a.empresa_id=p_empresa_id and a.cae~'^[0-9]{14}$' and a.resultado='A' and (v_rol<>'vendedor' or e.vendedor_id=v_vendedor);end if;
+ end if;
+ return jsonb_build_object('empresaId',p_empresa_id,'customers',v_catalogo->'clientes','products',v_catalogo->'productos','personalLedgerAvailable',v_rol='vendedor','confirmedReturns',v_devoluciones,'invoices',v_facturas,'ledger',v_ledger,'collections','[]'::jsonb,'inventory',v_stock,
+ 'sales',coalesce((select jsonb_agg(jsonb_build_object('empresaId',p_empresa_id,'pedidoId',e.pedido_id,'clienteId',e.cliente_id,'vendedorId',e.vendedor_id,'rutaId',e.ruta_id,'fecha',v.created_at,'estado',v.estado,'centavos',((v.total-coalesce((select sum(d.total) from public.devoluciones_sigo d where d.empresa_id=p_empresa_id and d.venta_id=v.id),0))*100)::bigint,'unidades',(select sum(i.cantidad-coalesce((select sum(d.cantidad) from public.devolucion_items_sigo d where d.empresa_id=p_empresa_id and d.venta_item_id=i.id),0)) from public.venta_items_sigo i where i.empresa_id=p_empresa_id and i.venta_id=v.id)))
+ from public.sigo_mayorista_entregas_comerciales e join public.ventas_sigo v on v.id=e.venta_id and v.empresa_id=e.empresa_id where e.empresa_id=p_empresa_id and e.estado='confirmado' and (v_rol<>'vendedor' or e.vendedor_id=v_vendedor)),'[]'::jsonb));
+end $$;
+
+REVOKE ALL ON FUNCTION public.leer_metricas_mayorista_sigo(uuid) FROM public,anon;
+GRANT EXECUTE ON FUNCTION public.leer_metricas_mayorista_sigo(uuid) TO authenticated;

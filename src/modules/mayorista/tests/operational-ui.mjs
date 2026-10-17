@@ -194,6 +194,10 @@ try{
  assert.equal((await pool.query("SELECT count(*) FROM mayorista.vendedores WHERE empresa_id=$1 AND nombre=$2",[fixture.E,'Vendedor vínculo QA persistente'])).rows[0].count,'1');
  assert.equal((await pool.query("SELECT count(*) FROM mayorista.vendedores WHERE empresa_id=$1 AND nombre=$2",[fixture.B,'Vendedor vínculo QA persistente'])).rows[0].count,'0');
  await passed('Sesión SIGO externa → identidad QA distinta: diez páginas funcionales y alta persistida solo en QA');
+ // Cambia únicamente el fixture CI al propietario autorizado antes de probar configuración de Gerencia.
+ await pool.query("UPDATE public.empresa_usuarios SET rol='owner' WHERE empresa_id=$1 AND user_id=$2",[fixture.B,fixture.actors.gerencia]);
+ await evaluate(`(async()=>{await window.portal.destroy();document.body.innerHTML='<main id="qa-ui" class="sigo-mayorista-workspace"></main>';const {mountOperationalPortal}=await import('./admin/operational-portal.mjs');window.portal=mountOperationalPortal(document.querySelector('#qa-ui'),{enabled:true,baseUrl:location.origin+'/',integrated:true,qaAislado:true,expectedEmpresaId:${JSON.stringify(fixture.B)},getSigoToken:async()=>${JSON.stringify(rootToken)}});})()`);
+ await wait("!!document.querySelector('nav [data-tab=panel]')&&!document.querySelector('[aria-busy=true]')");assert.equal(await evaluate('window.portal.client.identity().rol'),'gerencia');
  // Aceptación P1 publicada en el servidor HTTPS de CI; independiente de Railway y de los pedidos físicos.
  await evaluate("window.portal.showPage('puesta-marcha')");await wait("!!document.querySelector('[data-launch=setup]')&&!document.querySelector('[aria-busy=true]')");
  await submit('[data-launch=setup]',{tipoNegocio:'mayorista',nombre:'Distribuidora UI CI',documento:'QA-UI',direccion:'Calle CI'});
