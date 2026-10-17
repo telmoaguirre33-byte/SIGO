@@ -1,3 +1,8 @@
+import MayoristaBusinessType, {type BusinessType} from "./modules/mayorista/integration/MayoristaBusinessType";
+import MayoristaAdministrarAccess from "./modules/mayorista/integration/MayoristaAdministrarAccess";
+import {previewQaConfig} from "./modules/mayorista/integration/preview-qa-config";
+import {createCompanyConfigProvider} from "./modules/mayorista/integration/company-config";
+import {supabase} from "./supabase";
 import { useEffect, useMemo, useState } from "react";
 import type { EmpresaOperativa } from "./tenant";
 import {
@@ -7,6 +12,35 @@ import {
   type ModuloEmpresa,
   type PresetModulo,
 } from "./modulosEmpresa";
+
+const getSigoTokenMayorista=async()=>{const {data}=await supabase.auth.getSession();const token=data.session?.access_token;if(!token)throw Error('Volvé a ingresar a SIGO');return token;};
+const sharedCommerceRpc=async(name:string,args:Record<string,unknown>)=>{
+ if(['facturar_entrega_mayorista_sigo','emitir_nota_credito_mayorista_sigo'].includes(name)){
+  const {data}=await supabase.auth.getSession();const token=data.session?.access_token;if(!token)throw new Error('Volvé a ingresar a SIGO');
+  const response=await fetch(name==='emitir_nota_credito_mayorista_sigo'?'/api/mayorista/nota-credito':'/api/mayorista/arca',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(args),signal:AbortSignal.timeout(60000)});
+  const result=await response.json();if(!response.ok)throw new Error('No se confirmó la factura. La entrega se conserva para reintentar o revisar en Facturación.');return result;
+ }
+ if(!['registrar_entrega_mayorista_sigo','autorizar_credito_mayorista_sigo','registrar_cobro_mayorista_sigo','leer_comercio_mayorista_sigo'].includes(name))throw new Error('Operación compartida inválida');
+ const {data,error}=await supabase.rpc(name,args);if(error)throw new Error('No se pudo registrar en SIGO. La operación Mayorista se conserva para revisión.');return data;
+};
+
+const obtenerConfigMayorista=createCompanyConfigProvider(async(empresaId,signal)=>{
+  const qa=previewQaConfig(empresaId,import.meta.env,location.origin);if(qa)return qa;
+  const {data,error}=await supabase.rpc('obtener_acceso_mayorista_sigo',{p_empresa_id:empresaId}).abortSignal(signal);
+  if(error)throw new Error('No se pudo verificar Mayorista para esta empresa.');
+  return data;
+},async(empresaId,signal)=>{
+  const {data,error}=await supabase.rpc('listar_modulos_empresa_sigo',{p_empresa_id:empresaId}).abortSignal(signal);
+  if(error)throw error;return data;
+});
+
+const readBusinessType=async(empresaId:string,signal:AbortSignal):Promise<BusinessType>=>{
+ const {data,error}=await supabase.rpc('leer_tipo_negocio_sigo',{p_empresa_id:empresaId}).abortSignal(signal);
+ if(error||!['minorista','mayorista','mixto'].includes(data))throw new Error('Tipo de negocio no disponible');return data as BusinessType;
+};
+const writeBusinessType=async(empresaId:string,tipo:BusinessType)=>{
+ const {error}=await supabase.rpc('declarar_tipo_negocio_sigo',{p_empresa_id:empresaId,p_tipo:tipo});if(error)throw error;
+};
 
 const PRESETS: Array<{ clave: PresetModulo; nombre: string; detalle: string }> = [
   { clave: "kiosco", nombre: "Kiosco", detalle: "Venta rápida, stock, precios, scanner, clientes y ARCA." },
@@ -136,6 +170,11 @@ export default function ModulosControlPanel({ empresa }: { empresa: EmpresaOpera
         </div>
       </div>
 
+      {puedeEditar && <MayoristaBusinessType key={empresa.empresa_id} empresaId={empresa.empresa_id} readType={readBusinessType} writeType={writeBusinessType} onChanged={cargar} />}
+
+      {modulos.some(m => m.clave === "mayorista_distribuidora" && m.habilitado) &&
+        <MayoristaAdministrarAccess key={empresa.empresa_id} empresaId={empresa.empresa_id} rol={empresa.rol} obtenerConfig={obtenerConfigMayorista} sharedRpc={sharedCommerceRpc} getSigoToken={getSigoTokenMayorista} />}
+
       {error ? <div className="form-error" role="alert" style={{ marginBottom: 14 }}>{error}</div> : null}
       {mensaje ? <div className="sigo-matriz-success" style={{ marginBottom: 14 }}>{mensaje}</div> : null}
       {!puedeEditar ? <p className="barcode-help">Tu perfil puede consultar los módulos, pero sólo Propietario o Administrador puede modificarlos.</p> : null}
@@ -188,3 +227,4 @@ export default function ModulosControlPanel({ empresa }: { empresa: EmpresaOpera
     </section>
   );
 }
+
