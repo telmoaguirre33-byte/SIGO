@@ -17,8 +17,8 @@ Elegí la cuenta QA correspondiente al rol. Las credenciales se administran medi
 3. Usar los pasos para productos, stock, clientes, vendedores, zonas/rutas, vehículos, listas, condiciones, objetivos y usuarios. Los pasos enlazan las funciones existentes.
 4. Para planillas, abrir **Importar Excel / CSV**. Descargar la plantilla, completar códigos y datos, ver la vista previa y preparar la importación.
 5. Confirmar la importación. Se aplican lotes de 25 filas, con progreso y opción de pausa. Si se corta la conexión, reanudar la misma importación. No volver a dar altas a mano para resolver un corte.
-6. Corregir las filas con errores y continuar. Las filas aplicadas permanecen intactas. Volver a subir el mismo archivo recupera su importación; los códigos identifican registros existentes.
-7. En **Clientes**, buscar y filtrar. Seleccionar una página o clientes concretos; elegir vendedor, ruta/zona y lista. Confirmar hasta 100 asignaciones por operación. Una edición concurrente exige actualizar.
+6. Usar **Errores anteriores / Más errores** para corregir cualquier fila, incluso en archivos grandes, y luego confirmar para continuar. Corregir por sí solo no aplica la fila. Las filas aplicadas permanecen intactas. Volver a subir el mismo archivo recupera su importación; los códigos identifican registros existentes.
+7. En **Clientes**, buscar y filtrar. Seleccionar una página o clientes concretos; elegir vendedor, ruta/zona y lista. Confirmar hasta 100 asignaciones por operación. Una edición concurrente exige actualizar. Al cambiar búsqueda o filtros se descarta la selección anterior; revisar siempre la cantidad antes de confirmar.
 8. En **Objetivos**, elegir vendedor/empresa, métrica y período diario, semanal, mensual o personalizado. Guardar y editar desde la tabla objetivo/real/%/falta. Los importes se ingresan en pesos; internamente se conservan centavos.
 9. Revisar el paso final. El asistente verifica conteos reales, no considera una casilla como prueba de existencia de productos/clientes/roles. La dirección del depósito es configuración del módulo, sin habilitar depósitos adicionales de SIGO.
 

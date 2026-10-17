@@ -1,6 +1,6 @@
 # Entrega P1/P2 — Mayorista / Distribuidora
 
-Alcance exclusivo de PR #72. Sin merge, producción, Minorista funcional, Compras ni módulos externos. No se contrataron herramientas ni infraestructura. Los dos pedidos del Android no se leen ni se envían desde este desarrollo. El QA sigue fijado al último despliegue autorizado hasta aplicar un único patch final.
+Alcance exclusivo de PR #72. Sin merge, producción, Minorista funcional, Compras ni módulos externos. No se contrataron herramientas ni infraestructura. Los dos pedidos del Android no se leen ni se envían desde este desarrollo. Railway QA aceptado: HEAD `8082acb7fad2e4a73fac7c23434d014e6bb42694`, deployment `c4f6b8ac-f6ef-4d20-b523-589d60c3f4ee`, SUCCESS. No se repite el despliegue. Los cambios posteriores de interfaz se validan en CI/Preview; no actualizan automáticamente los archivos publicados por Railway.
 
 ## Problemas corregidos
 
@@ -74,3 +74,14 @@ P0 permanece abierto. No se declara comercializable ni se publica producción.
 El deployment `18b8625b-24ff-4880-bd9d-5046e81345ce` compiló, reutilizó correctamente la evidencia P0 y falló al verificar RLS. PostgreSQL registró `relation "mayorista.puesta_marcha" does not exist` en `WHERE oid=$1::regclass` (42P01). El adaptador QA traduce SQL, pero el parámetro conservaba el esquema base en vez del namespace sintético existente. No era un fallo de usuarios, permisos comerciales ni del sembrado. La excepción provoca rollback antes del commit de la ampliación.
 
 La corrección resuelve explícitamente el nombre de esquema del pool validado para `to_regclass($1)`, conserva RLS obligatorio y añade diagnóstico por etapa. El instalador real se ejecuta y se repite en PostgreSQL CI dentro de un namespace aislado; además se prueba rollback si falta RLS. No se reintenta Railway automáticamente: el siguiente HEAD necesita un nuevo patch autorizado. Los datos y movimientos QA se conservan.
+
+
+## Cierre de desarrollo automatizable posterior a la aceptación QA
+
+Se completa la navegación de todos los errores de importación, con páginas de 20 sobre el lector existente, incluso después de la fila 100. Corregir conserva la fila pendiente: no aplica datos sin confirmar. No cambia API, RLS, SQL ni esquema.
+
+La selección de clientes entre páginas respeta siempre el límite de 100, incluso usando «Seleccionar esta página». Cambiar búsqueda/filtros elimina la selección anterior para evitar asignaciones ocultas. Nuevas regresiones Chromium/PostgreSQL cubren 125 errores, corrección en página final y selección entre cinco páginas de 130 clientes CI.
+
+El despliegue QA aceptado emitió `MAYORISTA_P0_EVIDENCE_REUSED`, `verified: true`, `seeded: false`, `existingOrdersChanged: false`. Evidencia: `evidencia/railway-8082acb7-success.json`. La consulta directa de health/readiness y la nueva medición Railway continúan sin acreditarse por fallo de conexión al proxy del ejecutor; no se sustituyen por resultados CI. Esto no implica un error HTTP del servicio.
+
+No se crea ni aplica otro patch Railway. La aplicación autónoma se apoya en el alta de empresa y habilitación existentes de SIGO; no provisiona infraestructura. Suscripción queda preparada sin cobros/suspensión efectiva. La restauración del proveedor y la homologación fiscal real requieren acceso/autorización externos. Las pruebas físicas continúan postergadas. P0 sigue abierto sólo para la aceptación física final según la decisión del usuario; no se declara comercializable.

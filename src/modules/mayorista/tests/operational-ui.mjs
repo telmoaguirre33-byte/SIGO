@@ -209,6 +209,26 @@ try{
  await wait("!!document.querySelector('[data-prepare]')&&!document.querySelector('[aria-busy=true]')");await click('[data-prepare]');await wait("!!document.querySelector('[data-apply]')");await click('[data-apply]');await wait("document.querySelector('#launch-panel').textContent.includes('Aplicadas: 1')");
  assert.equal((await pool.query("SELECT count(*) FROM public.clientes_sigo WHERE empresa_id=$1 AND documento='UI-DOC'",[fixture.E])).rows[0].count,'1');
  await passed('CSV desde interfaz → vista previa → confirmación → fila real en PostgreSQL');
+ // Todas las filas con error son corregibles, incluso después del límite de lectura de 100.
+ const errorJob=await evaluate(`(async()=>{const client=window.portal.client;return client.prepareImport({id:crypto.randomUUID(),empresaId:client.identity().empresaId,tipo:'clientes',matrix:[['codigo','nombre','documento'],...Array.from({length:125},(_,i)=>['UI-ERROR-'+i,'','UI-ERRDOC-'+i])]});})()`);
+ await evaluate("window.portal.showPage('importaciones')");await wait("!!document.querySelector('[data-launch=preview]')&&!document.querySelector('[aria-busy=true]')");
+ await click('[data-resume="'+errorJob.id+'"]');
+ for(let page=0;page<6;page++)await click('[data-errors-page="1"]');
+ assert.equal(await evaluate("document.querySelector('[data-launch=correct] [name=numero]').value"),'122');
+ await submit('[data-launch=correct]',{nombre:'Cliente corregido página final'});
+ assert.equal((await pool.query("SELECT estado FROM mayorista.importacion_filas WHERE empresa_id=$1 AND importacion_id=$2 AND fila=122",[fixture.E,errorJob.id])).rows[0].estado,'pendiente');
+ assert.equal((await pool.query("SELECT count(*) FROM public.clientes_sigo WHERE empresa_id=$1 AND documento='UI-ERRDOC-120'",[fixture.E])).rows[0].count,'0');
+ await passed('Importación: 125 errores paginados; corrección después de la fila 100 queda pendiente sin aplicar automáticamente');
+ // Alta CI exclusiva para recorrer cinco páginas; no usa Railway ni datos del teléfono.
+ await evaluate(`(async()=>{const client=window.portal.client,E=client.identity().empresaId;let job=await client.prepareImport({id:crypto.randomUUID(),empresaId:E,tipo:'clientes',matrix:[['codigo','nombre','documento'],...Array.from({length:130},(_,i)=>['UI-MASS-'+i,'Padrón lote '+String(i).padStart(3,'0'),'UI-MASSDOC-'+i])]});for(let n=0;n<6&&job.resumen.some(r=>r.estado==='pendiente');n++)job=await client.processImport({id:crypto.randomUUID(),empresaId:E,importacionId:job.id,tipo:'aplicar'});})()`);
+ await evaluate("window.portal.showPage('padron')");await wait("!!document.querySelector('[data-launch=search]')&&!document.querySelector('[aria-busy=true]')");
+ await submit('[data-launch=search]',{q:'Padrón lote',vendedorId:'',rutaId:'',zona:''});
+ for(let page=0;page<5;page++){await click('[data-select-page]');if(page<4)await click('[data-page="1"]');}
+ assert.equal(await evaluate("document.querySelector('#launch-panel').textContent.includes('100 seleccionados')"),true);
+ assert.equal(await evaluate("document.querySelectorAll('[data-select]:checked').length"),0);
+ await submit('[data-launch=search]',{q:'Padrón lote 000',vendedorId:'',rutaId:'',zona:''});
+ assert.equal(await evaluate("document.querySelector('#launch-panel').textContent.includes('0 seleccionados')"),true);
+ await passed('Selección entre cinco páginas se limita a 100 clientes; cambiar filtros elimina selección oculta');
  await evaluate("window.portal.showPage('padron')");await wait("!!document.querySelector('[data-launch=search]')&&!document.querySelector('[aria-busy=true]')");await submit('[data-launch=search]',{q:'Cliente importación UI',vendedorId:'',rutaId:'',zona:''});await wait("document.querySelector('tbody').textContent.includes('Cliente importación UI')");
  assert.equal(await evaluate("document.querySelectorAll('#launch-panel tbody tr').length"),1);
  await passed('Padrón busca y pagina desde API; no despliega todos los clientes en el DOM');
