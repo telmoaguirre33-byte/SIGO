@@ -40,6 +40,7 @@ CREATE FUNCTION mayorista.importar_fila(p_empresa uuid,p_tipo text,p_clave text,
 DECLARE registro uuid; candidatos uuid[]; producto record; n integer; lista uuid; precio uuid; changed boolean:=false;
 BEGIN
  PERFORM public.sigo_mayorista_operador_comercial(p_empresa);
+ IF NOT public.tiene_permiso_empresa(p_empresa,case when p_tipo='clientes' then 'clients.write' else 'products.write' end) THEN RAISE EXCEPTION 'MAYORISTA_FORBIDDEN';END IF;
  IF p_tipo NOT IN ('clientes','productos','stock','precios') OR length(p_clave) NOT BETWEEN 1 AND 160 OR jsonb_typeof(p_datos)<>'object' THEN RAISE EXCEPTION 'IMPORT_INVALID';END IF;
  IF p_tipo IN ('clientes','productos') AND length(coalesce(p_datos->>'nombre','')) NOT BETWEEN 1 AND 160 THEN RAISE EXCEPTION 'Nombre requerido, máximo 160 caracteres';END IF;
  IF p_tipo='productos' AND (coalesce(p_datos->>'precio','') !~ '^[0-9]+([.][0-9]{1,2})?$' OR (p_datos->>'precio')::numeric NOT BETWEEN 0.01 AND 1000000000) THEN RAISE EXCEPTION 'Precio inválido';END IF;

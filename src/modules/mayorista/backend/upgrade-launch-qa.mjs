@@ -7,7 +7,7 @@ import {acceptanceNamespace} from '../railway/acceptance-namespace.mjs';
 export async function upgradeLaunchQA(env,{Pool=pg.Pool}={}){
  const config=railwayRuntime(env),base=new Pool(config.policy.config);
  try{
-  await assertInstalledQA(base);await verifyExistingP0QA(base);
+  await assertInstalledQA(base);console.log(JSON.stringify(await verifyExistingP0QA(base)));
   const pool=acceptanceNamespace(base,P0_NAMESPACE),c=await pool.connect();
   try{
    await c.query('BEGIN');await c.query("SELECT pg_advisory_xact_lock(hashtext('mayorista-launch-v1'))");await assertInstalledQA(c);
@@ -15,6 +15,7 @@ export async function upgradeLaunchQA(env,{Pool=pg.Pool}={}){
    for(const name of ['puesta_marcha','importaciones','importacion_filas','identidades_importacion','suscripciones']){
     const row=(await c.query('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=$1::regclass',['mayorista.'+name])).rows[0];if(!row?.relrowsecurity||!row.relforcerowsecurity)throw Error('LAUNCH_RLS_INVALID');
    }
+   const functions=(await c.query("SELECT to_regprocedure('mayorista.importar_fila(uuid,text,text,jsonb)') AS importer,to_regprocedure('mayorista.padron_clientes(uuid,text,uuid,uuid,text,integer,integer)') AS directory,to_regprocedure('mayorista.fichas_asignacion(uuid,uuid[])') AS assignment")).rows[0];if(!functions?.importer||!functions?.directory||!functions?.assignment)throw Error('LAUNCH_FUNCTIONS_MISSING');
    await c.query('COMMIT');return {verified:true,upgrade:'launch-v1',namespace:P0_NAMESPACE,seeded:false,existingOrdersChanged:false};
   }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
  }finally{await base.end();}

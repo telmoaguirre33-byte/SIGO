@@ -11,7 +11,7 @@ export function launchConfig(input){
 }
 const aliases={codigo:['codigo','codigo interno','sku','codigo cliente'],nombre:['nombre','producto','cliente','razon social'],documento:['documento','cuit','dni'],direccion:['direccion','domicilio'],telefono:['telefono','tel'],email:['email','correo'],ean:['ean','codigo de barras','codigo barras'],marca:['marca'],precio:['precio','precio venta','precio de venta'],cantidad:['cantidad','stock','stock inicial'],lista:['lista','lista de precios'],presentacion:['presentacion'],unidadesBase:['unidades','unidades por caja','unidades base'],ajuste:['ajuste','ajuste porcentaje']};
 export function normalizeImport(kind,matrix){
- if(!IMPORT_KINDS.includes(kind)||!Array.isArray(matrix)||matrix.length<2||matrix.length>10001)throw Error('Usá entre 1 y 10.000 filas.');
+ if(!IMPORT_KINDS.includes(kind)||!Array.isArray(matrix)||matrix.length<2||matrix.length>10001||matrix.some(r=>!Array.isArray(r)||r.length>100))throw Error('Usá entre 1 y 10.000 filas.');
  const headers=matrix[0].map(fold),columns=Object.fromEntries(Object.entries(aliases).map(([key,names])=>[key,headers.findIndex(h=>[fold(key),...names].includes(h))]));
  const seen=new Set();
  return matrix.slice(1).map((cells,index)=>{

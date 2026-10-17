@@ -5,8 +5,8 @@ import {performance} from 'node:perf_hooks';
 /** PostgreSQL CI real. Nunca se invoca desde Railway ni usa QA persistente. */
 export async function verifyLaunchAPI(pool,{make,origin,E,B,creds}){
  await pool.query(await readFile(new URL('../commercial/launch-schema-qa.sql',import.meta.url),'utf8'));
- let service=make();const timings={};
- const call=async(path,token,body)=>{const t=performance.now();const response=await service(new Request(origin+path,{method:body?'POST':'GET',headers:{Origin:origin,Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})}));const value=await response.json();(timings[path.split('?')[0]]??=[]).push(performance.now()-t);return {status:response.status,body:value};};
+ let service=make();const timings={},serverTimings=[];
+ const call=async(path,token,body)=>{const t=performance.now();const response=await service(new Request(origin+path,{method:body?'POST':'GET',headers:{Origin:origin,Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})}));const value=await response.json();if(response.headers.has('Server-Timing'))serverTimings.push({path:path.split('?')[0],value:response.headers.get('Server-Timing')});(timings[path.split('?')[0]]??=[]).push(performance.now()-t);return {status:response.status,body:value};};
  const login=async role=>(await call('/auth/login','',creds[role])).body.accessToken;
  const token=await login('gerencia'),seller=await login('vendedor'),admin=await login('administracion'),warehouse=await login('armador'),driver=await login('chofer');
  const c=body=>({id:randomUUID(),empresaId:E,...body});
@@ -49,8 +49,10 @@ export async function verifyLaunchAPI(pool,{make,origin,E,B,creds}){
  service=make();const persisted=await call('/admin/launch',token);assert.equal(persisted.body.datos.nombre,'Distribuidora CI');assert.equal(persisted.body.version,1);
  assert.equal((await call('/admin/launch/imports?id='+products.id,token)).body.resumen.find(r=>r.estado==='aplicada').cantidad,5000);
  for(const tipo of ['ventas','facturacion','cobranzas','deuda','vendedores','objetivos','clientes','rutas','productos','entregas','devoluciones']){const r=await call('/admin/reports/export?tipo='+tipo,token);assert.equal(r.status,200,JSON.stringify(r));assert.ok(r.body.rows.length<=100);assert.equal(r.body.revision.length,64);}
+ const firstHistory=await call('/orders/history?limit=1',seller);assert.equal(firstHistory.status,200);assert.ok(firstHistory.body.items.length<=1);if(firstHistory.body.items[0]){const first=firstHistory.body.items[0],next=await call('/orders/history?limit=1&before='+encodeURIComponent(first.recibidoEn)+'&id='+first.pedidoId,seller);assert.equal(next.status,200);assert.ok(next.body.items.every(p=>p.pedidoId!==first.pedidoId));}
+ for(let sample=0;sample<20;sample++)assert.equal((await call('/catalog',token)).status,200);
  const db=await pool.connect();try{await db.query('BEGIN');await db.query('SET LOCAL ROLE authenticated');await db.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[(await pool.query('SELECT user_id FROM mayorista.miembros WHERE empresa_id=$1 AND rol=$2 LIMIT 1',[E,'vendedor'])).rows[0].user_id]);assert.equal((await db.query('SELECT * FROM mayorista.importaciones')).rows.length,0);assert.equal((await db.query('SELECT * FROM mayorista.puesta_marcha')).rows.length,0);}finally{await db.query('ROLLBACK');db.release();}
  const metrics=Object.fromEntries(Object.entries(timings).map(([k,v])=>{v.sort((a,b)=>a-b);return [k,{n:v.length,p50:v[Math.floor(v.length*.5)],p95:v[Math.min(v.length-1,Math.floor(v.length*.95))]}];}));
- await mkdir(new URL('./artifacts/',import.meta.url),{recursive:true});await writeFile(new URL('./artifacts/launch-ci-metrics.json',import.meta.url),JSON.stringify({environment:'PostgreSQL CI real; no Railway ni Android físico',clients:1500,products:5000,metrics},null,2));
+ await mkdir(new URL('./artifacts/',import.meta.url),{recursive:true});await writeFile(new URL('./artifacts/launch-ci-metrics.json',import.meta.url),JSON.stringify({environment:'PostgreSQL CI real; no Railway ni Android físico',clients:1500,products:5000,serverTimings,metrics},null,2));
  console.log('PASS lanzamiento PostgreSQL real: 1500 clientes, 5000 productos, apertura, reintentos, corrección, persistencia, padrón paginado, asignación y RLS',JSON.stringify(metrics));
 }

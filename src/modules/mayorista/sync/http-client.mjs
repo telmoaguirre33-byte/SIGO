@@ -19,6 +19,7 @@ export function createMayoristaClient({enabled=false,baseUrl,qaAislado=false,get
         }
         if(authorization===token){token=null;principal=null;}
       }
+      if(path.startsWith('/admin/launch')||path.startsWith('/admin/reports/export')){const messages={409:'Los datos cambiaron en otra sesión. Actualizá y revisá antes de reintentar.',422:value.error||'Revisá los datos ingresados.',413:'El archivo supera el tamaño permitido. Dividilo en archivos más pequeños.',429:'Hay muchas solicitudes. Esperá unos segundos y volvé a intentar.'};if(messages[r.status])throw failure(messages[r.status],r.status,path);}
       // Un 403 de una función no revoca una sesión válida para otras funciones.
       throw failure(r.status===409?'Conflicto: revisar pedido conservado en el dispositivo':r.status===401?'Revalidá tu acceso desde SIGO':r.status===403?'Sin permisos para esta empresa o función':`Error de sincronización (${r.status}). Conservamos la operación; volvé a intentar.`,r.status,path);
     }
