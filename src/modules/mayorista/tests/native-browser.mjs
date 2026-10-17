@@ -77,6 +77,9 @@ export async function verifyNativeBrowsers({handler,password,empresaId,vendedorI
     await check('App segura autentica y cifra catálogo de API real',async()=>{
       assert.equal(await a.evaluate(`(async()=>{const f=document.querySelector('#login');f.elements.empresaId.value=${JSON.stringify(empresaId)};f.elements.email.value='vendedor@qa.invalid';f.elements.password.value=${JSON.stringify(password)};f.elements.localPassword.value=${JSON.stringify(localPassword)};f.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));for(let n=0;n<200;n++){await new Promise(r=>setTimeout(r,50));if(document.querySelector('#line'))return document.body.textContent.includes('Catálogo cifrado actualizado.');}return false;})()`),true);
     });
+    await check('Buscador de clientes filtra asignados y recupera la selección sin escribir identificadores',async()=>{
+      assert.equal(await a.evaluate(`(()=>{const input=document.querySelector('#customer-search'),select=document.querySelector('#order-client'),before=select.options.length;if(!input||!before)return false;input.value='cliente-inexistente-zzzz';input.dispatchEvent(new Event('input',{bubbles:true}));if(select.options.length!==0)return false;input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));return select.options.length===before&&!!select.value;})()`),true);
+    });
     await a.command('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});
     let encryptedOrderId;
     await check('App segura crea borrador y pedido cifrados offline con UUID estable',async()=>{
