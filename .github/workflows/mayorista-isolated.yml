@@ -77,7 +77,7 @@ jobs:
         run: docker build -f ../backend/Dockerfile -t sigo-mayorista-qa:ci ../../../..
       - name: Verificar paquete runtime y bloqueo por defecto
         run: |
-          docker run --rm --network none --entrypoint node sigo-mayorista-qa:ci --input-type=module -e "await import('./server.mjs');const {railwayRuntime}=await import('./railway-runtime.mjs');try{railwayRuntime({});throw new Error('Habilitación inesperada')}catch(e){if(e.message!=='Mayorista QA está desactivado')throw e}console.log('Runtime importado y desactivado por defecto; sin red ni despliegue')"
+          docker run --rm --network none --entrypoint node sigo-mayorista-qa:ci --input-type=module -e "await import('./server.mjs');const {railwayRuntime}=await import('./railway-runtime.mjs');try{railwayRuntime({});throw new Error('Habilitación inesperada')}catch(e){if(e.message!=='Mayorista QA está desactivado')throw e}const {acceptLiveDemo}=await import('./accept-live-demo.mjs');try{await acceptLiveDemo({});throw new Error('Aceptación live inesperada')}catch(e){if(e.message!=='Aceptación live requiere opt-in explícito')throw e};console.log('Runtime importado y desactivado por defecto; sin red ni despliegue')"
       - name: Guardar evidencia y lockfile generado
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -89,3 +89,4 @@ jobs:
             src/modules/mayorista/backend/package-lock.json
           if-no-files-found: warn
           retention-days: 7
+
