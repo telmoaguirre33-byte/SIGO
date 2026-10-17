@@ -1,3 +1,4 @@
+import {installLaunchSchema} from '../backend/launch-upgrade.mjs';
 import assert from 'node:assert/strict';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
@@ -9,7 +10,7 @@ export async function verifyLaunchAPI(pool,{make,origin,E,B,creds}){
  const login=async role=>(await call('/auth/login','',creds[role])).body.accessToken;
  const token=await login('gerencia'),seller=await login('vendedor'),admin=await login('administracion'),warehouse=await login('armador'),driver=await login('chofer');
  const beforeCatalog=await call('/catalog',token),beforeDashboard=await call('/admin/dashboard',token);assert.equal(beforeCatalog.status,200);assert.equal(beforeDashboard.status,200);
- await pool.query(await readFile(new URL('../commercial/launch-schema-qa.sql',import.meta.url),'utf8'));
+ assert.equal((await installLaunchSchema(pool)).verified,true);assert.equal((await installLaunchSchema(pool)).verified,true);
  const afterCatalog=await call('/catalog',token),afterDashboard=await call('/admin/dashboard',token);assert.equal(afterCatalog.status,200);assert.equal(afterDashboard.status,200);
  const sorted=value=>Array.isArray(value)?value.map(sorted).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).filter(([k])=>k!=='descargadoEn').sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>[k,sorted(v)])):value;
  assert.deepEqual(sorted(afterCatalog.body),sorted(beforeCatalog.body));assert.deepEqual(sorted(afterDashboard.body),sorted(beforeDashboard.body));

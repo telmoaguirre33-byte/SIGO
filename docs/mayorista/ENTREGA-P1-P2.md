@@ -68,3 +68,9 @@ El programa verifica binding QA y evidencia P0; luego instala la ampliación adi
 Aplicar requiere aprobación específica del patch final Railway. Después: SUCCESS/HEAD, health/readiness, medición real y smoke de lectura/seguridad sobre la empresa existente. No usar los dos pedidos hasta la aceptación física acordada.
 
 P0 permanece abierto. No se declara comercializable ni se publica producción.
+
+## Corrección de predeploy observada en Railway
+
+El deployment `18b8625b-24ff-4880-bd9d-5046e81345ce` compiló, reutilizó correctamente la evidencia P0 y falló al verificar RLS. PostgreSQL registró `relation "mayorista.puesta_marcha" does not exist` en `WHERE oid=$1::regclass` (42P01). El adaptador QA traduce SQL, pero el parámetro conservaba el esquema base en vez del namespace sintético existente. No era un fallo de usuarios, permisos comerciales ni del sembrado. La excepción provoca rollback antes del commit de la ampliación.
+
+La corrección resuelve explícitamente el nombre de esquema del pool validado para `to_regclass($1)`, conserva RLS obligatorio y añade diagnóstico por etapa. El instalador real se ejecuta y se repite en PostgreSQL CI dentro de un namespace aislado; además se prueba rollback si falta RLS. No se reintenta Railway automáticamente: el siguiente HEAD necesita un nuevo patch autorizado. Los datos y movimientos QA se conservan.

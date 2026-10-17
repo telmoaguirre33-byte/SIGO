@@ -73,6 +73,7 @@ jobs:
           node ../tests/readiness.mjs
           node ../tests/timing.mjs
           node ../tests/import-files.mjs
+          node ../tests/launch-upgrade.mjs
           node ../tests/seller-workflow.mjs
           node ../tests/device-session-client.mjs
       - name: Políticas RLS en PostgreSQL efímero local
