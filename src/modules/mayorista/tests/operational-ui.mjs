@@ -33,7 +33,7 @@ async function openPortal(role='gerencia',page='panel'){
 }
 try{
  await installAcceptanceNamespace(pool,await schemaPackage(),[QA_RAILWAY.projectId,QA_RAILWAY.environmentId]);created=true;
- await verifyBusinessTypeSQL(pool);await verifySharedCommerceSQL(pool);fixture=await prepareSharedBackendFixture(pool,{origin});
+ await verifyBusinessTypeSQL(pool);await verifySharedCommerceSQL(pool);fixture=await prepareSharedBackendFixture(pool,{origin});await pool.query(await readFile(new URL('../commercial/launch-schema-qa.sql',import.meta.url),'utf8'));
  const backend=fixture.make({sourceRevision:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',authenticateSigo:async token=>{const actor=await fixture.verifyRootToken(token);return {id:actor.userId,email:fixture.creds.gerencia.email};}}),activation=await prepareActivationUi(pool,fixture,backend);
  const keys=forge.pki.rsa.generateKeyPair(2048),cert=forge.pki.createCertificate();cert.publicKey=keys.publicKey;cert.serialNumber='01';cert.validity.notBefore=new Date(Date.now()-60000);cert.validity.notAfter=new Date(Date.now()+86400000);cert.setSubject([{name:'commonName',value:'localhost'}]);cert.setIssuer(cert.subject.attributes);cert.setExtensions([{name:'subjectAltName',altNames:[{type:2,value:'localhost'}]}]);cert.sign(keys.privateKey,forge.md.sha256.create());
  server=createServer({key:forge.pki.privateKeyToPem(keys.privateKey),cert:forge.pki.certificateToPem(cert)},async(req,res)=>{
@@ -181,7 +181,7 @@ try{
  qaBackend=fixture.make({qaSigoLink:qaLink});
  await evaluate(`(async()=>{window.activationModule.unmountActivation();document.body.innerHTML='<main id="qa-ui" class="sigo-mayorista-workspace"></main>';const {mountOperationalPortal}=await import('./admin/operational-portal.mjs');window.portal=mountOperationalPortal(document.querySelector('#qa-ui'),{enabled:true,baseUrl:location.origin+'/',integrated:true,qaAislado:true,sharedCommerce:{invoice:()=>{throw Error('Transporte productivo prohibido');},creditNote:()=>{throw Error('Transporte productivo prohibido');}},expectedEmpresaId:${JSON.stringify(fixture.B)},getSigoToken:async()=>${JSON.stringify(rootToken)}});})()`);
  await wait("!!document.querySelector('nav [data-tab=panel]')&&!document.querySelector('[aria-busy=true]')");
- const navigation=['panel','vendedores','objetivos','pedidos','administracion','deposito','cargas','reparto','entregas','rendiciones','clientes','catalogo','cuentas','personal','informes','panel'];
+ const navigation=['panel','vendedores','objetivos','pedidos','administracion','deposito','cargas','reparto','entregas','rendiciones','clientes','catalogo','cuentas','personal','informes','puesta-marcha','importaciones','padron','panel'];
  const navigationIdentity=await evaluate('window.portal.client.identity()');
  for(let round=0;round<2;round++){if(round)await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});for(const id of navigation){await evaluate(`window.portal.showPage(${JSON.stringify(id)})`);await wait("!document.querySelector('[aria-busy=true]')");assert.equal(await evaluate(`document.querySelector('nav [aria-current=page]').dataset.tab`),id);assert.equal(await evaluate("!!document.querySelector('[data-form=login]')"),false);assert.equal(await evaluate("document.body.innerText.includes('Error de sincronización')"),false);assert.equal(await evaluate('window.portal.client.identity().empresaId'),fixture.E);for(const field of ['userId','rol','sessionId'])assert.equal(await evaluate(`window.portal.client.identity()[${JSON.stringify(field)}]`),navigationIdentity[field]);}}
  await passed('Navegación prolongada: dos recorridos de 16 páginas sin 503, segundo login ni pérdida de empresa/rol');
@@ -194,6 +194,26 @@ try{
  assert.equal((await pool.query("SELECT count(*) FROM mayorista.vendedores WHERE empresa_id=$1 AND nombre=$2",[fixture.E,'Vendedor vínculo QA persistente'])).rows[0].count,'1');
  assert.equal((await pool.query("SELECT count(*) FROM mayorista.vendedores WHERE empresa_id=$1 AND nombre=$2",[fixture.B,'Vendedor vínculo QA persistente'])).rows[0].count,'0');
  await passed('Sesión SIGO externa → identidad QA distinta: diez páginas funcionales y alta persistida solo en QA');
+ // Aceptación P1 publicada en el servidor HTTPS de CI; independiente de Railway y de los pedidos físicos.
+ await evaluate("window.portal.showPage('puesta-marcha')");await wait("!!document.querySelector('[data-launch=setup]')&&!document.querySelector('[aria-busy=true]')");
+ await submit('[data-launch=setup]',{tipoNegocio:'mayorista',nombre:'Distribuidora UI CI',documento:'QA-UI',direccion:'Calle CI'});
+ await wait("!!document.querySelector('[name=deposito]')");await submit('[data-launch=setup]',{deposito:'Depósito UI CI'});
+ await click('[data-step=empresa]');assert.equal(await evaluate("document.querySelector('[name=nombre]').value"),'Distribuidora UI CI');
+ await passed('Asistente guarda y recupera pasos desde PostgreSQL sin intervención técnica');
+ await evaluate("window.portal.showPage('importaciones')");await wait("!!document.querySelector('[data-launch=preview]')&&!document.querySelector('[aria-busy=true]')");
+ await evaluate(`(()=>{const f=document.querySelector('[data-launch=preview]'),transfer=new DataTransfer();transfer.items.add(new File([${JSON.stringify('codigo;nombre;documento\nUI-CLIENT;Cliente importación UI;UI-DOC\n')}], 'clientes.csv',{type:'text/csv'}));f.elements.archivo.files=transfer.files;f.requestSubmit();})()`);
+ await wait("!!document.querySelector('[data-prepare]')&&!document.querySelector('[aria-busy=true]')");await click('[data-prepare]');await wait("!!document.querySelector('[data-apply]')");await click('[data-apply]');await wait("document.querySelector('#launch-panel').textContent.includes('Aplicadas: 1')");
+ assert.equal((await pool.query("SELECT count(*) FROM public.clientes_sigo WHERE empresa_id=$1 AND documento='UI-DOC'",[fixture.E])).rows[0].count,'1');
+ await passed('CSV desde interfaz → vista previa → confirmación → fila real en PostgreSQL');
+ await evaluate("window.portal.showPage('padron')");await wait("!!document.querySelector('[data-launch=search]')&&!document.querySelector('[aria-busy=true]')");await submit('[data-launch=search]',{q:'Cliente importación UI',vendedorId:'',rutaId:'',zona:''});await wait("document.querySelector('tbody').textContent.includes('Cliente importación UI')");
+ assert.equal(await evaluate("document.querySelectorAll('#launch-panel tbody tr').length"),1);
+ await passed('Padrón busca y pagina desde API; no despliega todos los clientes en el DOM');
+ await evaluate("window.portal.showPage('informes')");await wait("!!document.querySelector('#launch-panel form')&&!document.querySelector('[aria-busy=true]')");await submit('#launch-panel form',{tipo:'clientes',periodo:'mes',vendedorId:'',rutaId:'',zona:''});await wait("!!document.querySelector('[data-excel]')&&!document.querySelector('[aria-busy=true]')");
+ assert.equal(await evaluate("document.querySelector('tbody').textContent.includes('Cliente importación UI')"),true);
+ await command('Page.setDownloadBehavior',{behavior:'allow',downloadPath:profile});await click('[data-excel]');await wait("document.querySelector('#launch-panel').textContent.includes('Excel generado')");
+ await passed('Informes publicados usan filtros y generan XLSX desde datos reales de CI');
+ for(const width of [390,1280]){await command('Emulation.setDeviceMetricsOverride',{width,height:844,deviceScaleFactor:1,mobile:width<600});assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth+2'),true);const shot=await command('Page.captureScreenshot',{format:'png'});await writeFile(new URL('./artifacts/launch-'+width+'.png',import.meta.url),Buffer.from(shot.data,'base64'));}
+ await command('Emulation.clearDeviceMetricsOverride');
  assert.deepEqual(errors,[]);await mkdir(new URL('./artifacts/',import.meta.url),{recursive:true});await writeFile(new URL('./artifacts/operational-ui.json',import.meta.url),JSON.stringify({scope:'Chromium HTTPS y PostgreSQL CI; WSFE simulado',results},null,2));console.log(results.length+' controles UI operativos aprobados. No ejecución contra Railway ni empresas productivas.');
 }finally{
  if(socket?.readyState===1)await command('Browser.close').catch(()=>{});socket?.close();browser?.kill('SIGTERM');if(server)await new Promise(r=>server.close(r));await pool.end();if(created)for(const schema of Object.values(pool.schemas))await base.query('DROP SCHEMA '+schema+' CASCADE');await base.end();await rm(profile,{recursive:true,force:true});

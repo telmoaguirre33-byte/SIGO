@@ -70,6 +70,7 @@ jobs:
           node ../tests/existing-p0-evidence.mjs
           node ../tests/launch-model.mjs
           node ../tests/report-export.mjs
+          node ../tests/readiness.mjs
           node ../tests/seller-workflow.mjs
           node ../tests/device-session-client.mjs
       - name: Políticas RLS en PostgreSQL efímero local

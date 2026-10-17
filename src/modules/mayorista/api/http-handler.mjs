@@ -1,3 +1,4 @@
+import {measuredJSON} from '../backend/timing.mjs';
 import {ApiError} from './receive-order.mjs';
 import {approvedOrigins} from './origins.mjs';
 const LIMIT=256*1024;
@@ -13,7 +14,7 @@ async function readBody(request){
 export function createOrderHttpHandler({enabled=false,allowedOrigin,integrationOrigins=[],receive,rateLimit}={}){
   return async request=>{
     const headers={'Cache-Control':'no-store','Content-Type':'application/json','X-Content-Type-Options':'nosniff','Vary':'Origin'};
-    const reply=(status,body)=>new Response(JSON.stringify(body),{status,headers});
+    const reply=(status,body)=>new Response(measuredJSON(body),{status,headers});
     if(!enabled || !receive || !rateLimit)return reply(503,{error:'Recepción Mayorista desactivada'});
     let origins;try{origins=approvedOrigins(allowedOrigin,integrationOrigins);}catch{return reply(503,{error:'Origen no configurado'});}
     const requestOrigin=request.headers.get('Origin');
@@ -32,3 +33,4 @@ export function createOrderHttpHandler({enabled=false,allowedOrigin,integrationO
     }catch(e){const status=e instanceof ApiError?e.status:503;const messages={401:'Sesión inválida',403:'Sin permisos',409:'Pedido requiere revisión',413:'Pedido demasiado grande',422:'Pedido inválido',503:'Servicio no disponible'};return reply(status,{error:messages[status]??'No se pudo recibir el pedido'});}
   };
 }
+

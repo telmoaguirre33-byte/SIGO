@@ -1,3 +1,4 @@
+import {measureSQL} from '../backend/timing.mjs';
 import {createLaunchTransaction} from '../commercial/launch.mjs';
 import {validateSharedOrder} from '../commercial/order-references.mjs';
 import {createCollectionsTransaction} from '../commercial/collections.mjs';
@@ -25,31 +26,31 @@ export function createPostgresRepository({enabled=false,pool,inventoryRequired=f
   return {withPrincipal:async(principal,fn)=>{
     if(!enabled)throw new ApiError(503,'Persistencia desactivada');(databasePolicy?.assertPool??assertIsolatedPool)(pool);
     for(let attempt=0;attempt<8;attempt++){
-    const c=await pool.connect();
+    const c=await pool.connect(),q=(...args)=>measureSQL(()=>c.query(...args));
     try{
-      await c.query('BEGIN ISOLATION LEVEL SERIALIZABLE');await c.query('SET LOCAL ROLE authenticated');
-      await c.query("SELECT set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claims',$2,true)",[principal.userId,JSON.stringify({sub:principal.userId,is_anonymous:false,session_id:principal.sessionId,exp:Math.floor(principal.expiresAt/1000)})]);
+      await q('BEGIN ISOLATION LEVEL SERIALIZABLE');await q('SET LOCAL ROLE authenticated');
+      await q("SELECT set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claims',$2,true)",[principal.userId,JSON.stringify({sub:principal.userId,is_anonymous:false,session_id:principal.sessionId,exp:Math.floor(principal.expiresAt/1000)})]);
       const tx={
-        find:async(e,id)=>normalize((await c.query(`SELECT ${columns} FROM mayorista.pedidos WHERE empresa_id=$1 AND pedido_id=$2`,[e,id])).rows[0]),
+        find:async(e,id)=>normalize((await q(`SELECT ${columns} FROM mayorista.pedidos WHERE empresa_id=$1 AND pedido_id=$2`,[e,id])).rows[0]),
         validateReferences:async order=>{
-          const client=(await c.query(`SELECT cliente_id${operational?',lista_id':''} FROM mayorista.clientes WHERE empresa_id=$1 AND cliente_id=$2 AND vendedor_id=$3 AND habilitado`,[order.empresaId,order.clienteId,order.vendedorId])).rows[0];
+          const client=(await q(`SELECT cliente_id${operational?',lista_id':''} FROM mayorista.clientes WHERE empresa_id=$1 AND cliente_id=$2 AND vendedor_id=$3 AND habilitado`,[order.empresaId,order.clienteId,order.vendedorId])).rows[0];
           if(!client)return ['cliente no asignado'];
           const ids=[...new Set(order.lineas.map(l=>l.productoId))];
-          const products=(await c.query('SELECT producto_id FROM mayorista.productos WHERE empresa_id=$1 AND producto_id=ANY($2::uuid[]) AND activo',[order.empresaId,ids])).rows;
-          const prices=(await c.query(`SELECT producto_id,precio,unidades_base${operational?',precio_id,lista_id':''} FROM mayorista.precios WHERE empresa_id=$1 AND producto_id=ANY($2::uuid[])${operational?' AND (lista_id IS NULL OR EXISTS(SELECT 1 FROM mayorista.listas l WHERE l.empresa_id=precios.empresa_id AND l.lista_id=precios.lista_id AND l.activa))':''}`,[order.empresaId,ids])).rows;const offers=operational?(await c.query('SELECT precio_id,descuento FROM mayorista.ofertas WHERE empresa_id=$1 AND desde<=now() AND hasta>now()',[order.empresaId])).rows:[];if(operational)for(const p of prices)p.precio=Math.min(Number(p.precio),...offers.filter(o=>o.precio_id===p.precio_id).map(o=>offerPrice(p.precio,o.descuento)));
+          const products=(await q('SELECT producto_id FROM mayorista.productos WHERE empresa_id=$1 AND producto_id=ANY($2::uuid[]) AND activo',[order.empresaId,ids])).rows;
+          const prices=(await q(`SELECT producto_id,precio,unidades_base${operational?',precio_id,lista_id':''} FROM mayorista.precios WHERE empresa_id=$1 AND producto_id=ANY($2::uuid[])${operational?' AND (lista_id IS NULL OR EXISTS(SELECT 1 FROM mayorista.listas l WHERE l.empresa_id=precios.empresa_id AND l.lista_id=precios.lista_id AND l.activa))':''}`,[order.empresaId,ids])).rows;const offers=operational?(await q('SELECT precio_id,descuento FROM mayorista.ofertas WHERE empresa_id=$1 AND desde<=now() AND hasta>now()',[order.empresaId])).rows:[];if(operational)for(const p of prices)p.precio=Math.min(Number(p.precio),...offers.filter(o=>o.precio_id===p.precio_id).map(o=>offerPrice(p.precio,o.descuento)));
           const issues=[];
           for(const l of order.lineas){if(!products.some(p=>p.producto_id===l.productoId))issues.push('producto inactivo');if(!prices.some(p=>p.producto_id===l.productoId && (!operational||p.lista_id===client.lista_id) && Math.abs(Number(p.precio)/p.unidades_base-l.precioUnitario)<0.000001))issues.push('precio cambiado');}
           return issues;
         },
         insertOnce:async row=>{
           const commercial=!!row.comerciales;
-          if(commercial&&!(await c.query("SELECT 1 FROM pg_attribute WHERE attrelid='mayorista.pedidos'::regclass AND attname='comerciales' AND NOT attisdropped")).rows.length)throw new ApiError(503,'Condiciones comerciales requieren actualización Mayorista');
-          const result=await c.query(`INSERT INTO mayorista.pedidos(empresa_id,pedido_id,vendedor_id,cliente_id,creado_en,recibido_en,lineas,huella,estado${commercial?',comerciales':''}) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9${commercial?',$10::jsonb':''}) ON CONFLICT(empresa_id,pedido_id) DO NOTHING RETURNING ${columns}`,[row.empresaId,row.pedidoId,row.vendedorId,row.clienteId,row.creadoEn,row.recibidoEn,JSON.stringify(row.lineas),row.hash,row.estado,...(commercial?[JSON.stringify(row.comerciales)]:[])]);
+          if(commercial&&!(await q("SELECT 1 FROM pg_attribute WHERE attrelid='mayorista.pedidos'::regclass AND attname='comerciales' AND NOT attisdropped")).rows.length)throw new ApiError(503,'Condiciones comerciales requieren actualización Mayorista');
+          const result=await q(`INSERT INTO mayorista.pedidos(empresa_id,pedido_id,vendedor_id,cliente_id,creado_en,recibido_en,lineas,huella,estado${commercial?',comerciales':''}) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9${commercial?',$10::jsonb':''}) ON CONFLICT(empresa_id,pedido_id) DO NOTHING RETURNING ${columns}`,[row.empresaId,row.pedidoId,row.vendedorId,row.clienteId,row.creadoEn,row.recibidoEn,JSON.stringify(row.lineas),row.hash,row.estado,...(commercial?[JSON.stringify(row.comerciales)]:[])]);
           return normalize(result.rows[0])??tx.find(row.empresaId,row.pedidoId);
         },
         adminState:async()=>{
           if(!administrative(principal))throw new ApiError(403,'Sin permisos administrativos');
-          return (await c.query('SELECT datos FROM mayorista.administracion WHERE empresa_id=$1',[principal.empresaId])).rows[0]?.datos??createAdminState(principal.empresaId);
+          return (await q('SELECT datos FROM mayorista.administracion WHERE empresa_id=$1',[principal.empresaId])).rows[0]?.datos??createAdminState(principal.empresaId);
         },
         adminCommand:async(command)=>{
           if(!administrative(principal)||command.empresaId!==principal.empresaId)throw new ApiError(403,'Sin permisos administrativos');
@@ -57,43 +58,49 @@ export function createPostgresRepository({enabled=false,pool,inventoryRequired=f
           if(!Object.hasOwn(actions,command.operacion)||!command.input||Array.isArray(command.input)||typeof command.input!=='object')throw new ApiError(422,'Operación inválida');
           const canonical=value=>value&&typeof value==='object'?(Array.isArray(value)?value.map(canonical):Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])]))):value;
           const hash=createHash('sha256').update(JSON.stringify(canonical({operacion:command.operacion,input:command.input}))).digest('hex');
-          const old=(await c.query('SELECT huella,respuesta FROM mayorista.comandos_administrativos WHERE empresa_id=$1 AND comando_id=$2',[principal.empresaId,command.id])).rows[0];
+          const old=(await q('SELECT huella,respuesta FROM mayorista.comandos_administrativos WHERE empresa_id=$1 AND comando_id=$2',[principal.empresaId,command.id])).rows[0];
           if(old){if(old.huella!==hash)throw new ApiError(409,'UUID administrativo reutilizado');return old.respuesta;}
           const state=await tx.adminState();if(command.version!==state.revision)throw new ApiError(409,'Edición concurrente');
           let next;try{next=actions[command.operacion](state,{...command.input,empresaId:command.input.empresaId??principal.empresaId});}catch(e){throw new ApiError(422,e.message);}
           if(operational)await tx.publishPlanning(command,next);
           next.revision++;
-          await c.query('INSERT INTO mayorista.administracion(empresa_id,revision,datos) VALUES($1,$2,$3::jsonb) ON CONFLICT(empresa_id) DO UPDATE SET revision=excluded.revision,datos=excluded.datos',[principal.empresaId,next.revision,JSON.stringify(next)]);
-          await c.query('INSERT INTO mayorista.comandos_administrativos(empresa_id,comando_id,huella,actor_id,respuesta) VALUES($1,$2,$3,$4,$5::jsonb)',[principal.empresaId,command.id,hash,principal.userId,JSON.stringify(next)]);
+          await q('INSERT INTO mayorista.administracion(empresa_id,revision,datos) VALUES($1,$2,$3::jsonb) ON CONFLICT(empresa_id) DO UPDATE SET revision=excluded.revision,datos=excluded.datos',[principal.empresaId,next.revision,JSON.stringify(next)]);
+          await q('INSERT INTO mayorista.comandos_administrativos(empresa_id,comando_id,huella,actor_id,respuesta) VALUES($1,$2,$3,$4,$5::jsonb)',[principal.empresaId,command.id,hash,principal.userId,JSON.stringify(next)]);
           return next;
         },
-        catalog:async()=>({empresaId:principal.empresaId,vendedorId:principal.vendedorId,descargadoEn:new Date().toISOString(),clientes:(await c.query('SELECT cliente_id AS id,nombre,ruta_id AS "rutaId" FROM mayorista.clientes WHERE empresa_id=$1 AND habilitado',[principal.empresaId])).rows,productos:(await c.query('SELECT producto_id AS id,nombre FROM mayorista.productos WHERE empresa_id=$1 AND activo',[principal.empresaId])).rows,precios:(await c.query('SELECT precio_id AS id,producto_id AS "productoId",unidades_base AS "unidadesBase",precio FROM mayorista.precios WHERE empresa_id=$1',[principal.empresaId])).rows}),
+        catalog:async()=>({empresaId:principal.empresaId,vendedorId:principal.vendedorId,descargadoEn:new Date().toISOString(),clientes:(await q('SELECT cliente_id AS id,nombre,ruta_id AS "rutaId" FROM mayorista.clientes WHERE empresa_id=$1 AND habilitado',[principal.empresaId])).rows,productos:(await q('SELECT producto_id AS id,nombre FROM mayorista.productos WHERE empresa_id=$1 AND activo',[principal.empresaId])).rows,precios:(await q('SELECT precio_id AS id,producto_id AS "productoId",unidades_base AS "unidadesBase",precio FROM mayorista.precios WHERE empresa_id=$1',[principal.empresaId])).rows}),
         fulfillment:async(command)=>{
           if(!administrative(principal))throw new ApiError(403,'Sin permisos administrativos');
           const row=await tx.find(principal.empresaId,command.pedidoId);if(!row)throw new ApiError(404,'Pedido no disponible');
           let state=createFulfillment(row);
-          const events=(await c.query('SELECT comando,actor_id FROM mayorista.eventos_pedido WHERE empresa_id=$1 AND pedido_id=$2 ORDER BY version',[principal.empresaId,row.pedidoId])).rows;
+          const events=(await q('SELECT comando,actor_id FROM mayorista.eventos_pedido WHERE empresa_id=$1 AND pedido_id=$2 ORDER BY version',[principal.empresaId,row.pedidoId])).rows;
           for(const e of events)state=applyFulfillment(state,e.comando,{empresaId:principal.empresaId,userId:e.actor_id,rol:'administrador'});
-          if(command.tipo&&((await c.query("SELECT empresa_id FROM mayorista.cargas_estado WHERE empresa_id=$1 AND datos->'pedidos' ? $2",[principal.empresaId,command.pedidoId])).rows.length))throw new ApiError(409,'Pedido asignado a Armado de Cargas');
+          if(command.tipo&&((await q("SELECT empresa_id FROM mayorista.cargas_estado WHERE empresa_id=$1 AND datos->'pedidos' ? $2",[principal.empresaId,command.pedidoId])).rows.length))throw new ApiError(409,'Pedido asignado a Armado de Cargas');
           if(command.tipo){let next;try{next=applyFulfillment(state,command,{...principal,rol:'administrador'});}catch(e){throw new ApiError(409,e.message);}
-            if(next.version!==state.version)await c.query('INSERT INTO mayorista.eventos_pedido(empresa_id,pedido_id,comando_id,version,comando,actor_id) VALUES($1,$2,$3,$4,$5::jsonb,$6)',[principal.empresaId,row.pedidoId,command.id,next.version,JSON.stringify(command),principal.userId]);
+            if(next.version!==state.version)await q('INSERT INTO mayorista.eventos_pedido(empresa_id,pedido_id,comando_id,version,comando,actor_id) VALUES($1,$2,$3,$4,$5::jsonb,$6)',[principal.empresaId,row.pedidoId,command.id,next.version,JSON.stringify(command),principal.userId]);
             state=next;
           }
           return state;
         },
-        list:async()=> (await c.query(`SELECT ${columns} FROM mayorista.pedidos WHERE empresa_id=$1 ORDER BY recibido_en DESC LIMIT 500`,[principal.empresaId])).rows.map(normalize)
+        orderPage:async raw=>{
+          const limit=Number(raw.limit??50),before=raw.before??'',id=raw.id??'';
+          if(!Number.isSafeInteger(limit)||limit<1||limit>100||!!before!==!!id||before&&(!Number.isFinite(Date.parse(before))||!/^[a-f0-9-]{36}$/i.test(id)))throw new ApiError(422,'Historial inválido');
+          const items=(await q(`SELECT ${columns} FROM mayorista.pedidos WHERE empresa_id=$1 ${before?'AND (recibido_en,pedido_id)<($3::timestamptz,$4::uuid)':''} ORDER BY recibido_en DESC,pedido_id DESC LIMIT $2`,[principal.empresaId,limit+1,...(before?[before,id]:[])])).rows.map(normalize),hasMore=items.length>limit;
+          return {items:items.slice(0,limit),hasMore};
+        },
+        list:async()=> (await q(`SELECT ${columns} FROM mayorista.pedidos WHERE empresa_id=$1 ORDER BY recibido_en DESC LIMIT 500`,[principal.empresaId])).rows.map(normalize)
       };
-      Object.assign(tx,createVisitsTransaction({query:(sql,args)=>c.query(sql,args),principal}));
-      Object.assign(tx,createCargasTransaction({query:(sql,args)=>c.query(sql,args),principal,findOrder:tx.find,fulfillment:tx.fulfillment,readCatalog:principal.fuenteComercial==='sigo'?()=>tx.sharedCatalog():undefined}));
-      if(operational){Object.assign(tx,createMasterTransaction({query:(sql,args)=>c.query(sql,args),principal}));tx.catalog=tx.operationalCatalog;Object.assign(tx,createCollectionsTransaction({query:(sql,args)=>c.query(sql,args),principal}),createReportTransaction({query:(sql,args)=>c.query(sql,args),principal}));}
-      if(operational){Object.assign(tx,createAssignedLoadsTransaction({query:(sql,args)=>c.query(sql,args),principal,legacyLoads:tx.cargasState,resolveSubstitute:async(p,input)=>{if(!administrative(principal)||!p)throw new ApiError(403,'Autorización administrativa requerida');const productId=input.sustitutoId;if(principal.fuenteComercial==='sigo'){const catalog=await tx.sharedCatalog(),product=catalog.productos.find(x=>x.id===productId);if(!product)throw new ApiError(422,'Sustituto no disponible');const quote=await tx.sharedQuote(p.clienteId,[{productoId:productId,cantidad:input.cantidad,precioId:input.precioId??productId}]);return {nombre:product.nombre,precioUnitario:Number(quote[0].precioUnitario),precioId:input.precioId??productId};}const product=(await c.query('SELECT nombre FROM mayorista.productos WHERE empresa_id=$1 AND producto_id=$2 AND activo',[principal.empresaId,productId])).rows[0];const price=(await c.query('SELECT p.precio_id,p.precio,p.unidades_base FROM mayorista.precios p JOIN mayorista.clientes cl ON cl.empresa_id=p.empresa_id AND cl.cliente_id=$3 WHERE p.empresa_id=$1 AND p.producto_id=$2 AND p.lista_id IS NOT DISTINCT FROM cl.lista_id AND ($4::uuid IS NULL OR p.precio_id=$4) ORDER BY p.precio_id LIMIT 1',[principal.empresaId,productId,p.clienteId,input.precioId??null])).rows[0];if(!product||!price)throw new ApiError(422,'Sustituto sin precio para el cliente');const offers=(await c.query('SELECT descuento FROM mayorista.ofertas WHERE empresa_id=$1 AND precio_id=$2 AND desde<=now() AND hasta>now()',[principal.empresaId,price.precio_id])).rows;const amount=Math.min(Number(price.precio),...offers.map(o=>offerPrice(price.precio,o.descuento)));return {nombre:product.nombre,precioUnitario:amount/price.unidades_base,precioId:price.precio_id};},onChange:async(before,after,command)=>{if(principal.fuenteComercial!=='sigo'&&accountsEnabled&&['entregar','devolver','revisar_rendicion'].includes(command.tipo))await tx.accountLoadChanges(before,after,command);if(principal.fuenteComercial!=='sigo'&&inventoryRequired){const tipo={verificar:'reserva',salir:'salida',cerrar:'devolucion'}[command.tipo];if(tipo)await createInventoryTransaction({query:(sql,args)=>c.query(sql,args),principal,loads:async()=>after}).inventoryCommand({id:command.id,empresaId:principal.empresaId,tipo,input:{cargaId:command.input.cargaId}});}}}));const apply=tx.cargasCommand;tx.cargasCommand=async command=>{if(command.input?.cargaId&&(await c.query('SELECT carga_id FROM mayorista.cargas_operativas WHERE empresa_id=$1 AND carga_id=$2',[principal.empresaId,command.input.cargaId])).rows.length)throw new ApiError(409,'Carga publicada: usar circuito asignado');return apply(command);};}
-      Object.assign(tx,createInventoryTransaction({query:(sql,args)=>c.query(sql,args),principal,loads:tx.cargasState}));
-      Object.assign(tx,createAccountsTransaction({query:(sql,args)=>c.query(sql,args),principal}));
+      Object.assign(tx,createVisitsTransaction({query:(sql,args)=>q(sql,args),principal}));
+      Object.assign(tx,createCargasTransaction({query:(sql,args)=>q(sql,args),principal,findOrder:tx.find,fulfillment:tx.fulfillment,readCatalog:principal.fuenteComercial==='sigo'?()=>tx.sharedCatalog():undefined}));
+      if(operational){Object.assign(tx,createMasterTransaction({query:(sql,args)=>q(sql,args),principal}));tx.catalog=tx.operationalCatalog;Object.assign(tx,createCollectionsTransaction({query:(sql,args)=>q(sql,args),principal}),createReportTransaction({query:(sql,args)=>q(sql,args),principal}));}
+      if(operational){Object.assign(tx,createAssignedLoadsTransaction({query:(sql,args)=>q(sql,args),principal,legacyLoads:tx.cargasState,resolveSubstitute:async(p,input)=>{if(!administrative(principal)||!p)throw new ApiError(403,'Autorización administrativa requerida');const productId=input.sustitutoId;if(principal.fuenteComercial==='sigo'){const catalog=await tx.sharedCatalog(),product=catalog.productos.find(x=>x.id===productId);if(!product)throw new ApiError(422,'Sustituto no disponible');const quote=await tx.sharedQuote(p.clienteId,[{productoId:productId,cantidad:input.cantidad,precioId:input.precioId??productId}]);return {nombre:product.nombre,precioUnitario:Number(quote[0].precioUnitario),precioId:input.precioId??productId};}const product=(await q('SELECT nombre FROM mayorista.productos WHERE empresa_id=$1 AND producto_id=$2 AND activo',[principal.empresaId,productId])).rows[0];const price=(await q('SELECT p.precio_id,p.precio,p.unidades_base FROM mayorista.precios p JOIN mayorista.clientes cl ON cl.empresa_id=p.empresa_id AND cl.cliente_id=$3 WHERE p.empresa_id=$1 AND p.producto_id=$2 AND p.lista_id IS NOT DISTINCT FROM cl.lista_id AND ($4::uuid IS NULL OR p.precio_id=$4) ORDER BY p.precio_id LIMIT 1',[principal.empresaId,productId,p.clienteId,input.precioId??null])).rows[0];if(!product||!price)throw new ApiError(422,'Sustituto sin precio para el cliente');const offers=(await q('SELECT descuento FROM mayorista.ofertas WHERE empresa_id=$1 AND precio_id=$2 AND desde<=now() AND hasta>now()',[principal.empresaId,price.precio_id])).rows;const amount=Math.min(Number(price.precio),...offers.map(o=>offerPrice(price.precio,o.descuento)));return {nombre:product.nombre,precioUnitario:amount/price.unidades_base,precioId:price.precio_id};},onChange:async(before,after,command)=>{if(principal.fuenteComercial!=='sigo'&&accountsEnabled&&['entregar','devolver','revisar_rendicion'].includes(command.tipo))await tx.accountLoadChanges(before,after,command);if(principal.fuenteComercial!=='sigo'&&inventoryRequired){const tipo={verificar:'reserva',salir:'salida',cerrar:'devolucion'}[command.tipo];if(tipo)await createInventoryTransaction({query:(sql,args)=>q(sql,args),principal,loads:async()=>after}).inventoryCommand({id:command.id,empresaId:principal.empresaId,tipo,input:{cargaId:command.input.cargaId}});}}}));const apply=tx.cargasCommand;tx.cargasCommand=async command=>{if(command.input?.cargaId&&(await q('SELECT carga_id FROM mayorista.cargas_operativas WHERE empresa_id=$1 AND carga_id=$2',[principal.empresaId,command.input.cargaId])).rows.length)throw new ApiError(409,'Carga publicada: usar circuito asignado');return apply(command);};}
+      Object.assign(tx,createInventoryTransaction({query:(sql,args)=>q(sql,args),principal,loads:tx.cargasState}));
+      Object.assign(tx,createAccountsTransaction({query:(sql,args)=>q(sql,args),principal}));
       if(accountsEnabled&&principal.fuenteComercial!=='sigo'){const apply=tx.cargasCommand;tx.cargasCommand=async command=>{const before=await tx.cargasState(),after=await apply(command);await tx.accountLoadChanges(before,after,command);return after;};}
       if(inventoryRequired&&principal.fuenteComercial!=='sigo'){const apply=tx.cargasCommand;tx.cargasCommand=async command=>{const state=await apply(command);const tipo={verificar:'reserva',salir:'salida',cerrar:'devolucion'}[command.tipo];if(tipo)await tx.inventoryCommand({id:command.id,empresaId:principal.empresaId,tipo,input:{cargaId:command.input.cargaId}});return state;};}
       if(operational){
         tx.accounts=tx.collectionsAccounts;
-        const query=(sql,args)=>c.query(sql,args);
+        const query=(sql,args)=>q(sql,args);
         Object.assign(tx,createDashboardTransaction({query,principal,readSharedMetrics,readSharedData:principal.fuenteComercial==='sigo'?()=>tx.sharedMetrics():undefined}));
         Object.assign(tx,createGoalsTransaction({query,principal,readMetricsData:tx.readMetricsData}));
         const dashboard=tx.dashboard;
@@ -117,9 +124,9 @@ export function createPostgresRepository({enabled=false,pool,inventoryRequired=f
       }
       if(principal.fuenteComercial==='sigo'){
         if(!sharedSource)throw new ApiError(503,'Fuente compartida no instalada');
-        Object.assign(tx,sharedSource.transaction({query:(sql,args)=>c.query(sql,args),principal}));
-        tx.catalog=async()=>{const result=await tx.sharedCatalog();if((await c.query("SELECT to_regclass('mayorista.metas') AS metas")).rows[0]?.metas)result.metas=(await tx.goals()).objetivos;return result;};
-        tx.validateReferences=order=>validateSharedOrder({query:(sql,args)=>c.query(sql,args),principal,quote:tx.sharedQuote},order);
+        Object.assign(tx,sharedSource.transaction({query:(sql,args)=>q(sql,args),principal}));
+        tx.catalog=async()=>{const result=await tx.sharedCatalog();if((await q("SELECT to_regclass('mayorista.metas') AS metas")).rows[0]?.metas)result.metas=(await tx.goals()).objetivos;return result;};
+        tx.validateReferences=order=>validateSharedOrder({query:(sql,args)=>q(sql,args),principal,quote:tx.sharedQuote},order);
         tx.inventory=tx.sharedInventory;
         tx.accounts=async()=>{const data=await tx.sharedState();return {empresaId:principal.empresaId,cuentas:data.cuentas};};
         tx.masterState=async()=>{if(!administrative(principal))throw new ApiError(403,'Administración requerida');const data=await tx.sharedCatalog();return {empresaId:principal.empresaId,revision:0,productos:data.productos.map(p=>({...p,activo:true})),listas:data.listas??[],precios:data.precios,ofertas:data.ofertas};};
@@ -131,14 +138,14 @@ export function createPostgresRepository({enabled=false,pool,inventoryRequired=f
           if(!administrative(principal)||command.empresaId!==principal.empresaId)throw new ApiError(403,'Sin permisos de asignación');
           const customer=(await tx.sharedCustomer(command.input?.id)).cliente;
           if(!customer?.activo)throw new ApiError(422,'Seleccioná un cliente activo de SIGO de esta empresa');
-          if(command.input.listaId&&!(await c.query('SELECT lista_id FROM mayorista.listas WHERE empresa_id=$1 AND lista_id=$2 AND activa',[principal.empresaId,command.input.listaId])).rows.length)throw new ApiError(422,'Lista compartida no disponible');
+          if(command.input.listaId&&!(await q('SELECT lista_id FROM mayorista.listas WHERE empresa_id=$1 AND lista_id=$2 AND activa',[principal.empresaId,command.input.listaId])).rows.length)throw new ApiError(422,'Lista compartida no disponible');
           // Solo asignaciones: nombre, dirección, saldo y crédito vienen de la ficha SIGO.
           return adminCommand({...command,input:{...command.input,nombre:customer.nombre,direccion:customer.direccion||'Sin dirección registrada'}});
         };
       }
-      if(operational)Object.assign(tx,createLaunchTransaction({query:(sql,args)=>c.query(sql,args),principal,tx}));
-      const result=await fn(tx);await c.query('COMMIT');return result;
-    }catch(e){await c.query('ROLLBACK').catch(()=>{});if(!['40001','40P01','23505'].includes(e.code)||attempt===7)throw e;}finally{c.release();}
+      if(operational)Object.assign(tx,createLaunchTransaction({query:(sql,args)=>q(sql,args),principal,tx}));
+      const result=await fn(tx);await q('COMMIT');return result;
+    }catch(e){await q('ROLLBACK').catch(()=>{});if(!['40001','40P01','23505'].includes(e.code)||attempt===7)throw e;}finally{c.release();}
     // Solo se repite una transacción ya revertida. Cede el slot del pool antes
     // del backoff para que ocho vendedores no agoten sus intentos en sincronía.
     await new Promise(resolve=>setTimeout(resolve,Math.min(250,20*2**attempt)+Math.floor(Math.random()*40)));

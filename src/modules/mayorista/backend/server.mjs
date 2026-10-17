@@ -1,3 +1,4 @@
+import {qaReadiness} from './readiness.mjs';
 import {operationalAsset} from './static-assets.mjs';
 import {trustedSigoVerifier} from '../security/sigo-bridge.mjs';
 import {interactiveQa} from './interactive-qa.mjs';
@@ -16,16 +17,15 @@ export function operationalContext(pool,interactive){
 export async function startRailwayServer(env=process.env){
  const config=railwayRuntime(env),pool=new pg.Pool(config.policy.config);try{await assertInstalledQA(pool);}catch(error){await pool.end();throw error;}
  const interactive=await interactiveQa(env);
- const serviceOptions={enabled:true,...config,origin:config.origin,databasePolicy:config.policy,operational:true,inventoryRequired:true,accountsEnabled:true,sharedSourceEnabled:env.MAYORISTA_SHARED_SOURCE_QA==='true',rateLimit:requestLimiter(),authenticateSigo:trustedSigoVerifier(env)};
+ const serviceOptions={enabled:true,...config,origin:config.origin,databasePolicy:config.policy,operational:true,inventoryRequired:true,accountsEnabled:true,sharedSourceEnabled:env.MAYORISTA_SHARED_SOURCE_QA==='true',rateLimit:requestLimiter(),emitMetrics:metric=>console.log(JSON.stringify(metric)),authenticateSigo:trustedSigoVerifier(env)};
  const handler=createIsolatedService({...serviceOptions,...operationalContext(pool,interactive)});
  const sw=await readFile(path.join(root,'operational-sw.js'),'utf8'),assetNames=[...sw.matchAll(/'\.\/([^']+)'/g)].map(m=>'/'+m[1]);const allowed=new Set([...assetNames,'/operational-sw.js']);
  const server=createServer(async(req,res)=>{try{
   const url=new URL(req.url,config.origin),headers={'X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin','X-Frame-Options':'DENY','Strict-Transport-Security':'max-age=31536000'};
   if(url.pathname==='/health'&&req.method==='GET'){res.writeHead(200,{...headers,'Content-Type':'application/json','Cache-Control':'no-store'});res.end('{"status":"ok","module":"mayorista"}');return;}
   if(url.pathname==='/readiness'&&req.method==='GET'){
-   const installed=(await pool.query("SELECT to_regclass('mayorista_private.acceptance_runs') AS runs")).rows[0]?.runs;
-   const report=installed?(await pool.query('SELECT report FROM mayorista_private.acceptance_runs WHERE revision=$1',[env.RAILWAY_GIT_COMMIT_SHA])).rows[0]?.report:null;
-   res.writeHead(report?200:503,{...headers,'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(report?{...report,interactiveQa:interactive?{enabled:true,empresaSigo:interactive.externalEmpresaId,empresaQA:interactive.qaEmpresaId,source:'synthetic_railway_qa_only'}:{enabled:false}}:{status:'acceptance_pending',productionActivation:false}));return;
+   const report=await qaReadiness({base:pool,operational:interactive?.pool??pool,head:env.RAILWAY_GIT_COMMIT_SHA});
+   res.writeHead(200,{...headers,'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({...report,interactiveQa:interactive?{enabled:true,empresaSigo:interactive.externalEmpresaId,empresaQA:interactive.qaEmpresaId,source:'synthetic_railway_qa_only'}:{enabled:false}}));return;
   }
   if(url.pathname==='/'&&req.method==='GET'){res.writeHead(302,{...headers,Location:'/portal.html'});res.end();return;}
   if(req.method==='GET'&&allowed.has(url.pathname)){

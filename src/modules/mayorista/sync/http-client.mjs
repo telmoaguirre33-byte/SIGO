@@ -43,6 +43,7 @@ export function createMayoristaClient({enabled=false,baseUrl,qaAislado=false,get
     importState:id=>request('/admin/launch/imports?id='+encodeURIComponent(id)),
     prepareImport:c=>request('/admin/launch/imports',c),
     processImport:c=>request('/admin/launch/imports/process',c),
+    orderHistory:filters=>request('/orders/history?'+new URLSearchParams(filters)),
     orders:()=>request('/orders'),
     cargas:()=>request('/cargas'),
     cargasCommand:command=>request('/cargas/commands',command),

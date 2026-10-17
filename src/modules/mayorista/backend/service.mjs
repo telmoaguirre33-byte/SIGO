@@ -1,3 +1,4 @@
+import {instrumentRequest,measuredJSON} from './timing.mjs';
 import {exportReport} from '../commercial/report-export.mjs';
 import {sellerOrderStatuses} from '../commercial/seller-status.mjs';
 import {createSigoBridge} from '../security/sigo-bridge.mjs';
@@ -19,7 +20,7 @@ async function smallJson(request,limit=4096){
 
 /** Backend Mayorista: localhost QA o Railway QA explícito con TLS verificado. No monta rutas en SIGO.
  * Llaves Ed25519 y rate limiter son obligatorios; no contiene credenciales remotas. */
-export function createIsolatedService({enabled=false,pool,privateKey,publicKey,origin,issuer,rateLimit,inventoryRequired=false,accountsEnabled=false,databasePolicy,operational=false,readSharedMetrics,integrationOrigins=[],sharedSourceEnabled=false,authenticateSigo,qaSigoLink,sourceRevision=process.env.RAILWAY_GIT_COMMIT_SHA}={}){
+export function createIsolatedService({enabled=false,pool,privateKey,publicKey,origin,issuer,rateLimit,inventoryRequired=false,accountsEnabled=false,databasePolicy,operational=false,readSharedMetrics,integrationOrigins=[],sharedSourceEnabled=false,authenticateSigo,qaSigoLink,sourceRevision=process.env.RAILWAY_GIT_COMMIT_SHA,emitMetrics=()=>{}}={}){
   if(databasePolicy&&!operational)throw new ApiError(503,'Railway requiere permisos operativos persistentes');
   if(enabled)(databasePolicy?.assertPool??assertIsolatedPool)(pool);
   const sharedSource=enabled&&sharedSourceEnabled?createSharedSource({pool,databasePolicy:databasePolicy??{assertPool:assertIsolatedPool}}):null;
@@ -29,11 +30,11 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
   const directory=operational?createUserDirectory({pool,databasePolicy}):null;
   const repository=createPostgresRepository({enabled,pool,inventoryRequired,accountsEnabled,databasePolicy,operational,readSharedMetrics,sharedSource});
   const orders=createOrderHttpHandler({enabled,allowedOrigin:origin,integrationOrigins,rateLimit,receive:createOrderReceiver({enabled,auth,repository})});
-  return async request=>{
+  return async request=>instrumentRequest(request,async()=>{
     const path=new URL(request.url).pathname;
     if(path==='/orders'&&request.method!=='GET')return orders(request);
     const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Vary':'Origin'};
-    const reply=(status,value)=>new Response(JSON.stringify(value),{status,headers});
+    const reply=(status,value)=>new Response(measuredJSON(value),{status,headers});
     if(!enabled||!rateLimit)return reply(503,{error:'Backend aislado desactivado'});
     try{
       const origins=approvedOrigins(origin,integrationOrigins);
@@ -141,9 +142,10 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
         if(command.empresaId!==principal.empresaId)throw new ApiError(403,'Otra empresa');
         return reply(200,await repository.withPrincipal(principal,tx=>tx.fulfillment(command)));
       }
+      if(path==='/orders/history'&&request.method==='GET'){const page=await repository.withPrincipal(principal,tx=>tx.orderPage(Object.fromEntries(new URL(request.url).searchParams)));if(operational&&principal.rol==='vendedor')page.items=await sellerOrderStatuses({pool,databasePolicy,principal,orders:page.items});return reply(200,page);}
       if(path==='/orders'&&request.method==='GET'){const own=await repository.withPrincipal(principal,tx=>tx.list());return reply(200,operational&&principal.rol==='vendedor'?await sellerOrderStatuses({pool,databasePolicy,principal,orders:own}):own);}
       return reply(404,{error:'Ruta inexistente'});
     }catch(e){const status=e instanceof ApiError?e.status:503;if(status===503)console.warn(JSON.stringify({event:'MAYORISTA_REQUEST_UNAVAILABLE',path:path.startsWith('/shared/customers/')?'/shared/customers/:id':/^\/(?:auth\/(?:sigo|login|logout)|me|catalog|orders|visits|cargas(?:\/commands)?|accounts(?:\/commands)?|inventory(?:\/commands)?|admin\/(?:state|catalog|reports|dashboard|goals|users)(?:\/(?:candidates|commands))?|shared\/(?:commerce|collections|collectors|pricing|returns)(?:\/(?:inspect|from-load))?|operations\/loads(?:\/commands)?|goals)$/.test(path)?path:'unmatched',reason:e instanceof ApiError?'DEPENDENCY_UNAVAILABLE':['40001','40P01','53300','57P01'].includes(e.code)?e.code:'INTERNAL_FAILURE'}));return reply(status,{error:status===401?'Credenciales o sesión inválidas':status===403?'Sin permisos':status===422?'Solicitud inválida':'Servicio no disponible'});}
-  };
+  },{emit:emitMetrics,head:sourceRevision});
 }
 
