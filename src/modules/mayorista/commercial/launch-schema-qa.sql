@@ -1,0 +1,100 @@
+-- Adición Mayorista. Ejecutar únicamente mediante upgrade-launch-qa con binding QA verificado.
+CREATE TABLE mayorista.puesta_marcha(empresa_id uuid PRIMARY KEY REFERENCES mayorista.empresas(empresa_id),version integer NOT NULL DEFAULT 0,datos jsonb NOT NULL DEFAULT '{}',actualizado_por uuid NOT NULL,actualizado_en timestamptz NOT NULL DEFAULT now());
+ALTER TABLE mayorista.puesta_marcha ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mayorista.puesta_marcha FORCE ROW LEVEL SECURITY;
+CREATE POLICY puesta_marcha_admin ON mayorista.puesta_marcha FOR ALL TO authenticated USING(mayorista.operador(empresa_id,array['gerencia','administracion'])) WITH CHECK(mayorista.operador(empresa_id,array['gerencia','administracion']) AND actualizado_por=auth.uid());
+GRANT SELECT,INSERT,UPDATE ON mayorista.puesta_marcha TO authenticated;
+CREATE TABLE mayorista.importaciones(empresa_id uuid NOT NULL REFERENCES mayorista.empresas(empresa_id),importacion_id uuid NOT NULL,tipo text NOT NULL CHECK(tipo IN ('clientes','productos','stock','precios')),huella text NOT NULL,estado text NOT NULL DEFAULT 'preparada',creado_por uuid NOT NULL,creado_en timestamptz NOT NULL DEFAULT now(),PRIMARY KEY(empresa_id,importacion_id),UNIQUE(empresa_id,tipo,huella));
+CREATE TABLE mayorista.importacion_filas(empresa_id uuid NOT NULL,importacion_id uuid NOT NULL,fila integer NOT NULL,datos jsonb NOT NULL,estado text NOT NULL DEFAULT 'pendiente' CHECK(estado IN ('pendiente','error','aplicada')),resultado jsonb,PRIMARY KEY(empresa_id,importacion_id,fila),FOREIGN KEY(empresa_id,importacion_id) REFERENCES mayorista.importaciones(empresa_id,importacion_id));
+ALTER TABLE mayorista.importaciones ENABLE ROW LEVEL SECURITY;ALTER TABLE mayorista.importaciones FORCE ROW LEVEL SECURITY;
+ALTER TABLE mayorista.importacion_filas ENABLE ROW LEVEL SECURITY;ALTER TABLE mayorista.importacion_filas FORCE ROW LEVEL SECURITY;
+CREATE POLICY importaciones_admin ON mayorista.importaciones FOR ALL TO authenticated USING(mayorista.operador(empresa_id,array['gerencia','administracion'])) WITH CHECK(mayorista.operador(empresa_id,array['gerencia','administracion']) );
+CREATE POLICY importacion_filas_admin ON mayorista.importacion_filas FOR ALL TO authenticated USING(mayorista.operador(empresa_id,array['gerencia','administracion'])) WITH CHECK(mayorista.operador(empresa_id,array['gerencia','administracion']));
+GRANT SELECT,INSERT ON mayorista.importaciones TO authenticated;GRANT UPDATE(estado) ON mayorista.importaciones TO authenticated;GRANT SELECT,INSERT,UPDATE ON mayorista.importacion_filas TO authenticated;
+CREATE TABLE mayorista.identidades_importacion(empresa_id uuid NOT NULL,tipo text NOT NULL,clave text NOT NULL,registro_id uuid NOT NULL,PRIMARY KEY(empresa_id,tipo,clave));
+ALTER TABLE mayorista.identidades_importacion ENABLE ROW LEVEL SECURITY;ALTER TABLE mayorista.identidades_importacion FORCE ROW LEVEL SECURITY;
+CREATE POLICY identidades_admin ON mayorista.identidades_importacion FOR ALL TO authenticated USING(mayorista.operador(empresa_id,array['gerencia','administracion'])) WITH CHECK(mayorista.operador(empresa_id,array['gerencia','administracion']));
+GRANT SELECT,INSERT ON mayorista.identidades_importacion TO authenticated;
+CREATE INDEX pedidos_historial_cursor ON mayorista.pedidos(empresa_id,recibido_en DESC,pedido_id DESC);
+CREATE INDEX importacion_filas_pendientes ON mayorista.importacion_filas(empresa_id,importacion_id,estado,fila);
+-- Lecturas/escrituras compartidas siguen validando sesión, rol y empresa con el guard aprobado.
+CREATE FUNCTION mayorista.padron_clientes(p_empresa uuid,p_busqueda text,p_vendedor uuid,p_ruta uuid,p_zona text,p_offset integer,p_limit integer) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
+DECLARE result jsonb;
+BEGIN
+ PERFORM public.sigo_mayorista_operador_comercial(p_empresa);
+ IF p_offset<0 OR p_offset>1000000 OR p_limit NOT BETWEEN 1 AND 100 OR length(p_busqueda)>160 THEN RAISE EXCEPTION 'PADRON_INVALID';END IF;
+ WITH filtered AS (
+ SELECT c.id,c.nombre,c.documento,c.direccion,c.telefono,c.email,c.saldo_actual AS saldo,c.limite_credito AS "limiteCredito",a.vendedor_id AS "vendedorId",a.ruta_id AS "rutaId",a.lista_id AS "listaId",a.habilitado,r.zona,r.nombre AS ruta,v.nombre AS vendedor,
+ (SELECT max(o.recibido_en) FROM mayorista.pedidos o WHERE o.empresa_id=p_empresa AND o.cliente_id=c.id) AS "ultimoPedido",
+ (SELECT max(vis.recibida_en) FROM mayorista.visitas vis WHERE vis.empresa_id=p_empresa AND vis.cliente_id=c.id) AS "ultimaVisita"
+ FROM public.clientes_sigo c LEFT JOIN mayorista.clientes a ON a.empresa_id=c.empresa_id AND a.cliente_id=c.id LEFT JOIN mayorista.rutas r ON r.empresa_id=a.empresa_id AND r.ruta_id=a.ruta_id LEFT JOIN mayorista.vendedores v ON v.empresa_id=a.empresa_id AND v.vendedor_id=a.vendedor_id
+ WHERE c.empresa_id=p_empresa AND c.activo AND (p_vendedor IS NULL OR a.vendedor_id=p_vendedor) AND (p_ruta IS NULL OR a.ruta_id=p_ruta) AND (p_zona='' OR r.zona=p_zona)
+ AND (p_busqueda='' OR concat_ws(' ',c.nombre,c.documento,c.direccion,c.telefono,c.email,r.zona,r.nombre,v.nombre) ILIKE '%'||replace(replace(replace(p_busqueda,'\','\\'),'%','\%'),'_','\_')||'%')
+ ), page AS (SELECT * FROM filtered ORDER BY lower(nombre),id OFFSET p_offset LIMIT p_limit)
+ SELECT jsonb_build_object('total',(SELECT count(*) FROM filtered),'items',coalesce((SELECT jsonb_agg(page) FROM page),'[]'::jsonb),'offset',p_offset,'limit',p_limit) INTO result;
+ RETURN result;
+END $$;
+REVOKE ALL ON FUNCTION mayorista.padron_clientes(uuid,text,uuid,uuid,text,integer,integer) FROM public,anon;
+GRANT EXECUTE ON FUNCTION mayorista.padron_clientes(uuid,text,uuid,uuid,text,integer,integer) TO authenticated;
+CREATE FUNCTION mayorista.importar_fila(p_empresa uuid,p_tipo text,p_clave text,p_datos jsonb) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE registro uuid; candidatos uuid[]; producto record; n integer; lista uuid; precio uuid; changed boolean:=false;
+BEGIN
+ PERFORM public.sigo_mayorista_operador_comercial(p_empresa);
+ IF p_tipo NOT IN ('clientes','productos','stock','precios') OR length(p_clave) NOT BETWEEN 1 AND 160 OR jsonb_typeof(p_datos)<>'object' THEN RAISE EXCEPTION 'IMPORT_INVALID';END IF;
+ IF p_tipo IN ('clientes','productos') AND length(coalesce(p_datos->>'nombre','')) NOT BETWEEN 1 AND 160 THEN RAISE EXCEPTION 'Nombre requerido, máximo 160 caracteres';END IF;
+ IF p_tipo='productos' AND (coalesce(p_datos->>'precio','') !~ '^[0-9]+([.][0-9]{1,2})?$' OR (p_datos->>'precio')::numeric NOT BETWEEN 0.01 AND 1000000000) THEN RAISE EXCEPTION 'Precio inválido';END IF;
+ IF p_tipo='stock' AND (coalesce(p_datos->>'cantidad','') !~ '^[0-9]+$' OR (p_datos->>'cantidad')::numeric NOT BETWEEN 0 AND 1000000) THEN RAISE EXCEPTION 'Stock inválido';END IF;
+ PERFORM pg_advisory_xact_lock(hashtext(p_empresa::text),hashtext(case when p_tipo='clientes' then 'clientes' else 'productos' end||p_clave));
+ SELECT registro_id INTO registro FROM mayorista.identidades_importacion WHERE empresa_id=p_empresa AND tipo=case when p_tipo='clientes' then 'clientes' else 'productos' end AND clave=p_clave;
+ IF p_tipo='clientes' THEN
+  IF registro IS NULL THEN
+   SELECT array_agg(id) INTO candidatos FROM public.clientes_sigo WHERE empresa_id=p_empresa AND ((nullif(p_datos->>'documento','') IS NOT NULL AND documento=p_datos->>'documento') OR lower(nombre)=lower(p_datos->>'nombre'));
+   IF cardinality(candidatos)>1 THEN RAISE EXCEPTION 'Coincidencia ambigua: corregí documento o código';END IF;
+   registro:=candidatos[1];
+  END IF;
+  IF registro IS NULL THEN
+   registro:=gen_random_uuid();
+   INSERT INTO public.clientes_sigo(id,empresa_id,nombre,documento,direccion,telefono,email,created_by) VALUES(registro,p_empresa,p_datos->>'nombre',nullif(p_datos->>'documento',''),nullif(p_datos->>'direccion',''),nullif(p_datos->>'telefono',''),nullif(p_datos->>'email',''),auth.uid());changed:=true;
+  ELSE
+   -- Importar nunca pisa crédito, deuda, saldos ni una ficha existente.
+   IF NOT EXISTS(SELECT 1 FROM public.clientes_sigo WHERE empresa_id=p_empresa AND id=registro AND activo) THEN RAISE EXCEPTION 'Cliente inactivo o ajeno';END IF;
+  END IF;
+ ELSE
+  IF registro IS NULL THEN
+   SELECT array_agg(id) INTO candidatos FROM public.productos WHERE empresa_id=p_empresa AND ((nullif(p_datos->>'codigo','') IS NOT NULL AND lower(codigo_interno)=lower(p_datos->>'codigo')) OR (nullif(p_datos->>'ean','') IS NOT NULL AND codigo_barras=p_datos->>'ean') OR (p_tipo='productos' AND lower(nombre)=lower(p_datos->>'nombre')));
+   IF cardinality(candidatos)>1 THEN RAISE EXCEPTION 'Coincidencia ambigua: corregí código o EAN';END IF;
+   registro:=candidatos[1];
+  END IF;
+  IF p_tipo='productos' THEN
+   IF registro IS NULL THEN
+    registro:=gen_random_uuid();
+    INSERT INTO public.productos(id,empresa_id,nombre,codigo_interno,codigo_barras,marca,precio_venta,stock_actual,activo) VALUES(registro,p_empresa,p_datos->>'nombre',nullif(p_datos->>'codigo',''),nullif(p_datos->>'ean',''),nullif(p_datos->>'marca',''),(p_datos->>'precio')::numeric,0,true);changed:=true;
+   END IF;
+  ELSE
+   IF registro IS NULL THEN RAISE EXCEPTION 'Producto no encontrado: importá primero el catálogo';END IF;
+   SELECT * INTO producto FROM public.productos WHERE empresa_id=p_empresa AND id=registro AND activo FOR UPDATE;
+   IF NOT FOUND THEN RAISE EXCEPTION 'Producto inactivo o ajeno';END IF;
+   IF p_tipo='stock' THEN
+    -- Apertura exclusivamente: nunca sobreescribe stock comercial ni ignora reservas/pedidos.
+    IF producto.stock_actual<>0 OR EXISTS(SELECT 1 FROM public.venta_items_sigo WHERE empresa_id=p_empresa AND producto_id=registro) OR EXISTS(SELECT 1 FROM mayorista.pedidos o CROSS JOIN LATERAL jsonb_array_elements(o.lineas) l WHERE o.empresa_id=p_empresa AND l->>'productoId'=registro::text) THEN RAISE EXCEPTION 'Producto con stock o movimientos: usá el ajuste operativo con revisión';END IF;
+    UPDATE public.productos SET stock_actual=(p_datos->>'cantidad')::numeric WHERE empresa_id=p_empresa AND id=registro;changed:=true;
+   ELSIF p_tipo='precios' THEN
+    SELECT count(*),min(lista_id::text)::uuid INTO n,lista FROM mayorista.listas WHERE empresa_id=p_empresa AND nombre=p_datos->>'lista' AND activa;
+    IF n<>1 THEN RAISE EXCEPTION 'Creá o seleccioná una lista activa con nombre único';END IF;
+    SELECT precio_id INTO precio FROM public.sigo_mayorista_presentaciones WHERE empresa_id=p_empresa AND producto_id=registro AND lista_id=lista AND presentacion=p_datos->>'presentacion' LIMIT 1;
+    PERFORM public.configurar_precio_mayorista_sigo(p_empresa,jsonb_build_object('tipo','presentacion','id',coalesce(precio,gen_random_uuid()),'productoId',registro,'listaId',lista,'presentacion',p_datos->>'presentacion','unidadesBase',p_datos->'unidadesBase','ajustePorcentaje',p_datos->'ajuste','desde',now(),'hasta',now()+interval '10 years','activa',true));changed:=true;
+   END IF;
+  END IF;
+ END IF;
+ INSERT INTO mayorista.identidades_importacion(empresa_id,tipo,clave,registro_id) VALUES(p_empresa,case when p_tipo='clientes' then 'clientes' else 'productos' end,p_clave,registro) ON CONFLICT DO NOTHING;
+ RETURN jsonb_build_object('registroId',registro,'accion',case when changed then 'creada' else 'existente_conservado' end);
+END $$;
+REVOKE ALL ON FUNCTION mayorista.importar_fila(uuid,text,text,jsonb) FROM public,anon;
+GRANT EXECUTE ON FUNCTION mayorista.importar_fila(uuid,text,text,jsonb) TO authenticated;
+CREATE FUNCTION mayorista.resumen_puesta_marcha(p_empresa uuid) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
+BEGIN
+ PERFORM public.sigo_mayorista_operador_comercial(p_empresa);
+ RETURN jsonb_build_object('productos',(SELECT count(*) FROM public.productos WHERE empresa_id=p_empresa AND activo AND precio_venta>0),'clientes',(SELECT count(*) FROM public.clientes_sigo WHERE empresa_id=p_empresa AND activo),'roles',(SELECT count(DISTINCT rol) FROM mayorista.miembros WHERE empresa_id=p_empresa AND activo));
+END $$;
+REVOKE ALL ON FUNCTION mayorista.resumen_puesta_marcha(uuid) FROM public,anon;
+GRANT EXECUTE ON FUNCTION mayorista.resumen_puesta_marcha(uuid) TO authenticated;

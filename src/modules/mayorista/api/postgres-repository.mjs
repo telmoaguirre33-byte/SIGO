@@ -1,3 +1,5 @@
+import {createLaunchTransaction} from '../commercial/launch.mjs';
+import {validateSharedOrder} from '../commercial/order-references.mjs';
 import {createCollectionsTransaction} from '../commercial/collections.mjs';
 import {createDashboardTransaction} from '../commercial/dashboard.mjs';
 import {createGoalsTransaction} from '../commercial/goals.mjs';
@@ -117,7 +119,7 @@ export function createPostgresRepository({enabled=false,pool,inventoryRequired=f
         if(!sharedSource)throw new ApiError(503,'Fuente compartida no instalada');
         Object.assign(tx,sharedSource.transaction({query:(sql,args)=>c.query(sql,args),principal}));
         tx.catalog=async()=>{const result=await tx.sharedCatalog();if((await c.query("SELECT to_regclass('mayorista.metas') AS metas")).rows[0]?.metas)result.metas=(await tx.goals()).objetivos;return result;};
-        tx.validateReferences=async order=>{const data=await tx.sharedCatalog();if(!data.clientes.some(x=>x.id===order.clienteId&&x.vendedorId===order.vendedorId))return ['cliente no asignado'];const quoted=await tx.sharedQuote(order.clienteId,order.lineas);return order.lineas.flatMap((l,n)=>!data.productos.some(p=>p.id===l.productoId)?['producto inactivo']:!Number.isFinite(Number(quoted[n]?.precioUnitario))||Math.abs(Number(quoted[n]?.precioUnitario)-l.precioUnitario)>0.000001?['precio cambiado']:[]);};
+        tx.validateReferences=order=>validateSharedOrder({query:(sql,args)=>c.query(sql,args),principal,quote:tx.sharedQuote},order);
         tx.inventory=tx.sharedInventory;
         tx.accounts=async()=>{const data=await tx.sharedState();return {empresaId:principal.empresaId,cuentas:data.cuentas};};
         tx.masterState=async()=>{if(!administrative(principal))throw new ApiError(403,'Administración requerida');const data=await tx.sharedCatalog();return {empresaId:principal.empresaId,revision:0,productos:data.productos.map(p=>({...p,activo:true})),listas:data.listas??[],precios:data.precios,ofertas:data.ofertas};};
@@ -127,13 +129,14 @@ export function createPostgresRepository({enabled=false,pool,inventoryRequired=f
         tx.adminCommand=async command=>{
           if(command?.operacion!=='cliente')return adminCommand(command);
           if(!administrative(principal)||command.empresaId!==principal.empresaId)throw new ApiError(403,'Sin permisos de asignación');
-          const customers=(await tx.sharedCatalog()).clientes,customer=customers.find(c=>c.id===command.input?.id);
-          if(!customer)throw new ApiError(422,'Seleccioná un cliente existente de SIGO de esta empresa');
-          if(command.input.listaId&&!(await tx.sharedCatalog()).listas?.some(l=>l.id===command.input.listaId&&l.activa))throw new ApiError(422,'Lista compartida no disponible');
+          const customer=(await tx.sharedCustomer(command.input?.id)).cliente;
+          if(!customer?.activo)throw new ApiError(422,'Seleccioná un cliente activo de SIGO de esta empresa');
+          if(command.input.listaId&&!(await c.query('SELECT lista_id FROM mayorista.listas WHERE empresa_id=$1 AND lista_id=$2 AND activa',[principal.empresaId,command.input.listaId])).rows.length)throw new ApiError(422,'Lista compartida no disponible');
           // Solo asignaciones: nombre, dirección, saldo y crédito vienen de la ficha SIGO.
           return adminCommand({...command,input:{...command.input,nombre:customer.nombre,direccion:customer.direccion||'Sin dirección registrada'}});
         };
       }
+      if(operational)Object.assign(tx,createLaunchTransaction({query:(sql,args)=>c.query(sql,args),principal,tx}));
       const result=await fn(tx);await c.query('COMMIT');return result;
     }catch(e){await c.query('ROLLBACK').catch(()=>{});if(!['40001','40P01','23505'].includes(e.code)||attempt===7)throw e;}finally{c.release();}
     // Solo se repite una transacción ya revertida. Cede el slot del pool antes

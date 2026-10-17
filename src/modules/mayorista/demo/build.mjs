@@ -37,3 +37,7 @@ console.log('Build Mayorista aislado: 7 módulos TypeScript transformados, App V
 
 
 await cp(path.join(root,'../security/qa-access.mjs'),path.join(out,'security/qa-access.mjs'));
+
+await cp(path.join(root,'../commercial/launch-model.mjs'),path.join(out,'admin/launch-model.mjs'));
+const reader=await readFile(path.join(root,'../admin/import-reader.ts'),'utf8');
+await writeFile(path.join(out,'admin/import-reader.mjs'),stripTypeScriptTypes(reader,{mode:'transform'}));

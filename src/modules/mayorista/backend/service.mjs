@@ -82,6 +82,14 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
       if(operational&&path==='/operations/loads'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.assignedLoads()));
       if(operational&&path==='/operations/loads'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const input=await smallJson(request);return reply(200,await repository.withPrincipal(principal,tx=>tx.publishLoad(input)));}
       if(operational&&path==='/operations/loads/commands'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const command=await smallJson(request,256*1024);return reply(200,await repository.withPrincipal(principal,tx=>tx.assignedLoadCommand(command)));}
+      if(operational&&path.startsWith('/admin/launch')){
+        if(!administrative(principal))throw new ApiError(403,'Administración requerida');
+        const routes={'/admin/launch':['launchState','launchCommand'],'/admin/launch/customers':['customersPage','assignCustomers'],'/admin/launch/imports':['importState','prepareImport'],'/admin/launch/imports/process':[null,'processImport']};
+        const route=routes[path];if(!route)throw new ApiError(404,'Función no disponible');
+        if(request.method==='GET'&&route[0]){const params=Object.fromEntries(new URL(request.url).searchParams);return reply(200,await repository.withPrincipal(principal,tx=>tx[route[0]](path.endsWith('/imports')?params.id:params)));}
+        if(request.method==='POST'&&route[1]){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const body=await smallJson(request,4*1024*1024);return reply(200,await repository.withPrincipal(principal,tx=>tx[route[1]](body)));}
+        throw new ApiError(405,'Método no permitido');
+      }
       if(operational&&path==='/admin/reports'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.managementReport()));
       if(operational&&path==='/admin/dashboard'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.dashboard(Object.fromEntries(new URL(request.url).searchParams))));
       if(operational&&path==='/goals'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.goals()));

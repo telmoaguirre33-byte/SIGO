@@ -191,6 +191,7 @@ export async function verifySharedBackend(pool){
  await pool.query('UPDATE public.sigo_empresa_modulos SET habilitado=false WHERE empresa_id=$1',[freshCompany]);assert.equal((await call('/auth/sigo',{token:owner,body:{empresaId:freshCompany}})).status,403);assert.equal((await call('/auth/logout',{token:direct.body.accessToken,body:{}})).status,200);
  await call('/auth/logout',{token:owner,body:{}});assert.equal((await call('/shared/commerce',{token:owner})).status,401);
  await verifyQaSigoLink(pool,{make,E,origin,creds,actors});
+ if(process.env.MAYORISTA_TEST_LAUNCH==='true')await (await import('./launch-api.mjs')).verifyLaunchAPI(pool,{make,origin,E,B,creds});
  console.log('PASS fuente compartida backend: catálogo SIGO, cinco roles, UUID recuperable, escritores QA bloqueados, crédito y aislamiento');
  return [{name:'Backend conectado a fuente SIGO por empresa; cinco roles y escritores QA bloqueados',status:'pass'}];
 }
