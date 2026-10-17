@@ -16,7 +16,7 @@ export async function prepareQaOrder(workspace,catalog){
   const price=catalog.precios.find(p=>p.productoId===product?.id&&p.listaId===customer?.listaId&&p.unidadesBase===1);
   if(!product||!customer||!price)throw Error('No se encontró un cliente y precio QA habilitados');
   const id=crypto.randomUUID(),label='PRUEBA P0 '+id.slice(0,8).toUpperCase();
-  const draft={id,clienteId:customer.id,lineas:[{productoId:product.id,precioId:price.id,cantidad:1,precioUnitario:Number(price.precio),presentacion:price.presentacion,unidadesBase:1,observacion:label}],comerciales:{condicionPago:'cuenta_corriente',observacion:label}};
+  const draft={id,clienteId:customer.id,lineas:[{productoId:product.id,precioId:price.id,cantidad:1,precioUnitario:Number(price.precio),presentacion:price.presentacion,unidadesBase:1,observacion:label}],comerciales:{condicionPago:'efectivo',observacion:label}};
   marker=await workspace.write('qa-test','current',{label,draft});
  }
  const {draft,label}=marker.data,order=await workspace.read('orders',draft.id);

@@ -94,7 +94,7 @@ export async function verifyNativeBrowsers({handler,password,empresaId,vendedorI
     await a.command('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});
     await check('Reconectar no envía; doble sincronización explícita confirma una vez en PostgreSQL',async()=>{
       await delay(150);assert.equal((await b.evaluate('client.orders()')).filter(p=>p.pedidoId===encryptedOrderId).length,0);
-      await a.evaluate("document.querySelector('#sync').click();document.querySelector('#sync').click()");await readySeller();await press('#sync');assert.equal((await b.evaluate('client.orders()')).filter(p=>p.pedidoId===encryptedOrderId).length,1);assert.equal((await b.evaluate('client.visits()')).length,2);
+      await a.evaluate("document.querySelector('#sync').click();document.querySelector('#sync').click()");await readySeller();await press('#sync');assert.equal((await b.evaluate('client.orders()')).filter(p=>p.pedidoId===encryptedOrderId).length,1,await a.evaluate('document.body.innerText'));assert.equal((await b.evaluate('client.visits()')).length,2);
     });
     await check('Respaldo cifrado restaura pedido y visita en otro perfil sin duplicar servidor',async()=>{
       const backup=await a.evaluate(`(async()=>{const W=(await import('./security/encrypted-workspace.mjs')).EncryptedWorkspace;const w=new W(${JSON.stringify({empresaId,vendedorId})});await w.unlockDevice();return w.exportBackup(${JSON.stringify(localPassword)});})()`);

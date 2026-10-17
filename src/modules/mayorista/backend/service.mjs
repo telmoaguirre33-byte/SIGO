@@ -1,3 +1,4 @@
+import {sellerOrderStatuses} from '../commercial/seller-status.mjs';
 import {createSigoBridge} from '../security/sigo-bridge.mjs';
 import {createUserDirectory} from '../commercial/user-directory.mjs';
 import {approvedOrigins} from '../api/origins.mjs';
@@ -126,7 +127,7 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
         if(command.empresaId!==principal.empresaId)throw new ApiError(403,'Otra empresa');
         return reply(200,await repository.withPrincipal(principal,tx=>tx.fulfillment(command)));
       }
-      if(path==='/orders'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.list()));
+      if(path==='/orders'&&request.method==='GET'){const own=await repository.withPrincipal(principal,tx=>tx.list());return reply(200,operational&&principal.rol==='vendedor'?await sellerOrderStatuses({pool,databasePolicy,principal,orders:own}):own);}
       return reply(404,{error:'Ruta inexistente'});
     }catch(e){const status=e instanceof ApiError?e.status:503;if(status===503)console.warn(JSON.stringify({event:'MAYORISTA_REQUEST_UNAVAILABLE',path:path.startsWith('/shared/customers/')?'/shared/customers/:id':/^\/(?:auth\/(?:sigo|login|logout)|me|catalog|orders|visits|cargas(?:\/commands)?|accounts(?:\/commands)?|inventory(?:\/commands)?|admin\/(?:state|catalog|reports|dashboard|goals|users)(?:\/(?:candidates|commands))?|shared\/(?:commerce|collections|collectors|pricing|returns)(?:\/(?:inspect|from-load))?|operations\/loads(?:\/commands)?|goals)$/.test(path)?path:'unmatched',reason:e instanceof ApiError?'DEPENDENCY_UNAVAILABLE':['40001','40P01','53300','57P01'].includes(e.code)?e.code:'INTERNAL_FAILURE'}));return reply(status,{error:status===401?'Credenciales o sesión inválidas':status===403?'Sin permisos':status===422?'Solicitud inválida':'Servicio no disponible'});}
   };

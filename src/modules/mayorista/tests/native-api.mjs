@@ -55,6 +55,9 @@ try{
   await check('20 visitas HTTP concurrentes guardan una visita y un acuse estable',async()=>{const rs=await Promise.all(Array.from({length:20},()=>call('/visits',{token:token2,body:visit})));assert.ok(rs.every(r=>r.status===200));assert.ok(rs.every(r=>JSON.stringify(r.body)===JSON.stringify(rs[0].body)));assert.equal((await call('/visits',{token:token2})).body.length,1);});
   await check('Visita recupera acuse y rechaza UUID alterado, empresa falsa y GPS inválido',async()=>{assert.equal((await call('/visits',{token:token2,body:visit})).status,200);assert.equal((await call('/visits',{token:token2,body:{...visit,nota:'UUID alterado'}})).status,409);assert.equal((await call('/visits',{token:token2,body:{...visit,id:randomUUID(),empresaId:B}})).status,403);assert.equal((await call('/visits',{token:token2,body:{...visit,id:randomUUID(),gps:{latitud:91,longitud:0,precision:1}}})).status,422);});
   await check('RLS de visitas prohíbe UPDATE/DELETE y oculta otra empresa',async()=>{const c=await pool.connect();try{for(const sql of ['UPDATE mayorista.visitas SET huella=huella','DELETE FROM mayorista.visitas']){await c.query('BEGIN');await c.query('SET LOCAL ROLE authenticated');await c.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[U]);await assert.rejects(()=>c.query(sql),e=>e.code==='42501');await c.query('ROLLBACK');}await c.query('BEGIN');await c.query('SET LOCAL ROLE authenticated');await c.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[U]);assert.equal((await c.query('SELECT * FROM mayorista.visitas WHERE empresa_id=$1',[B])).rows.length,0);}finally{await c.query('ROLLBACK');c.release();}});
+  // El fixture legado adopta la columna ya presente en el esquema operativo;
+  // la UI no omite condiciones comerciales para acomodar un test antiguo.
+  await pool.query('ALTER TABLE mayorista.pedidos ADD COLUMN IF NOT EXISTS comerciales jsonb');
   results.push(...await verifyNativeBrowsers({handler,password,empresaId:E,vendedorId:V,clienteId:C,productoId:P}));
   assert.equal(Number((await pool.query('SELECT count(*) FROM mayorista.pedidos')).rows[0].count),204);
   await check('Vendedor no puede administrar pedidos',async()=>{assert.equal((await call('/admin/fulfillment',{token:token2,body:{empresaId:E,pedidoId:first.pedidoId}})).status,403);});
@@ -112,3 +115,4 @@ try{
   if(server?.listening)await new Promise(resolve=>server.close(resolve));await pool.end();
   await mkdir(new URL('./artifacts/',import.meta.url),{recursive:true});await writeFile(new URL('./artifacts/native-api-result.json',import.meta.url),JSON.stringify({date:new Date().toISOString(),target:'127.0.0.1:55471/mayorista_qa',results},null,2));
 }
+

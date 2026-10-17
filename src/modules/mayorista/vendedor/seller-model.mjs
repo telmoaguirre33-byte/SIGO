@@ -14,7 +14,7 @@ export function lineQuantity(line,count){
  return {...line,cantidad:n*units};
 }
 export function orderGroup(p){
- if(p.estado==='cancelado')return 'cancelados';
- if(p.estado==='sincronizado')return ['aprobado','confirmado','en_preparacion','preparado','despachado','entregado','facturado'].includes(p.estadoRemoto)?'confirmados':'enviados';
+ if(p.estado==='cancelado'||['anulado','cancelado'].includes(p.estadoRemoto))return 'cancelados';
+ if(p.estado==='sincronizado')return ['aprobado','confirmado','en_preparacion','preparado','despachado','entregado','facturado','cerrado','en_carga','con_faltantes','parcial','devuelto','no_entregado','preparacion'].includes(p.estadoRemoto)?'confirmados':'enviados';
  if(p.estado==='borrador')return 'borradores';return 'pendientes';
 }

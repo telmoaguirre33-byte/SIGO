@@ -56,7 +56,7 @@ export async function verifySharedBackend(pool){
  const seller=tokens.vendedor,owner=tokens.gerencia;
  const catalog=(await call('/catalog',{token:seller}));assert.equal(catalog.status,200);assert.equal(catalog.body.clientes.find(c=>c.id===C).nombre,'Cliente SIGO compartido');assert.equal(catalog.body.productos[0].nombre,'Producto SIGO compartido');assert.equal(Number(catalog.body.precios[0].precio),10);assert.equal(catalog.body.productos[0].ean,'7790012345678');assert.equal(catalog.body.productos[0].marca,'Marca SIGO');
  const pedido={pedidoId:randomUUID(),empresaId:E,vendedorId:V,clienteId:C,creadoEn:new Date().toISOString(),lineas:[{productoId:P,cantidad:1,precioUnitario:10}]};
- const receipt=await call('/orders',{token:seller,body:pedido});assert.equal(receipt.status,200);
+ const receipt=await call('/orders',{token:seller,body:pedido});assert.equal(receipt.status,200);const ownHistory=await call('/orders',{token:seller});assert.equal(ownHistory.status,200);assert.equal(ownHistory.body[0].estadoOperativo,'recibido');assert.ok(ownHistory.body.every(p=>p.empresaId===E&&p.vendedorId===V&&!p.load&&!p.approved));
  service=make();assert.deepEqual(await call('/orders',{token:seller,body:pedido}),receipt);
  assert.equal(Number((await pool.query('SELECT count(*) FROM mayorista.pedidos WHERE empresa_id=$1',[E])).rows[0].count),1);
  for(const role of ['vendedor','armador','chofer'])assert.equal((await call('/shared/commerce',{token:tokens[role]})).status,403);
