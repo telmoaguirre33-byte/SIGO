@@ -36,7 +36,7 @@ export async function acceptLiveDemo(env){
    try{response=await fetch(origin+path,{method:body?'POST':'GET',headers:{Origin:origin,...(token?{Authorization:'Bearer '+token}:{}),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(60000)});}
    catch{samples.push({path,status:0,ms:performance.now()-time});throw Error('Transporte QA no disponible en '+path);}
    const data=await response.json();samples.push({path,method:body?'POST':'GET',status:response.status,expected,ms:performance.now()-time});
-   assert.equal(response.status,expected,path+' HTTP '+response.status);return data;
+   assert.equal(response.status,expected,path+' HTTP '+response.status+' '+String(data?.error??data?.message??'').slice(0,300));return data;
   }
   async function journal(step,path,token,body){
    await pool.query('INSERT INTO mayorista_private.qa_live_journal(run_id,step,request) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',[RUN,step,{path,body}]);
@@ -90,7 +90,10 @@ export async function acceptLiveDemo(env){
     await call('/operations/loads/commands',{token:token(worker),body:{id:id('forbidden-substitution'),empresaId:E,version,tipo:'sustituir',input},expected:403});
     await step('substitute-'+i,owner,'sustituir',input);
    }
-   await step('pick-'+i,worker,'escanear',{codigo:'LIVE-P0-P',cantidad:i===2?2:i===1?3:4,modo:'picking'});
+   // La sustitución conserva la línea original para auditoría. El SKU original
+   // se prepara solo para el otro pedido, sin intentar reponer lo sustituido.
+   // Clave nueva: el intento agregado anterior recibió 409; no se reescribe su journal.
+   await step(i===2?'pick-unsubstituted-order-v2': 'pick-'+i,worker,'escanear',{codigo:'LIVE-P0-P',cantidad:i===2?2:i===1?3:4,modo:'picking',...(i===2?{pedidoId:pair[1].body.pedidoId}:{})});
    if(i===2)await step('pick-q-'+i,worker,'escanear',{codigo:'LIVE-P0-Q',cantidad:2,modo:'picking'});
    if(i===1)await step('shortage-'+i,owner,'autorizar_faltante',{pedidoId:pair[1].body.pedidoId,productoId:P,destino:'cancelado',nota:'Faltante sintético autorizado P0'});
    await step('verify-'+i,worker,'verificar');await step('load-'+i,worker,'cargar',{nota:'Carga controlada P0'});await step('depart-'+i,owner,'salir',{nota:'Salida autorizada P0'});

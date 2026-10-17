@@ -13,3 +13,19 @@ test('Sustitución conserva solicitud, faltante, responsable, tiempo y transicio
  send('codigo',{productoId:'otro',codigo:'SUB-01',unidadesBase:1});send('escanear',{cargaId:'carga',codigo:'SUB-01',cantidad:4,modo:'picking'});send('verificar',{cargaId:'carga'});send('cargar',{cargaId:'carga',nota:'Control firmado'});assert.equal(orderState({order:{pedidoId:'pedido'},load:get().cargas.carga}),'en_carga');
  send('salir',{cargaId:'carga',nota:'Salida autorizada'});assert.equal(orderState({order:{pedidoId:'pedido'},load:get().cargas.carga}),'despachado');assert.throws(()=>send('sustituir',{cargaId:'carga'}),/preparación/);
 });
+
+test('Carga consolidada prepara el original de otro pedido sin reponer la línea sustituida',()=>{
+ const {get,send}=setup();
+ send('aprobar',{pedido:{empresaId:'qa',pedidoId:'segundo',clienteId:'otro-cliente',estado:'recibido',lineas:[{productoId:'sku',cantidad:2,precioUnitario:10}]}});
+ send('crear',{id:'carga',camion:'QA',ruta:'ruta',chofer:'chofer',responsable:'armador',modo:'consolidada'});
+ for(const pedidoId of ['pedido','segundo'])send('asignar',{cargaId:'carga',pedidoId});
+ send('iniciar',{cargaId:'carga'});
+ send('sustituir',{cargaId:'carga',pedidoId:'pedido',productoId:'sku',faltante:7,sustitutoId:'otro',cantidad:4,precioUnitario:3,nombre:'Otro SKU',nota:'Cliente acepta cambio'});
+ send('codigo',{productoId:'sku',codigo:'ORIGINAL',unidadesBase:1});send('codigo',{productoId:'otro',codigo:'SUSTITUTO',unidadesBase:1});
+ assert.throws(()=>send('escanear',{cargaId:'carga',codigo:'ORIGINAL',cantidad:2,modo:'picking'}),/sustituto/);
+ send('escanear',{cargaId:'carga',pedidoId:'segundo',codigo:'ORIGINAL',cantidad:2,modo:'picking'});
+ send('escanear',{cargaId:'carga',codigo:'SUSTITUTO',cantidad:4,modo:'picking'});
+ send('verificar',{cargaId:'carga'});
+ const load=get().cargas.carga;assert.equal(load.estado,'verificada');assert.equal(load.pedidos.pedido.lineas[0].preparado,0);assert.equal(load.pedidos.segundo.lineas[0].preparado,2);assert.equal(load.pedidos.pedido.lineas[1].preparado,4);
+});
+
