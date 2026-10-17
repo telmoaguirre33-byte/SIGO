@@ -34,3 +34,6 @@ await cp(path.join(root,'../offline/encrypted-collections.mjs'),path.join(out,'o
 await cp(path.join(root,'../offline/encrypted-visits.mjs'),path.join(out,'offline/encrypted-visits.mjs'));
 console.log('Build Mayorista aislado: 7 módulos TypeScript transformados, App Vendedor y administración demo generadas; sin chequeo tsc.');
 
+
+
+await cp(path.join(root,'../security/qa-access.mjs'),path.join(out,'security/qa-access.mjs'));

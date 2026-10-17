@@ -84,9 +84,9 @@ export async function verifyNativeBrowsers({handler,password,empresaId,vendedorI
       encryptedOrderId=await a.evaluate("document.querySelector('[data-order-id]').dataset.orderId");
       await a.command('Browser.setPermission',{permission:{name:'geolocation'},setting:'denied',origin:'https://127.0.0.1:4181'});
       assert.equal(await a.evaluate(`(async()=>{document.querySelector('#visit').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));for(let n=0;n<100;n++){await new Promise(r=>setTimeout(r,50));if(document.body.textContent.includes('Visita conservada con resultado GPS.'))return document.body.textContent.includes('1 visitas conservadas');}return false;})()`),true);
-      await a.stop();a=await start(0);await a.command('Page.navigate',{url:'https://127.0.0.1:4181/secure-qa.html'});for(let n=0;n<100;n++){if(await a.evaluate("!!document.querySelector('#unlock')"))break;await delay(50);}
+      await a.stop();a=await start(0);await a.command('Page.navigate',{url:'https://127.0.0.1:4181/secure-qa.html'});for(let n=0;n<100;n++){if(await a.evaluate("!!document.querySelector('#unlock [name=profile]')"))break;await delay(50);}
       await a.command('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});
-      assert.equal(await a.evaluate(`(async()=>{const f=document.querySelector('#unlock');f.elements.empresaId.value=${JSON.stringify(empresaId)};f.elements.vendedorId.value=${JSON.stringify(vendedorId)};f.elements.localPassword.value=${JSON.stringify(localPassword)};f.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));for(let n=0;n<200;n++){await new Promise(r=>setTimeout(r,50));const e=document.querySelector('[data-order-id]');if(e)return e.dataset.orderId===${JSON.stringify(encryptedOrderId)}&&document.body.textContent.includes('Acceso offline')&&document.body.textContent.includes('1 visitas conservadas');}return false;})()`),true);
+      assert.equal(await a.evaluate(`(async()=>{const f=document.querySelector('#unlock');f.elements.localPassword.value=${JSON.stringify(localPassword)};f.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));for(let n=0;n<200;n++){await new Promise(r=>setTimeout(r,50));const e=document.querySelector('[data-order-id]');if(e)return e.dataset.orderId===${JSON.stringify(encryptedOrderId)}&&document.body.textContent.includes('Acceso offline')&&document.body.textContent.includes('1 visitas conservadas');}return false;})()`),true);
       assert.equal(await a.evaluate(`(async()=>{document.querySelector('#sync').click();await new Promise(r=>setTimeout(r,100));return document.body.textContent.includes('Iniciá sesión online para sincronizar');})()`),true);
     });
     await a.command('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});
@@ -106,4 +106,5 @@ export async function verifyNativeBrowsers({handler,password,empresaId,vendedorI
     await mkdir(new URL('./artifacts/',import.meta.url),{recursive:true});await writeFile(new URL('./artifacts/native-browser-result.json',import.meta.url),JSON.stringify({date:new Date().toISOString(),profiles:2,physicalDevices:false,gps:'emulated',results},null,2));
   }
 }
+
 

@@ -1,6 +1,6 @@
 const DB='sigo-mayorista-secure-v1',encoder=new TextEncoder(),decoder=new TextDecoder();
 const scopeKey=s=>JSON.stringify([s.empresaId,s.vendedorId]);
-const safeIdentity=i=>({empresaId:i.empresaId,vendedorId:i.vendedorId,userId:i.userId,...(typeof i.nombre==='string'&&i.nombre.length<=160?{nombre:i.nombre}:{}),...(typeof i.empresaNombre==='string'&&i.empresaNombre.length<=160?{empresaNombre:i.empresaNombre}:{})});
+const safeIdentity=i=>({empresaId:i.empresaId,vendedorId:i.vendedorId,userId:i.userId,...(i.fuenteComercial==='sigo'?{fuenteComercial:'sigo'}:{}),...(typeof i.nombre==='string'&&i.nombre.length<=160?{nombre:i.nombre}:{}),...(typeof i.empresaNombre==='string'&&i.empresaNombre.length<=160?{empresaNombre:i.empresaNombre}:{})});
 function validOffline(identity,scope,now,maxHours=168){const age=now-Date.parse(identity.offlineValidatedAt);if(!Number.isFinite(now)||!Number.isFinite(maxHours)||maxHours<=0||maxHours>168||identity.empresaId!==scope.empresaId||identity.vendedorId!==scope.vendedorId||!identity.userId||!Number.isFinite(age)||age< -300000||age>maxHours*3600000)throw new Error('El acceso offline requiere renovar la validación online');}
 const aad=(s,kind,id,revision)=>encoder.encode(JSON.stringify([DB,s.empresaId,s.vendedorId,kind,id,revision]));
 async function keyFor(password,salt){
@@ -10,6 +10,13 @@ async function keyFor(password,salt){
 }
 function open(){return new Promise((resolve,reject)=>{if(!globalThis.indexedDB)return reject(new Error('IndexedDB no disponible'));const r=indexedDB.open(DB,1);r.onupgradeneeded=()=>{r.result.createObjectStore('profiles',{keyPath:'scope'});const s=r.result.createObjectStore('records',{keyPath:'key'});s.createIndex('byScopeKind',['scope','kind']);};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);r.onblocked=()=>reject(new Error('Cerrá otras pestañas para actualizar el almacén cifrado'));});}
 async function read(store,key){const db=await open();try{return await new Promise((resolve,reject)=>{const tx=db.transaction(store,'readonly');let value;const r=tx.objectStore(store).get(key);r.onsuccess=()=>{value=r.result};tx.oncomplete=()=>resolve(value??null);tx.onabort=tx.onerror=()=>reject(tx.error);});}finally{db.close();}}
+// Solo metadatos de alcance ya existentes. No revela la identidad cifrada ni autentica.
+export async function offlineProfiles(){
+ const db=await open();try{return await new Promise((resolve,reject)=>{
+  const tx=db.transaction('profiles','readonly');let rows=[];const r=tx.objectStore('profiles').getAll();r.onsuccess=()=>{rows=r.result;};
+  tx.oncomplete=()=>resolve(rows.flatMap(p=>{try{const s=JSON.parse(p.scope);return p.version===1&&Array.isArray(s)&&s.length===2&&s.every(x=>typeof x==='string'&&x.length>0&&x.length<200)?[{empresaId:s[0],vendedorId:s[1]}]:[];}catch{return [];}}));tx.onabort=tx.onerror=()=>reject(tx.error);
+ });}finally{db.close();}
+}
 async function encrypt(key,scope,kind,id,revision,data){const iv=crypto.getRandomValues(new Uint8Array(12));const bytes=await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:aad(scope,kind,id,revision)},key,encoder.encode(JSON.stringify(data)));return {iv:Array.from(iv),ciphertext:Array.from(new Uint8Array(bytes))};}
 async function decrypt(key,scope,kind,id,revision,envelope){if(!Array.isArray(envelope?.iv)||envelope.iv.length!==12||!Array.isArray(envelope.ciphertext)||envelope.ciphertext.length<16||envelope.ciphertext.length>8*1024*1024)throw new Error('Registro cifrado inválido');try{return JSON.parse(decoder.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(envelope.iv),additionalData:aad(scope,kind,id,revision)},key,new Uint8Array(envelope.ciphertext))));}catch{throw new Error('Clave incorrecta o registro alterado');}}
 /** Ninguna clave, contraseña, token, cliente o precio se persiste en texto claro.
@@ -67,3 +74,4 @@ export class EncryptedWorkspace{
     if(generation===this.#generation)this.#key=key;return identity;
   }
 }
+
