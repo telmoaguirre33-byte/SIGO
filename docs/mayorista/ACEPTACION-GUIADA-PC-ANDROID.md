@@ -39,10 +39,10 @@ No usar respaldos para reemplazar este almacén. No borrar IndexedDB. La aceptac
 ## PC: continuar con las referencias de los pedidos revisados
 
 1. Administración → Pedidos: identificar los pedidos revisados por cliente y referencia, y aprobar. En Cargas crear una carga con vehículo/ruta existentes; agregar ese pedido y asignar Depósito y Chofer 1. No crear clientes, productos ni vehículos nuevos.
-2. Depósito → Iniciar picking → Conteo de una unidad → Verificar carga → Confirmar mercadería en carga.
+2. Depósito → Iniciar picking → Conteo según las cantidades revisadas → Verificar carga → Confirmar mercadería en carga.
 3. Administración → Salida a reparto.
-4. Chofer 1 → Entrega: una unidad entregada, cero devuelta, comprobante de prueba.
-5. Administración → confirmar Entrega → venta / stock SIGO si sigue pendiente. Cuenta corriente: registrar una sola cobranza por el importe de esa venta, con referencia del pedido revisado.
+4. Chofer 1 → Entrega: cantidades realmente entregadas y devueltas, comprobante de prueba.
+5. Administración → confirmar Entrega → venta / stock SIGO si sigue pendiente. Comprobar condición y pagos ya registrados antes de cobrar. En cuenta corriente, registrar una sola cobranza por el importe pendiente, con referencia del pedido revisado.
 6. Chofer 1 → Rendición por ese importe. Gerencia → Revisar rendición y cerrar carga.
 
 La referencia del pedido aparece en el historial del vendedor, los pedidos administrativos, el selector de pedidos aprobados y el detalle de pedidos de la carga. Las acciones comerciales siguen siendo las existentes y exigen sus roles. No registrar el mismo cobro en administración y chofer. Ante una confirmación ambigua, conservar la pantalla y pedir conciliación antes de repetir un cobro.

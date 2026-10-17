@@ -52,11 +52,11 @@ export class EncryptedWorkspace{
     const db=await open();try{await new Promise((resolve,reject)=>{const t=db.transaction('profiles','readwrite'),s=t.objectStore('profiles'),r=s.get(scopeKey(this.#scope));r.onsuccess=()=>{if(!r.result||generation!==this.#generation)t.abort();else s.put({...r.result,deviceKey:key});};t.oncomplete=resolve;t.onabort=t.onerror=()=>reject(t.error??Error('Vinculación cancelada'));});}finally{db.close();}
   }
   async forgetDevice(){
-    const db=await open();try{await new Promise((resolve,reject)=>{const t=db.transaction('profiles','readwrite'),s=t.objectStore('profiles'),r=s.get(scopeKey(this.#scope));r.onsuccess=()=>{if(r.result){const {deviceKey,...profile}=r.result;s.put(profile);}};t.oncomplete=resolve;t.onabort=t.onerror=()=>reject(t.error);});}finally{db.close();this.lock();}
+    const db=await open();try{await new Promise((resolve,reject)=>{const t=db.transaction('profiles','readwrite'),s=t.objectStore('profiles'),r=s.get(scopeKey(this.#scope));r.onsuccess=()=>{if(r.result){const {deviceKey,...profile}=r.result;s.put({...profile,requiresOnline:true});}};t.oncomplete=resolve;t.onabort=t.onerror=()=>reject(t.error);});}finally{db.close();this.lock();}
   }
   async unlockDevice(options={}){
     this.lock();const generation=this.#generation,profile=await read('profiles',scopeKey(this.#scope)),key=profile?.deviceKey;
-    if(!key||key.extractable||key.algorithm?.name!=='AES-GCM')throw Error('Prepará el acceso de este teléfono una vez');
+    if(profile?.requiresOnline||!key||key.extractable||key.algorithm?.name!=='AES-GCM')throw Error('Prepará el acceso de este teléfono una vez');
     const identity=await decrypt(key,this.#scope,'profile','identity',1,profile.verifier);
     validOffline(identity,this.#scope,options.now??Date.now(),options.maxOfflineHours??168);
     if(generation!==this.#generation)throw Error('Apertura cancelada');this.#key=key;return identity;
@@ -69,7 +69,7 @@ export class EncryptedWorkspace{
     if(generation!==this.#generation)throw new Error('Desbloqueo cancelado');this.#key=key;return identity;
   }
   async unlock(password,{now=Date.now(),maxOfflineHours=168}={}){
-    this.lock();const generation=this.#generation,profile=await read('profiles',scopeKey(this.#scope));if(profile?.version!==1||profile.salt?.length!==16)throw new Error('No hay almacén de este vendedor en el dispositivo');
+    this.lock();const generation=this.#generation,profile=await read('profiles',scopeKey(this.#scope));if(profile?.requiresOnline)throw Error('Ingresá online para volver a habilitar este dispositivo');if(profile?.version!==1||profile.salt?.length!==16)throw new Error('No hay almacén de este vendedor en el dispositivo');
     const key=await keyFor(password,profile.salt),identity=await decrypt(key,this.#scope,'profile','identity',1,profile.verifier);
     validOffline(identity,this.#scope,now,maxOfflineHours);
     if(generation!==this.#generation)throw new Error('Desbloqueo cancelado');this.#key=key;return identity;
@@ -86,7 +86,7 @@ export class EncryptedWorkspace{
     const key=this.#key,generation=this.#generation;if(!key)throw new Error('Almacén bloqueado');if(identity.empresaId!==this.#scope.empresaId||identity.vendedorId!==this.#scope.vendedorId||!identity.userId)throw new Error('Identidad ajena');
     const profile=await read('profiles',scopeKey(this.#scope)),verifier=await encrypt(key,this.#scope,'profile','identity',1,{...safeIdentity(identity),offlineValidatedAt:new Date().toISOString()});
     if(generation!==this.#generation)throw new Error('Almacén bloqueado');
-    const db=await open();try{await new Promise((resolve,reject)=>{const t=db.transaction('profiles','readwrite'),store=t.objectStore('profiles'),r=store.get(scopeKey(this.#scope));let error;r.onsuccess=()=>{if(generation!==this.#generation||JSON.stringify(r.result?.salt)!==JSON.stringify(profile.salt)){error=new Error('Perfil cambió durante la renovación');t.abort();return;}store.put({...profile,verifier});};t.oncomplete=resolve;t.onabort=t.onerror=()=>reject(error??t.error);});}finally{db.close();}
+    const db=await open();try{await new Promise((resolve,reject)=>{const t=db.transaction('profiles','readwrite'),store=t.objectStore('profiles'),r=store.get(scopeKey(this.#scope));let error;r.onsuccess=()=>{if(generation!==this.#generation||JSON.stringify(r.result?.salt)!==JSON.stringify(profile.salt)){error=new Error('Perfil cambió durante la renovación');t.abort();return;}store.put({...profile,requiresOnline:false,verifier});};t.oncomplete=resolve;t.onabort=t.onerror=()=>reject(error??t.error);});}finally{db.close();}
   }
   async read(kind,id){const key=this.#key;if(!key)throw new Error('Almacén bloqueado');const row=await read('records',[scopeKey(this.#scope),kind,id]);if(!row)return null;const data=await decrypt(key,this.#scope,kind,id,row.revision,row);if(this.#key!==key)throw new Error('Almacén bloqueado durante lectura');return {revision:row.revision,data};}
   async write(kind,id,data,expectedRevision=0){

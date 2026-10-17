@@ -37,5 +37,5 @@ export class EncryptedOrders{
   }
 }
 // Un acuse perdido también pudo crear el pedido remoto: no se modifica su contenido.
-export const canEditOrder=p=>p?.estado==='pendiente'&&(p.intentos??0)===0;
+export const canEditOrder=p=>p?.estado==='pendiente'&&(p.intentos??0)===0&&!p.confirmadoEn&&!p.estadoRemoto;
 
