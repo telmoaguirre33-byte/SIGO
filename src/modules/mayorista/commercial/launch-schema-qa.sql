@@ -29,7 +29,7 @@ BEGIN
  (SELECT max(vis.recibida_en) FROM mayorista.visitas vis WHERE vis.empresa_id=p_empresa AND vis.cliente_id=c.id) AS "ultimaVisita"
  FROM public.clientes_sigo c LEFT JOIN mayorista.clientes a ON a.empresa_id=c.empresa_id AND a.cliente_id=c.id LEFT JOIN mayorista.rutas r ON r.empresa_id=a.empresa_id AND r.ruta_id=a.ruta_id LEFT JOIN mayorista.vendedores v ON v.empresa_id=a.empresa_id AND v.vendedor_id=a.vendedor_id
  WHERE c.empresa_id=p_empresa AND c.activo AND (p_vendedor IS NULL OR a.vendedor_id=p_vendedor) AND (p_ruta IS NULL OR a.ruta_id=p_ruta) AND (p_zona='' OR r.zona=p_zona)
- AND (p_busqueda='' OR concat_ws(' ',c.nombre,c.documento,c.direccion,c.telefono,c.email,r.zona,r.nombre,v.nombre) ILIKE '%'||replace(replace(replace(p_busqueda,'\','\\'),'%','\%'),'_','\_')||'%')
+ AND (p_busqueda='' OR translate(lower(concat_ws(' ',c.nombre,c.documento,c.direccion,c.telefono,c.email,r.zona,r.nombre,v.nombre)),'áéíóúüñ','aeiouun') ILIKE '%'||replace(replace(replace(translate(lower(p_busqueda),'áéíóúüñ','aeiouun'),'\','\\'),'%','\%'),'_','\_')||'%')
  ), page AS (SELECT * FROM filtered ORDER BY lower(nombre),id OFFSET p_offset LIMIT p_limit)
  SELECT jsonb_build_object('total',(SELECT count(*) FROM filtered),'items',coalesce((SELECT jsonb_agg(page) FROM page),'[]'::jsonb),'offset',p_offset,'limit',p_limit) INTO result;
  RETURN result;

@@ -28,7 +28,7 @@ export function mountOperationalPortal(app,{enabled=false,baseUrl,integrated=fal
  const beginOperation=key=>{operationKey=key;operationSlot=0;};
  const adminRole=rol=>['gerencia','administracion','administrador'].includes(rol);
  const admin=()=>['gerencia','administracion','administrador'].includes(identity?.rol),manager=()=>identity?.rol==='gerencia';
- const options=items=>items.map(i=>[i.id,i.nombre??i.email??i.id]);
+ const options=items=>items.map(i=>[i.id,[i.nombre??i.email??i.id,i.codigoInterno,i.ean].filter(Boolean).join(' · ')]);
  const loadStep=async(cargaId,tipo,input={})=>{const current=data.assigned.cargas.find(c=>c.cargaId===cargaId);await client.loadCommand({id:newId(),empresaId:identity.empresaId,version:current.version,tipo,input:{cargaId,...input}});};
  const legacy=async(tipo,input)=>{data.loads=await client.cargasCommand({id:newId(),empresaId:identity.empresaId,version:data.loads.revision,tipo,input});};
  async function acceptIdentity(verified){const qaMatch=qaAislado&&verified.qaAislado===true&&verified.sigoEmpresaId===expectedEmpresaId;if(expectedEmpresaId&&verified.empresaId!==expectedEmpresaId&&!qaMatch){await client.logout();throw Error('Ingresá con la empresa activa de SIGO');}if(qaAislado&&!qaMatch){await client.logout();throw Error('El backend no confirmó el vínculo QA aislado');}if(!adminRole(verified.rol)&&!['armador','chofer'].includes(verified.rol)){await client.logout();throw Error('Usá la App Vendedor para este acceso');}identity=verified;

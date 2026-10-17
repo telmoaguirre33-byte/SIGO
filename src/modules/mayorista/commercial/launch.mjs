@@ -13,7 +13,8 @@ export function createLaunchTransaction({query,principal,tx}){
  const rows=async(sql,args=[E])=>(await query(sql,args)).rows;
  const requireId=id=>{if(!UUID.test(id))throw new ApiError(422,'Registro inválido');};
  async function job(id){requireId(id);const j=(await rows('SELECT importacion_id AS id,tipo,estado FROM mayorista.importaciones WHERE empresa_id=$1 AND importacion_id=$2 FOR UPDATE',[E,id]))[0];if(!j)throw new ApiError(404,'Importación no encontrada');return j;}
- async function state(id){const j=await job(id);return {...j,resumen:await rows('SELECT estado,count(*)::int AS cantidad FROM mayorista.importacion_filas WHERE empresa_id=$1 AND importacion_id=$2 GROUP BY estado',[E,id]),filas:await rows("SELECT fila,datos,estado,resultado FROM mayorista.importacion_filas WHERE empresa_id=$1 AND importacion_id=$2 AND estado<>'aplicada' ORDER BY fila LIMIT 100",[E,id])};}
+ async function state(id,raw={}){const j=await job(id),offset=Number(raw.offset??0),estado=raw.estado??'';if(!Number.isSafeInteger(offset)||offset<0||offset>10000||!['','error','pendiente','aplicada'].includes(estado))throw new ApiError(422,'Paginación inválida');return {...j,resumen:await rows('SELECT estado,count(*)::int AS cantidad FROM mayorista.importacion_filas WHERE empresa_id=$1 AND importacion_id=$2 GROUP BY estado',[E,id]),acciones:await rows("SELECT resultado->>'accion' AS accion,count(*)::int AS cantidad FROM mayorista.importacion_filas WHERE empresa_id=$1 AND importacion_id=$2 AND estado='aplicada' GROUP BY resultado->>'accion'",[E,id]),filas:await rows("SELECT fila,datos,estado,resultado FROM mayorista.importacion_filas WHERE empresa_id=$1 AND importacion_id=$2 AND ($3='' AND estado<>'aplicada' OR estado=$3) ORDER BY fila OFFSET $4 LIMIT 100",[E,id,estado,offset])};}
+
  async function journal(command,action){
   if(command?.empresaId!==E||!UUID.test(command?.id))throw new ApiError(403,'Operación fuera de empresa');
   const hash=digest(command),old=(await rows('SELECT huella,respuesta FROM mayorista.comandos_administrativos WHERE empresa_id=$1 AND comando_id=$2',[E,command.id]))[0];
@@ -49,7 +50,7 @@ export function createLaunchTransaction({query,principal,tx}){
    await query('INSERT INTO mayorista.administracion(empresa_id,revision,datos) VALUES($1,$2,$3::jsonb) ON CONFLICT(empresa_id) DO UPDATE SET revision=excluded.revision,datos=excluded.datos',[E,plan.revision,JSON.stringify(plan)]);
    return {asignados:customers.length,revision:plan.revision};
   });},
-  importState:async id=>{admin();return state(id);},
+  importState:async input=>{admin();return typeof input==='string'?state(input):state(input.id,input);},
   prepareImport:async command=>{shared();return journal(command,async()=>{
    if(!IMPORT_KINDS.includes(command.tipo)||!Array.isArray(command.matrix))throw new ApiError(422,'Archivo inválido');let validated;try{validated=normalizeImport(command.tipo,command.matrix);}catch(e){throw new ApiError(422,e.message);}
    const hash=digest({tipo:command.tipo,matrix:command.matrix}),existing=(await rows('SELECT importacion_id AS id FROM mayorista.importaciones WHERE empresa_id=$1 AND tipo=$2 AND huella=$3',[E,command.tipo,hash]))[0];if(existing)return state(existing.id);

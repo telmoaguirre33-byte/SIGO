@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto';
-import {normalizeReportFilters,calculateManagementMetrics,loadCommercialEvents} from './management-metrics.mjs';
+import {normalizeReportFilters,calculateManagementMetrics,loadCommercialEvents,MONEY_METRICS,goalProgress} from './management-metrics.mjs';
 export const REPORT_TYPES=Object.freeze({ventas:'Ventas',facturacion:'Facturación',cobranzas:'Cobranzas',deuda:'Deuda',vendedores:'Vendedores',objetivos:'Objetivos',clientes:'Clientes',rutas:'Rutas',productos:'Productos entregados',entregas:'Entregas',devoluciones:'Devoluciones'});
 /** Exportación usa los mismos períodos UTC, atribución y fuentes del panel. */
 export function exportReport(data,raw){
@@ -26,7 +26,14 @@ export function exportReport(data,raw){
   rows=[...balances].map(([id,n])=>[customer(id),seller(customers.get(id)?.vendedorId),cents(n),data.dueBalances===null?'Sin datos confirmados':cents(data.dueBalances.filter(e=>e.clienteId===id&&Date.parse(e.vencimiento)<Date.parse(filters.hastaExclusivo)).reduce((s,e)=>s+Number(e.centavos),0))]);
  }
  if(type==='vendedores'){headers=['Vendedor','Ventas ARS','Entregado ARS','Pedidos','Visitas','Clientes con compra'];rows=report.vendedores.map(v=>[v.nombre,cents(v.vendido),cents(v.importeEntregado),v.pedidos,v.visitas,v.clientesConCompra]);}
- if(type==='objetivos'){headers=['Vendedor','Métrica','Desde','Hasta','Objetivo','Real','Cumplimiento %','Falta'];rows=(data.goals??[]).filter(g=>(!filters.vendedorId||g.vendedorId===filters.vendedorId)&&g.desde<filters.hastaExclusivo&&g.hasta>=filters.desde.slice(0,10)).map(g=>[g.vendedorId?seller(g.vendedorId):'Empresa',g.nombre,g.desde,g.hasta,g.objetivo,g.real,g.cumplimiento,g.falta]);}
+ if(type==='objetivos'){
+  headers=['Vendedor','Métrica / unidad','Desde','Hasta','Objetivo del período','Real filtrado','Cumplimiento %','Falta'];
+  rows=(data.goals??[]).filter(g=>(!filters.vendedorId||!g.vendedorId||g.vendedorId===filters.vendedorId)&&g.desde<filters.hastaExclusivo&&g.hasta>=filters.desde.slice(0,10)).map(g=>{
+   const desde=[g.desde,filters.desde.slice(0,10)].sort().at(-1),hasta=[g.hasta,new Date(Date.parse(filters.hastaExclusivo)-86400000).toISOString().slice(0,10)].sort()[0],scoped=normalizeReportFilters({periodo:'personalizado',desde,hasta,vendedorId:g.vendedorId??filters.vendedorId,rutaId:filters.rutaId,zona:filters.zona}),real=calculateManagementMetrics(data,scoped).resumen[g.metrica],progress=goalProgress(g.objetivo,real),amount=n=>MONEY_METRICS.has(g.metrica)?cents(n):n;
+   return [g.vendedorId?seller(g.vendedorId):'Empresa',g.nombre+(MONEY_METRICS.has(g.metrica)?' (ARS)':''),g.desde,g.hasta,amount(g.objetivo),amount(real),progress.cumplimiento,amount(progress.falta)];
+  });
+ }
+
  if(type==='clientes'){headers=['Cliente','Documento','Dirección','Vendedor','Zona','Ruta','Lista'];rows=data.customers.filter(c=>matches({clienteId:c.id})).map(c=>[c.nombre,c.documento,c.direccion,seller(c.vendedorId),routes.get(c.rutaId)?.zona,route(c.rutaId),c.listaId?'Lista asignada':'General']);}
  if(type==='rutas'){headers=['Ruta','Zona','Unidades entregadas netas','Importe entregado neto ARS'];rows=report.rutas.map(r=>[r.nombre,routes.get(r.id)?.zona,r.unidades,cents(r.centavos)]);}
  if(type==='productos'){

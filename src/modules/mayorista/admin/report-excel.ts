@@ -112,7 +112,7 @@ export function descargarTablaExcel(nombreHoja: string, encabezados: string[], f
     ...filas.map((fila, indiceFila) => `<row r="${indiceFila + 2}">${encabezados.map((_, indiceCol) => {
       const valor = fila[indiceCol];
       const referencia = `${columnaExcel(indiceCol + 1)}${indiceFila + 2}`;
-      return indiceCol === 1 || indiceCol === 2 ? celdaXml(valor == null ? "" : String(valor), referencia) : celdaXml(valor, referencia);
+      return celdaXml(valor, referencia);
     }).join("")}</row>`),
   ];
   const ultimaColumna = columnaExcel(Math.max(1, encabezados.length));

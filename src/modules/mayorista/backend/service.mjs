@@ -88,7 +88,7 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
         if(!administrative(principal))throw new ApiError(403,'Administración requerida');
         const routes={'/admin/launch':['launchState','launchCommand'],'/admin/launch/subscription':['subscriptionState','subscriptionCommand'],'/admin/launch/customers':['customersPage','assignCustomers'],'/admin/launch/imports':['importState','prepareImport'],'/admin/launch/imports/process':[null,'processImport']};
         const route=routes[path];if(!route)throw new ApiError(404,'Función no disponible');
-        if(request.method==='GET'&&route[0]){const params=Object.fromEntries(new URL(request.url).searchParams);return reply(200,await repository.withPrincipal(principal,tx=>tx[route[0]](path.endsWith('/imports')?params.id:params)));}
+        if(request.method==='GET'&&route[0]){const params=Object.fromEntries(new URL(request.url).searchParams);return reply(200,await repository.withPrincipal(principal,tx=>tx[route[0]](params)));}
         if(request.method==='POST'&&route[1]){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const body=await smallJson(request,4*1024*1024);return reply(200,await repository.withPrincipal(principal,tx=>tx[route[1]](body)));}
         throw new ApiError(405,'Método no permitido');
       }

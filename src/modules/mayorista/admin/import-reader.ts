@@ -32,7 +32,7 @@ async function leerZip(arrayBuffer: ArrayBuffer) {
   if (eocd < 0) throw new Error("El archivo no parece ser un Excel .xlsx válido.");
   const cantidad = u16(bytes, eocd + 10);
   if(cantidad>1000)throw new Error("El libro tiene demasiadas entradas. Exportá sólo la hoja a importar.");
-  let totalDeclarado=0;
+  let totalDeclarado=0,totalReal=0;
   const centralOffset = u32(bytes, eocd + 16);
   let offset = centralOffset;
   const archivos = new Map<string, Uint8Array>();
@@ -56,7 +56,8 @@ async function leerZip(arrayBuffer: ArrayBuffer) {
     const localExtra = u16(bytes, localOffset + 28);
     const inicio = localOffset + 30 + localNombre + localExtra;
     const datos = bytes.slice(inicio, inicio + comprimido);
-    archivos.set(nombre, await descomprimirZipEntrada(datos, metodo, descomprimido));
+    const inflated=await descomprimirZipEntrada(datos,metodo,descomprimido);totalReal+=inflated.length;if(totalReal>100*1024*1024)throw new Error("El contenido real del Excel supera 100 MB.");
+    archivos.set(nombre,inflated);
     offset += 46 + largoNombre + largoExtra + largoComentario;
   }
   return archivos;
@@ -89,6 +90,7 @@ function matrizDesdeHoja(xml: string, strings: string[]) {
   const rows = Array.from(doc.getElementsByTagName("row"));
   rows.forEach((row, rowIndex) => {
     const numero = Math.max(1, Number(row.getAttribute("r") || rowIndex + 1));
+    if(numero>10001)throw new Error("Usá hasta 10.000 filas de datos.");
     const fila: string[] = salida[numero - 1] ?? [];
     Array.from(row.getElementsByTagName("c")).forEach((celda) => {
       const ref = celda.getAttribute("r") || "A1";
@@ -100,7 +102,7 @@ function matrizDesdeHoja(xml: string, strings: string[]) {
         const raw = celda.getElementsByTagName("v")[0]?.textContent ?? "";
         valor = type === "s" ? strings[Number(raw)] ?? "" : raw;
       }
-      fila[indiceColumna(ref)] = valor;
+      const col=indiceColumna(ref);if(col>=100)throw new Error("Usá hasta 100 columnas.");fila[col] = valor;
     });
     salida[numero - 1] = fila;
   });
