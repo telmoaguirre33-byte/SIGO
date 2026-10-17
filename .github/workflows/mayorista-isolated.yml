@@ -67,6 +67,7 @@ jobs:
           node ../tests/fulfillment.mjs
           node ../tests/acceptance-order-resume.mjs
           node ../tests/reset-seller1-qa.mjs
+          node ../tests/existing-p0-evidence.mjs
       - name: Políticas RLS en PostgreSQL efímero local
         run: npm run test:rls
       - name: Autenticación firmada y API HTTP contra PostgreSQL aislado
