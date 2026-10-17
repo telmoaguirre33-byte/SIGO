@@ -22,7 +22,7 @@ function normalize(row){return row?{...row,creadoEn:row.creadoEn.toISOString(),r
 export function createPostgresRepository({enabled=false,pool,inventoryRequired=false,accountsEnabled=false,databasePolicy,operational=false,readSharedMetrics,sharedSource}={}){
   return {withPrincipal:async(principal,fn)=>{
     if(!enabled)throw new ApiError(503,'Persistencia desactivada');(databasePolicy?.assertPool??assertIsolatedPool)(pool);
-    for(let attempt=0;attempt<4;attempt++){
+    for(let attempt=0;attempt<8;attempt++){
     const c=await pool.connect();
     try{
       await c.query('BEGIN ISOLATION LEVEL SERIALIZABLE');await c.query('SET LOCAL ROLE authenticated');
@@ -135,7 +135,11 @@ export function createPostgresRepository({enabled=false,pool,inventoryRequired=f
         };
       }
       const result=await fn(tx);await c.query('COMMIT');return result;
-    }catch(e){await c.query('ROLLBACK').catch(()=>{});if(!['40001','40P01','23505'].includes(e.code)||attempt===3)throw e;}finally{c.release();}
+    }catch(e){await c.query('ROLLBACK').catch(()=>{});if(!['40001','40P01','23505'].includes(e.code)||attempt===7)throw e;}finally{c.release();}
+    // Solo se repite una transacción ya revertida. Cede el slot del pool antes
+    // del backoff para que ocho vendedores no agoten sus intentos en sincronía.
+    await new Promise(resolve=>setTimeout(resolve,Math.min(250,20*2**attempt)+Math.floor(Math.random()*40)));
     }
   }};
 }
+
