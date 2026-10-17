@@ -1,3 +1,4 @@
+import {verifySellerDevice} from './seller-device-browser.mjs';
 import {verifySellerSearch} from './product-search-browser.mjs';
 import {verifyEncryptedWorkspace} from './encrypted-browser.mjs';
 import {createServer} from 'node:http';
@@ -124,6 +125,7 @@ try{
   await test('PWA segura tiene inicio independiente y permanece desactivada', `const m=await(await fetch('./secure.webmanifest')).json(),c=await import('./secure-config.mjs');if(m.start_url!=='./secure.html'||m.display!=='standalone'||!m.icons.some(i=>i.sizes==='512x512'))throw new Error('manifest seguro');if(c.secureConfig.enabled!==false||c.secureConfig.approvedOrigin!==null)throw new Error('activación involuntaria')`);
   passed+=await verifyEncryptedWorkspace({evaluate,stop,start,call,otherTab});
   passed+=await verifySellerSearch({evaluate,call});
+  passed+=await verifySellerDevice({evaluate,call,stop,start});
   await call('Page.navigate',{url:'http://127.0.0.1:4173/admin.html'});
   for(let i=0;i<100;i++){if(await evaluate("!!document.querySelector('[data-tab=operaciones]')"))break;await delay(50);}
   await test('Administración demo prepara pedido y conserva historial local', `document.querySelector('[data-tab=operaciones]').click();const form=document.querySelector('[data-form=fulfillment]');if(!form)throw new Error('sin pedido recibido para administrar');form.querySelector('[name=nota]').value='Comprobante QA';form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));let done=false;for(let i=0;i<100;i++){await new Promise(r=>setTimeout(r,50));if(document.body.textContent.includes('preparacion · revisión 1')){done=true;break;}}if(!done)throw new Error('operación administrativa no persistida')`);
@@ -162,4 +164,5 @@ try{
   await stop();await new Promise(r=>server.close(r));
   await rm(profile,{recursive:true,force:true,maxRetries:10,retryDelay:200}).catch(e=>console.error('No se pudo limpiar perfil temporal:',e.message));
 }
+
 

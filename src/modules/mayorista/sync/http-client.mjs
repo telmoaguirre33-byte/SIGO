@@ -2,7 +2,7 @@ import {construirSolicitud,verificarAcuse} from './contrato-pedidos.js';
 /** Transporte opcional. Tokens solo en memoria, sin almacenamiento ni URLs.
  * La cola IndexedDB existente conserva el pedido ante cualquier fallo. */
 export function createMayoristaClient({enabled=false,baseUrl,qaAislado=false,getSigoToken,expectedEmpresaId,fetchImpl=globalThis.fetch}={}){
-  let token=null,principal=null,generation=0,renewing=null,closed=0;
+  let token=null,principal=null,generation=0,renewing=null,closed=0,sessionExpiry=0;
   const gate=()=>{if(!enabled)throw new Error('Conexión Mayorista desactivada');const u=new URL(baseUrl);if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash||u.pathname!=='/')throw new Error('API HTTPS independiente inválida');return u.origin;};
   const failure=(message,status,path)=>Object.assign(new Error(message),{status,path});
   async function request(path,body,authorization=token,recovered=false){
@@ -25,8 +25,10 @@ export function createMayoristaClient({enabled=false,baseUrl,qaAislado=false,get
     return value;
   }
   const api={
-    login:async credentials=>{const attempt=++generation;token=null;principal=null;const session=await request('/auth/login',credentials);if(attempt!==generation)throw new Error('Inicio de sesión cancelado');if(typeof session.accessToken!=='string'||!Number.isFinite(session.expiresAt)||session.expiresAt<=Date.now())throw new Error('Sesión inválida');token=session.accessToken;try{const verified=await request('/me');if(attempt!==generation)throw new Error('Inicio de sesión cancelado');if(verified.empresaId!==credentials.empresaId||!verified.userId||verified.rol==='vendedor'&&!verified.vendedorId)throw new Error('Identidad fuera de la empresa');principal=verified;return {...principal};}catch(e){if(attempt===generation){token=null;principal=null;}throw e;}},
-    loginSigo:async(empresaId,sigoToken)=>{const attempt=++generation;token=null;principal=null;const session=await request('/auth/sigo',{empresaId},sigoToken);if(attempt!==generation)throw Error('Acceso cancelado');if(typeof session.accessToken!=='string'||!Number.isFinite(session.expiresAt)||session.expiresAt<=Date.now())throw Error('Sesión SIGO no validada');token=session.accessToken;try{const verified=await request('/me',undefined,token,true);if(attempt!==generation)throw Error('Acceso cancelado');if(verified.empresaId!==empresaId&&!(qaAislado&&verified.qaAislado===true&&verified.sigoEmpresaId===empresaId)||!verified.userId)throw Error('Empresa SIGO no validada');principal=verified;return {...principal};}catch(e){if(attempt===generation){token=null;principal=null;}throw e;}},
+    savedSession:()=>token&&principal?{accessToken:token,expiresAt:sessionExpiry,empresaId:principal.empresaId,userId:principal.userId,vendedorId:principal.vendedorId}:null,
+    resume:async session=>{const attempt=++generation;token=null;principal=null;if(typeof session?.accessToken!=='string'||session.expiresAt<=Date.now())throw failure('Tu acceso venció. Ingresá nuevamente; los pedidos están conservados.',401,'/me');token=session.accessToken;sessionExpiry=session.expiresAt;try{const verified=await request('/me');if(attempt!==generation||['empresaId','userId','vendedorId'].some(k=>verified[k]!==session[k]))throw failure('El acceso del dispositivo cambió',403,'/me');principal=verified;return {...verified};}catch(e){if(attempt===generation){token=null;principal=null;}throw e;}},
+    login:async credentials=>{const attempt=++generation;token=null;principal=null;const session=await request('/auth/login',credentials);if(attempt!==generation)throw new Error('Inicio de sesión cancelado');if(typeof session.accessToken!=='string'||!Number.isFinite(session.expiresAt)||session.expiresAt<=Date.now())throw new Error('Sesión inválida');token=session.accessToken;sessionExpiry=session.expiresAt;try{const verified=await request('/me');if(attempt!==generation)throw new Error('Inicio de sesión cancelado');if(verified.empresaId!==credentials.empresaId||!verified.userId||verified.rol==='vendedor'&&!verified.vendedorId)throw new Error('Identidad fuera de la empresa');principal=verified;return {...principal};}catch(e){if(attempt===generation){token=null;principal=null;}throw e;}},
+    loginSigo:async(empresaId,sigoToken)=>{const attempt=++generation;token=null;principal=null;const session=await request('/auth/sigo',{empresaId},sigoToken);if(attempt!==generation)throw Error('Acceso cancelado');if(typeof session.accessToken!=='string'||!Number.isFinite(session.expiresAt)||session.expiresAt<=Date.now())throw Error('Sesión SIGO no validada');token=session.accessToken;sessionExpiry=session.expiresAt;try{const verified=await request('/me',undefined,token,true);if(attempt!==generation)throw Error('Acceso cancelado');if(verified.empresaId!==empresaId&&!(qaAislado&&verified.qaAislado===true&&verified.sigoEmpresaId===empresaId)||!verified.userId)throw Error('Empresa SIGO no validada');principal=verified;return {...principal};}catch(e){if(attempt===generation){token=null;principal=null;}throw e;}},
     logout:async()=>{const previous=token;closed++;generation++;token=null;principal=null;if(previous)await request('/auth/logout',{},previous);},
     send:async order=>{gate();if(!token||!principal)throw new Error('Iniciá sesión antes de sincronizar');if(order.empresaId!==principal.empresaId||order.vendedorId!==principal.vendedorId)throw new Error('Pedido fuera de la sesión activa');return verificarAcuse(order,await request('/orders',construirSolicitud(order)));},
     visits:()=>request('/visits'),
@@ -47,6 +49,8 @@ export function createMayoristaClient({enabled=false,baseUrl,qaAislado=false,get
     sharedState:()=>request('/shared/commerce'),
     sharedCommand:command=>request('/shared/commerce',command),
     users:()=>request('/admin/users'),
+    devices:()=>request('/auth/devices'),
+    revokeDevice:sessionId=>request('/auth/devices',{sessionId}),
     sharedUserCandidates:()=>request('/admin/users/candidates'),
     userCommand:command=>request('/admin/users/commands',command),
     masterState:()=>request('/admin/catalog'),
@@ -69,3 +73,4 @@ export function createMayoristaClient({enabled=false,baseUrl,qaAislado=false,get
   };
   return api;
 }
+

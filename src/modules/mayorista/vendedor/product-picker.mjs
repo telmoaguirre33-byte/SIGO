@@ -28,6 +28,7 @@ export function createProductPicker() {
     if (!entry) return;
     productId = entry.product.id; priceId = entry.prices[0].id;
     query = entry.product.nombre ?? entry.product.descripcion ?? entry.product.id; open = false; highlighted = -1; paint();
+    host.dispatchEvent(new CustomEvent('product-selected',{bubbles:true}));
     host.querySelector('[data-product-presentation]').focus();
   }
   async function camera() {
@@ -73,7 +74,7 @@ export function createProductPicker() {
     const capable = globalThis.isSecureContext && typeof globalThis.BarcodeDetector?.getSupportedFormats === 'function' && !!navigator.mediaDevices?.getUserMedia;
     host.innerHTML = `<label for="product-query">Producto</label><div class="product-search-row"><input id="product-query" data-product-query type="search" role="combobox" aria-autocomplete="list" aria-controls="product-results" aria-expanded="false" aria-describedby="product-search-status" autocomplete="off" placeholder="Nombre, marca, código o EAN">${capable ? '<button type="button" data-scan aria-label="Leer código de barras con cámara">Cámara</button>' : ''}</div><ul id="product-results" role="listbox" aria-label="Productos" hidden></ul><small id="product-search-status" data-search-status role="status"></small><p data-camera-status role="status"></p><div data-camera-panel hidden><video muted playsinline aria-label="Cámara de códigos de barras"></video><button type="button" data-stop-camera>Cerrar cámara</button></div><label>Presentación<select data-product-presentation name="precioId"></select></label>`;
     const input = host.querySelector('[data-product-query]');
-    input.addEventListener('input', () => {query = input.value; productId = ''; priceId = ''; search();});
+    input.addEventListener('input', () => {query = input.value; productId = ''; priceId = ''; search();host.dispatchEvent(new CustomEvent('product-selected',{bubbles:true}));});
     input.addEventListener('focus', () => {if (!productId) search();});
     input.addEventListener('keydown', e => {
       if (e.isComposing) return;
@@ -88,7 +89,7 @@ export function createProductPicker() {
     host.addEventListener('focusout', () => {queueMicrotask(() => {if (host && !host.contains(document.activeElement)) {open = false; paint();}});});
     host.querySelector('[role=listbox]').addEventListener('pointerdown', e => {if (e.target.closest('[data-result]')) e.preventDefault();});
     host.querySelector('[role=listbox]').addEventListener('click', e => {const row = e.target.closest('[data-result]'); if (row) choose(results[Number(row.dataset.result)]);});
-    host.querySelector('[data-product-presentation]').addEventListener('change', e => {priceId = e.target.value;});
+    host.querySelector('[data-product-presentation]').addEventListener('change', e => {priceId = e.target.value;host.dispatchEvent(new CustomEvent('product-selected',{bubbles:true}));});
     host.querySelector('[data-scan]')?.addEventListener('click', () => {void camera();});
     host.querySelector('[data-stop-camera]').addEventListener('click', () => {stopCamera(); focus();});
     results = searchProducts(index, query, frequencies); paint();
@@ -98,3 +99,4 @@ export function createProductPicker() {
     price() {return selected()?.prices.find(price => price.id === priceId);},
     dispose() {stopCamera(); host = null; index = []; catalogRef = undefined; pricesRef = undefined; frequencies.clear(); clear();}};
 }
+

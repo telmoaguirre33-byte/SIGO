@@ -26,7 +26,7 @@ await mkdir(path.join(out,'vendedor'),{recursive:true});
 await cp(path.join(root,'../vendedor/connected.mjs'),path.join(out,'vendedor/connected.mjs'));
 await cp(path.join(root,'../vendedor/secure.mjs'),path.join(out,'vendedor/secure.mjs'));
 await cp(path.join(root,'../vendedor/route-map.mjs'),path.join(out,'vendedor/route-map.mjs'));
-for(const name of ['product-search.mjs','product-picker.mjs'])await cp(path.join(root,'../vendedor',name),path.join(out,'vendedor',name));
+for(const name of ['product-search.mjs','product-picker.mjs','seller-model.mjs'])await cp(path.join(root,'../vendedor',name),path.join(out,'vendedor',name));
 await mkdir(path.join(out,'security'),{recursive:true});
 await cp(path.join(root,'../security/encrypted-workspace.mjs'),path.join(out,'security/encrypted-workspace.mjs'));
 await cp(path.join(root,'../offline/encrypted-orders.mjs'),path.join(out,'offline/encrypted-orders.mjs'));

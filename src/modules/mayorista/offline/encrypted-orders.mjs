@@ -3,6 +3,18 @@ import {verificarResultadoEnvio} from './pedidos-locales.js';
 export class EncryptedOrders{
   constructor(workspace){this.workspace=workspace;}
   async listar(){return (await this.workspace.list('orders')).map(r=>r.data);}
+  async editar(id,changes,expectedRevision){
+    const record=await this.workspace.read('orders',id);
+    if(!record||record.revision!==expectedRevision||!canEditOrder(record.data))throw Error('Este pedido es de solo lectura: ya se intentó enviar o cambió en otra ventana');
+    const next={...record.data,lineas:changes.lineas.map(l=>({...l})),comerciales:changes.comerciales,actualizadoEn:new Date().toISOString(),revisionLocal:(record.data.revisionLocal??1)+1,
+      historial:[...(record.data.historial??[]),{revision:record.data.revisionLocal??1,fecha:record.data.actualizadoEn,lineas:record.data.lineas,comerciales:record.data.comerciales}]};
+    if(!next.lineas.length||next.lineas.length>200||next.lineas.some(l=>!l.productoId||!Number.isSafeInteger(l.cantidad)||l.cantidad<1||!Number.isFinite(l.precioUnitario)||l.precioUnitario<0))throw Error('Revisá las cantidades y los productos');
+    await this.workspace.write('orders',id,next,record.revision);return next;
+  }
+  async cancelar(id,expectedRevision){
+    const r=await this.workspace.read('orders',id);if(!r||r.revision!==expectedRevision||!canEditOrder(r.data))throw Error('Solo se cancela aquí un pedido que todavía no se envió');
+    return this.workspace.write('orders',id,{...r.data,estado:'cancelado',actualizadoEn:new Date().toISOString()},r.revision);
+  }
   async crear(clienteId,lineas,id=crypto.randomUUID(),comerciales){
     if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)||!clienteId||!Array.isArray(lineas)||!lineas.length||lineas.length>200||lineas.some(l=>!l?.productoId||!Number.isSafeInteger(l.cantidad)||l.cantidad<1||!Number.isFinite(l.precioUnitario)||l.precioUnitario<0))throw new Error('Pedido inválido');
     const normalized=lineas.map(l=>({...l}));
@@ -15,7 +27,7 @@ export class EncryptedOrders{
     return navigator.locks.request(JSON.stringify(['mayorista-encrypted-sync',this.workspace.scope]),{ifAvailable:true},async lock=>{
       if(!lock)return {enviados:0,fallidos:0};let enviados=0,fallidos=0;
       for(const record of await this.workspace.list('orders')){
-        if(record.data.estado==='sincronizado')continue;
+        if(['sincronizado','cancelado'].includes(record.data.estado))continue;
         const active={...record.data,estado:'sincronizando',intentos:record.data.intentos+1,actualizadoEn:new Date().toISOString(),error:null};const saved=await this.workspace.write('orders',active.id,active,record.revision);
         try{const receipt=await send(active);verificarResultadoEnvio(active,receipt);await this.workspace.write('orders',active.id,{...active,estado:'sincronizado',confirmadoEn:receipt.confirmadoEn},saved.revision);enviados++;}
         catch(e){await this.workspace.write('orders',active.id,{...active,estado:'error',error:e.message??'Error de sincronización'},saved.revision);fallidos++;}
@@ -24,3 +36,6 @@ export class EncryptedOrders{
     });
   }
 }
+// Un acuse perdido también pudo crear el pedido remoto: no se modifica su contenido.
+export const canEditOrder=p=>p?.estado==='pendiente'&&(p.intentos??0)===0;
+

@@ -53,6 +53,8 @@ export function createIsolatedService({enabled=false,pool,privateKey,publicKey,o
       const principal=await auth.verify(token);
       if(path==='/auth/logout'&&request.method==='POST'){await auth.signOut(token);return reply(200,{revoked:true});}
       if(path==='/me'&&request.method==='GET')return reply(200,principal);
+      if(operational&&path==='/auth/devices'&&request.method==='GET')return reply(200,await directory.devices(principal));
+      if(operational&&path==='/auth/devices'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const input=await smallJson(request);return reply(200,await directory.revokeDevice(principal,input?.sessionId));}
       if(principal.fuenteComercial==='sigo'&&path==='/shared/returns/from-load'&&request.method==='POST'){if(request.headers.get('Content-Type')!=='application/json')throw new ApiError(415,'Se requiere JSON');const d=await smallJson(request);return reply(200,await repository.withPrincipal(principal,tx=>tx.sharedPhysicalReturn(d)));}
       if(principal.fuenteComercial==='sigo'&&path==='/shared/returns'&&request.method==='GET')return reply(200,await repository.withPrincipal(principal,tx=>tx.sharedReceipts()));
       if(principal.fuenteComercial==='sigo'&&path==='/shared/pricing'&&request.method==='POST'){

@@ -15,6 +15,8 @@ export function createUserDirectory({pool,databasePolicy}){
   }catch(e){await c.query('ROLLBACK').catch(()=>{});if(e.code==='23503')throw new ApiError(422,'Vendedor de otra empresa o inexistente');if(['23505','40001','40P01'].includes(e.code))throw new ApiError(409,'Edición concurrente o usuario no disponible');throw e;}finally{c.release();}
  }
  return {
+  devices:principal=>transaction(principal,true,async c=>(await c.query('SELECT s.session_id AS id,s.user_id AS "userId",u.nombre,u.email,s.vence_en AS "venceEn",s.revocada FROM mayorista_private.sesiones s JOIN mayorista_private.usuarios u ON u.user_id=s.user_id JOIN mayorista.miembros m ON m.user_id=s.user_id AND m.empresa_id=s.empresa_id WHERE s.empresa_id=$1 AND s.vence_en>now() ORDER BY s.vence_en DESC LIMIT 200',[principal.empresaId])).rows),
+  revokeDevice:(principal,id)=>transaction(principal,true,async c=>{if(!uuid.test(id))throw new ApiError(422,'Dispositivo inválido');if(id===principal.sessionId)throw new ApiError(422,'Usá Cerrar sesión para salir de este dispositivo');const r=await c.query('UPDATE mayorista_private.sesiones SET revocada=true WHERE session_id=$1 AND empresa_id=$2 RETURNING session_id',[id,principal.empresaId]);if(!r.rows.length)throw new ApiError(404,'Dispositivo no disponible');return {revoked:true};}),
   candidates:principal=>transaction(principal,false,async c=>{if(principal.fuenteComercial!=='sigo')return [];return (await c.query("SELECT eu.user_id AS id,coalesce(to_jsonb(u)->>'email',eu.user_id::text) AS email,coalesce(to_jsonb(u)->'raw_user_meta_data'->>'nombre',to_jsonb(u)->'raw_user_meta_data'->>'full_name',to_jsonb(u)->>'email',eu.user_id::text) AS nombre,eu.rol FROM public.empresa_usuarios eu JOIN auth.users u ON u.id=eu.user_id WHERE eu.empresa_id=$1 AND eu.activo AND eu.rol<>'client' AND NOT EXISTS(SELECT 1 FROM mayorista.miembros m WHERE m.empresa_id=eu.empresa_id AND m.user_id=eu.user_id) ORDER BY eu.user_id",[principal.empresaId])).rows;}),
   list:principal=>transaction(principal,false,async c=>(await c.query('SELECT m.user_id AS id,u.nombre,u.email,m.rol,m.vendedor_id AS "vendedorId",m.activo FROM mayorista.miembros m JOIN mayorista_private.usuarios u ON u.user_id=m.user_id WHERE m.empresa_id=$1 ORDER BY u.email',[principal.empresaId])).rows),
   command:(principal,command)=>transaction(principal,true,async c=>{
@@ -41,3 +43,4 @@ export function createUserDirectory({pool,databasePolicy}){
   })
  };
 }
+
