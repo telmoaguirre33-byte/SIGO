@@ -38,6 +38,11 @@ console.log('Build Mayorista aislado: 7 módulos TypeScript transformados, App V
 
 await cp(path.join(root,'../security/qa-access.mjs'),path.join(out,'security/qa-access.mjs'));
 
-await cp(path.join(root,'../commercial/launch-model.mjs'),path.join(out,'admin/launch-model.mjs'));
+await mkdir(path.join(out,'commercial'),{recursive:true});
+await cp(path.join(root,'../commercial/launch-model.mjs'),path.join(out,'commercial/launch-model.mjs'));
+for(const name of ['launch-panel','reports-panel']){const source=await readFile(path.join(root,'../admin',name+'.mjs'),'utf8');await writeFile(path.join(out,'admin',name+'.mjs'),source.replace(/(from ['"]\.\/[^'"]+)\.ts(['"])/g,'$1.mjs$2'));}
 const reader=await readFile(path.join(root,'../admin/import-reader.ts'),'utf8');
 await writeFile(path.join(out,'admin/import-reader.mjs'),stripTypeScriptTypes(reader,{mode:'transform'}));
+
+const excel=await readFile(path.join(root,'../admin/report-excel.ts'),'utf8');
+await writeFile(path.join(out,'admin/report-excel.mjs'),stripTypeScriptTypes(excel,{mode:'transform'}));

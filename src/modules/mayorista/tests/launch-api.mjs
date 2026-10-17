@@ -8,9 +8,9 @@ export async function verifyLaunchAPI(pool,{make,origin,E,B,creds}){
  let service=make();const timings={};
  const call=async(path,token,body)=>{const t=performance.now();const response=await service(new Request(origin+path,{method:body?'POST':'GET',headers:{Origin:origin,Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})}));const value=await response.json();(timings[path.split('?')[0]]??=[]).push(performance.now()-t);return {status:response.status,body:value};};
  const login=async role=>(await call('/auth/login','',creds[role])).body.accessToken;
- const token=await login('gerencia'),seller=await login('vendedor'),admin=await login('administracion');
+ const token=await login('gerencia'),seller=await login('vendedor'),admin=await login('administracion'),warehouse=await login('armador'),driver=await login('chofer');
  const c=body=>({id:randomUUID(),empresaId:E,...body});
- for(const path of ['/admin/launch','/admin/launch/customers','/admin/launch/imports?id='+randomUUID()])assert.equal((await call(path,seller)).status,403);
+ for(const roleToken of [seller,warehouse,driver])for(const path of ['/admin/launch','/admin/launch/customers','/admin/launch/imports?id='+randomUUID()])assert.equal((await call(path,roleToken)).status,403);
  assert.equal((await call('/admin/launch',token)).status,200);
  const command=c({version:0,input:{tipoNegocio:'mixto',nombre:'Distribuidora CI',deposito:'Central CI'}});
  assert.equal((await call('/admin/launch',token,command)).status,200);
@@ -23,11 +23,14 @@ export async function verifyLaunchAPI(pool,{make,origin,E,B,creds}){
   const id=initial.body.id;assert.equal((await call('/admin/launch/imports',token,prepare)).body.id,id);
   let current=initial.body,requests=0;
   while(current.resumen.some(r=>r.estado==='pendiente'&&r.cantidad)){
-   const apply=c({tipo:'aplicar',importacionId:id});const first=await call('/admin/launch/imports/process',admin,apply);assert.equal(first.status,200,JSON.stringify(first));
+   const apply=c({tipo:'aplicar',importacionId:id});const concurrent=requests===0?await Promise.all([call('/admin/launch/imports/process',admin,apply),call('/admin/launch/imports/process',admin,apply)]):null;if(concurrent)assert.deepEqual(concurrent[0],concurrent[1]);const first=concurrent?.[0]??await call('/admin/launch/imports/process',admin,apply);assert.equal(first.status,200,JSON.stringify(first));
    const retry=await call('/admin/launch/imports/process',admin,apply);assert.deepEqual(retry,first);current=first.body;if(++requests>410)throw Error('Importación no progresa');
   }
   return {id,current};
  }
+ const subscription=c({version:0,input:{estado:'prueba',hasta:'2030-01-01T00:00:00Z'}});assert.equal((await call('/admin/launch/subscription',token,subscription)).status,200);assert.equal((await call('/admin/launch/subscription',token,subscription)).status,200);assert.equal((await call('/admin/launch/subscription',admin,c({version:1,input:{estado:'suspendido',hasta:'2030-01-01'}}))).status,403);
+ let sv=1;for(const estado of ['activo','pago_pendiente','suspendido','reactivado']){const changed=await call('/admin/launch/subscription',token,c({version:sv,input:{estado,hasta:'2030-01-01T00:00:00Z'}}));assert.equal(changed.status,200,JSON.stringify(changed));sv++;assert.equal(changed.body.datos.aplicarSuspension,false);}
+ assert.equal((await call('/admin/launch/subscription',token)).body.vigencia.estado,'reactivado');
  const clients=await importRows('clientes',[['codigo','nombre','documento','direccion'],...Array.from({length:1500},(_,i)=>['LAUNCH-C'+i,'Cliente lanzamiento '+String(i).padStart(4,'0'),'LAUNCH-D'+i,'Calle '+i])]);assert.equal(clients.current.resumen.find(r=>r.estado==='aplicada')?.cantidad,1500,JSON.stringify(clients.current));
  const products=await importRows('productos',[['codigo','ean','nombre','marca','precio'],...Array.from({length:5000},(_,i)=>['LAUNCH-P'+i,'LAUNCH-EAN'+i,'Producto lanzamiento '+i,'Marca CI','25.50'])]);assert.equal(products.current.resumen.find(r=>r.estado==='aplicada')?.cantidad,5000,JSON.stringify(products.current));
  // Archivo repetido con otro comando conserva importación e identidades existentes.
@@ -42,9 +45,10 @@ export async function verifyLaunchAPI(pool,{make,origin,E,B,creds}){
  const page=await call('/admin/launch/customers?q=Cliente%20lanzamiento&limit=30&offset=30',token);assert.equal(page.status,200,JSON.stringify(page));assert.equal(page.body.total,1500);assert.equal(page.body.items.length,30);
  const next=await call('/admin/launch/customers?q=Cliente%20lanzamiento&limit=30&offset=60',token);assert.ok(!next.body.items.some(c=>page.body.items.some(p=>p.id===c.id)));
  const sellerId=(await pool.query('SELECT vendedor_id FROM mayorista.vendedores WHERE empresa_id=$1 LIMIT 1',[E])).rows[0].vendedor_id,routeId=(await pool.query('SELECT ruta_id FROM mayorista.rutas WHERE empresa_id=$1 LIMIT 1',[E])).rows[0].ruta_id;
- const assignment=c({input:{clientes:page.body.items.slice(0,3).map(c=>c.id),vendedorId:sellerId,rutaId:routeId,listaId:null}}),assigned=await call('/admin/launch/customers',token,assignment);assert.equal(assigned.status,200,JSON.stringify(assigned));assert.deepEqual(await call('/admin/launch/customers',token,assignment),assigned);
+ const assignment=c({version:(await call('/admin/state',token)).body.revision,input:{clientes:page.body.items.slice(0,3).map(c=>c.id),vendedorId:sellerId,rutaId:routeId,listaId:null}}),assigned=await call('/admin/launch/customers',token,assignment);assert.equal(assigned.status,200,JSON.stringify(assigned));assert.deepEqual(await call('/admin/launch/customers',token,assignment),assigned);
  service=make();const persisted=await call('/admin/launch',token);assert.equal(persisted.body.datos.nombre,'Distribuidora CI');assert.equal(persisted.body.version,1);
  assert.equal((await call('/admin/launch/imports?id='+products.id,token)).body.resumen.find(r=>r.estado==='aplicada').cantidad,5000);
+ for(const tipo of ['ventas','facturacion','cobranzas','deuda','vendedores','objetivos','clientes','rutas','productos','entregas','devoluciones']){const r=await call('/admin/reports/export?tipo='+tipo,token);assert.equal(r.status,200,JSON.stringify(r));assert.ok(r.body.rows.length<=100);assert.equal(r.body.revision.length,64);}
  const db=await pool.connect();try{await db.query('BEGIN');await db.query('SET LOCAL ROLE authenticated');await db.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[(await pool.query('SELECT user_id FROM mayorista.miembros WHERE empresa_id=$1 AND rol=$2 LIMIT 1',[E,'vendedor'])).rows[0].user_id]);assert.equal((await db.query('SELECT * FROM mayorista.importaciones')).rows.length,0);assert.equal((await db.query('SELECT * FROM mayorista.puesta_marcha')).rows.length,0);}finally{await db.query('ROLLBACK');db.release();}
  const metrics=Object.fromEntries(Object.entries(timings).map(([k,v])=>{v.sort((a,b)=>a-b);return [k,{n:v.length,p50:v[Math.floor(v.length*.5)],p95:v[Math.min(v.length-1,Math.floor(v.length*.95))]}];}));
  await mkdir(new URL('./artifacts/',import.meta.url),{recursive:true});await writeFile(new URL('./artifacts/launch-ci-metrics.json',import.meta.url),JSON.stringify({environment:'PostgreSQL CI real; no Railway ni Android físico',clients:1500,products:5000,metrics},null,2));

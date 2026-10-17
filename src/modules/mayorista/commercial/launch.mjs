@@ -1,8 +1,9 @@
+import {assignCustomer} from '../admin/model.mjs';
 import {createHash,randomUUID} from 'node:crypto';
 import {ApiError} from '../api/receive-order.mjs';
 import {administrative} from '../security/company-roles.mjs';
 import {canonical} from '../cargas/model.mjs';
-import {launchConfig,normalizeImport,IMPORT_KINDS,UUID} from './launch-model.mjs';
+import {launchConfig,normalizeImport,normalizeSubscription,subscriptionAccess,IMPORT_KINDS,UUID} from './launch-model.mjs';
 const digest=value=>createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 /** Reutiliza la transacción autenticada: todo cambio comparte rollback, RLS y reintentos. */
 export function createLaunchTransaction({query,principal,tx}){
@@ -20,6 +21,8 @@ export function createLaunchTransaction({query,principal,tx}){
   const result=await action();await query('INSERT INTO mayorista.comandos_administrativos(empresa_id,comando_id,huella,actor_id,respuesta) VALUES($1,$2,$3,$4,$5::jsonb)',[E,command.id,hash,principal.userId,JSON.stringify(result)]);return result;
  }
  return {
+  subscriptionState:async()=>{admin();const row=(await rows('SELECT version,datos FROM mayorista.suscripciones WHERE empresa_id=$1'))[0];return row?{...row,vigencia:subscriptionAccess(row.datos),modo:'preparacion',aplicarSuspension:false,cobrosReales:false}:{version:0,datos:null,modo:'preparacion',aplicarSuspension:false,cobrosReales:false};},
+  subscriptionCommand:async command=>{admin();if(principal.rol!=='gerencia')throw new ApiError(403,'Gerencia requerida');return journal(command,async()=>{const old=(await rows('SELECT version,datos FROM mayorista.suscripciones WHERE empresa_id=$1 FOR UPDATE'))[0];if((old?.version??0)!==command.version)throw new ApiError(409,'La suscripción cambió en otra sesión');let datos;try{datos=normalizeSubscription(command.input,old?.datos);}catch(e){throw new ApiError(422,e.message);}const version=command.version+1;await query('INSERT INTO mayorista.suscripciones(empresa_id,version,datos,actualizado_por) VALUES($1,$2,$3,$4) ON CONFLICT(empresa_id) DO UPDATE SET version=excluded.version,datos=excluded.datos,actualizado_por=excluded.actualizado_por,actualizado_en=now()',[E,version,datos,principal.userId]);return {version,datos};});},
   launchState:async()=>{admin();const config=(await rows('SELECT version,datos FROM mayorista.puesta_marcha WHERE empresa_id=$1'))[0]??{version:0,datos:{}};
    const counts=(await rows(`SELECT (SELECT count(*)::int FROM mayorista.vendedores WHERE empresa_id=$1 AND activo) AS vendedores,(SELECT count(*)::int FROM mayorista.rutas WHERE empresa_id=$1) AS rutas,(SELECT count(*)::int FROM mayorista.listas WHERE empresa_id=$1 AND activa) AS listas,(SELECT count(*)::int FROM mayorista.metas WHERE empresa_id=$1 AND activa) AS objetivos,(SELECT count(DISTINCT rol)::int FROM mayorista.miembros WHERE empresa_id=$1 AND activo) AS roles`))[0];
    const catalogCounts=principal.fuenteComercial==='sigo'?(await rows('SELECT mayorista.resumen_puesta_marcha($1) AS r'))[0].r:{};counts.roles=catalogCounts.roles??counts.roles;
@@ -33,12 +36,18 @@ export function createLaunchTransaction({query,principal,tx}){
   assignCustomers:async command=>{shared();return journal(command,async()=>{
    const {clientes,vendedorId,rutaId,listaId}=command.input??{};
    if(!Array.isArray(clientes)||!clientes.length||clientes.length>100||new Set(clientes).size!==clientes.length||clientes.some(id=>!UUID.test(id))||!UUID.test(vendedorId)||!UUID.test(rutaId)||listaId!==null&&!UUID.test(listaId))throw new ApiError(422,'Seleccioná de 1 a 100 clientes, vendedor, ruta y lista');
-   let asignados=0;
-   for(const id of [...clientes].sort()){
-    const plan=await tx.adminState();
-    await tx.adminCommand({id:randomUUID(),empresaId:E,version:plan.revision,operacion:'cliente',input:{id,nombre:'Cliente',direccion:'Sin dirección registrada',vendedorId,rutaId,listaId,habilitado:true}});asignados++;
+   const customers=(await rows('SELECT mayorista.fichas_asignacion($1,$2::uuid[]) AS r',[E,clientes]))[0].r;
+   if(customers.length!==clientes.length)throw new ApiError(422,'Hay clientes inactivos o ajenos a esta empresa');
+   if(listaId&&!(await rows('SELECT lista_id FROM mayorista.listas WHERE empresa_id=$1 AND lista_id=$2 AND activa',[E,listaId])).length)throw new ApiError(422,'Lista no disponible');
+   let plan=await tx.adminState();if(command.version!==plan.revision)throw new ApiError(409,'El padrón cambió en otra sesión. Actualizá antes de asignar.');
+   for(const customer of customers){
+    const input={...customer,vendedorId,rutaId,listaId,habilitado:true};
+    try{plan=assignCustomer(plan,input);}catch(e){throw new ApiError(422,e.message);}
+    await tx.publishPlanning({operacion:'cliente',input},plan);
    }
-   return {asignados};
+   plan.revision++;
+   await query('INSERT INTO mayorista.administracion(empresa_id,revision,datos) VALUES($1,$2,$3::jsonb) ON CONFLICT(empresa_id) DO UPDATE SET revision=excluded.revision,datos=excluded.datos',[E,plan.revision,JSON.stringify(plan)]);
+   return {asignados:customers.length,revision:plan.revision};
   });},
   importState:async id=>{admin();return state(id);},
   prepareImport:async command=>{shared();return journal(command,async()=>{

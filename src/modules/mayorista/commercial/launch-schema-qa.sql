@@ -98,3 +98,35 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION mayorista.resumen_puesta_marcha(uuid) FROM public,anon;
 GRANT EXECUTE ON FUNCTION mayorista.resumen_puesta_marcha(uuid) TO authenticated;
+
+-- Misma firma, guard y proyección del lector aprobado: elimina búsquedas JSON cuadráticas.
+create or replace function public.leer_catalogo_mayorista_sigo_base(p_empresa_id uuid) returns jsonb
+language plpgsql stable security definer set search_path='' as $$
+declare v_rol text;v_vendedor uuid;
+begin
+ v_rol:=public.sigo_mayorista_lector(p_empresa_id);
+ if v_rol not in ('owner','admin','vendedor') then raise exception 'CATALOG_FORBIDDEN';end if;
+ select m.vendedor_id into v_vendedor from mayorista.miembros m where m.empresa_id=p_empresa_id and m.user_id=auth.uid() and m.activo;
+ if v_rol='vendedor' and v_vendedor is null then raise exception 'SELLER_REQUIRED';end if;
+ if to_regclass('public.sigo_mayorista_presentaciones') is null and exists(select 1 from mayorista.clientes a where a.empresa_id=p_empresa_id and a.habilitado and (v_rol<>'vendedor' or a.vendedor_id=v_vendedor) and a.lista_id is not null) then raise exception 'SHARED_PRICE_LIST_NOT_READY';end if;
+ return jsonb_build_object('empresaId',p_empresa_id,'vendedorId',v_vendedor,'descargadoEn',now(),
+ 'clientes',coalesce((select jsonb_agg(jsonb_build_object('id',c.id,'nombre',c.nombre,'direccion',c.direccion,'vendedorId',a.vendedor_id,'rutaId',a.ruta_id,'listaId',a.lista_id,'latitud',a.latitud,'longitud',a.longitud,'habilitado',coalesce(a.habilitado,false),'orden',coalesce(meta.orden,0),'telefono',c.telefono,'documento',c.documento,'limiteCredito',c.limite_credito,'saldo',c.saldo_actual)) from public.clientes_sigo c left join (select x.id,x.orden from mayorista.administracion plan cross join lateral jsonb_to_recordset(plan.datos->'clientes') x(id uuid,orden integer) where plan.empresa_id=p_empresa_id) meta on meta.id=c.id left join mayorista.clientes a on a.empresa_id=c.empresa_id and a.cliente_id=c.id where c.empresa_id=p_empresa_id and c.activo and (v_rol<>'vendedor' or (a.habilitado and a.vendedor_id=v_vendedor))),'[]'::jsonb),
+ 'productos',coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'nombre',p.nombre,'marca',to_jsonb(p)->>'marca','codigoInterno',to_jsonb(p)->>'codigo_interno','ean',to_jsonb(p)->>'codigo_barras')) from public.productos p where p.empresa_id=p_empresa_id and p.activo and p.precio_venta>0),'[]'::jsonb),
+ 'precios',coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'productoId',p.id,'listaId',null,'presentacion','unidad','unidadesBase',1,'precioBase',p.precio_venta,'precio',round(p.precio_venta*(1-coalesce((select o.descuento_porcentaje from public.ofertas_productos_sigo o where o.empresa_id=p_empresa_id and o.producto_id=p.id and o.fecha_inicio<=(now() at time zone 'America/Argentina/Cordoba')::date and o.fecha_fin>=(now() at time zone 'America/Argentina/Cordoba')::date limit 1),0)/100),2))) from public.productos p where p.empresa_id=p_empresa_id and p.activo and p.precio_venta>0),'[]'::jsonb),
+ 'rutas',coalesce((select jsonb_agg(jsonb_build_object('id',r.ruta_id,'nombre',r.nombre,'zona',r.zona,'dias',coalesce(meta.dias,'[]'::jsonb))) from mayorista.rutas r left join (select x.id,x.dias from mayorista.administracion plan cross join lateral jsonb_to_recordset(plan.datos->'rutas') x(id uuid,dias jsonb) where plan.empresa_id=p_empresa_id) meta on meta.id=r.ruta_id where r.empresa_id=p_empresa_id and (v_rol<>'vendedor' or exists(select 1 from mayorista.clientes a where a.empresa_id=p_empresa_id and a.ruta_id=r.ruta_id and a.vendedor_id=v_vendedor and a.habilitado))),'[]'::jsonb),'ofertas','[]'::jsonb,'objetivos','[]'::jsonb);
+end $$;
+
+REVOKE ALL ON FUNCTION public.leer_catalogo_mayorista_sigo_base(uuid) FROM public,anon,authenticated;
+CREATE TABLE mayorista.suscripciones(empresa_id uuid PRIMARY KEY REFERENCES mayorista.empresas(empresa_id),version integer NOT NULL,datos jsonb NOT NULL,actualizado_por uuid NOT NULL,actualizado_en timestamptz NOT NULL DEFAULT now());
+ALTER TABLE mayorista.suscripciones ENABLE ROW LEVEL SECURITY;ALTER TABLE mayorista.suscripciones FORCE ROW LEVEL SECURITY;
+CREATE POLICY suscripcion_read ON mayorista.suscripciones FOR SELECT TO authenticated USING(mayorista.operador(empresa_id,array['gerencia','administracion']));
+CREATE POLICY suscripcion_write ON mayorista.suscripciones FOR ALL TO authenticated USING(mayorista.operador(empresa_id,array['gerencia'])) WITH CHECK(mayorista.operador(empresa_id,array['gerencia']) AND actualizado_por=auth.uid());
+GRANT SELECT,INSERT,UPDATE ON mayorista.suscripciones TO authenticated;
+CREATE FUNCTION mayorista.fichas_asignacion(p_empresa uuid,p_ids uuid[]) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
+BEGIN
+ PERFORM public.sigo_mayorista_operador_comercial(p_empresa);
+ IF cardinality(p_ids) NOT BETWEEN 1 AND 100 THEN RAISE EXCEPTION 'ASSIGNMENT_LIMIT';END IF;
+ RETURN coalesce((SELECT jsonb_agg(jsonb_build_object('id',id,'nombre',nombre,'direccion',coalesce(nullif(direccion,''),'Sin dirección registrada'))) FROM public.clientes_sigo WHERE empresa_id=p_empresa AND id=ANY(p_ids) AND activo),'[]'::jsonb);
+END $$;
+REVOKE ALL ON FUNCTION mayorista.fichas_asignacion(uuid,uuid[]) FROM public,anon;
+GRANT EXECUTE ON FUNCTION mayorista.fichas_asignacion(uuid,uuid[]) TO authenticated;

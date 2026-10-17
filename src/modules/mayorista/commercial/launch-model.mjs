@@ -37,3 +37,9 @@ export function subscriptionAccess(input,now=Date.now()){
  const estado=['prueba','activo','reactivado'].includes(input.estado)&&end<=now?'vencido':input.estado;
  return {estado,hasta:new Date(end).toISOString(),permiteOperar:['prueba','activo','reactivado'].includes(estado),conservaDatos:true,cobrosReales:false};
 }
+export function normalizeSubscription(input,previous=null,now=Date.now()){
+ const value=subscriptionAccess(input,now),allowed={prueba:['prueba','activo','pago_pendiente','suspendido','vencido'],activo:['activo','pago_pendiente','vencido','suspendido'],pago_pendiente:['pago_pendiente','reactivado','suspendido','vencido'],vencido:['vencido','reactivado','suspendido','pago_pendiente'],suspendido:['suspendido','reactivado'],reactivado:['reactivado','activo','pago_pendiente','vencido','suspendido']};
+ if(!previous&&input.estado!=='prueba'||previous&&!allowed[subscriptionAccess(previous,now).estado].includes(input.estado))throw Error('Transición comercial no permitida');
+ if(['prueba','activo','reactivado'].includes(input.estado)&&Date.parse(input.hasta)<=now)throw Error('Elegí una fecha de vencimiento futura');
+ return {...value,estado:input.estado,modo:'preparacion',aplicarSuspension:false,cobrosReales:false};
+}

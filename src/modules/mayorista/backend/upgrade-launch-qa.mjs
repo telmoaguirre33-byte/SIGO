@@ -12,7 +12,7 @@ export async function upgradeLaunchQA(env,{Pool=pg.Pool}={}){
   try{
    await c.query('BEGIN');await c.query("SELECT pg_advisory_xact_lock(hashtext('mayorista-launch-v1'))");await assertInstalledQA(c);
    if(!(await c.query("SELECT to_regclass('mayorista.puesta_marcha') AS installed")).rows[0].installed)await c.query(await readFile(new URL('../commercial/launch-schema-qa.sql',import.meta.url),'utf8'));
-   for(const name of ['puesta_marcha','importaciones','importacion_filas','identidades_importacion']){
+   for(const name of ['puesta_marcha','importaciones','importacion_filas','identidades_importacion','suscripciones']){
     const row=(await c.query('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=$1::regclass',['mayorista.'+name])).rows[0];if(!row?.relrowsecurity||!row.relforcerowsecurity)throw Error('LAUNCH_RLS_INVALID');
    }
    await c.query('COMMIT');return {verified:true,upgrade:'launch-v1',namespace:P0_NAMESPACE,seeded:false,existingOrdersChanged:false};

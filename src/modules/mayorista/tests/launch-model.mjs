@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {normalizeImport,launchConfig,subscriptionAccess} from '../commercial/launch-model.mjs';
+import {normalizeImport,launchConfig,subscriptionAccess,normalizeSubscription} from '../commercial/launch-model.mjs';
 import {validateSharedOrder} from '../commercial/order-references.mjs';
 const clients=normalizeImport('clientes',[['codigo','nombre','documento'],...Array.from({length:1500},(_,i)=>['C'+i,'Cliente '+i,'D'+i])]);assert.equal(clients.length,1500);assert.ok(clients.every(r=>!r.errors.length));
 const products=normalizeImport('productos',[['codigo','nombre','precio'],...Array.from({length:5000},(_,i)=>['P'+i,'Producto '+i,'123,50'])]);assert.equal(products.length,5000);assert.ok(products.every(r=>!r.errors.length));
@@ -18,3 +18,6 @@ assert.deepEqual(await validateSharedOrder({query,principal,quote},order),[]);as
 assert.deepEqual(await validateSharedOrder({query:async()=>({rows:[]}),principal,quote},order),['cliente no asignado']);assert.equal(quoteCalls,1);
 assert.deepEqual(await validateSharedOrder({query,principal,quote:async()=>[{productoId:'Otro',cantidad:10,precioUnitario:50}]},order),['precio cambiado']);
 console.log('PASS lanzamiento: 1500 clientes, 5000 productos, duplicados, validación, fiscal segura, suscripción sin borrado y pedido sin catálogo completo');
+
+assert.throws(()=>normalizeSubscription({estado:'activo',hasta:'2030-01-01'}));
+const trial=normalizeSubscription({estado:'prueba',hasta:'2030-01-01'});const suspended=normalizeSubscription({estado:'suspendido',hasta:'2030-01-01'},trial);assert.equal(suspended.conservaDatos,true);assert.throws(()=>normalizeSubscription({estado:'activo',hasta:'2030-01-01'},suspended));assert.equal(normalizeSubscription({estado:'reactivado',hasta:'2030-01-01'},suspended).aplicarSuspension,false);
