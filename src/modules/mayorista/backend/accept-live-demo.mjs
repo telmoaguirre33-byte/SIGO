@@ -4,6 +4,7 @@ import {interactiveQa} from './interactive-qa.mjs';
 import {demoId} from './demo-company.mjs';
 import {buildProductIndex,searchProducts} from '../vendedor/product-search.mjs';
 import {verifySharedFiscal} from '../tests/shared-fiscal.mjs';
+import {restoreAcceptanceOrder} from './acceptance-order-request.mjs';
 
 const RUN='p0-live-70c2783-v1';
 /** Ejecutor de aceptación, opt-in. No siembra ni arranca un servidor de prueba.
@@ -54,13 +55,14 @@ export async function acceptLiveDemo(env){
   for(const a of [worker,drivers[0]])await call('/catalog',{token:token(a),expected:403});
   const catalogs=await Promise.all(sellers.map(s=>call('/catalog',{token:token(s)})));
   assert.equal(new Set(catalogs.flatMap(c=>c.clientes.map(x=>x.id))).size,1500);
+  const savedOrders=new Map((await pool.query('SELECT step,request FROM mayorista_private.qa_live_journal WHERE run_id=$1 AND step LIKE $2',[RUN,'order-%'])).rows.map(r=>[r.step,r.request]));
   const orders=[],searchTimes=[];
   for(const [i,c] of catalogs.entries()){
    assert.equal(c.productos.length,5000);assert.ok(c.clientes.every(x=>x.vendedorId===sellers[i].vendedorId));
    const customer=c.clientes.find(x=>Number(x.limiteCredito)>=100000),prices=c.precios.filter(x=>x.listaId===customer.listaId),index=buildProductIndex(c.productos,prices);
    for(let k=0;k<40;k++){const t=performance.now();assert.ok(searchProducts(index,'QA-P-00001').length);searchTimes.push(performance.now()-t);}
    const product=c.productos.find(x=>x.codigoInterno==='QA-P-00001'),substitute=c.productos.find(x=>x.codigoInterno==='QA-P-00002'),price=prices.find(x=>x.productoId===product.id),subPrice=prices.find(x=>x.productoId===substitute.id);
-   for(let k=0;k<2;k++)orders.push({actor:sellers[i],customer,substitute:substitute.id,subPrice,body:{pedidoId:id('order-'+i+'-'+k),empresaId:E,vendedorId:sellers[i].vendedorId,clienteId:customer.id,creadoEn:'2026-10-16T00:00:00.000Z',comerciales:{condicionPago:'cuenta_corriente'},lineas:[{productoId:product.id,precioId:price.id,cantidad:2,precioUnitario:Number(price.precio)}]}});
+   for(let k=0;k<2;k++)orders.push(restoreAcceptanceOrder({actor:sellers[i],customer,substitute:substitute.id,subPrice,body:{pedidoId:id('order-'+i+'-'+k),empresaId:E,vendedorId:sellers[i].vendedorId,clienteId:customer.id,creadoEn:'2026-10-16T00:00:00.000Z',comerciales:{condicionPago:'cuenta_corriente'},lineas:[{productoId:product.id,precioId:price.id,cantidad:2,precioUnitario:Number(price.precio)}]}},savedOrders.get('order-'+i+'-'+k),c));
   }
   const P=orders[0].body.lineas[0].productoId,Q=orders[0].substitute;
   const snapshot=async()=>({stocks:(await pool.query('SELECT id,stock_actual::text FROM public.productos WHERE empresa_id=$1 AND id=ANY($2::uuid[]) ORDER BY id',[E,[P,Q]])).rows,balances:(await pool.query('SELECT id,saldo_actual::text FROM public.clientes_sigo WHERE empresa_id=$1 ORDER BY id',[E])).rows,counts:(await pool.query(`SELECT
