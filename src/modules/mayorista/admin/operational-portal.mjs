@@ -10,7 +10,6 @@ import {createMayoristaClient} from '../sync/http-client.mjs';
 import {renderLoadDocument} from '../cargas/documents.mjs';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const field=(name,label,type='text',value='')=>`<label>${label}<input name="${name}" type="${type}" value="${esc(value)}" required ${type==='number'?'min="0" step="any"':''} ${type==='password'?'minlength="12" autocomplete="new-password"':''}></label>`;
-const choose=(name,label,items)=>`<label>${label}<select name="${name}">${items.map(([v,l])=>`<option value="${esc(v)}">${esc(l)}</option>`).join('')}</select></label>`;
 const form=(name,title,body)=>`<form data-form="${name}" class="card"><h2>${title}</h2>${body}<button>Guardar</button></form>`;
 /** Portal operativo: autenticación real y lectura/escritura exclusivamente por API. */
 export function mountOperationalPortal(app,{enabled=false,baseUrl,integrated=false,expectedEmpresaId,sharedCommerce,initialPage='panel',getSigoToken,qaAislado=false}={}){

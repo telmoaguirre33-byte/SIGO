@@ -52,7 +52,7 @@ BEGIN
  SELECT registro_id INTO registro FROM mayorista.identidades_importacion WHERE empresa_id=p_empresa AND tipo=case when p_tipo='clientes' then 'clientes' else 'productos' end AND clave=p_clave;
  IF p_tipo='clientes' THEN
   IF registro IS NULL THEN
-   SELECT array_agg(id) INTO candidatos FROM public.clientes_sigo WHERE empresa_id=p_empresa AND ((nullif(p_datos->>'documento','') IS NOT NULL AND documento=p_datos->>'documento') OR lower(nombre)=lower(p_datos->>'nombre'));
+   SELECT array_agg(id) INTO candidatos FROM public.clientes_sigo WHERE empresa_id=p_empresa AND ((nullif(p_datos->>'documento','') IS NOT NULL AND regexp_replace(lower(documento),'[^a-z0-9]','','g')=regexp_replace(lower(p_datos->>'documento'),'[^a-z0-9]','','g')) OR lower(nombre)=lower(p_datos->>'nombre'));
    IF cardinality(candidatos)>1 THEN RAISE EXCEPTION 'Coincidencia ambigua: corregí documento o código';END IF;
    registro:=candidatos[1];
   END IF;

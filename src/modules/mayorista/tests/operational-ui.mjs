@@ -4,7 +4,7 @@ import {verifySharedCreditNotes} from './shared-credit-notes.mjs';
 /** Chromium → HTTPS → backend real → PostgreSQL CI. Sin conexión a datos productivos. */
 import {createServer} from 'node:https';
 import {spawn} from 'node:child_process';
-import {readFile,mkdtemp,rm,mkdir,writeFile} from 'node:fs/promises';
+import {readFile,readdir,mkdtemp,rm,mkdir,writeFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import pg from '../backend/node_modules/pg/lib/index.js';
 import forge from '../backend/node_modules/node-forge/lib/index.js';
@@ -215,6 +215,8 @@ try{
  await evaluate("window.portal.showPage('informes')");await wait("!!document.querySelector('#launch-panel form')&&!document.querySelector('[aria-busy=true]')");await submit('#launch-panel form',{tipo:'clientes',periodo:'mes',vendedorId:'',rutaId:'',zona:''});await wait("!!document.querySelector('[data-excel]')&&!document.querySelector('[aria-busy=true]')");
  assert.equal(await evaluate("document.querySelector('tbody').textContent.includes('Cliente importación UI')"),true);
  await command('Page.setDownloadBehavior',{behavior:'allow',downloadPath:profile});await click('[data-excel]');await wait("document.querySelector('#launch-panel').textContent.includes('Excel generado')");
+ let downloaded;for(let attempt=0;attempt<100;attempt++){const name=(await readdir(profile)).find(n=>n.endsWith('.xlsx'));if(name){downloaded=await readFile(profile+'/'+name);break;}await delay(50);}assert.ok(downloaded,'El navegador no entregó el archivo Excel');assert.equal(downloaded.readUInt32LE(0),0x04034b50);
+ const reopened=await evaluate(`(async()=>{const {leerArchivoStock}=await import('./admin/import-reader.mjs');const bytes=Uint8Array.from(atob(${JSON.stringify(downloaded.toString('base64'))}),c=>c.charCodeAt(0));const matrix=await leerArchivoStock(new File([bytes],'clientes.xlsx'));return matrix.some(row=>row.includes('Cliente importación UI'));})()`);assert.equal(reopened,true);
  await passed('Informes publicados usan filtros y generan XLSX desde datos reales de CI');
  for(const width of [390,1280]){await command('Emulation.setDeviceMetricsOverride',{width,height:844,deviceScaleFactor:1,mobile:width<600});assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth+2'),true);const shot=await command('Page.captureScreenshot',{format:'png'});await writeFile(new URL('./artifacts/launch-'+width+'.png',import.meta.url),Buffer.from(shot.data,'base64'));}
  await command('Emulation.clearDeviceMetricsOverride');

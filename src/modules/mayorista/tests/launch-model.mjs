@@ -21,3 +21,5 @@ console.log('PASS lanzamiento: 1500 clientes, 5000 productos, duplicados, valida
 
 assert.throws(()=>normalizeSubscription({estado:'activo',hasta:'2030-01-01'}));
 const trial=normalizeSubscription({estado:'prueba',hasta:'2030-01-01'});const suspended=normalizeSubscription({estado:'suspendido',hasta:'2030-01-01'},trial);assert.equal(suspended.conservaDatos,true);assert.throws(()=>normalizeSubscription({estado:'activo',hasta:'2030-01-01'},suspended));assert.equal(normalizeSubscription({estado:'reactivado',hasta:'2030-01-01'},suspended).aplicarSuspension,false);
+
+assert.ok(normalizeImport('clientes',[['codigo','nombre','documento'],['A','Uno','20-12345678-1'],['B','Dos','20123456781']])[1].errors.includes('Identificador repetido en el archivo'));

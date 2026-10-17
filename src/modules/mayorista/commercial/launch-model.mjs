@@ -17,7 +17,7 @@ export function normalizeImport(kind,matrix){
  return matrix.slice(1).map((cells,index)=>{
   const row=Object.fromEntries(Object.keys(aliases).map(k=>[k,String(cells[columns[k]]??'').trim()]));
   const errors=[];for(const [k,v] of Object.entries(row))if(v.length>500)errors.push(`${k}: máximo 500 caracteres`);
-  const identity=fold(kind==='clientes'?row.documento||row.codigo:row.codigo||row.ean);
+  const identity=kind==='clientes'&&row.documento?fold(row.documento).replace(/[^a-z0-9]/g,''):fold(kind==='clientes'?row.codigo:row.codigo||row.ean);
   if(!identity)errors.push(kind==='clientes'?'Falta documento o código de cliente':'Falta código interno o EAN');
   if(seen.has(identity))errors.push('Identificador repetido en el archivo');else seen.add(identity);
   if(['clientes','productos'].includes(kind)&&!row.nombre)errors.push('Falta nombre');

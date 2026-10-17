@@ -1,6 +1,6 @@
 # Entrega P1/P2 — Mayorista / Distribuidora
 
-Alcance exclusivo de PR #72. Sin merge, producción, Minorista funcional, Compras, SOVI ni Prospección. No se contrataron herramientas ni infraestructura. Los dos pedidos del Android no se leen ni se envían desde este desarrollo. El QA sigue fijado al último despliegue autorizado hasta aplicar un único patch final.
+Alcance exclusivo de PR #72. Sin merge, producción, Minorista funcional, Compras ni módulos externos. No se contrataron herramientas ni infraestructura. Los dos pedidos del Android no se leen ni se envían desde este desarrollo. El QA sigue fijado al último despliegue autorizado hasta aplicar un único patch final.
 
 ## Problemas corregidos
 
