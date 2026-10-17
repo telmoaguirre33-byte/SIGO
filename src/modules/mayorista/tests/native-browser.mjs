@@ -58,7 +58,7 @@ export async function verifyNativeBrowsers({handler,password,empresaId,vendedorI
     await check('GPS sin posición disponible informa el error',async()=>{await a.command('Browser.setPermission',{permission:{name:'geolocation'},setting:'granted',origin:'https://127.0.0.1:4181'});await a.command('Emulation.setGeolocationOverride',{});assert.equal(await a.evaluate('new Promise(resolve=>navigator.geolocation.getCurrentPosition(()=>resolve(0),e=>resolve(e.code),{timeout:3000}))'),2);});
     await check('Logout borra token en memoria y no elimina pedidos persistidos',async()=>{assert.equal(await a.evaluate('(async()=>{await client.logout();let denied=false;try{await client.send((await queue.listar())[0]);}catch{denied=true;}return denied&&client.identity()===null&&(await queue.listar()).length===101;})()'),true);});
     await a.command('Page.navigate',{url:'https://127.0.0.1:4181/seller-qa.html'});
-    for(let n=0;n<100;n++){if(await a.evaluate("!!document.querySelector('#login')"))break;await delay(50);}
+    for(let n=0;n<100;n++){if(await a.evaluate("!!document.querySelector('#login')&&!document.querySelector('[aria-busy=true]')"))break;await delay(50);}
     await check('Pantalla Vendedor QA autentica y descarga catálogo real por empresa',async()=>{
       assert.equal(await a.evaluate(`(async()=>{const f=document.querySelector('#login');f.elements.empresaId.value=${JSON.stringify(empresaId)};f.elements.email.value='vendedor@qa.invalid';f.elements.password.value=${JSON.stringify(password)};f.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));for(let n=0;n<100;n++){await new Promise(r=>setTimeout(r,50));if(document.querySelector('#order'))return document.body.textContent.includes('Catálogo descargado y persistido.');}return false;})()`),true);
     });
@@ -72,7 +72,7 @@ export async function verifyNativeBrowsers({handler,password,empresaId,vendedorI
       const remote=await b.evaluate('client.orders()');assert.ok(remote.some(p=>p.pedidoId===id));
     });
     await a.command('Page.navigate',{url:'https://127.0.0.1:4181/secure-qa.html'});
-    for(let n=0;n<100;n++){if(await a.evaluate("!!document.querySelector('#login')"))break;await delay(50);}
+    for(let n=0;n<100;n++){if(await a.evaluate("!!document.querySelector('#login')&&!document.querySelector('[aria-busy=true]')"))break;await delay(50);}
     const localPassword='clave-cifrada-real-20261012';
     const readySeller=async()=>{for(let n=0;n<200;n++){if(await a.evaluate("!!document.querySelector('#sync') && document.querySelector('[aria-busy]')?.getAttribute('aria-busy')==='false'"))return;await delay(50);}throw Error('Vendedor no quedó listo');};
     const press=async selector=>{await a.evaluate('document.querySelector('+JSON.stringify(selector)+').click()');await readySeller();};
