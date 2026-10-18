@@ -34,6 +34,8 @@ jobs:
       - run: npm run build
       - name: Timeout, retries, concurrency, decimal import, fiscal IVA and incomplete reports
         run: node --experimental-vm-modules scripts/test-issue79-integridad.mjs
+      - name: Incomplete reports block KPIs and export in actual React component
+        run: node scripts/test-issue79-informes-ui.mjs
       - name: Existing Caja, Stock, ARCA and return guards
         run: |
           node scripts/verify-sale-returns-cart.mjs

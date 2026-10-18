@@ -479,6 +479,7 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
               <button onClick={() => { setVistaStock("actual"); void cargarValorizacionStock(); }}><span>📦</span><strong>Valorización de stock</strong><small>Costo y precio de venta</small></button>
               <button onClick={() => setVistaStock("rotacion")}><span>📉</span><strong>Rotación</strong><small>Movimiento</small></button>
             </div>}
+            {vistaStock === "actual" && valorizacionEstado && <p role="status">{valorizacionEstado}</p>}
             {vistaStock === "ranking" && <RankingProductosStock empresaId={empresaId} />}
             {(vistaStock === "actual" || vistaStock === "quiebre" || vistaStock === "rotacion") && <div className="stats-grid sigo-stock-stats-rows">
               <div className="stat-card"><span>Unidades en stock</span><strong>{resumen.unidadesStock}</strong><small>{resumen.productos} productos</small></div>

@@ -63,6 +63,7 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
     setCantidades({});
     setMotivo("");
     setExito("");
+    setProcesando(false);
     void cargar(empresaId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId]);
@@ -120,6 +121,7 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
         motivo,
         items: seleccionParcial,
       });
+      if (empresaRef.current !== empresaId) return;
       setExito(`Devolución registrada para la venta ${etiquetaVenta(seleccionada)}.`);
       setSeleccionada(null);
       setItems([]);
@@ -127,9 +129,10 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
       setMotivo("");
       await cargar(empresaId);
     } catch (err) {
+      if (empresaRef.current !== empresaId) return;
       setError(err instanceof Error ? err.message : "No se pudo registrar la devolución.");
     } finally {
-      setProcesando(false);
+      if (empresaRef.current === empresaId) setProcesando(false);
     }
   }
 
@@ -146,6 +149,7 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
     setExito("");
     try {
       await anularVentaSigo({ empresaId, ventaId: seleccionada.id, motivo });
+      if (empresaRef.current !== empresaId) return;
       setExito(`Venta ${etiquetaVenta(seleccionada)} anulada correctamente.`);
       setSeleccionada(null);
       setItems([]);
@@ -153,9 +157,10 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
       setMotivo("");
       await cargar(empresaId);
     } catch (err) {
+      if (empresaRef.current !== empresaId) return;
       setError(err instanceof Error ? err.message : "No se pudo anular la venta.");
     } finally {
-      setProcesando(false);
+      if (empresaRef.current === empresaId) setProcesando(false);
     }
   }
 
@@ -175,7 +180,7 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
     } catch (err) {
       if (empresaRef.current === empresaId) setError(err instanceof Error ? err.message : "No se pudo conciliar la operación.");
     } finally {
-      setProcesando(false);
+      if (empresaRef.current === empresaId) setProcesando(false);
     }
   }
 
