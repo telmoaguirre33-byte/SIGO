@@ -1,0 +1,496 @@
+{
+  "base": "d9a5a9dddb3910ba5a0c53e96c79caa0f6da71d9",
+  "scope": "Inventario Git; no representa el historial aplicado de ninguna base",
+  "migrations": [
+    {
+      "path": "supabase/migrations/20260909191300_multiempresa_base.sql",
+      "gitBlobSha": "b74402e1ecd0392a8af8d2b91c034929310b75d0",
+      "bytes": 6039
+    },
+    {
+      "path": "supabase/migrations/20260909201500_permisos_backend.sql",
+      "gitBlobSha": "db303b08c1e8a3cb29e5be0ced67dd4e63eef459",
+      "bytes": 4327
+    },
+    {
+      "path": "supabase/migrations/20260909211500_tenant_operacional_preparacion.sql",
+      "gitBlobSha": "d0279ab58e73c95dfe1c59de7b1e8380e8b5eba5",
+      "bytes": 3251
+    },
+    {
+      "path": "supabase/migrations/20260909221300_tenant_guardrails.sql",
+      "gitBlobSha": "5b1e582d4857bfe82a65e475825a425bc16e339c",
+      "bytes": 1720
+    },
+    {
+      "path": "supabase/migrations/20260909231300_productos_lectura_segura.sql",
+      "gitBlobSha": "1387ecc08c1d55f0b7b3702f3fd6ab2961a52958",
+      "bytes": 2775
+    },
+    {
+      "path": "supabase/migrations/20260910001300_barcode_lookup_seguro.sql",
+      "gitBlobSha": "e0abee4ad89124a41cc61d5bfa5266443bd349a3",
+      "bytes": 2165
+    },
+    {
+      "path": "supabase/migrations/20260910010900_portal_cliente_seguro.sql",
+      "gitBlobSha": "7c24a52af865fc75805797b5febf9fc99675ef83",
+      "bytes": 4583
+    },
+    {
+      "path": "supabase/migrations/20260910021200_arca_config_segura.sql",
+      "gitBlobSha": "39d77e695ec35acda39fc8787b57f1e9425812ac",
+      "bytes": 6489
+    },
+    {
+      "path": "supabase/migrations/20260910031300_permisos_denegados_granulares.sql",
+      "gitBlobSha": "349a8e8a2c81769a62cfd2be2abb1416233afcd7",
+      "bytes": 4355
+    },
+    {
+      "path": "supabase/migrations/20260910100800_superadmin_plataforma_seguro.sql",
+      "gitBlobSha": "c192e60dda554ca4d94621cd2d485522c7090ec7",
+      "bytes": 5551
+    },
+    {
+      "path": "supabase/migrations/20260910110800_mis_empresas_operativas.sql",
+      "gitBlobSha": "e893b3445778195c2355efcf5fb1c6454cf74193",
+      "bytes": 1043
+    },
+    {
+      "path": "supabase/migrations/20260910142200_productos_escritura_segura.sql",
+      "gitBlobSha": "3a6fd88d9dc453372fe527c9f63278c7b3430de4",
+      "bytes": 5810
+    },
+    {
+      "path": "supabase/migrations/20260910192000_productos_borrado_seguro.sql",
+      "gitBlobSha": "b2642519d8d19e1005a647d8a75211bd7f274cf5",
+      "bytes": 1226
+    },
+    {
+      "path": "supabase/migrations/20260911043000_ventas_caja_operativas.sql",
+      "gitBlobSha": "daf40d62bf3a9c78142e999a3c11d09050565e57",
+      "bytes": 7623
+    },
+    {
+      "path": "supabase/migrations/20260911051800_bloquear_cuenta_corriente_sin_cliente.sql",
+      "gitBlobSha": "b42cdb673bba3218add7680e732dfd6f6a58a4b0",
+      "bytes": 4020
+    },
+    {
+      "path": "supabase/migrations/20260911062000_clientes_cuenta_corriente.sql",
+      "gitBlobSha": "d9d26679f62c018214933b98a146028c2f3a74d6",
+      "bytes": 10664
+    },
+    {
+      "path": "supabase/migrations/20260911073000_compras_proveedores_operativos.sql",
+      "gitBlobSha": "1479453f9aaefae11c361622ecd6b4f9f3637861",
+      "bytes": 9167
+    },
+    {
+      "path": "supabase/migrations/20260911112000_cobros_cuenta_corriente_caja.sql",
+      "gitBlobSha": "8199fd26ad9cb05047fd8ad2d43c7d304ce32605",
+      "bytes": 2683
+    },
+    {
+      "path": "supabase/migrations/20260911200000_bootstrap_acceso_sigo.sql",
+      "gitBlobSha": "09736f7a853c9bd221cb5e598c143338f7fe722b",
+      "bytes": 5726
+    },
+    {
+      "path": "supabase/migrations/20260911202500_sigo_access_healthcheck.sql",
+      "gitBlobSha": "46bfa41cee2bc0684d77b929d6f22b00d208d8f0",
+      "bytes": 1086
+    },
+    {
+      "path": "supabase/migrations/20260912004500_bootstrap_telmo_owner.sql",
+      "gitBlobSha": "16806b8ba1e82f974f3a5dfb1af19d42a5e68d10",
+      "bytes": 2003
+    },
+    {
+      "path": "supabase/migrations/20260912032000_precio_venta_para_operacion.sql",
+      "gitBlobSha": "de86af2f0f080a141d249bf74b0fee08416dcdfc",
+      "bytes": 3081
+    },
+    {
+      "path": "supabase/migrations/20260912102000_roles_operativos_hardening.sql",
+      "gitBlobSha": "183b90e072c3cbedb9572c2eec2341fb3351cdb3",
+      "bytes": 2742
+    },
+    {
+      "path": "supabase/migrations/20260912111800_evitar_codigos_duplicados_por_empresa.sql",
+      "gitBlobSha": "c26fa38855b35adb7d41e92a29c0992a4d4cf255",
+      "bytes": 2056
+    },
+    {
+      "path": "supabase/migrations/20260912122500_ventas_idempotencia_cliente_segura.sql",
+      "gitBlobSha": "616e07a07d38cee61396dfe9bdbad327f5426b8d",
+      "bytes": 6532
+    },
+    {
+      "path": "supabase/migrations/20260912123000_compras_idempotencia_stock_segura.sql",
+      "gitBlobSha": "52159f7f678730624a8e4dcb32ad819348c1f211",
+      "bytes": 6703
+    },
+    {
+      "path": "supabase/migrations/20260912131700_mercado_pago_ventas.sql",
+      "gitBlobSha": "868920ad29f3e51da24b1ae3b6a028383d36bbd7",
+      "bytes": 6666
+    },
+    {
+      "path": "supabase/migrations/20260912142200_productos_precio_operativo_seguro.sql",
+      "gitBlobSha": "66f9b953f63716d904ca9b7849efc81b2530a8f3",
+      "bytes": 7298
+    },
+    {
+      "path": "supabase/migrations/20260912142500_productos_edicion_no_pisa_stock_costo.sql",
+      "gitBlobSha": "89f901956bb7de39826423fe82a8151c637544ad",
+      "bytes": 7097
+    },
+    {
+      "path": "supabase/migrations/20260912151800_productos_baja_logica_segura.sql",
+      "gitBlobSha": "adbc97807fe4227d09d334aff2f86439d09225e2",
+      "bytes": 6239
+    },
+    {
+      "path": "supabase/migrations/20260912162000_idempotencia_payload_y_productos_activos.sql",
+      "gitBlobSha": "f5fb7ac6f037a5a2a20ba65a51fecfb827f9901e",
+      "bytes": 17014
+    },
+    {
+      "path": "supabase/migrations/20260912185000_usuarios_empresa_gestion_segura.sql",
+      "gitBlobSha": "53179e550232f6e6806d3f9666f3477a715d06f4",
+      "bytes": 6480
+    },
+    {
+      "path": "supabase/migrations/20260912190000_verificar_gestion_usuarios_produccion.sql",
+      "gitBlobSha": "1b172bc0101db3149e9b0a3fcbf91ddb1b7c5851",
+      "bytes": 758
+    },
+    {
+      "path": "supabase/migrations/20260912193000_portal_cliente_vinculacion_segura.sql",
+      "gitBlobSha": "9cae7412c9fbc170187d5b959983dc3d33092723",
+      "bytes": 8471
+    },
+    {
+      "path": "supabase/migrations/20260912215500_matriz_superadmin_operativa.sql",
+      "gitBlobSha": "a76626d74aaaacd7970658ac1171989b65fc6ffb",
+      "bytes": 8558
+    },
+    {
+      "path": "supabase/migrations/20260912230000_stock_import_base.sql",
+      "gitBlobSha": "022df4afdedc4a165397a5816a3ca91beb4d165c",
+      "bytes": 7908
+    },
+    {
+      "path": "supabase/migrations/20260912230030_stock_import_single_tenant_fix.sql",
+      "gitBlobSha": "6ecbd39364ba6e31b050537339fd7786455121f5",
+      "bytes": 7220
+    },
+    {
+      "path": "supabase/migrations/20260912230040_stock_import_constraints_and_collisions.sql",
+      "gitBlobSha": "824edb36d9cbdbd7c3a148cab4288050021a58a5",
+      "bytes": 7773
+    },
+    {
+      "path": "supabase/migrations/20260912230100_stock_libreria_01.sql",
+      "gitBlobSha": "e9332a532b2aa54ccaccd0557b22baba90cf53dc",
+      "bytes": 8139
+    },
+    {
+      "path": "supabase/migrations/20260912230200_stock_libreria_02.sql",
+      "gitBlobSha": "210808ca9ba279c29eb14305544a58e94fc27cd6",
+      "bytes": 7914
+    },
+    {
+      "path": "supabase/migrations/20260912230300_stock_libreria_03.sql",
+      "gitBlobSha": "31733e6735736fa846e25b82d92babe3ddfa2326",
+      "bytes": 7850
+    },
+    {
+      "path": "supabase/migrations/20260912230400_stock_libreria_04.sql",
+      "gitBlobSha": "4287598afeef9f985080198fca09b6673d4cde7f",
+      "bytes": 7861
+    },
+    {
+      "path": "supabase/migrations/20260912230500_stock_libreria_05.sql",
+      "gitBlobSha": "f1c6e758d8903ec8a8438a9be60051f603d6e89a",
+      "bytes": 8135
+    },
+    {
+      "path": "supabase/migrations/20260912230600_stock_libreria_06.sql",
+      "gitBlobSha": "27057425c2134bea997fa87b2e33795a9140fc14",
+      "bytes": 8076
+    },
+    {
+      "path": "supabase/migrations/20260912230700_stock_libreria_07.sql",
+      "gitBlobSha": "1ba68d62e4987a806fe40da783a3eec80cfcb89f",
+      "bytes": 7932
+    },
+    {
+      "path": "supabase/migrations/20260912230800_stock_libreria_08.sql",
+      "gitBlobSha": "3593a3418f280d4c4a58af44d526b445ec390627",
+      "bytes": 7037
+    },
+    {
+      "path": "supabase/migrations/20260912230900_stock_libreria_09.sql",
+      "gitBlobSha": "f48fd64647297493d7e5414be644597be9069e2a",
+      "bytes": 6355
+    },
+    {
+      "path": "supabase/migrations/20260912231000_stock_libreria_10.sql",
+      "gitBlobSha": "97d09b90318a7e813dcc43d75f5e6f1455c7b6d9",
+      "bytes": 5203
+    },
+    {
+      "path": "supabase/migrations/20260912231100_stock_sertec_01.sql",
+      "gitBlobSha": "f2d410790854dc20177cb2a390df80135a47010b",
+      "bytes": 6390
+    },
+    {
+      "path": "supabase/migrations/20260912231200_stock_sertec_02.sql",
+      "gitBlobSha": "9d4cd914d9ac76d3346c36763e0bf82ef74722f2",
+      "bytes": 6277
+    },
+    {
+      "path": "supabase/migrations/20260912231300_stock_sertec_03.sql",
+      "gitBlobSha": "3c662509c6703fb382938fdb4926675faddb3817",
+      "bytes": 5964
+    },
+    {
+      "path": "supabase/migrations/20260912231400_stock_sertec_04.sql",
+      "gitBlobSha": "15f96f20fb885d3fd46c0d05be588c3edec3a9ff",
+      "bytes": 5868
+    },
+    {
+      "path": "supabase/migrations/20260912231500_stock_sertec_05.sql",
+      "gitBlobSha": "1bdadf864e9bc606989439dd8a04ed1540665c4b",
+      "bytes": 1546
+    },
+    {
+      "path": "supabase/migrations/20260912231600_stock_import_verify.sql",
+      "gitBlobSha": "dfa909f6603f506147eaba8086e05f4f6ecb743b",
+      "bytes": 3031
+    },
+    {
+      "path": "supabase/migrations/20260912235500_productos_alta_costos_cero.sql",
+      "gitBlobSha": "f024d7d3537a026f51959ece5c884697748cf408",
+      "bytes": 7516
+    },
+    {
+      "path": "supabase/migrations/20260913002000_compras_documento_duplicado_guard.sql",
+      "gitBlobSha": "f6d42882f2aafc8fc76ae1b0bc0d2a791b9a6158",
+      "bytes": 8884
+    },
+    {
+      "path": "supabase/migrations/20260913003000_ventas_precio_positivo_guard.sql",
+      "gitBlobSha": "46e4059d45d027f700b49a2311d3f60785a7c6a3",
+      "bytes": 1011
+    },
+    {
+      "path": "supabase/migrations/20260913012500_operational_readiness_stock_cost_guard.sql",
+      "gitBlobSha": "be5826e383617ed1933af96562ff3edfd50ca509",
+      "bytes": 4098
+    },
+    {
+      "path": "supabase/migrations/20260913023000_compras_identidad_documental_guard.sql",
+      "gitBlobSha": "0bc940058c8c181af64fbaafa9db25763eda402c",
+      "bytes": 3911
+    },
+    {
+      "path": "supabase/migrations/20260913053500_productos_costos_no_nulos_write_guard.sql",
+      "gitBlobSha": "a8cfa06e5402659b123616ea2f665e4b3abdc80f",
+      "bytes": 749
+    },
+    {
+      "path": "supabase/migrations/20260913054000_compras_max_300_items_guard.sql",
+      "gitBlobSha": "182649dcdaf5b58df11118f66d21b200fc26c952",
+      "bytes": 795
+    },
+    {
+      "path": "supabase/migrations/20260913162000_guard_movimientos_producto_operativo.sql",
+      "gitBlobSha": "b97ce9aad6dc7f3fe46426bcef49e01e58e906be",
+      "bytes": 2316
+    },
+    {
+      "path": "supabase/migrations/20260913183000_tenant_diagnostico_lint_fix.sql",
+      "gitBlobSha": "22c858f3c9e26467aea67cc196d0fff607715e39",
+      "bytes": 1564
+    },
+    {
+      "path": "supabase/migrations/20260913194000_producto_guardado_readback.sql",
+      "gitBlobSha": "bb583af686cf0669182c63ccf7c416b64e710bd6",
+      "bytes": 2610
+    },
+    {
+      "path": "supabase/migrations/20260913203500_desactivar_servicios_no_vendibles.sql",
+      "gitBlobSha": "a2eb1986bf1c97b3507f103964696eb62cb8e876",
+      "bytes": 5335
+    },
+    {
+      "path": "supabase/migrations/20260913205500_carrito_devoluciones_anulaciones.sql",
+      "gitBlobSha": "e3112501ad280b8c6162924bdab1cffabba18d3c",
+      "bytes": 12899
+    },
+    {
+      "path": "supabase/migrations/20260913212500_go_live_proveedores_compras_arca_guard.sql",
+      "gitBlobSha": "0d0cc174d0cd32373e14ec51296fb7734c879351",
+      "bytes": 9684
+    },
+    {
+      "path": "supabase/migrations/20260913214500_cuit_validator_lint_clean.sql",
+      "gitBlobSha": "0f0523ff900cabf88b4745b9bec3446dfe46a22e",
+      "bytes": 1388
+    },
+    {
+      "path": "supabase/migrations/20260913223000_permisos_owner_configurables.sql",
+      "gitBlobSha": "312413b07656307f1bdc4688a9f8415abbcb0c01",
+      "bytes": 3287
+    },
+    {
+      "path": "supabase/migrations/20260913224500_venta_sin_cliente_efectivo_segura.sql",
+      "gitBlobSha": "f095a93619517b02beedc9d6bf5011d6fbfc8493",
+      "bytes": 8185
+    },
+    {
+      "path": "supabase/migrations/20260914001000_arca_storage_certificado_privado.sql",
+      "gitBlobSha": "16f4a00d61ba6ed29857c05f96b20f079b44142b",
+      "bytes": 3263
+    },
+    {
+      "path": "supabase/migrations/20260914003500_arca_cae_preflight_guards.sql",
+      "gitBlobSha": "4e9c62cb155ff68e399f6bc06207a885b24a4ef9",
+      "bytes": 3004
+    },
+    {
+      "path": "supabase/migrations/20260914003600_arca_emision_read_policy.sql",
+      "gitBlobSha": "50d7a479bbecef5e772f3b6112f6614c9040635e",
+      "bytes": 792
+    },
+    {
+      "path": "supabase/migrations/20260914003700_productos_fiscal_wsfe.sql",
+      "gitBlobSha": "8ac3f7f933ff96950f0ff42bd5e3df82fa35c424",
+      "bytes": 1296
+    },
+    {
+      "path": "supabase/migrations/20260914084500_compras_documentos_proveedores_db_guard.sql",
+      "gitBlobSha": "8f62ddbe13598e063a16d6eb23d31ad83ea01004",
+      "bytes": 7684
+    },
+    {
+      "path": "supabase/migrations/20260914105000_owner_sigo_administracion_arca.sql",
+      "gitBlobSha": "40a33e0ea302f9201899af2a30db62782e398617",
+      "bytes": 2493
+    },
+    {
+      "path": "supabase/migrations/20260914113000_arca_ticket_wsaa_privado.sql",
+      "gitBlobSha": "ef9d102d52d16777d913dba1d371e200b9810589",
+      "bytes": 2307
+    },
+    {
+      "path": "supabase/migrations/20260914204500_listas_precios_margen_masivo.sql",
+      "gitBlobSha": "895a174e51b6d87183238e4991247adc5e6cccc4",
+      "bytes": 3760
+    },
+    {
+      "path": "supabase/migrations/20260915014000_modulos_por_empresa.sql",
+      "gitBlobSha": "a1fb49adf6b7f964a972c7c29f36e6e9bf00772a",
+      "bytes": 10272
+    },
+    {
+      "path": "supabase/migrations/20260916162000_cristina_veron_libreria_stock.sql",
+      "gitBlobSha": "64a779998be24c91dac5577b1f62adddccc12e5a",
+      "bytes": 10144
+    },
+    {
+      "path": "supabase/migrations/20260916164500_producto_codigos_alias_scanner.sql",
+      "gitBlobSha": "7511ba112a098fc8e74f7b78570e8a64b3289f5e",
+      "bytes": 4330
+    },
+    {
+      "path": "supabase/migrations/20260916165000_cristina_scanner_missing_catalog.sql",
+      "gitBlobSha": "5143c64cf95d60d86584e8151001b064afe331ec",
+      "bytes": 2624
+    },
+    {
+      "path": "supabase/migrations/20260919083000_modulo_busqueda_ean_matriz.sql",
+      "gitBlobSha": "663dd7fa3425c939d911b1303ef032bcb3840949",
+      "bytes": 5124
+    },
+    {
+      "path": "supabase/migrations/20260919110000_modulo_lector_celular_remoto.sql",
+      "gitBlobSha": "e9929dc11fb1a212d6913d4504a13ddd96675184",
+      "bytes": 1043
+    },
+    {
+      "path": "supabase/migrations/20260919113000_lector_celular_sesiones.sql",
+      "gitBlobSha": "d13bc0c631300566cd2d8d23aee88759499ca66e",
+      "bytes": 1598
+    },
+    {
+      "path": "supabase/migrations/20260922233000_compras_precio_automatico.sql",
+      "gitBlobSha": "3e56ed4b9a2e73136b03daf915fc72a2725f1407",
+      "bytes": 9787
+    },
+    {
+      "path": "supabase/migrations/20260925120000_compra_ia_guardado_atomico.sql",
+      "gitBlobSha": "d86c654b5d24dca9d20ddc98e32e4f3fd2d5af51",
+      "bytes": 13493
+    },
+    {
+      "path": "supabase/migrations/20260925121500_configuracion_ticket_sigo.sql",
+      "gitBlobSha": "9599e8b7a33b573bb527370c05cb6e181d5801d4",
+      "bytes": 1156
+    },
+    {
+      "path": "supabase/migrations/20260925124500_compra_ia_precio_admin.sql",
+      "gitBlobSha": "f221a4767c749ef41313db7940af3f0de9292fda",
+      "bytes": 13272
+    },
+    {
+      "path": "supabase/migrations/20260925135500_compra_ia_precio_existente.sql",
+      "gitBlobSha": "24fbaca05e025d3b805ba2b0953f083bd2054469",
+      "bytes": 14542
+    },
+    {
+      "path": "supabase/migrations/20260925141000_editar_anular_compras.sql",
+      "gitBlobSha": "f4685cf6ebc98d731518763a7521cd9868d32346",
+      "bytes": 7586
+    },
+    {
+      "path": "supabase/migrations/20260925143000_borradores_compra_historial.sql",
+      "gitBlobSha": "d5ae1509694be0c793761d11f8eaaf7c6ee959c7",
+      "bytes": 1949
+    },
+    {
+      "path": "supabase/migrations/20260925212000_redondeo_precio_venta.sql",
+      "gitBlobSha": "2b2087b1ca2ab421b62bbd8fe5947b95b3bb4fcc",
+      "bytes": 3605
+    },
+    {
+      "path": "supabase/migrations/20260926163000_productos_oferta.sql",
+      "gitBlobSha": "c447416dd973c18e7f64be2968a5fdb9f88101c4",
+      "bytes": 12585
+    },
+    {
+      "path": "supabase/migrations/20260926183000_ofertas_permisos_administrador.sql",
+      "gitBlobSha": "607cd8b442ba49cab37668d49d5d5ac9e781bc5a",
+      "bytes": 2798
+    },
+    {
+      "path": "supabase/migrations/20261003020716_pos_manual_discount_atomic_v2.sql",
+      "gitBlobSha": "b15d7d52763c722afded3db5ec498172d536ea3e",
+      "bytes": 9529
+    },
+    {
+      "path": "supabase/migrations/20261011190000_admin_push_notifications.sql",
+      "gitBlobSha": "aabcb7dab2b2ba168b3635a9392953a824d7be09",
+      "bytes": 7062
+    },
+    {
+      "path": "supabase/migrations/20261013090000_mayorista_modulo_matriz.sql",
+      "gitBlobSha": "4eb9c3b4cef125ca14f7bfce88405ebbcdbcb217",
+      "bytes": 2047
+    }
+  ]
+}

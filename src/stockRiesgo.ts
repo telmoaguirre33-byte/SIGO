@@ -1,5 +1,6 @@
-import { supabase } from "./supabase";
-import { listarProductosSigo, type ProductoSigo } from "./productos";
+import { reportesClient as supabase } from "./reportesClient";
+import { listarProductosInforme as listarProductosSigo } from "./reportesDatos";
+import type { ProductoSigo } from "./productos";
 
 export type EstadoRiesgoStockSigo =
   | "sin_stock"
@@ -196,3 +197,4 @@ export async function cargarRiesgoStockSigo(
     productosPrioritarios: prioritarios.slice(0, 20),
   };
 }
+

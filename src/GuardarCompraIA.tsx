@@ -69,8 +69,11 @@ export default function GuardarCompraIA(props: Props) {
         p_compra: compra,
       });
       if (error) {
-        // A PostgreSQL error proves transaction rollback. A transport error does not.
-        if (/^[0-9A-Z]{5}$/.test(error.code ?? "") && !error.message.includes("IDEMPOTENCY_CONFLICT")) {
+        // Sólo un rechazo determinista del PRIMER intento permite corregir el envío.
+        // Un rollback del reintento no demuestra que el intento original no hizo commit.
+        const codigo = String(error.code ?? "");
+        const rechazoDefinitivo = /^(22|23)/.test(codigo) || ["P0001", "42501", "40001", "40P01"].includes(codigo);
+        if (!envioGuardado && rechazoDefinitivo && !error.message.includes("IDEMPOTENCY_CONFLICT")) {
           localStorage.removeItem(envioKey);
           if (current.active) { setPendiente(false); props.onPendiente(false); }
         }
@@ -109,3 +112,4 @@ export default function GuardarCompraIA(props: Props) {
     {guardando ? "Confirmando compra…" : pendiente ? "💾 REINTENTAR INGRESO DE STOCK" : "💾 GUARDAR COMPRA E INGRESAR STOCK"}
   </button>{mensajeValidacion && <small role="alert" style={{color:"#b91c1c",fontWeight:700}}>{mensajeValidacion}</small>}{pendiente && !guardando && <small role="status">Hay un envío pendiente. Reintentá para recuperar su resultado sin duplicar la compra ni el stock.</small>}</div>;
 }
+

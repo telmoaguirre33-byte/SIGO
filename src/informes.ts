@@ -1,6 +1,6 @@
-import { supabase } from "./supabase";
-import { listarClientesSigo } from "./clientes";
-import { listarProductosSigo } from "./productos";
+import { reportesClient as supabase } from "./reportesClient";
+import { listarClientesInforme as listarClientesSigo } from "./reportesDatos";
+import { listarProductosInforme as listarProductosSigo } from "./reportesDatos";
 
 export type ResumenOperativoSigo = {
   productos: number;
@@ -400,3 +400,4 @@ export async function cargarResumenOperativoSigo(empresaId: string): Promise<Res
     caja7DiasNeto,
   };
 }
+

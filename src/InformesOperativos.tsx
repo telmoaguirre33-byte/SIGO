@@ -5,7 +5,8 @@ import { cargarResumenOperativoSigo,
   type ResumenOperativoSigo, type ResumenVentasPeriodoSigo, type ResumenComprasPeriodoSigo } from "./informes";
 import { cargarRiesgoStockSigo, type ResumenRiesgoStockSigo, type EstadoRiesgoStockSigo } from "./stockRiesgo";
 import RankingProductosStock from "./RankingProductosStock";
-import { listarProductosSigo, type ProductoSigo } from "./productos";
+import { listarProductosInforme as listarProductosSigo } from "./reportesDatos";
+import type { ProductoSigo } from "./productos";
 
 const vacio: ResumenOperativoSigo = {
   productos: 0,
@@ -596,3 +597,4 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
     </div>
   );
 }
+

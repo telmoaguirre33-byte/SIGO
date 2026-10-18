@@ -19,7 +19,7 @@ import {
   etiquetaRol,
   type SigoWorkspace,
   workspaceInicial,
-  workspacePermitido,
+  workspacePermitido as workspacePermitidoPorRol,
   workspacesPermitidos,
 } from "./workspacePermissions";
 
@@ -54,9 +54,23 @@ export default function SigoRoot() {
   const [matrixMode, setMatrixMode] = useState(false);
   const autoProvisionAttemptedRef = useRef(false);
 
+  const [permisoInformes, setPermisoInformes] = useState({ empresaId: "", permitido: false });
+  const informesHabilitados = permisoInformes.empresaId === empresaActiva?.empresa_id && permisoInformes.permitido;
+  const workspacePermitido = (rol: EmpresaOperativa["rol"], destino: SigoWorkspace) =>
+    workspacePermitidoPorRol(rol, destino) && (destino !== "informes" || informesHabilitados);
+  useEffect(() => {
+    let activo = true;
+    const empresaId = empresaActiva?.empresa_id;
+    setPermisoInformes({ empresaId: "", permitido: false });
+    if (empresaId) void supabase.rpc("tiene_permiso_empresa", { p_empresa_id: empresaId, p_permiso: "reports.read" })
+      .then(({ data, error }) => { if (activo) setPermisoInformes({ empresaId, permitido: !error && data === true }); },
+        () => { if (activo) setPermisoInformes({ empresaId, permitido: false }); });
+    return () => { activo = false; };
+  }, [empresaActiva?.empresa_id]);
+
   const permitidos = useMemo(
-    () => (empresaActiva ? workspacesPermitidos(empresaActiva.rol) : []),
-    [empresaActiva],
+    () => (empresaActiva ? workspacesPermitidos(empresaActiva.rol).filter(w => w !== "informes" || informesHabilitados) : []),
+    [empresaActiva, informesHabilitados],
   );
 
   const handleEmpresaChange = useCallback((empresa: EmpresaOperativa | null) => {
@@ -90,7 +104,7 @@ export default function SigoRoot() {
     if (!workspacePermitido(empresaActiva.rol, workspace)) {
       setWorkspace(workspaceInicial(empresaActiva.rol));
     }
-  }, [empresaActiva, workspace]);
+  }, [empresaActiva, workspace, informesHabilitados]);
 
   useEffect(() => {
     if (tenantState !== "error" || autoRetryCount >= 3) return;
@@ -361,3 +375,4 @@ export default function SigoRoot() {
     </div>
   );
 }
+

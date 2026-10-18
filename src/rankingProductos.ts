@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { reportesClient as supabase } from "./reportesClient";
 
 export type RankingProductoSigo = { productoId: string; codigo: string; ean: string; nombre: string; categoria: string; marca: string; unidades: number; importe: number; stock: number };
 type VentaRow = { id?: string | null };
@@ -38,3 +38,4 @@ export async function cargarRankingProductosSigo(empresaId: string, desde: strin
   }
   return Array.from(acumulado.values());
 }
+
