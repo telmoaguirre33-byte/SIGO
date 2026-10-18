@@ -16,7 +16,7 @@ export async function prepareUnifiedUi(pool,fixture){
  const original=await readFile(new URL('../../../../src/main.tsx',import.meta.url),'utf8');
  assert.ok(original.includes('ReactDOM.createRoot(document.getElementById("root")!).render('));
  const entry=original.replace('ReactDOM.createRoot(document.getElementById("root")!).render(','const root=ReactDOM.createRoot(document.getElementById("root")!); export function unmountUnified(){root.unmount();} root.render(');
- const compiled=await build({stdin:{contents:entry,resolveDir:new URL('../../../../src/',import.meta.url).pathname,sourcefile:'unified-entry.tsx',loader:'tsx'},bundle:true,write:false,outdir:'/tmp/sigo-unified-bundle',format:'esm',jsx:'automatic',external:['/sigo-logo-oficial.png'],define:{'process.env.NODE_ENV':'"production"','import.meta.env':'{}'},plugins:[{name:'ci-auth-postgrest-transport-only',setup(b){b.onResolve({filter:/[/.]supabase$/},()=>({path:'unified-supabase',namespace:'ci'}));b.onLoad({filter:/.*/,namespace:'ci'},()=>({contents:transport,loader:'js'}));}}]});
+ const compiled=await build({stdin:{contents:entry,resolveDir:new URL('../../../../src/',import.meta.url).pathname,sourcefile:'unified-entry.tsx',loader:'tsx'},bundle:true,write:false,outdir:'/tmp/sigo-unified-bundle',format:'esm',jsx:'automatic',external:['/sigo-logo-oficial.png'],define:{'process.env.NODE_ENV':'"production"','import.meta.env':'{}'},plugins:[{name:'exact-native-case-paths',setup(b){b.onResolve({filter:/^\.\/(guardarCompraIA|GuardarCompraIA|portalCliente|PortalCliente)$/},args=>({path:new URL('../../../../src/'+args.path.slice(2)+(args.path[2]===args.path[2].toLowerCase()?'.ts':'.tsx'),import.meta.url).pathname}));}},{name:'ci-auth-postgrest-transport-only',setup(b){b.onResolve({filter:/[/.]supabase$/},()=>({path:'unified-supabase',namespace:'ci'}));b.onLoad({filter:/.*/,namespace:'ci'},()=>({contents:transport,loader:'js'}));}}]});
  async function prepare(){
   await pool.query('INSERT INTO public.empresas(id) VALUES($1)',[M]);
   await pool.query("INSERT INTO public.empresa_usuarios VALUES($1,$2,true,'owner')",[M,fixture.U]);
@@ -64,6 +64,7 @@ export async function prepareUnifiedUi(pool,fixture){
 }
 
 export async function exerciseUnifiedUi({unified,pool,fixture,evaluate,wait,command,passed}){
+ await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false});
  await unified.prepare();
  await evaluate(`(async()=>{await window.portal?.destroy();window.seller?.dispose();window.activationModule?.unmountActivation();const r=await fetch('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(${JSON.stringify(fixture.creds.gerencia)})});if(!r.ok)throw Error('Unified login failed');window.unifiedToken=(await r.json()).accessToken;document.body.innerHTML='<div id="root"></div>';const css=document.createElement('link');css.rel='stylesheet';css.href='/__unified.css';document.head.append(css);window.unified=await import('/__unified.js');})()`);
  await wait("document.querySelector('select')?.options.length===3 && !!document.querySelector('.sidebar .menu')");
