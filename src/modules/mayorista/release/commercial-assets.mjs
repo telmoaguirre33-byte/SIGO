@@ -24,7 +24,7 @@ export async function prepareCommercialAssets({source,destination}){
     if(name==='security/qa-access.mjs')text=stub;
     else if(name==='secure-config.mjs')text='export const secureConfig=Object.freeze({enabled:false,approvedOrigin:null});\n';
     else text=text.replace(/PRUEBA P0/gi,'Ensayo operativo').replace(/QA AISLADO/gi,'Entorno de prueba');
-    if(name==='operational-sw.js')text=text.replace(/sigo-mayorista-operational-v\d+/g,'sigo-mayorista-commercial-v1');
+    if(name==='operational-sw.js')text=text.replaceAll('sigo-mayorista-operational-','sigo-mayorista-commercial-');
     if(forbidden.test(text))throw Error('COMMERCIAL_ASSET_QA_OR_SECRET_REJECTED:'+name);
     for(const m of text.matchAll(/(?:from\s*|import\s*\()\s*['"](\.[^'"]+)['"]/g)){
      const dependency=path.posix.normalize(path.posix.join(path.posix.dirname(name),m[1]));

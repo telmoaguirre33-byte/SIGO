@@ -8,6 +8,7 @@ try{
  const original=await readFile(new URL('security/qa-access.mjs',source),'utf8');
  const manifest=await prepareCommercialAssets({source,destination});
  assert.ok(manifest.files.length>20);assert.equal(manifest.enabled,false);
+ const sw=await readFile(path.join(destination,'operational-sw.js'),'utf8');assert.ok(sw.includes('sigo-mayorista-commercial-'));assert.ok(!sw.includes('sigo-mayorista-operational-'));
  assert.equal(await readFile(new URL('security/qa-access.mjs',source),'utf8'),original);
  for(const name of ['sample.mjs','index.html','connected.html','offline-check.html','admin.html','cargas.html','tests','backend'])assert.ok(!manifest.files.some(f=>f.path===name||f.path.startsWith(name+'/')));
  const qa=await import(pathToFileURL(path.join(destination,'security/qa-access.mjs')));
