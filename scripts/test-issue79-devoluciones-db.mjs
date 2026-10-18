@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+const exec=promisify(execFile);
+assert.equal(process.env.SIGO_ISOLATED_TEST_DB,'1');
+assert.equal(process.env.PGHOST,'127.0.0.1');
+assert.equal(process.env.PGDATABASE,'sigo_returns_qa');
+const tenant='00000000-0000-4000-8000-000000000001',user='00000000-0000-4000-8000-000000000002',sale='00000000-0000-4000-8000-000000000003',product='00000000-0000-4000-8000-000000000004',item='00000000-0000-4000-8000-000000000005';
+const literal=v=>`'${String(v).replaceAll("'","''")}'`;
+async function sql(source){return(await exec('psql',['-X','-qAt','-v','ON_ERROR_STOP=1','-c',source])).stdout.trim();}
+await sql(`
+ create role authenticated;
+ create schema auth;
+ create table auth.users(id uuid primary key);
+ insert into auth.users values('${user}');
+ create function auth.uid() returns uuid language sql as $$select '${user}'::uuid$$;
+ create function public.tiene_permiso_empresa(empresa uuid, permiso text) returns boolean language sql as $$select empresa='${tenant}'::uuid and permiso in ('sales.write','sales.read')$$;
+ create table public.empresas(id uuid primary key);
+ insert into public.empresas values('${tenant}');
+ create table public.ventas_sigo(id uuid primary key,numero bigint,empresa_id uuid,cliente_id uuid,medio_pago text,total numeric,estado text);
+ create table public.productos(id uuid primary key,empresa_id uuid,stock_actual numeric);
+ create table public.venta_items_sigo(id uuid primary key,empresa_id uuid,venta_id uuid,producto_id uuid,cantidad numeric,precio_unitario numeric);
+ create table public.clientes_sigo(id uuid primary key,empresa_id uuid,saldo_actual numeric,updated_at timestamptz);
+ create table public.caja_movimientos_sigo(id uuid default gen_random_uuid(),empresa_id uuid,venta_id uuid,tipo text,medio_pago text,importe numeric,concepto text,created_by uuid);
+ create table public.cliente_movimientos_sigo(id uuid default gen_random_uuid(),empresa_id uuid,cliente_id uuid,venta_id uuid,tipo text,importe numeric,concepto text,created_by uuid);
+ insert into public.ventas_sigo values('${sale}',1,'${tenant}',null,'efectivo',1000,'confirmada');
+ insert into public.productos values('${product}','${tenant}',10);
+ insert into public.venta_items_sigo values('${item}','${tenant}','${sale}','${product}',10,100);
+`);
+// Backup isolated fixture BEFORE loading the original migration; no external database.
+await exec('pg_dump',['--format=custom','--file=/tmp/issue79-returns-before.dump']);
+await sql(readFileSync('supabase/migrations/20260913205500_carrito_devoluciones_anulaciones.sql','utf8'));
+const call=key=>`select public.registrar_devolucion_sigo('${tenant}','${sale}','[{"venta_item_id":"${item}","cantidad":2}]'::jsonb,'QA aislada',${literal(key)},false)`;
+const original=await sql(call('lost-response'));
+// Simulated lost HTTP response after ACTUAL PostgreSQL commit: retry same key.
+assert.equal(await sql(call('lost-response')),original);
+assert.equal(await sql('select stock_actual::int from productos'),'12');
+assert.equal(await sql('select count(*) from caja_movimientos_sigo'),'1');
+console.log('PASS PostgreSQL: timeout after commit + retry, one return/stock/cash effect');
+const [a,b]=await Promise.all([sql(`begin;${call('concurrent')};select pg_sleep(0.25);commit;`),sql(call('concurrent'))]);
+assert.equal(a.split('\n')[0],b);
+assert.equal(await sql('select stock_actual::int from productos'),'14');
+assert.equal(await sql('select count(*) from devoluciones_sigo'),'2');
+assert.equal(await sql('select count(*) from caja_movimientos_sigo'),'2');
+assert.equal(await sql('select sum(importe)::int from caja_movimientos_sigo'),'400');
+console.log('PASS PostgreSQL: independent concurrent connections, no duplicate effects');
+await assert.rejects(sql(`select public.registrar_devolucion_sigo('00000000-0000-4000-8000-999999999999','${sale}','[]'::jsonb,'QA aislada','foreign',false)`),/SALES_WRITE_FORBIDDEN/);
+console.log('PASS PostgreSQL: foreign company rejected');
+await exec('createdb',['sigo_returns_restore_qa']);
+await exec('pg_restore',['--no-owner','--dbname=sigo_returns_restore_qa','/tmp/issue79-returns-before.dump']);
+const restored=(await exec('psql',['-X','-qAt','-d','sigo_returns_restore_qa','-c','select stock_actual::int from productos'])).stdout.trim();
+assert.equal(restored,'10');
+console.log('PASS isolated fixture backup/restore verified; not a reconciliation of production migrations');

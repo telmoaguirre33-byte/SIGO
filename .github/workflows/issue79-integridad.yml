@@ -13,6 +13,16 @@ jobs:
   integrity:
     runs-on: ubuntu-latest
     timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: sigo_returns_qa
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: isolated_test_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -30,3 +40,12 @@ jobs:
           node scripts/verify-stock-import-assistant.mjs
           node scripts/test-arca-cae-protocol.mjs
           node scripts/verify-scanner-queue-and-sale-readback.mjs
+      - name: Actual PostgreSQL returns, retries, concurrency and fixture restore
+        env:
+          SIGO_ISOLATED_TEST_DB: '1'
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGDATABASE: sigo_returns_qa
+          PGUSER: postgres
+          PGPASSWORD: isolated_test_only
+        run: node scripts/test-issue79-devoluciones-db.mjs
