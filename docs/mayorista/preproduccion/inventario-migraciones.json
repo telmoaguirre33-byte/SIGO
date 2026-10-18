@@ -21,133 +21,133 @@
     {
       "order": 1,
       "path": "docs/mayorista/sql/002_seguridad_preparada_NO_APLICAR.sql",
-      "sha256": "cccd96d70a34e6fcb06099c42ec8778115fea784382d5174233b7c5d7b90c21f",
+      "sha256": "9b1f714f891dcb44aabc95c82e742a47642c484e9840c3a743dff822ae6c8c0c",
       "dependsOnPrevious": false,
       "productionStatus": "blocked_pending_versioned_conversion_and_real_schema_rehearsal"
     },
     {
       "order": 2,
       "path": "docs/mayorista/sql/003_flujo_administrativo_NO_APLICAR.sql",
-      "sha256": "82e75a0e95c3a3e81f48bfdeacc7d8d94970817417b4261bfa63bdc5bb0a6c3c",
+      "sha256": "6510499e27852ee086bfe1e37b630a92d06b21ba072847765b001de707e32185",
       "dependsOnPrevious": true,
       "productionStatus": "blocked_pending_versioned_conversion_and_real_schema_rehearsal"
     },
     {
       "order": 3,
       "path": "docs/mayorista/sql/004_administracion_NO_APLICAR.sql",
-      "sha256": "f35fcb2823669718732c2cfb776f5c7a4afe34c3e65cc38998fb50270128b4c7",
+      "sha256": "3ca83ff15bcb3f61fe7148eba3cc3998977c6fb6b04908851878725774363ba6",
       "dependsOnPrevious": true,
       "productionStatus": "blocked_pending_versioned_conversion_and_real_schema_rehearsal"
     },
     {
       "order": 4,
       "path": "src/modules/mayorista/cargas/schema-qa.sql",
-      "sha256": "0480acbd18b655359b7332ab86f99ea760d8a9a2f620ffba9eabc48ebc364c51",
+      "sha256": "5e48ffe034b33b269679e4236206ae8bc46a142a6004d0828dddc52de32d46bc",
       "dependsOnPrevious": true,
       "productionStatus": "blocked_pending_versioned_conversion_and_real_schema_rehearsal"
     },
     {
       "order": 5,
       "path": "src/modules/mayorista/commercial/visits-schema-qa.sql",
-      "sha256": "190a116ebb16c8215f3cc08f9ce5b40061311c77dfbcdca431af216467b08ee0",
+      "sha256": "bdf4078972c0a1fd281d291f05e1d85cc35bf510994a331e67b79ea94f1c1124",
       "dependsOnPrevious": true,
       "productionStatus": "blocked_pending_versioned_conversion_and_real_schema_rehearsal"
     },
     {
       "order": 6,
       "path": "src/modules/mayorista/commercial/inventory-schema-qa.sql",
-      "sha256": "3d07e45c0641bf783e4be2949bed3a32ae789526a587ece3c420fa6e0b1fff0e",
+      "sha256": "f7a164446353a0865804cf016c84d010fd4510a2c558aee8731eeb6b8fadc097",
       "dependsOnPrevious": true,
       "productionStatus": "blocked_pending_versioned_conversion_and_real_schema_rehearsal"
     },
     {
       "order": 7,
       "path": "src/modules/mayorista/commercial/accounts-schema-qa.sql",
-      "sha256": "a3756fa9613d87d3288ad0dc678607de7a1864918f17c8e5b1da6a1479b7bd7d",
+      "sha256": "0c584d00d379f6fe86349d27e657c7707d8339dfb2097b84dcad2e6895ad5003",
       "dependsOnPrevious": true,
       "productionStatus": "blocked_pending_versioned_conversion_and_real_schema_rehearsal"
     },
     {
       "order": 8,
       "path": "src/modules/mayorista/railway/private-auth-schema.sql",
-      "sha256": "9302352f26a11cadffe806683a79665f9abe3cb0e3a088b77f4a6ac9ac43a000",
+      "sha256": "02894f4a19512a2c16e6d7298aa0518c0fe668acc4e2417ab73119d5209ced13",
       "dependsOnPrevious": true,
       "productionStatus": "blocked_pending_versioned_conversion_and_real_schema_rehearsal"
     },
     {
       "order": 9,
       "path": "src/modules/mayorista/commercial/roles-schema-qa.sql",
-      "sha256": "7f306e36408893c0b9c96a63c87124190fa1fcd41a907469f7b48e42c17a87bb",
+      "sha256": "b0cfaf645d274027f84da32ac75eb552d5605f7085e43ee6483d141c36061b94",
       "dependsOnPrevious": true,
       "productionStatus": "blocked_pending_versioned_conversion_and_real_schema_rehearsal"
     },
     {
       "order": 10,
       "path": "src/modules/mayorista/commercial/master-schema-qa.sql",
-      "sha256": "f3ec4dca00641dcf78139de58bb4bb109e60c8d41416b244b6b86a02132a61d9",
+      "sha256": "da0d1218e06b0c83405a6a38565c19a6b321a6714fd84b2894205cf2958deb1f",
       "dependsOnPrevious": true,
       "productionStatus": "blocked_pending_versioned_conversion_and_real_schema_rehearsal"
     },
     {
       "order": 11,
       "path": "src/modules/mayorista/commercial/collections-schema-qa.sql",
-      "sha256": "af7ad52c15d3225b53f5a9d06533d0d4ffcf188abed9d831a97b19ae62ee6f39",
+      "sha256": "2c2fb0df1ba4c053eee261fa661a4581c69dbe4d59503558e80f753493463f15",
       "dependsOnPrevious": true,
       "productionStatus": "blocked_pending_versioned_conversion_and_real_schema_rehearsal"
     },
     {
       "order": 12,
       "path": "src/modules/mayorista/commercial/goals-schema-qa.sql",
-      "sha256": "51d915cdc58bcdc9f24c5367e1427244d78c9f97a5ffac889c3c41a9635e7c80",
+      "sha256": "f50c3aedf652f2bfb7ffe2b4aaf7f15d6cae845ccf8b73dc584f71e92811c4d9",
       "dependsOnPrevious": true,
       "productionStatus": "blocked_pending_versioned_conversion_and_real_schema_rehearsal"
     },
     {
       "order": 13,
       "path": "docs/mayorista/sql/005_integracion_empresa_NO_APLICAR.sql",
-      "sha256": "a9a498411f6d8cb43b2a0da7eeca6a61e9f54e22fcc9567e2950e86eb0426086",
+      "sha256": "86af1d9c734efde00bb63050547e2ba90dddae3fe61628979d90538d0001ffb6",
       "dependsOnPrevious": true,
       "productionStatus": "blocked_pending_versioned_conversion_and_real_schema_rehearsal"
     },
     {
       "order": 14,
       "path": "docs/mayorista/sql/006_comercio_compartido_NO_APLICAR.sql",
-      "sha256": "79703c97aac9b34e4014fd5fcceafb32112761c23fb16e7e8723854e479ca7c3",
+      "sha256": "69897ea8ec1322fda511be033e495dcac83e42c920417c75ab1271ff98c3857a",
       "dependsOnPrevious": true,
       "productionStatus": "blocked_pending_versioned_conversion_and_real_schema_rehearsal"
     },
     {
       "order": 15,
       "path": "docs/mayorista/sql/007_lectura_compartida_NO_APLICAR.sql",
-      "sha256": "cc622050eceb93c7ca0f2ce08480edcec6af7985e4525d5a78e242a8b86d0e16",
+      "sha256": "7bfbd70819db7c3a22a897936684aec9da45e38184982acead62ac6ba90b4e93",
       "dependsOnPrevious": true,
       "productionStatus": "blocked_pending_versioned_conversion_and_real_schema_rehearsal"
     },
     {
       "order": 16,
       "path": "docs/mayorista/sql/008_operacion_comercial_NO_APLICAR.sql",
-      "sha256": "5bc68850ea1586d8ebe08a4cb6191c43f2d9c3651abee5c4d25789c50cce2b31",
+      "sha256": "f08c407421a5752627ccbe398a2b2e194f7f62a7898354a6d0403487b3c8514e",
       "dependsOnPrevious": true,
       "productionStatus": "blocked_pending_versioned_conversion_and_real_schema_rehearsal"
     },
     {
       "order": 17,
       "path": "docs/mayorista/sql/009_precios_compartidos_NO_APLICAR.sql",
-      "sha256": "90868773d9fd2e36f7c0d7425b62fd7438fe210febd54fc9fa71c1fbd342bac5",
+      "sha256": "2ca32c82f8c2550d66c2c519091fc9cddae41462cd0778e3913610be4ade720a",
       "dependsOnPrevious": true,
       "productionStatus": "blocked_pending_versioned_conversion_and_real_schema_rehearsal"
     },
     {
       "order": 18,
       "path": "docs/mayorista/sql/010_nota_credito_compartida_NO_APLICAR.sql",
-      "sha256": "ea3ada4203dc1d31d683b8cb35aed39dd834db8fc815396aa513f9e532b63093",
+      "sha256": "0d9b792c2348e88ba90f2e3b643ad113d44025f7b487c4bf1dc9833e918a34a7",
       "dependsOnPrevious": true,
       "productionStatus": "blocked_pending_versioned_conversion_and_real_schema_rehearsal"
     },
     {
       "order": 19,
       "path": "docs/mayorista/sql/011_destino_predeterminado_NO_APLICAR.sql",
-      "sha256": "00711fb212378a0558a399d439f06c93387b475e1772f60fa0af3f27914db5ea",
+      "sha256": "67644afef35ce01b7620cdf24cb8811802903248689b65c13661534a9d453f25",
       "dependsOnPrevious": true,
       "productionStatus": "blocked_pending_versioned_conversion_and_real_schema_rehearsal"
     },
@@ -158,5 +158,6 @@
       "dependsOnPrevious": true,
       "productionStatus": "blocked_pending_versioned_conversion_and_real_schema_rehearsal"
     }
-  ]
+  ],
+  "hashSource": "GitHub blob content at sourceHead; not reconstructed local snapshot"
 }
