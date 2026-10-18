@@ -12,7 +12,7 @@ export async function prepareUnifiedUi(pool,fixture){
  const transport=`async function invoke(name,args={}){const r=await fetch('/__unified/rpc',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+window.unifiedToken},body:JSON.stringify({name,args})});const data=await r.json();return r.ok?{data,error:null}:{data:null,error:data};}
  async function user(){const r=await invoke('__user');return {data:{user:r.data},error:r.error};}
  function query(table){const state={table,filters:[]};const q={select(){return q;},eq(k,v){state.filters.push([k,v]);return q;},order(){return q;},limit(n){state.limit=n;return q;},range(a,b){state.limit=b-a+1;return q;},in(k,v){state.filters.push([k,v]);return q;},maybeSingle(){state.single=true;return q;},single(){state.single=true;return q;},abortSignal(){return q;},then(ok,bad){return invoke('__read',state).then(ok,bad);}};return q;}
- export const supabase={rpc(name,args){const p=invoke(name,args);p.abortSignal=()=>p;return p;},from:query,auth:{getUser:user,getSession:async()=>{const r=await user();return {data:{session:r.data.user?{access_token:window.unifiedToken,user:r.data.user}:null},error:r.error};},onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})},channel:()=>({on(){return this;},subscribe(){return this;},unsubscribe(){}}),removeChannel:async()=>{}};`;
+ export const supabase={rpc(name,args){const p=invoke(name,args);p.abortSignal=()=>p;p.range=(from,to)=>invoke(name,{...args,__offset:from,__limit:to-from+1});return p;},from:query,auth:{getUser:user,getSession:async()=>{const r=await user();return {data:{session:r.data.user?{access_token:window.unifiedToken,user:r.data.user}:null},error:r.error};},onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})},channel:()=>({on(){return this;},subscribe(){return this;},unsubscribe(){}}),removeChannel:async()=>{}};`;
  const original=await readFile(new URL('../../../../src/main.tsx',import.meta.url),'utf8');
  assert.ok(original.includes('ReactDOM.createRoot(document.getElementById("root")!).render('));
  const entry=original.replace('ReactDOM.createRoot(document.getElementById("root")!).render(','const root=ReactDOM.createRoot(document.getElementById("root")!); export function unmountUnified(){root.unmount();} root.render(');
@@ -49,7 +49,7 @@ export async function prepareUnifiedUi(pool,fixture){
     if(name==='__read'||name==='listar_productos_sigo'){
      const table=name==='listar_productos_sigo'?'productos':args.table;if(!reads.has(table))throw Error('Unsupported native read');
      // Actual canonical rows, no invented products, balances or successful writes.
-     const rows=(await pool.query('SELECT * FROM public.'+table+' WHERE empresa_id=$1 LIMIT 100',[company])).rows;value=args.single?(rows[0]??null):rows;
+     const rows=(await pool.query('SELECT * FROM public.'+table+' WHERE empresa_id=$1 ORDER BY id LIMIT $2 OFFSET $3',[company,Math.min(1000,Math.max(1,Number(args.__limit??args.limit??100))),Math.max(0,Number(args.__offset??0))])).rows;value=args.single?(rows[0]??null):rows;
     }else{
      const signatures={listar_modulos_empresa_sigo:'SELECT * FROM public.listar_modulos_empresa_sigo($1)',leer_tipo_negocio_sigo:'SELECT public.leer_tipo_negocio_sigo($1) AS value',obtener_acceso_mayorista_sigo:'SELECT * FROM public.obtener_acceso_mayorista_sigo($1)'};
      if(!signatures[name])throw Error('Unsupported native RPC');
