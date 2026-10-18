@@ -192,7 +192,10 @@ function detalleFiscal(tipoCbte, total, items, productMap) {
     const producto = productMap.get(String(item.producto_id));
     if (!producto || producto.precio_incluye_iva !== true) throw new Error("ARCA_PRODUCT_PRICE_TAX_MODE_UNSUPPORTED");
     const id = entero(producto.iva_alicuota_id, 1, 99);
-    const tasa = Number(producto.iva_tasa);
+    const valorTasa = producto.iva_tasa;
+    const tasa = (typeof valorTasa === "number" || (typeof valorTasa === "string" && valorTasa.trim() !== "")) ? Number(valorTasa) : NaN;
+    const tasasAfip = new Map([[3, 0], [4, 10.5], [5, 21], [6, 27], [8, 5], [9, 2.5]]);
+    if (!tasasAfip.has(id) || tasasAfip.get(id) !== tasa) throw new Error("ARCA_PRODUCT_FISCAL_DATA_REQUIRED");
     const bruto = Number(item.subtotal);
     if (!id || !Number.isFinite(tasa) || tasa < 0 || !Number.isFinite(bruto) || bruto <= 0) throw new Error("ARCA_PRODUCT_FISCAL_DATA_REQUIRED");
     const base = bruto / (1 + tasa / 100);
@@ -402,3 +405,4 @@ export default async function handler(req, res) {
     return json(res, safe.status, { error: safe.code, stage, retryable: Boolean(reserva), observaciones: observations });
   }
 }
+

@@ -1,0 +1,32 @@
+name: Minorista issue 79 - integridad aislada
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'api/arca/**'
+      - 'scripts/test-issue79-*.mjs'
+      - '.github/workflows/issue79-integridad.yml'
+permissions:
+  contents: read
+jobs:
+  integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Timeout, retries, concurrency, decimal import, fiscal IVA and incomplete reports
+        run: node --experimental-vm-modules scripts/test-issue79-integridad.mjs
+      - name: Existing Caja, Stock, ARCA and return guards
+        run: |
+          node scripts/verify-sale-returns-cart.mjs
+          node scripts/verify-stock-import-assistant.mjs
+          node scripts/test-arca-cae-protocol.mjs
+          node scripts/verify-scanner-queue-and-sale-readback.mjs

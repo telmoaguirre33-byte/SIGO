@@ -51,7 +51,8 @@ type CanonicalKey =
   | "categoria"
   | "marca";
 
-type MatrizExcel = string[][];
+type CeldaImportacion = string | number;
+type MatrizExcel = CeldaImportacion[][];
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8");
@@ -88,25 +89,20 @@ function limpiarCodigo(value: unknown): string | null {
 }
 
 function numeroArgentino(value: unknown): { value: number | null; error: string | null } {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value >= 0
+      ? { value, error: null }
+      : { value: null, error: "El número debe ser finito y no negativo." };
+  }
   const original = String(value ?? "").trim();
   if (!original) return { value: null, error: null };
-  let limpio = original.replace(/[$€£ARSars\s]/g, "").replace(/[^0-9,.-]/g, "");
-  if (!limpio) return { value: null, error: `“${original}” no parece un número.` };
-
-  const ultimaComa = limpio.lastIndexOf(",");
-  const ultimoPunto = limpio.lastIndexOf(".");
-  if (ultimaComa >= 0 && ultimoPunto >= 0) {
-    if (ultimaComa > ultimoPunto) limpio = limpio.replace(/\./g, "").replace(",", ".");
-    else limpio = limpio.replace(/,/g, "");
-  } else if (ultimaComa >= 0) {
-    const decimales = limpio.length - ultimaComa - 1;
-    limpio = decimales === 3 && /^-?\d{1,3}(,\d{3})+$/.test(limpio)
-      ? limpio.replace(/,/g, "")
-      : limpio.replace(",", ".");
-  } else if (ultimoPunto >= 0) {
-    const decimales = limpio.length - ultimoPunto - 1;
-    if (decimales === 3 && /^-?\d{1,3}(\.\d{3})+$/.test(limpio)) limpio = limpio.replace(/\./g, "");
-  }
+  let limpio = original.replace(/^(?:ARS|[$€£])\s*/i, "").trim();
+  const invalido = () => ({ value: null, error: `“${original}” tiene un formato numérico inválido o ambiguo. Usá coma decimal sin separador de miles, o ambas separaciones (1.234,56).` });
+  if (/^-?\d{1,3}([.,]\d{3})+$/.test(limpio)) return invalido();
+  if (/^-?\d{1,3}(?:\.\d{3})+,\d+$/.test(limpio)) limpio = limpio.replace(/\./g, "").replace(",", ".");
+  else if (/^-?\d{1,3}(?:,\d{3})+\.\d+$/.test(limpio)) limpio = limpio.replace(/,/g, "");
+  else if (/^-?\d+(?:[.,]\d+)?$/.test(limpio)) limpio = limpio.replace(",", ".");
+  else return invalido();
 
   const numero = Number(limpio);
   if (!Number.isFinite(numero)) return { value: null, error: `“${original}” no parece un número válido.` };
@@ -147,8 +143,8 @@ function detectarColumnas(encabezados: string[]) {
   return resultado;
 }
 
-function valorCelda(fila: string[], indice: number | null) {
-  return indice == null ? "" : String(fila[indice] ?? "").trim();
+function valorCelda(fila: CeldaImportacion[], indice: number | null) {
+  return indice == null ? "" : fila[indice] ?? "";
 }
 
 function indicePorIdentidad(productos: ProductoSigo[]) {
@@ -183,10 +179,24 @@ function buscarExistente(
   if (candidatos.size > 1) {
     return { producto: null, error: "El código coincide con más de un producto. Revisalo antes de cargar." };
   }
-  if (candidatos.size === 1) return { producto: [...candidatos.values()][0], error: null };
+  if (candidatos.size === 1) {
+    const producto = [...candidatos.values()][0];
+    if ((codigoBarras && normalizar(producto.codigo_barras) !== normalizar(codigoBarras)) ||
+        (codigoInterno && normalizar(producto.codigo_interno) !== normalizar(codigoInterno))) {
+      return { producto: null, error: "Los códigos informados son contradictorios. Revisá la identidad del producto." };
+    }
+    return { producto, error: null };
+  }
 
   const porNombre = indices.porNombre.get(normalizar(nombre)) ?? [];
-  if (porNombre.length === 1) return { producto: porNombre[0], error: null };
+  if (porNombre.length === 1) {
+    const producto = porNombre[0];
+    if ((codigoBarras && normalizar(producto.codigo_barras) !== normalizar(codigoBarras)) ||
+        (codigoInterno && normalizar(producto.codigo_interno) !== normalizar(codigoInterno))) {
+      return { producto: null, error: "El nombre coincide pero el código informado es distinto. Revisá la identidad del producto." };
+    }
+    return { producto, error: null };
+  }
   if (porNombre.length > 1) return { producto: null, error: "Hay más de un producto con ese nombre. Agregá un código para identificarlo." };
   return { producto: null, error: null };
 }
@@ -382,20 +392,20 @@ function indiceColumna(referencia: string) {
 function matrizDesdeHoja(xml: string, strings: string[]) {
   const doc = new DOMParser().parseFromString(xml, "application/xml");
   if (doc.getElementsByTagName("parsererror").length) throw new Error("No pude leer la hoja del Excel.");
-  const salida: string[][] = [];
+  const salida: MatrizExcel = [];
   const rows = Array.from(doc.getElementsByTagName("row"));
   rows.forEach((row, rowIndex) => {
     const numero = Math.max(1, Number(row.getAttribute("r") || rowIndex + 1));
-    const fila: string[] = salida[numero - 1] ?? [];
+    const fila: CeldaImportacion[] = salida[numero - 1] ?? [];
     Array.from(row.getElementsByTagName("c")).forEach((celda) => {
       const ref = celda.getAttribute("r") || "A1";
       const type = celda.getAttribute("t");
-      let valor = "";
+      let valor: CeldaImportacion = "";
       if (type === "inlineStr") {
         valor = Array.from(celda.getElementsByTagName("t")).map((t) => t.textContent ?? "").join("");
       } else {
         const raw = celda.getElementsByTagName("v")[0]?.textContent ?? "";
-        valor = type === "s" ? strings[Number(raw)] ?? "" : raw;
+        valor = type === "s" ? strings[Number(raw)] ?? "" : (!type || type === "n") && raw.trim() ? Number(raw) : raw;
       }
       fila[indiceColumna(ref)] = valor;
     });
@@ -574,3 +584,4 @@ export async function importarFilasStockSigo(
   await Promise.all(Array.from({ length: workers }, () => trabajar()));
   return resultados;
 }
+

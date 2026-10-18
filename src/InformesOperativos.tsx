@@ -204,6 +204,9 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
   const [comprasPeriodoError, setComprasPeriodoError] = useState("");
   const [ventasDesde, setVentasDesde] = useState(desde30Iso);
   const [ventasHasta, setVentasHasta] = useState(hoyIso);
+  const [ventasPeriodoError, setVentasPeriodoError] = useState("");
+  const [valorizacionEstado, setValorizacionEstado] = useState("Cargando valorización…");
+  const [comprasGerencialesError, setComprasGerencialesError] = useState("");
   const [ventasPeriodo, setVentasPeriodo] = useState<ResumenVentasPeriodoSigo | null>(null);
   const [gerencialPeriodo, setGerencialPeriodo] = useState<PeriodoGerencial>("7");
   const rangoInicialGerencial = rangoGerencial("7");
@@ -252,7 +255,8 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
   useEffect(() => {
     let activo = true;
     setVentasPeriodo(null);
-    void cargarVentasPeriodoSigo(empresaId, ventasDesde, ventasHasta).then(v => { if (activo) setVentasPeriodo(v); }).catch(() => { if (activo) setVentasPeriodo(null); });
+    setVentasPeriodoError("");
+    void cargarVentasPeriodoSigo(empresaId, ventasDesde, ventasHasta).then(v => { if (activo) setVentasPeriodo(v); }).catch((err: unknown) => { if (activo) { setVentasPeriodo(null); setVentasPeriodoError(err instanceof Error ? err.message : "No se pudieron consultar las ventas."); } });
     return () => { activo = false; };
   }, [empresaId, ventasDesde, ventasHasta]);
 
@@ -279,9 +283,10 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
   useEffect(() => {
     let activo = true;
     setComprasGerenciales(null);
+    setComprasGerencialesError("");
     void cargarComprasPeriodoSigo(empresaId, gerencialDesde, gerencialHasta)
       .then((valor) => { if (activo) setComprasGerenciales(valor); })
-      .catch(() => { if (activo) setComprasGerenciales(null); });
+      .catch((err: unknown) => { if (activo) { setComprasGerenciales(null); setComprasGerencialesError(err instanceof Error ? err.message : "No se pudieron consultar las compras."); } });
     return () => { activo = false; };
   }, [empresaId, gerencialDesde, gerencialHasta]);
 
@@ -314,7 +319,19 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
   const stockValorizadoCosto = productosValorizacion.reduce((t,p)=>t + Number(p.stock_actual ?? 0) * Number(p.costo_actual ?? p.costo_ultima_compra ?? 0),0);
   const stockValorizadoVenta = productosValorizacion.reduce((t,p)=>t + Number(p.stock_actual ?? 0) * Number(p.precio_venta ?? 0),0);
   const margenPotencialStock = stockValorizadoVenta - stockValorizadoCosto;
-  const cargarValorizacionStock = async () => { try { setProductosValorizacion(await listarProductosSigo(empresaId)); } catch { setProductosValorizacion([]); } };
+  const cargarValorizacionStock = async () => {
+    setValorizacionEstado("Cargando valorización…");
+    try {
+      const productos = await listarProductosSigo(empresaId);
+      if (empresaActivaRef.current !== empresaId) return;
+      setProductosValorizacion(productos);
+      setValorizacionEstado("");
+    } catch (err) {
+      if (empresaActivaRef.current !== empresaId) return;
+      setProductosValorizacion([]);
+      setValorizacionEstado(err instanceof Error ? err.message : "Valorización no disponible.");
+    }
+  };
 
   const evolucionVentas = agruparEvolucionVentas(ventasPeriodo?.dias ?? [], ventasDesde, ventasHasta);
   const evolucionGerencial = agruparEvolucionVentas(ventasGerenciales?.dias ?? [], gerencialDesde, gerencialHasta);
@@ -326,7 +343,12 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
   const gananciaNetaGerencial = margenEstimadoGerencial - gastosTotalGerencial;
   const rentabilidadGerencial = facturacionGerencial > 0 ? (gananciaNetaGerencial / facturacionGerencial) * 100 : 0;
 
+  const gerencialDisponible = !error && !ventasGerencialesError && !comprasGerencialesError &&
+    ventasGerenciales?.desde === gerencialDesde && ventasGerenciales?.hasta === gerencialHasta &&
+    comprasGerenciales?.desde === gerencialDesde && comprasGerenciales?.hasta === gerencialHasta;
+
   function exportarGerencialExcel() {
+    if (!gerencialDisponible) return;
     const esc = (v: unknown) => `"${String(v ?? "").replaceAll('"', '""')}"`;
     const filas = [
       ["SIGO Gestión - Informe gerencial"],
@@ -372,16 +394,17 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
         <button className="admin-button sigo-reports-refresh" onClick={() => void cargar(empresaId)}>Actualizar</button>
       </div>
 
-      {!categoria && <>
+      {!categoria && !error && <>
         <section className="panel" aria-label="Resumen gerencial" style={{marginBottom:16}}>
           <div className="sigo-detail-title"><span>▥</span><h3>Resultado gerencial</h3></div>
           <div className="sigo-compras-periodo sigo-ventas-periodo">
             <strong>Período</strong>
             <label>Desde <input type="date" value={gerencialDesde} max={gerencialHasta} onChange={(e) => { setGerencialPeriodo("personalizado"); setGerencialDesde(e.target.value); }} /></label>
             <label>Hasta <input type="date" value={gerencialHasta} min={gerencialDesde} max={hoyIso} onChange={(e) => { setGerencialPeriodo("personalizado"); setGerencialHasta(e.target.value); }} /></label>
-            <button className="admin-button" type="button" onClick={exportarGerencialExcel}>Exportar Excel</button>
+            <button className="admin-button" type="button" disabled={!gerencialDisponible} onClick={exportarGerencialExcel}>Exportar Excel</button>
           </div>
-          <div className="sigo-gerencial-summary-cards">
+          {!gerencialDisponible && <p role="status">{ventasGerencialesError || comprasGerencialesError || "Cargando informe gerencial completo…"}</p>}
+          {gerencialDisponible && <><div className="sigo-gerencial-summary-cards">
             <div className="stat-card"><span>Ventas / facturación</span><strong>{dinero(facturacionGerencial)}</strong></div>
             <div className="stat-card"><span>Resultado de caja estimado</span><strong>{dinero(margenEstimadoGerencial)}</strong><small>Ventas − compras</small></div>
             <div className="stat-card"><span>Compras de mercadería</span><strong>{dinero(comprasTotalGerencial)}</strong></div>
@@ -396,7 +419,7 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
               {(["luz","agua","empleados","internet","alquiler","otros"] as const).map((clave)=>{const iconos={luz:"💡",agua:"💧",empleados:"👥",internet:"📶",alquiler:"🏠",otros:"•••"} as const; return <label key={clave} className="form-group sigo-expense-field"><span className="sigo-expense-label"><b aria-hidden="true">{iconos[clave]}</b><span style={{textTransform:"capitalize"}}>{clave}</span></span><div className="sigo-money-input"><span>$</span><input type="number" min="0" placeholder="0" value={gastosGerenciales[clave] || ""} onChange={(e)=>setGastosGerenciales(g=>({...g,[clave]:e.target.value === "" ? 0 : Number(e.target.value)}))}/></div></label>})}
             </div>
             <small>Estos gastos se usan sólo para estimar la ganancia neta del período mostrado.</small>
-          </details>
+          </details></>}
         </section>
         <section className="sigo-report-summary" aria-label="Indicadores principales">
           <div><span>Ventas hoy</span><strong>{resumen.ventasHoy}</strong></div>
@@ -438,14 +461,14 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
               <label>Hasta <input type="date" value={ventasHasta} min={ventasDesde} max={hoyIso} onChange={(e) => setVentasHasta(e.target.value)} /></label>
               <small>Seleccioná de cuándo a cuándo para consultar ventas, facturación, ticket promedio y evolución.</small>
             </div>
-            <div className="stats-grid sigo-sales-stats-rows">
+            {ventasPeriodo && !ventasPeriodoError ? <><div className="stats-grid sigo-sales-stats-rows">
               <div className="stat-card"><span>Ventas del período</span><strong>{ventasPeriodo?.cantidad ?? 0}</strong><small>{dinero(ventasPeriodo?.total ?? 0)}</small></div>
               <div className="stat-card"><span>Facturación del período</span><strong>{dinero(ventasPeriodo?.total ?? 0)}</strong><small>{ventasDesde} → {ventasHasta}</small></div>
               <div className="stat-card"><span>Ticket promedio del período</span><strong>{dinero(ventasPeriodo?.ticketPromedio ?? 0)}</strong><small>Promedio por venta confirmada</small></div>
               <div className="stat-card"><span>Días analizados</span><strong>{ventasPeriodo?.dias.length ?? 0}</strong><small>Período seleccionado</small></div>
             </div>
             <div className="sigo-manager-chart-card sigo-sales-chart-compact"><div className="sigo-manager-chart-head"><div><strong>Evolución del período</strong><span>{ventasDesde} → {ventasHasta}</span></div><strong>{dinero(ventasPeriodo?.total ?? 0)}</strong></div><GraficoVentas7Dias datos={evolucionVentas} /></div>
-          </section>}
+          </> : <p role="status">{ventasPeriodoError || "Cargando ventas del período…"}</p>}</section>}
 
           {categoria === "stock" && <section id="informe-stock" className="panel sigo-report-detail">
             <div className="sigo-detail-title"><span>◫</span><h3>Stock</h3></div>
@@ -459,8 +482,8 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
             {vistaStock === "ranking" && <RankingProductosStock empresaId={empresaId} />}
             {(vistaStock === "actual" || vistaStock === "quiebre" || vistaStock === "rotacion") && <div className="stats-grid sigo-stock-stats-rows">
               <div className="stat-card"><span>Unidades en stock</span><strong>{resumen.unidadesStock}</strong><small>{resumen.productos} productos</small></div>
-              {vistaStock === "actual" && <div className="stat-card"><span>Stock valorizado a costo</span><strong>{dinero(stockValorizadoCosto)}</strong><small>Stock × costo actual/última compra</small></div>}
-              {vistaStock === "actual" && <div className="stat-card"><span>Stock valorizado a venta</span><strong>{dinero(stockValorizadoVenta)}</strong><small>Stock × precio de venta</small></div>}
+              {vistaStock === "actual" && !valorizacionEstado && <div className="stat-card"><span>Stock valorizado a costo</span><strong>{dinero(stockValorizadoCosto)}</strong><small>Stock × costo actual/última compra</small></div>}
+              {vistaStock === "actual" && !valorizacionEstado && <div className="stat-card"><span>Stock valorizado a venta</span><strong>{dinero(stockValorizadoVenta)}</strong><small>Stock × precio de venta</small></div>}
               {vistaStock === "actual" && <div className="stat-card"><span>Margen potencial</span><strong>{dinero(margenPotencialStock)}</strong><small>Venta potencial − costo</small></div>}
               <div className="stat-card"><span>Stock crítico</span><strong>{resumen.productosCriticos}</strong><small>{resumen.productosSinStock} sin stock</small></div>
               {riesgoStock && <div className="stat-card"><span>Quiebre urgente</span><strong>{riesgoStock.urgentes}</strong><small>≤ 7 días de cobertura</small></div>}
@@ -531,12 +554,12 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
               <small>Seleccioná de cuándo a cuándo para analizar la facturación de compras.</small>
             </div>
             {comprasPeriodoError ? <p className="form-error" role="alert">{comprasPeriodoError}</p> : null}
-            <div className="stats-grid sigo-compras-rows">
+            {comprasPeriodo && !comprasPeriodoError ? <><div className="stats-grid sigo-compras-rows">
               <div className="stat-card"><span>Compras confirmadas · período</span><strong>{comprasPeriodo?.comprasCantidad ?? 0}</strong><small>Importe comprado: {dinero(comprasPeriodo?.comprasTotal ?? 0)}</small></div>
               <div className="stat-card"><span>Ventas confirmadas · período</span><strong>{comprasPeriodo?.ventasCantidad ?? 0}</strong><small>Facturación: {dinero(comprasPeriodo?.ventasTotal ?? 0)}</small></div>
               <div className="stat-card"><span>Ventas − compras</span><strong>{dinero(comprasPeriodo?.balanceComercial ?? 0)}</strong><small>Período {comprasDesde} → {comprasHasta}; indicador operativo</small></div>
             </div>
-          </section>}
+          </> : <p role="status">{comprasPeriodoError || "Cargando compras del período…"}</p>}</section>}
 
           {categoria === "caja" && <section id="informe-caja" className="panel sigo-report-detail sigo-caja-report">
             <div className="sigo-detail-title"><span>$</span><h3>Caja de hoy</h3></div>
@@ -568,7 +591,7 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
               <small>{gerencialDesde} → {gerencialHasta}</small>
             </div>
             {ventasGerencialesError ? <p className="form-error" role="alert">{ventasGerencialesError}</p> : null}
-            <div className="stats-grid sigo-manager-kpis">
+            {ventasGerenciales && !ventasGerencialesError && <><div className="stats-grid sigo-manager-kpis">
               <div className="stat-card"><span>Facturación del período</span><strong>{dinero(ventasGerenciales?.total ?? 0)}</strong><small>{ventasGerenciales?.cantidad ?? 0} ventas confirmadas</small></div>
               <div className="stat-card"><span>Ventas confirmadas</span><strong>{ventasGerenciales?.cantidad ?? 0}</strong><small>Período {gerencialDesde} → {gerencialHasta}</small></div>
               <div className="stat-card"><span>Ticket promedio</span><strong>{dinero(ventasGerenciales?.ticketPromedio ?? 0)}</strong><small>Del período elegido</small></div>
@@ -577,7 +600,7 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
             <div className="sigo-manager-chart-card"><div className="sigo-manager-chart-head"><div><strong>Evolución de ventas del período</strong><span>{gerencialDesde} → {gerencialHasta}</span></div><strong>{dinero(ventasGerenciales?.total ?? 0)}</strong></div><GraficoVentas7Dias datos={evolucionGerencial} /></div>
             <GraficoPicos datos={ventasGerenciales?.porHora ?? []} etiqueta="Horas pico · período seleccionado" />
             <GraficoDias datos={ventasGerenciales?.porDiaSemana ?? []} etiqueta="Días de la semana · período seleccionado" />
-            {salud && (
+            </>}{salud && (
               <div className="sigo-health-inline" role={salud.estado === "operativo" ? undefined : "alert"}>
                 <strong>{etiquetaSalud(salud)}</strong>
                 <span>{salud.operativos}/{salud.total} bloques críticos accesibles.</span>
@@ -588,7 +611,7 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
           {categoria && resumen.modulosNoDisponibles.length > 0 && (
             <div className="panel" role="alert">
               <h3>Tablero parcial</h3>
-              <p>Los módulos siguientes no respondieron y sus indicadores se muestran en cero: {resumen.modulosNoDisponibles.join(", ")}.</p>
+              <p>No se pudieron cargar los siguientes módulos: {resumen.modulosNoDisponibles.join(", ")}.</p>
             </div>
           )}
         </>
@@ -596,3 +619,4 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
     </div>
   );
 }
+

@@ -1,9 +1,10 @@
 import { readSheet } from "read-excel-file/universal";
 import { leerArchivoStock as leerArchivoStockLegacy } from "./stockImportExcel";
 
-type MatrizExcel = string[][];
+type MatrizExcel = Array<Array<string | number>>;
 
-function celdaComoTexto(value: unknown): string {
+function celdaComoTexto(value: unknown): string | number {
+  if (typeof value === "number") return value;
   if (value == null) return "";
   if (value instanceof Date && Number.isFinite(value.getTime())) return value.toISOString();
   return String(value).trim();
@@ -50,3 +51,4 @@ export async function leerArchivoStockMovil(file: File): Promise<MatrizExcel> {
     }
   }
 }
+
