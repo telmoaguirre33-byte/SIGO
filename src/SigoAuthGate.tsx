@@ -1,3 +1,4 @@
+import {businessPreferenceKey,configureDeclaredBusiness} from "./modules/mayorista/integration/registration";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
@@ -53,6 +54,7 @@ export default function SigoAuthGate({ children }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [businessType,setBusinessType]=useState<"minorista"|"mayorista"|"mixto">("minorista");
   const [empresaNombre, setEmpresaNombre] = useState("");
   const [telefonoRegistro, setTelefonoRegistro] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -239,6 +241,7 @@ export default function SigoAuthGate({ children }: Props) {
           [ONBOARDING_MODE_METADATA_KEY]: OWNER_ONBOARDING_MODE,
           sigo_telefono_contacto: telefono,
           sigo_email_contacto: normalizedEmail,
+          ...(businessType!=="minorista"?{[businessPreferenceKey]:businessType}:{}),
           sigo_trial_days: SIGO_TRIAL_DAYS,
           sigo_trial_started_at: new Date().toISOString(),
         },
@@ -274,7 +277,13 @@ export default function SigoAuthGate({ children }: Props) {
     });
 
     if (!empresaError) {
-      if (typeof empresaId === "string") void notificarAltaEmpresaAdmin(empresaId);
+      if (typeof empresaId === "string") {
+        void notificarAltaEmpresaAdmin(empresaId);
+        if(businessType!=="minorista"){
+          try{await configureDeclaredBusiness(empresaId,businessType);}
+          catch(e){terminarSolicitud();setError(e instanceof Error?e.message:"Tipo de negocio pendiente");setSession(data.session);return;}
+        }
+      }
       const { error: metadataError } = await supabase.auth.updateUser({
         data: { [PENDING_EMPRESA_METADATA_KEY]: null },
       });
@@ -509,6 +518,7 @@ export default function SigoAuthGate({ children }: Props) {
             <h1 id="sigo-login-title">Crear cuenta y comenzar</h1>
             <p className="sigo-auth-subtitle">Creá tu empresa y registrá tus datos de contacto para comenzar.</p>
             <form onSubmit={registrarme} className="sigo-auth-form">
+              <label className="sigo-auth-field"><span>Tipo de negocio</span><select value={businessType} onChange={e=>setBusinessType(e.target.value as "minorista"|"mayorista"|"mixto")}><option value="minorista">Minorista</option><option value="mayorista">Mayorista / Distribuidora</option><option value="mixto">Mixto (Minorista + Mayorista)</option></select></label>
               <label className="sigo-auth-field"><span>Razón social / negocio</span><input value={empresaNombre} onChange={(e) => setEmpresaNombre(e.target.value)} autoComplete="organization" required /></label>
               <label className="sigo-auth-field"><span>Teléfono de contacto</span><input type="tel" inputMode="tel" autoComplete="tel" value={telefonoRegistro} onChange={(e) => setTelefonoRegistro(e.target.value)} placeholder="Ej.: +54 9 376..." required /></label>
               <label className="sigo-auth-field"><span>Email</span><input type="email" inputMode="email" autoComplete="email" autoCapitalize="none" spellCheck={false} value={email} onChange={(e) => setEmail(e.target.value)} required /></label>

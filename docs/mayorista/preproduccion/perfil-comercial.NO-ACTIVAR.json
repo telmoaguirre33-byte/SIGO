@@ -1,0 +1,19 @@
+{
+  "formatVersion": 1,
+  "approved": false,
+  "projectId": null,
+  "environmentId": null,
+  "supabaseProjectRef": null,
+  "connectionMode": null,
+  "databaseHost": null,
+  "databasePort": null,
+  "databaseName": "postgres",
+  "databaseUser": null,
+  "runtimeRole": null,
+  "migrationUser": null,
+  "migrationRole": null,
+  "authOrigin": null,
+  "publicOrigin": null,
+  "sigoOrigin": null,
+  "publicKeySha256": null
+}

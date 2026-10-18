@@ -1,0 +1,1693 @@
+{
+  "reviewedHead": "d85bb6aa484ceef1849578b71489818793e2feb9",
+  "main": "d9a5a9dddb3910ba5a0c53e96c79caa0f6da71d9",
+  "mergeBase": "d9a5a9dddb3910ba5a0c53e96c79caa0f6da71d9",
+  "ahead": 148,
+  "behind": 0,
+  "reconciliationRequired": false,
+  "reviewScope": "complete file inventory and shared integration patches; core runtime/auth/migration/activation paths reviewed; no claim of a new production security certification",
+  "files": [
+    {
+      "path": ".github/workflows/mayorista-isolated.yml",
+      "status": "added",
+      "additions": 103,
+      "deletions": 0
+    },
+    {
+      "path": "api/mayorista/arca.js",
+      "status": "added",
+      "additions": 27,
+      "deletions": 0
+    },
+    {
+      "path": "api/mayorista/nota-credito.js",
+      "status": "added",
+      "additions": 33,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/ACEPTACION-COMPARTIDA-QA-20261014.md",
+      "status": "added",
+      "additions": 40,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/ACEPTACION-GUIADA-PC-ANDROID.md",
+      "status": "added",
+      "additions": 54,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/ACEPTACION-LIVE-DEMO-PREPARADA.md",
+      "status": "added",
+      "additions": 31,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/ACEPTACION-PERSISTENTE-QA-20261014.md",
+      "status": "added",
+      "additions": 7,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/AMPLIACION-GERENCIAL-20261014.md",
+      "status": "added",
+      "additions": 61,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/ANDROID-PRUEBAS-REALES-20261012.md",
+      "status": "added",
+      "additions": 43,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/ARMADO-DE-CARGAS-20261012.md",
+      "status": "added",
+      "additions": 89,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/AVANCE-APP-VENDEDOR-20261012.md",
+      "status": "added",
+      "additions": 77,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/AVANCE-COMERCIAL-20261012.md",
+      "status": "added",
+      "additions": 86,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/BACKEND-AISLADO.md",
+      "status": "added",
+      "additions": 43,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/BUG-MENU-PERSISTIDO-20261015.md",
+      "status": "added",
+      "additions": 24,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/CHECKLIST-FISICO-FINAL-P1-P2.md",
+      "status": "added",
+      "additions": 41,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/CIERRE-PARCIALES-20261015.md",
+      "status": "added",
+      "additions": 119,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/CIERRE-PR72-WINDOWS-20261014.md",
+      "status": "added",
+      "additions": 49,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/CIERRE-TECNICO-QA-20261013.md",
+      "status": "added",
+      "additions": 75,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/CIERRE-VISUAL-20261014.md",
+      "status": "added",
+      "additions": 97,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/COMERCIO-COMPARTIDO-20261014.md",
+      "status": "added",
+      "additions": 27,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/CONTINUACION-PR72-20261012.md",
+      "status": "added",
+      "additions": 78,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/CONTINUACION-WORK-ESTADO.md",
+      "status": "added",
+      "additions": 65,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/ENTREGA-OPERATIVA-20261013.md",
+      "status": "added",
+      "additions": 51,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/ENTREGA-P1-P2.md",
+      "status": "added",
+      "additions": 87,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/ESTABILIZACION-SESION-QA-20261015.md",
+      "status": "added",
+      "additions": 35,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/FASE-1-OFFLINE.md",
+      "status": "added",
+      "additions": 29,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/GUIA-ANDROID-OFFLINE.md",
+      "status": "added",
+      "additions": 117,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/GUIA-OPERACION-P1-P2.md",
+      "status": "added",
+      "additions": 73,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/ICONO-INSTALACION-20261013.md",
+      "status": "added",
+      "additions": 35,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/INVESTIGACION-COMPRAS.md",
+      "status": "added",
+      "additions": 16,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/P0-INTEGRACION-OPERATIVA-20261016.md",
+      "status": "added",
+      "additions": 66,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/PLAN-PRUEBAS.md",
+      "status": "added",
+      "additions": 23,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/QA-RAILWAY-DESBLOQUEO-20261013.md",
+      "status": "added",
+      "additions": 45,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/RAILWAY-QA-OPERACION.md",
+      "status": "added",
+      "additions": 58,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/RENDIMIENTO-BASE-P1-P2.json",
+      "status": "added",
+      "additions": 270,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/SEGURIDAD-PREPARADA.md",
+      "status": "added",
+      "additions": 15,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/TAREA-71.md",
+      "status": "added",
+      "additions": 78,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/UX-NUEVO-PEDIDO-20261014.md",
+      "status": "added",
+      "additions": 47,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/UX-VENDEDOR-P0.md",
+      "status": "added",
+      "additions": 76,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/VERIFICACION-PERSISTENCIA-20261012.md",
+      "status": "added",
+      "additions": 55,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/VINCULO-QA-LAPIZCITO5-20261015.md",
+      "status": "added",
+      "additions": 50,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/evidencia/p0-ci-dec38568.json",
+      "status": "added",
+      "additions": 148,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/evidencia/railway-8082acb7-success.json",
+      "status": "added",
+      "additions": 32,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/sql/001_pedidos_prueba_NO_APLICAR.sql",
+      "status": "added",
+      "additions": 23,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/sql/002_seguridad_preparada_NO_APLICAR.sql",
+      "status": "added",
+      "additions": 100,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/sql/003_flujo_administrativo_NO_APLICAR.sql",
+      "status": "added",
+      "additions": 20,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/sql/004_administracion_NO_APLICAR.sql",
+      "status": "added",
+      "additions": 31,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/sql/005_integracion_empresa_NO_APLICAR.sql",
+      "status": "added",
+      "additions": 96,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/sql/006_comercio_compartido_NO_APLICAR.sql",
+      "status": "added",
+      "additions": 185,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/sql/007_lectura_compartida_NO_APLICAR.sql",
+      "status": "added",
+      "additions": 87,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/sql/008_operacion_comercial_NO_APLICAR.sql",
+      "status": "added",
+      "additions": 195,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/sql/009_precios_compartidos_NO_APLICAR.sql",
+      "status": "added",
+      "additions": 70,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/sql/010_nota_credito_compartida_NO_APLICAR.sql",
+      "status": "added",
+      "additions": 56,
+      "deletions": 0
+    },
+    {
+      "path": "docs/mayorista/sql/011_destino_predeterminado_NO_APLICAR.sql",
+      "status": "added",
+      "additions": 25,
+      "deletions": 0
+    },
+    {
+      "path": "src/MatrizAdmin.tsx",
+      "status": "modified",
+      "additions": 3,
+      "deletions": 0
+    },
+    {
+      "path": "src/ModulosControlPanel.tsx",
+      "status": "modified",
+      "additions": 40,
+      "deletions": 0
+    },
+    {
+      "path": "src/SigoAuthGate.tsx",
+      "status": "modified",
+      "additions": 11,
+      "deletions": 1
+    },
+    {
+      "path": "src/SigoRoot.tsx",
+      "status": "modified",
+      "additions": 5,
+      "deletions": 0
+    },
+    {
+      "path": "src/main.tsx",
+      "status": "modified",
+      "additions": 2,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/admin/fulfillment.mjs",
+      "status": "added",
+      "additions": 37,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/admin/import-reader.ts",
+      "status": "added",
+      "additions": 149,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/admin/launch-panel.mjs",
+      "status": "added",
+      "additions": 62,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/admin/management-panel.mjs",
+      "status": "added",
+      "additions": 19,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/admin/model.mjs",
+      "status": "added",
+      "additions": 47,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/admin/operational-portal.d.mts",
+      "status": "added",
+      "additions": 1,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/admin/operational-portal.mjs",
+      "status": "added",
+      "additions": 154,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/admin/rendiciones.mjs",
+      "status": "added",
+      "additions": 19,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/admin/report-excel.ts",
+      "status": "added",
+      "additions": 139,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/admin/reports-panel.mjs",
+      "status": "added",
+      "additions": 18,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/admin/state.mjs",
+      "status": "added",
+      "additions": 4,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/api/http-handler.mjs",
+      "status": "added",
+      "additions": 36,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/api/origins.mjs",
+      "status": "added",
+      "additions": 9,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/api/postgres-repository.mjs",
+      "status": "added",
+      "additions": 155,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/api/receive-order.mjs",
+      "status": "added",
+      "additions": 50,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/api/test-project-auth.mjs",
+      "status": "added",
+      "additions": 28,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/.gitignore",
+      "status": "added",
+      "additions": 1,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/Dockerfile",
+      "status": "added",
+      "additions": 19,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/accept-live-demo.mjs",
+      "status": "added",
+      "additions": 145,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/acceptance-order-request.mjs",
+      "status": "added",
+      "additions": 14,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/bootstrap-identity.mjs",
+      "status": "added",
+      "additions": 6,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/demo-company.mjs",
+      "status": "added",
+      "additions": 74,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/interactive-qa.mjs",
+      "status": "added",
+      "additions": 46,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/launch-upgrade.mjs",
+      "status": "added",
+      "additions": 22,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/package-lock.json",
+      "status": "added",
+      "additions": 174,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/package.json",
+      "status": "added",
+      "additions": 1,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/prepare-demo-qa.mjs",
+      "status": "added",
+      "additions": 29,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/prepare-or-check-qa.mjs",
+      "status": "added",
+      "additions": 12,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/prepare-qa.mjs",
+      "status": "added",
+      "additions": 13,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/qa-local-accounts.mjs",
+      "status": "added",
+      "additions": 12,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/railway-runtime.mjs",
+      "status": "added",
+      "additions": 17,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/readiness.mjs",
+      "status": "added",
+      "additions": 9,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/reset-seller1-qa.mjs",
+      "status": "added",
+      "additions": 54,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/server.mjs",
+      "status": "added",
+      "additions": 41,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/service.mjs",
+      "status": "added",
+      "additions": 151,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/startup-diagnostic.mjs",
+      "status": "added",
+      "additions": 19,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/static-assets.mjs",
+      "status": "added",
+      "additions": 13,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/timing.mjs",
+      "status": "added",
+      "additions": 14,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/upgrade-launch-qa.mjs",
+      "status": "added",
+      "additions": 14,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/upgrade-management-qa.mjs",
+      "status": "added",
+      "additions": 23,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/verify-existing-p0-qa.mjs",
+      "status": "added",
+      "additions": 39,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/backend/verify-persistent-shared-qa.mjs",
+      "status": "added",
+      "additions": 42,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/cargas/documents.mjs",
+      "status": "added",
+      "additions": 8,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/cargas/model.mjs",
+      "status": "added",
+      "additions": 187,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/cargas/postgres.mjs",
+      "status": "added",
+      "additions": 37,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/cargas/schema-qa.sql",
+      "status": "added",
+      "additions": 28,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/cargas/storage.mjs",
+      "status": "added",
+      "additions": 5,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/accounts-postgres.mjs",
+      "status": "added",
+      "additions": 27,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/accounts-schema-qa.sql",
+      "status": "added",
+      "additions": 17,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/assigned-loads.mjs",
+      "status": "added",
+      "additions": 46,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/collections-schema-qa.sql",
+      "status": "added",
+      "additions": 8,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/collections.mjs",
+      "status": "added",
+      "additions": 20,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/dashboard.mjs",
+      "status": "added",
+      "additions": 47,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/goals-schema-qa.sql",
+      "status": "added",
+      "additions": 22,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/goals.mjs",
+      "status": "added",
+      "additions": 51,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/inventory-postgres.mjs",
+      "status": "added",
+      "additions": 55,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/inventory-schema-qa.sql",
+      "status": "added",
+      "additions": 22,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/launch-model.mjs",
+      "status": "added",
+      "additions": 45,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/launch-schema-qa.sql",
+      "status": "added",
+      "additions": 169,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/launch.mjs",
+      "status": "added",
+      "additions": 79,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/management-metrics.mjs",
+      "status": "added",
+      "additions": 121,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/master-data.mjs",
+      "status": "added",
+      "additions": 44,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/master-schema-qa.sql",
+      "status": "added",
+      "additions": 46,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/order-references.mjs",
+      "status": "added",
+      "additions": 11,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/report-export.mjs",
+      "status": "added",
+      "additions": 45,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/reports.mjs",
+      "status": "added",
+      "additions": 7,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/roles-schema-qa.sql",
+      "status": "added",
+      "additions": 111,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/seller-status.mjs",
+      "status": "added",
+      "additions": 21,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/shared-source.mjs",
+      "status": "added",
+      "additions": 68,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/user-directory.mjs",
+      "status": "added",
+      "additions": 46,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/visits-schema-qa.sql",
+      "status": "added",
+      "additions": 20,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/commercial/visits.mjs",
+      "status": "added",
+      "additions": 27,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/.gitignore",
+      "status": "added",
+      "additions": 1,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/admin.html",
+      "status": "added",
+      "additions": 1,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/admin.mjs",
+      "status": "added",
+      "additions": 31,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/app.mjs",
+      "status": "added",
+      "additions": 91,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/apple-touch-icon.png",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/build.mjs",
+      "status": "added",
+      "additions": 48,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/cargas.html",
+      "status": "added",
+      "additions": 1,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/cargas.mjs",
+      "status": "added",
+      "additions": 42,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/connected.html",
+      "status": "added",
+      "additions": 1,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/favicon-32.png",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/icon-192.png",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/icon-512.png",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/icon-maskable-192.png",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/icon-maskable-512.png",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/icon.svg",
+      "status": "added",
+      "additions": 1,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/index.html",
+      "status": "added",
+      "additions": 2,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/installation.mjs",
+      "status": "added",
+      "additions": 21,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/manifest.webmanifest",
+      "status": "added",
+      "additions": 39,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/offline-check.html",
+      "status": "added",
+      "additions": 1,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/offline-check.mjs",
+      "status": "added",
+      "additions": 96,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/operational-sw.js",
+      "status": "added",
+      "additions": 8,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/package-lock.json",
+      "status": "added",
+      "additions": 50,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/package.json",
+      "status": "added",
+      "additions": 26,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/portal.html",
+      "status": "added",
+      "additions": 1,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/sample.mjs",
+      "status": "added",
+      "additions": 30,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/secure-config.mjs",
+      "status": "added",
+      "additions": 3,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/secure.html",
+      "status": "added",
+      "additions": 1,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/secure.webmanifest",
+      "status": "added",
+      "additions": 39,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/seller-entry.mjs",
+      "status": "added",
+      "additions": 3,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/storage.mjs",
+      "status": "added",
+      "additions": 80,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/styles.css",
+      "status": "added",
+      "additions": 23,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/sw.js",
+      "status": "added",
+      "additions": 13,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/tsconfig.mayorista.json",
+      "status": "added",
+      "additions": 11,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/demo/vercel.json",
+      "status": "added",
+      "additions": 110,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/integration/MayoristaAdministrarAccess.tsx",
+      "status": "added",
+      "additions": 42,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/integration/MayoristaBusinessType.tsx",
+      "status": "added",
+      "additions": 9,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/integration/MayoristaLauncher.tsx",
+      "status": "added",
+      "additions": 60,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/integration/MayoristaMatrizDestino.tsx",
+      "status": "added",
+      "additions": 9,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/integration/MayoristaWorkspace.tsx",
+      "status": "added",
+      "additions": 20,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/integration/access-policy.ts",
+      "status": "added",
+      "additions": 44,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/integration/company-config.ts",
+      "status": "added",
+      "additions": 16,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/integration/navigation.d.mts",
+      "status": "added",
+      "additions": 4,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/integration/navigation.mjs",
+      "status": "added",
+      "additions": 13,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/integration/preview-qa-config.ts",
+      "status": "added",
+      "additions": 9,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/integration/registration.ts",
+      "status": "added",
+      "additions": 9,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/integration/shared-commerce.d.mts",
+      "status": "added",
+      "additions": 1,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/integration/shared-commerce.mjs",
+      "status": "added",
+      "additions": 24,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/integration/workspace.css",
+      "status": "added",
+      "additions": 37,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/offline/catalogo-indexeddb.ts",
+      "status": "added",
+      "additions": 74,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/offline/encrypted-collections.mjs",
+      "status": "added",
+      "additions": 16,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/offline/encrypted-orders.mjs",
+      "status": "added",
+      "additions": 41,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/offline/encrypted-visits.mjs",
+      "status": "added",
+      "additions": 14,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/offline/pedidos-indexeddb.ts",
+      "status": "added",
+      "additions": 131,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/offline/pedidos-locales.ts",
+      "status": "added",
+      "additions": 112,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/railway/acceptance-namespace.mjs",
+      "status": "added",
+      "additions": 29,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/railway/cli-runner.mjs",
+      "status": "added",
+      "additions": 40,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/railway/database-policy.mjs",
+      "status": "added",
+      "additions": 16,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/railway/private-auth-schema.sql",
+      "status": "added",
+      "additions": 6,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/railway/provision-qa-cli.mjs",
+      "status": "added",
+      "additions": 116,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/railway/qa-public-certificates.json",
+      "status": "added",
+      "additions": 9,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/railway/schema-package.mjs",
+      "status": "added",
+      "additions": 15,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/railway/verify-existing-qa.mjs",
+      "status": "added",
+      "additions": 45,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/security/company-roles.mjs",
+      "status": "added",
+      "additions": 5,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/security/encrypted-workspace.mjs",
+      "status": "added",
+      "additions": 122,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/security/isolated-auth.mjs",
+      "status": "added",
+      "additions": 47,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/security/qa-access.mjs",
+      "status": "added",
+      "additions": 28,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/security/qa-sigo-link.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/security/role-policy.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/security/session.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/security/sigo-bridge.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/security/vault.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/sync/contrato-pedidos.ts",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/sync/http-client.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/sync/validacion-pedidos.ts",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/.gitignore",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/acceptance-order-resume.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/activation-ui.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/admin.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/bootstrap-identity.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/browser.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/business-type-sql.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/cancellation-api.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/cargas-api.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/cargas.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/cli-runner.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/collections-api.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/demo-scale.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/device-session-client.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/encrypted-browser.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/existing-p0-evidence.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/fulfillment.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/http-auth.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/import-files.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/integration-pwa.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/interactive-qa.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/launch-api.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/launch-model.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/launch-upgrade.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/management-api.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/management-metrics.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/master-data-api.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/native-api.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/native-auth-schema.sql",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/native-browser.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/operational-browser.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/operational-roles-api.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/operational-ui.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/prepare-or-check-qa.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/presentation-loads.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/product-search-browser.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/product-search-fixture.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/product-search.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/provision-qa-cli.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/pwa-brand.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/qa-sigo-link.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/railway-policy.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/railway-tls.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/readiness.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/recovery-unit.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/rendiciones.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/report-export.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/reset-seller1-qa.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/rls-assertions.sql",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/rls-ci.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/role-policy.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/schema-package.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/security.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/seller-device-browser.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/seller-workflow.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/session-stability.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/shared-backend.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/shared-commerce-sql.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/shared-commerce.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/shared-credit-notes.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/shared-fiscal.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/shared-fixture-policy.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/startup-diagnostic.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/timing.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/unit.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/user-directory-api.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/tests/verify-existing-qa.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/vendedor/PedidosVendedor.tsx",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/vendedor/connected.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/vendedor/product-picker.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/vendedor/product-search.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/vendedor/route-map.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/vendedor/secure.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "src/modules/mayorista/vendedor/seller-model.mjs",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "vercel.json",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 0
+    }
+  ],
+  "productionChangesApplied": false,
+  "qaChangesApplied": false
+}
