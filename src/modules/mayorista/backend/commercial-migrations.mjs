@@ -24,7 +24,12 @@ export async function installCommercialMigrations({pool,profile,profileText,prof
  const steps=await prepareCommercialMigrations(profile?.runtimeRole);
  if(typeof profileText!=='string'||hash(profileText)!==profileHash||JSON.stringify(JSON.parse(profileText))!==JSON.stringify(profile)||approval?.profileHash!==profileHash||approval?.action!=='install-commercial-schema'||!/^[a-f0-9]{64}$/.test(profileHash)||profile?.approved!==true||steps?.length!==21||steps.some((s,i)=>s.version!==i+1||!/^[a-f0-9]{64}$/.test(s.sourceHash))||!profile.databaseName||!profile.migrationRole||profile.migrationRole===profile.runtimeRole)throw Error('MIGRATION_APPROVAL_REQUIRED');
  const o=pool?.options;if(!o||o.host!==profile.databaseHost||Number(o.port)!==profile.databasePort||o.database!==profile.databaseName||o.user!==profile.migrationUser||o.ssl?.rejectUnauthorized!==true||o.ssl?.servername!==profile.databaseHost||!o.ssl.ca||profile.projectId==='b9a7da94-1d87-46fe-b4da-c7e241ebe185'||profile.environmentId==='2addc3e9-f088-42df-a72c-c233fd4308cb')throw Error('MIGRATION_POOL_MISMATCH');
- const c=await pool.connect();try{
+ const c=await pool.connect();try{return await applyCommercialMigrationTransaction(c,{profile,profileHash,steps});}finally{c.release();}
+}
+/** Núcleo transaccional compartido con ensayo PostgreSQL aislado. No abre conexiones.
+ * El punto de entrada público anterior conserva aprobación y validación estricta TLS/target. */
+export async function applyCommercialMigrationTransaction(c,{profile,profileHash,steps}){
+ try{
   await c.query('BEGIN');await c.query("SET LOCAL lock_timeout='5s'");await c.query("SET LOCAL statement_timeout='120s'");await c.query("SELECT pg_advisory_xact_lock(hashtext('sigo-mayorista-commercial-release'))");
   const target=(await c.query('SELECT current_database() AS db,current_user AS role,inet_server_addr()::text AS address')).rows[0];
   if(target?.db!==profile.databaseName||target.role!==profile.migrationRole)throw Error('MIGRATION_TARGET_MISMATCH');
@@ -42,5 +47,5 @@ export async function installCommercialMigrations({pool,profile,profileText,prof
   if(installed.some((r,i)=>r.version!==i+1||steps[i]?.sourceHash!==r.source_hash)||installed.length!==0&&installed.length!==21)throw Error('MIGRATION_LEDGER_DRIFT');
   if(!installed.length)for(const step of steps){await c.query(step.sql);await c.query('INSERT INTO mayorista_private.release_migrations(version,source_hash) VALUES($1,$2)',[step.version,step.sourceHash]);}
   await c.query('COMMIT');return {installed:21,reused:installed.length===21,seeded:false};
- }catch(e){await c.query('ROLLBACK').catch(()=>{});throw e;}finally{c.release();}
+ }catch(e){await c.query('ROLLBACK').catch(()=>{});throw e;}
 }

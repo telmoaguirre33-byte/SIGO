@@ -6,7 +6,8 @@ export function acceptanceNamespace(pool, name){
  const schemas=Object.freeze({public:name+'_public',auth:name+'_auth',mayorista:name+'_module',mayorista_private:name+'_private'});
  const rewrite=text=>{
   if(typeof text!=='string'||/\b(?:CREATE|DROP|ALTER)\s+DATABASE\b/i.test(text))throw Error('Operación de base no permitida en aceptación QA');
-  return text.replace(/\b(public|auth|mayorista|mayorista_private)\./gi,(_,s)=>schemas[s.toLowerCase()]+'.')
+  return text.replace(/\bto_regnamespace\('(?:public|auth|mayorista|mayorista_private)'\)/gi,s=>s.replace(/'(public|auth|mayorista|mayorista_private)'/i,(_,n)=>"'"+schemas[n.toLowerCase()]+"'"))
+   .replace(/\b(public|auth|mayorista|mayorista_private)\./gi,(_,s)=>schemas[s.toLowerCase()]+'.')
    .replace(/(\bSCHEMA\s+)(public|auth|mayorista|mayorista_private)\b/gi,(_,prefix,s)=>prefix+schemas[s.toLowerCase()])
    .replace(/(\bsearch_path\s*=\s*)(public|auth|mayorista|mayorista_private)\b/gi,(_,prefix,s)=>prefix+schemas[s.toLowerCase()]);
  };
@@ -27,3 +28,4 @@ export async function installAcceptanceNamespace(pool, sql, binding){
   await client.query('COMMIT');
  }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }
+
