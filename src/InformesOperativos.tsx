@@ -162,10 +162,6 @@ type CategoriaInforme = "ventas" | "stock" | "caja" | "compras" | "clientes" | "
 type VistaStock = "menu" | "ranking" | "quiebre" | "actual" | "rotacion";
 type PeriodoGerencial = "hoy" | "2" | "3" | "7" | "15" | "30" | "3m" | "personalizado";
 
-function fechaLocalIso(fecha: Date) {
-  return `${fecha.getFullYear().toString().padStart(4, "0")}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
-}
-
 function rangoGerencial(periodo: Exclude<PeriodoGerencial, "personalizado">) {
   const fin = new Date();
   fin.setHours(0, 0, 0, 0);
