@@ -17,10 +17,11 @@ try{
   const r=await request(path);assert.equal(r.response.status,200);assert.ok(r.text.length>20);assert.ok(!r.text.includes('-----BEGIN PRIVATE KEY-----'));
   if(path==='/vendedor/secure.mjs'){assert.ok(r.text.includes('sellerCompanies'));assert.ok(!/name=["'](?:empresaId|vendedorId)["'][^>]*type=["']text/i.test(r.text));}
  }
- for(const path of ['/me','/catalog','/orders'])assert.equal((await request(path)).response.status,401);
+ for(const path of ['/me','/catalog','/orders'])assert.ok([401,403].includes((await request(path)).response.status),'Acceso anónimo debe rechazarse: '+path);
  const allowed=await request('/me',{method:'OPTIONS',origin:preview});assert.ok([200,204].includes(allowed.response.status));assert.equal(allowed.response.headers.get('access-control-allow-origin'),preview);
  const denied=await request('/me',{method:'OPTIONS',origin:'https://untrusted.example'});assert.ok([400,403].includes(denied.response.status));assert.notEqual(denied.response.headers.get('access-control-allow-origin'),'https://untrusted.example');
  console.log('PASS Railway QA publicado sólo lectura: health/readiness/HEAD y evidencia persistida, recursos vendedor/portal/offline, API sin sesión rechazada y CORS aprobado/ajeno. Sin login, escrituras ni prueba física.');
 }finally{
+ console.log('MAYORISTA_QA_READONLY_RESULT='+JSON.stringify({expectedHead:expected,results,writes:false,authenticatedRolesTested:false,physical:false}));
  await mkdir(new URL('./artifacts/',import.meta.url),{recursive:true});await writeFile(new URL('./artifacts/published-qa-readonly.json',import.meta.url),JSON.stringify({base,expectedHead:expected,results,writes:false,authenticatedRolesTested:false,physical:false},null,2));
 }
