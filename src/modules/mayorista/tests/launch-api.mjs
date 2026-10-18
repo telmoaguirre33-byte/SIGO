@@ -1,3 +1,4 @@
+import {verifyCommercialAdapters} from './commercial-adapters.mjs';
 import {installLaunchSchema} from '../backend/launch-upgrade.mjs';
 import assert from 'node:assert/strict';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
@@ -59,5 +60,6 @@ export async function verifyLaunchAPI(pool,{make,origin,E,B,creds}){
  const db=await pool.connect();try{await db.query('BEGIN');await db.query('SET LOCAL ROLE authenticated');await db.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[(await pool.query('SELECT user_id FROM mayorista.miembros WHERE empresa_id=$1 AND rol=$2 LIMIT 1',[E,'vendedor'])).rows[0].user_id]);assert.equal((await db.query('SELECT * FROM mayorista.importaciones')).rows.length,0);assert.equal((await db.query('SELECT * FROM mayorista.puesta_marcha')).rows.length,0);}finally{await db.query('ROLLBACK');db.release();}
  const metrics=Object.fromEntries(Object.entries(timings).map(([k,v])=>{v.sort((a,b)=>a-b);return [k,{n:v.length,p50:v[Math.floor(v.length*.5)],p95:v[Math.min(v.length-1,Math.floor(v.length*.95))]}];}));
  await mkdir(new URL('./artifacts/',import.meta.url),{recursive:true});await writeFile(new URL('./artifacts/launch-ci-metrics.json',import.meta.url),JSON.stringify({environment:'PostgreSQL CI real; no Railway ni Android físico',clients:1500,products:5000,serverTimings,metrics},null,2));
+ await verifyCommercialAdapters(pool,{make,origin,E,B,creds});
  console.log('PASS lanzamiento PostgreSQL real: 1500 clientes, 5000 productos, apertura, reintentos, corrección, persistencia, padrón paginado, asignación y RLS',JSON.stringify(metrics));
 }

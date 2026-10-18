@@ -2,6 +2,7 @@ FROM node:24.19.0-bookworm-slim AS build
 WORKDIR /app
 COPY src/modules/mayorista ./src/modules/mayorista
 COPY docs/mayorista/sql ./docs/mayorista/sql
+COPY docs/mayorista/preproduccion ./docs/mayorista/preproduccion
 COPY supabase/migrations ./supabase/migrations
 COPY api/arca ./api/arca
 COPY api/mayorista ./api/mayorista
@@ -17,3 +18,4 @@ USER node
 ENV NODE_ENV=production
 EXPOSE 8080
 CMD ["node","/app/src/modules/mayorista/backend/server.mjs"]
+

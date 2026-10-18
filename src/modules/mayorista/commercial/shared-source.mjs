@@ -3,11 +3,15 @@ import {administrative} from '../security/company-roles.mjs';
 import {canonical} from '../cargas/model.mjs';
 /** Fuente por empresa. Solo se instala en un backend con conexión SIGO validada.
  * No habilita una empresa por variables, por datos del navegador ni por licencia. */
-export function createSharedSource({pool,databasePolicy}){
+export function createSharedSource({pool,databasePolicy,commercialMode=false}){
  databasePolicy.assertPool(pool);
  return {
   identity:async principal=>{
    databasePolicy.assertPool(pool);
+   if(commercialMode){
+    const row=(await pool.query('SELECT mayorista_private.commercial_principal($1,$2,$3) AS allowed',[principal.userId,principal.empresaId,principal.rol])).rows[0];
+    if(!row?.allowed)throw new ApiError(403,'Empresa o perfil comercial no autorizado');return {...principal,fuenteComercial:'sigo'};
+   }
    const installed=(await pool.query("SELECT to_regclass('public.sigo_mayorista_comercio_fuente') AS source")).rows[0]?.source;
    if(!installed)return principal;
    const binding=(await pool.query('SELECT fuente FROM public.sigo_mayorista_comercio_fuente WHERE empresa_id=$1',[principal.empresaId])).rows[0];
@@ -66,3 +70,4 @@ export function createSharedSource({pool,databasePolicy}){
   }
  };
 }
+

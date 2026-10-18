@@ -8,11 +8,16 @@ export function trustedSigoVerifier(env){
  const u=new URL(env.MAYORISTA_SIGO_AUTH_URL);if(u.protocol!=='https:'||u.origin!==env.MAYORISTA_SIGO_AUTH_URL||u.username||u.password)throw Error('Origen Auth SIGO inválido');
  return async token=>{const response=await fetch(u.origin+'/auth/v1/user',{headers:{apikey:env.MAYORISTA_SIGO_AUTH_ANON_KEY,Authorization:'Bearer '+token},signal:AbortSignal.timeout(10000)});if(!response.ok)throw new ApiError(401,'Sesión SIGO no válida');return response.json();};
 }
-export function createSigoBridge({pool,authenticateSigo,sourceRevision,auth}){
+export function createSigoBridge({pool,authenticateSigo,sourceRevision,auth,commercialMode=false}){
  return async(request,empresaId)=>{
   if(typeof authenticateSigo!=='function'||!/^[a-f0-9]{40}$/.test(sourceRevision??''))throw new ApiError(503,'El acceso desde SIGO requiere su entorno Auth aprobado');
   const token=request.headers.get('Authorization')?.replace(/^Bearer /,'');if(!token||token.length>16000||!uuid(empresaId))throw new ApiError(401,'Sesión SIGO requerida');
   const user=await authenticateSigo(token);if(!uuid(user?.id)||typeof user.email!=='string'||!/^\S+@\S+\.\S+$/.test(user.email))throw new ApiError(401,'Identidad SIGO no válida');
+  if(commercialMode){
+   const r=await passwordRecord(randomBytes(32).toString('hex'));
+   await pool.query('SELECT mayorista_private.bootstrap_commercial_identity($1,$2,$3,$4,$5,$6)',[user.id,empresaId,user.email.toLowerCase(),r.salt,r.hash,sourceRevision]);
+   return auth.signInTrustedIdentity(user.id,empresaId);
+  }
   const c=await pool.connect();try{
    await c.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
    const ready=(await c.query("SELECT to_regprocedure('public.cotizar_pedido_mayorista_sigo(uuid,uuid,jsonb)') AS price,to_regprocedure('public.leer_ficha_mayorista_sigo(uuid,uuid)') AS profile")).rows[0];if(!ready.price||!ready.profile)throw new ApiError(503,'Fuente SIGO pendiente de integrar en este entorno');
@@ -31,3 +36,4 @@ export function createSigoBridge({pool,authenticateSigo,sourceRevision,auth}){
   }catch(e){await c.query('ROLLBACK').catch(()=>{});if(e.code==='23505'||e.code==='40001')throw new ApiError(409,'Vínculo concurrente: reintentá con la misma empresa');throw e;}finally{c.release();}
  };
 }
+

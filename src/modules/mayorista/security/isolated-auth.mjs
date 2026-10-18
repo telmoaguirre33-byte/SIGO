@@ -6,7 +6,7 @@ import {assertIsolatedPool} from '../api/postgres-repository.mjs';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const derive=promisify(scrypt), encode=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
 export async function passwordRecord(password){if(typeof password!=='string'||password.length<12||password.length>256)throw new ApiError(422,'Contraseña inválida');const salt=randomBytes(16).toString('hex');return {salt,hash:(await derive(password,salt,64)).toString('hex')};}
-export function createIsolatedAuth({enabled=false,pool,privateKey,publicKey,issuer,now=Date.now,databasePolicy,operational=false}={}){
+export function createIsolatedAuth({enabled=false,pool,privateKey,publicKey,issuer,now=Date.now,databasePolicy,operational=false,requireSharedCompany=false,commercialMode=false}={}){
   const gate=()=>{if(!enabled||!privateKey||!publicKey||!issuer)throw new ApiError(503,'Identidad aislada no configurada');(databasePolicy?.assertPool??assertIsolatedPool)(pool);};
   const member=async(userId,empresaId)=>{const c=await pool.connect();try{await c.query('BEGIN');await c.query('SET LOCAL ROLE authenticated');await c.query("SELECT set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claims',$2,true)",[userId,JSON.stringify({sub:userId,is_anonymous:false})]);const row=(await c.query('SELECT vendedor_id,rol FROM mayorista.miembros WHERE user_id=$1 AND empresa_id=$2 AND activo',[userId,empresaId])).rows[0];if(row&&operational){const company=(await c.query('SELECT empresa_id,nombre FROM mayorista.empresas WHERE empresa_id=$1 AND habilitada',[empresaId])).rows[0];if(!['gerencia','administracion','vendedor','armador','chofer'].includes(row.rol)||!company)throw new ApiError(403,'Empresa o rol no habilitados');row.empresaNombre=company.nombre;if(row.rol==='vendedor'){const seller=(await c.query('SELECT nombre FROM mayorista.vendedores WHERE empresa_id=$1 AND vendedor_id=$2 AND activo',[empresaId,row.vendedor_id])).rows[0];if(!seller)throw new ApiError(403,'Vendedor inactivo');row.nombre=seller.nombre;}}await c.query('COMMIT');return row;}catch(e){await c.query('ROLLBACK').catch(()=>{});throw e;}finally{c.release();}};
   const principal=async claims=>{
@@ -21,12 +21,21 @@ export function createIsolatedAuth({enabled=false,pool,privateKey,publicKey,issu
       const header=encode({alg:'EdDSA',typ:'JWT'}),payload=encode({iss:issuer,aud:'sigo-mayorista-isolated',sub:userId,sid,empresaId,iat:Math.floor(now()/1000),exp});const signing=header+'.'+payload;
       return {accessToken:signing+'.'+sign(null,Buffer.from(signing),privateKey).toString('base64url'),expiresAt:exp*1000};
   }
+  async function authenticatePassword({email,password}={}){
+    gate();if(typeof email!=='string'||email.length>160||typeof password!=='string'||password.length>256)throw new ApiError(401,'Credenciales inválidas');
+    const u=(await pool.query('SELECT user_id,salt,password_hash FROM mayorista_private.usuarios WHERE email=$1 AND activo',[email.trim().toLowerCase()])).rows[0];
+    const candidate=await derive(password,u?.salt??'cuenta-inexistente',64),expected=Buffer.from(u?.password_hash??'0'.repeat(128),'hex');
+    if(!u||expected.length!==candidate.length||!timingSafeEqual(candidate,expected))throw new ApiError(401,'Credenciales inválidas');return u;
+  }
   const api={
+    sellerCompanies:async credentials=>{
+      const u=await authenticatePassword(credentials);
+      if(!operational)return {empresas:(await pool.query("SELECT empresa_id AS \"empresaId\",'Empresa' AS nombre FROM mayorista.miembros WHERE user_id=$1 AND activo AND rol='vendedor' ORDER BY empresa_id LIMIT 50",[u.user_id])).rows};
+      const c=await pool.connect();let rows;try{await c.query('BEGIN');await c.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[u.user_id]);rows=(await c.query(`SELECT m.empresa_id AS "empresaId",e.nombre FROM mayorista.miembros m JOIN mayorista.empresas e USING(empresa_id) JOIN mayorista.vendedores v ON v.empresa_id=m.empresa_id AND v.vendedor_id=m.vendedor_id WHERE m.user_id=$1 AND m.activo AND m.rol='vendedor' AND e.habilitada AND v.activo ${commercialMode?"AND mayorista_private.commercial_principal(m.user_id,m.empresa_id,m.rol)":requireSharedCompany?"AND EXISTS(SELECT 1 FROM public.empresas se JOIN public.empresa_usuarios su ON su.empresa_id=se.id AND su.user_id=m.user_id AND su.activo JOIN public.sigo_empresa_modulos sm ON sm.empresa_id=se.id AND sm.modulo_clave='mayorista_distribuidora' AND sm.habilitado JOIN public.sigo_mayorista_comercio_fuente sf ON sf.empresa_id=se.id AND sf.fuente='sigo' WHERE se.id=m.empresa_id AND se.activa AND su.rol IN ('owner','admin','seller','warehouse'))":""} ORDER BY e.nombre,m.empresa_id LIMIT 51`,[u.user_id])).rows;await c.query('COMMIT');}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
+      if(!rows.length)throw new ApiError(403,'No tenés una empresa habilitada como vendedor');if(rows.length>50)throw new ApiError(409,'Revisá tus accesos con Administración');return {empresas:rows};
+    },
     signIn:async({email,password,empresaId,rememberDevice=false})=>{
-      gate();if(typeof email!=='string'||email.length>160||typeof password!=='string'||password.length>256||!UUID.test(empresaId))throw new ApiError(401,'Credenciales inválidas');
-      const u=(await pool.query('SELECT user_id,salt,password_hash FROM mayorista_private.usuarios WHERE email=$1 AND activo',[email.trim().toLowerCase()])).rows[0];
-      const candidate=await derive(password,u?.salt??'cuenta-inexistente',64);const expected=Buffer.from(u?.password_hash??'0'.repeat(128),'hex');
-      if(!u||expected.length!==candidate.length||!timingSafeEqual(candidate,expected))throw new ApiError(401,'Credenciales inválidas');
+      if(!UUID.test(empresaId))throw new ApiError(401,'Credenciales inválidas');const u=await authenticatePassword({email,password});
       const membership=await member(u.user_id,empresaId);if(!membership)throw new ApiError(403,'Empresa no autorizada');
       // Opt-in exclusivo de vendedor operativo: vence a los siete días, revocable
       // con los controles de sesión/usuario/membresía ya aplicados en cada request.
