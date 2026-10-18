@@ -1,4 +1,4 @@
-import {readFile,writeFile,mkdir,copyFile,realpath,rm} from 'node:fs/promises';
+import {readFile,writeFile,mkdir,realpath,rm} from 'node:fs/promises';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 const stub="export const isQaAccess=()=>false;\nexport const qaAccessFields=()=>'';\nexport async function prepareQaOrder(){throw Error('Operación no disponible');}\n";
@@ -23,7 +23,7 @@ export async function prepareCommercialAssets({source,destination}){
     let text=bytes.toString('utf8');
     if(name==='security/qa-access.mjs')text=stub;
     else if(name==='secure-config.mjs')text='export const secureConfig=Object.freeze({enabled:false,approvedOrigin:null});\n';
-    else text=text.replaceAll('PRUEBA P0','Ensayo operativo').replaceAll('QA AISLADO','Entorno de prueba');
+    else text=text.replace(/PRUEBA P0/gi,'Ensayo operativo').replace(/QA AISLADO/gi,'Entorno de prueba');
     if(name==='operational-sw.js')text=text.replace(/sigo-mayorista-operational-v\d+/g,'sigo-mayorista-commercial-v1');
     if(forbidden.test(text))throw Error('COMMERCIAL_ASSET_QA_OR_SECRET_REJECTED:'+name);
     for(const m of text.matchAll(/(?:from\s*|import\s*\()\s*['"](\.[^'"]+)['"]/g)){
