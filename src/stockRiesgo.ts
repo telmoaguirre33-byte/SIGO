@@ -63,7 +63,7 @@ async function listarVentasPeriodo(empresaId: string, desdeIso: string): Promise
       .eq("empresa_id", empresaId)
       .eq("estado", "confirmada")
       .gte("created_at", desdeIso)
-      .order("created_at", { ascending: false })
+      .order("created_at", { ascending: false }).order("id", { ascending: false })
       .range(desde, desde + PAGE_SIZE - 1);
 
     if (error) throw error;
@@ -83,11 +83,12 @@ async function sumarVentasPorProducto(empresaId: string, ventaIds: string[]): Pr
 
   for (let indice = 0; indice < ventaIds.length; indice += IDS_POR_CONSULTA) {
     const bloque = ventaIds.slice(indice, indice + IDS_POR_CONSULTA);
+    for (let offset = 0; ; offset += PAGE_SIZE) {
     const { data, error } = await supabase
       .from("venta_items_sigo")
       .select("producto_id,cantidad")
       .eq("empresa_id", empresaId)
-      .in("venta_id", bloque);
+      .in("venta_id", bloque).order("id", { ascending: true }).range(offset, offset + PAGE_SIZE - 1);
 
     if (error) throw error;
     for (const fila of (data ?? []) as VentaItemRow[]) {
@@ -95,6 +96,8 @@ async function sumarVentasPorProducto(empresaId: string, ventaIds: string[]): Pr
       const cantidad = numeroSeguro(fila.cantidad);
       if (!productoId || cantidad <= 0) continue;
       acumulado.set(productoId, (acumulado.get(productoId) ?? 0) + cantidad);
+    }
+    if ((data ?? []).length < PAGE_SIZE) break;
     }
   }
 
@@ -193,6 +196,7 @@ export async function cargarRiesgoStockSigo(
     revisar: riesgos.filter((item) => item.estado === "revisar").length,
     sinHistorial: riesgos.filter((item) => item.estado === "sin_historial").length,
     inversionSugerida: prioritarios.reduce((total, item) => total + item.inversionSugerida, 0),
-    productosPrioritarios: prioritarios.slice(0, 20),
+    productosPrioritarios: prioritarios,
   };
 }
+

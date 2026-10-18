@@ -1,3 +1,4 @@
+import { fechaLocalIso } from "./fechaLocal";
 import { useEffect, useRef, useState } from "react";
 import { verificarSaludOperativaSigo, type SaludOperativaSigo } from "./health";
 import { cargarResumenOperativoSigo,
@@ -181,12 +182,14 @@ function exportarRankingExcel(filas: Array<{ nombre: string; cantidad: number; t
   const blob = new Blob(["\ufeff" + lineas.join("\r\n")], { type: "text/csv;charset=utf-8" });
   const enlace = document.createElement("a");
   enlace.href = URL.createObjectURL(blob);
-  enlace.download = `SIGO-ranking-productos-${new Date().toISOString().slice(0, 10)}.csv`;
+  enlace.download = `SIGO-ranking-productos-${fechaLocalIso()}.csv`;
   document.body.appendChild(enlace); enlace.click(); enlace.remove();
   setTimeout(() => URL.revokeObjectURL(enlace.href), 1500);
 }
 
 export default function InformesOperativos({ empresaId, onVolver }: { empresaId: string; onVolver?: () => void }) {
+  const [actualizacion, setActualizacion] = useState(0);
+  const [paginaRiesgo, setPaginaRiesgo] = useState(0);
   const [resumen, setResumen] = useState<ResumenOperativoSigo>(vacio);
   const [salud, setSalud] = useState<SaludOperativaSigo | null>(null);
   const [riesgoStock, setRiesgoStock] = useState<ResumenRiesgoStockSigo | null>(null);
@@ -196,8 +199,8 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
   const [categoria, setCategoria] = useState<CategoriaInforme | null>(null);
   const [vistaStock, setVistaStock] = useState<VistaStock>("menu");
   const [productosValorizacion, setProductosValorizacion] = useState<ProductoSigo[]>([]);
-  const hoyIso = new Date().toISOString().slice(0, 10);
-  const desde30Iso = (() => { const d = new Date(); d.setDate(d.getDate() - 29); return d.toISOString().slice(0, 10); })();
+  const hoyIso = fechaLocalIso();
+  const desde30Iso = (() => { const d = new Date(); d.setDate(d.getDate() - 29); return fechaLocalIso(d); })();
   const [comprasDesde, setComprasDesde] = useState(desde30Iso);
   const [comprasHasta, setComprasHasta] = useState(hoyIso);
   const [comprasPeriodo, setComprasPeriodo] = useState<ResumenComprasPeriodoSigo | null>(null);
@@ -236,6 +239,7 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
       setResumen(nuevoResumen);
       setSalud(nuevaSalud);
       setRiesgoStock(nuevoRiesgo.value);
+      setPaginaRiesgo(0);
       setRiesgoError(nuevoRiesgo.error);
     } catch (err) {
       if (empresaActivaRef.current !== targetEmpresaId || cargaRef.current !== cargaId) return;
@@ -254,7 +258,7 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
     setVentasPeriodo(null);
     void cargarVentasPeriodoSigo(empresaId, ventasDesde, ventasHasta).then(v => { if (activo) setVentasPeriodo(v); }).catch(() => { if (activo) setVentasPeriodo(null); });
     return () => { activo = false; };
-  }, [empresaId, ventasDesde, ventasHasta]);
+  }, [empresaId, ventasDesde, ventasHasta, actualizacion]);
 
   useEffect(() => {
     let activo = true;
@@ -264,7 +268,7 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
       .then((valor) => { if (activo) setComprasPeriodo(valor); })
       .catch((err: unknown) => { if (activo) { setComprasPeriodo(null); setComprasPeriodoError(err instanceof Error ? err.message : "No se pudieron consultar las compras del período."); } });
     return () => { activo = false; };
-  }, [empresaId, comprasDesde, comprasHasta]);
+  }, [empresaId, comprasDesde, comprasHasta, actualizacion]);
 
   useEffect(() => {
     let activo = true;
@@ -274,7 +278,7 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
       .then((valor) => { if (activo) setVentasGerenciales(valor); })
       .catch((err: unknown) => { if (activo) { setVentasGerenciales(null); setVentasGerencialesError(err instanceof Error ? err.message : "No se pudieron consultar las ventas del período."); } });
     return () => { activo = false; };
-  }, [empresaId, gerencialDesde, gerencialHasta]);
+  }, [empresaId, gerencialDesde, gerencialHasta, actualizacion]);
 
   useEffect(() => {
     let activo = true;
@@ -283,7 +287,7 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
       .then((valor) => { if (activo) setComprasGerenciales(valor); })
       .catch(() => { if (activo) setComprasGerenciales(null); });
     return () => { activo = false; };
-  }, [empresaId, gerencialDesde, gerencialHasta]);
+  }, [empresaId, gerencialDesde, gerencialHasta, actualizacion]);
 
   useEffect(() => {
     empresaActivaRef.current = empresaId;
@@ -369,7 +373,7 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
           <p>{categoria ? "Elegí el informe que querés consultar." : "¿Qué querés analizar?"}</p>
           </div>
         </div>
-        <button className="admin-button sigo-reports-refresh" onClick={() => void cargar(empresaId)}>Actualizar</button>
+        <button className="admin-button sigo-reports-refresh" onClick={() => { setActualizacion(v => v + 1); void cargar(empresaId); if (vistaStock === "actual") void cargarValorizacionStock(); }}>Actualizar</button>
       </div>
 
       {!categoria && <>
@@ -456,7 +460,12 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
               <button onClick={() => { setVistaStock("actual"); void cargarValorizacionStock(); }}><span>📦</span><strong>Valorización de stock</strong><small>Costo y precio de venta</small></button>
               <button onClick={() => setVistaStock("rotacion")}><span>📉</span><strong>Rotación</strong><small>Movimiento</small></button>
             </div>}
-            {vistaStock === "ranking" && <RankingProductosStock empresaId={empresaId} />}
+            {riesgoStock && (vistaStock === "quiebre" || vistaStock === "rotacion") && <nav aria-label="Páginas del riesgo de stock">
+              <button disabled={paginaRiesgo === 0} onClick={() => setPaginaRiesgo(p => p - 1)}>Anterior</button>
+              <span>Página {paginaRiesgo + 1} · {riesgoStock.productosPrioritarios.length} productos</span>
+              <button disabled={(paginaRiesgo + 1) * 10 >= riesgoStock.productosPrioritarios.length} onClick={() => setPaginaRiesgo(p => p + 1)}>Siguiente</button>
+            </nav>}
+            {vistaStock === "ranking" && <RankingProductosStock empresaId={empresaId} actualizacion={actualizacion} />}
             {(vistaStock === "actual" || vistaStock === "quiebre" || vistaStock === "rotacion") && <div className="stats-grid sigo-stock-stats-rows">
               <div className="stat-card"><span>Unidades en stock</span><strong>{resumen.unidadesStock}</strong><small>{resumen.productos} productos</small></div>
               {vistaStock === "actual" && <div className="stat-card"><span>Stock valorizado a costo</span><strong>{dinero(stockValorizadoCosto)}</strong><small>Stock × costo actual/última compra</small></div>}
@@ -476,7 +485,7 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
                 </p>
                 {riesgoStock.productosPrioritarios.length > 0 ? (
                   <div className="sigo-stock-risk-grid" aria-label="Productos con riesgo de quiebre">
-                    {riesgoStock.productosPrioritarios.slice(0, 10).map((item) => (
+                    {riesgoStock.productosPrioritarios.slice(paginaRiesgo * 10, (paginaRiesgo + 1) * 10).map((item) => (
                       <article className={`sigo-stock-risk-item risk-${item.estado}`} key={item.productoId}>
                         <div>
                           <strong>{item.nombre}</strong>
@@ -596,3 +605,4 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
     </div>
   );
 }
+
