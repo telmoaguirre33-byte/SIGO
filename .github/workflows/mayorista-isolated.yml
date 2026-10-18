@@ -84,12 +84,14 @@ jobs:
         run: node ../tests/published-qa-readonly.mjs
       - name: Políticas RLS en PostgreSQL efímero local
         run: npm run test:rls
+      - name: Circuito SIGO completo y Mayorista en Chromium y PostgreSQL aislado
+        run: |
+          npm run build --prefix ../../../..
+          node ../tests/operational-ui.mjs
       - name: Autenticación firmada y API HTTP contra PostgreSQL aislado
         run: MAYORISTA_TEST_LAUNCH=true node ../tests/native-api.mjs
       - name: Migraciones comerciales versionadas en PostgreSQL compatible aislado
         run: node ../tests/commercial-migrations-postgres.mjs
-      - name: Circuito visible Mayorista en Chromium y PostgreSQL aislado
-        run: node ../tests/operational-ui.mjs
       - name: IndexedDB en Chromium real
         run: npm test
       - name: Compilar imagen operativa independiente sin desplegar
