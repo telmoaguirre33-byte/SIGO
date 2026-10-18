@@ -8,7 +8,7 @@ prueba qué versiones están aplicadas, ni resuelve divergencias de esquema.
 Para conciliar hace falta una copia autorizada del esquema e historial de
 migraciones, un backup identificado y una restauración verificada en un destino
 aislado. No hay ese destino ni backup configurados en esta sesión. No se consultan
-ni alteran COMERCIAL, SOVI o PROSPECCIÓN; no se ejecutan `db push`, reparaciones del
+ni alteran bases operativas ni otros proyectos; no se ejecutan `db push`, reparaciones del
 historial, migraciones históricas ni SQL contra servicios reales.
 
 Las pruebas PostgreSQL de Compras usan una base efímera con fixtures: comprueban

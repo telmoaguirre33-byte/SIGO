@@ -54,7 +54,7 @@ await test('SQL connection/completion-unknown errors never release immutable req
 });
 await test('timeout after commit retries same request and recovers original once',async()=>{
  values.clear();let writes=0,stored,original;
- const rpc=async(_,args)=>{if(!stored){writes++;original=args;stored=success;throw Error('lost response');}assert.deepEqual(args,original);return stored;};
+ const rpc=async(_,args)=>{if(!stored){writes++;original=args;stored=success;throw Error('lost response');}assert.equal(JSON.stringify(args),JSON.stringify(original));return stored;};
  const first=harness(rpc);first.click();await tick();assert.equal(values.size,1);
  const retry=harness(rpc);retry.click();await tick();assert.equal(writes,1);assert.equal(values.size,0);assert.equal(retry.callbacks.filter(c=>c[0]==='saved').length,1);
 });
