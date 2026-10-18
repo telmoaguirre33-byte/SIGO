@@ -1,4 +1,3 @@
-import { fechaLocalIso } from "./fechaLocal";
 import { supabase } from "./supabase";
 import { listarClientesSigo } from "./clientes";
 import { listarProductosSigo } from "./productos";
@@ -326,7 +325,7 @@ export async function cargarResumenOperativoSigo(empresaId: string): Promise<Res
       const fecha = new Date(venta.created_at).getTime();
       return fecha >= dia.getTime() && fecha < siguiente.getTime();
     });
-    return { fecha: fechaLocalIso(dia), total: delDia.reduce((total, venta) => total + numeroSeguro(venta.total), 0), cantidad: delDia.length };
+    return { fecha: fechaLocalIsoInforme(dia), total: delDia.reduce((total, venta) => total + numeroSeguro(venta.total), 0), cantidad: delDia.length };
   });
   const ventas7DiasTotal = ventasUltimos7Dias.reduce((total, dia) => total + dia.total, 0);
   const ventas7DiasAnteriorTotal = ventas.filter((venta) => venta.created_at && new Date(venta.created_at).getTime() >= inicioAnterior.getTime() && new Date(venta.created_at).getTime() < inicio7.getTime()).reduce((total, venta) => total + numeroSeguro(venta.total), 0);

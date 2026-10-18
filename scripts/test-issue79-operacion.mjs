@@ -31,21 +31,21 @@ const db={from(table){let data=table==='ventas_sigo'?sales:table==='venta_items_
  select(){return q;},eq(k,v){call.filters.push([k,v]);data=data.filter(r=>r[k]===v);return q;},in(k,values){data=data.filter(r=>values.includes(r[k]));return q;},gte(){return q;},lte(){return q;},order(k){call.orders.push(k);return q;},
  range(a,b){call.range=[a,b];return Promise.resolve({data:data.slice(a,b+1),error:null});},limit(n){throw Error(`Unpaginated limit ${n}`);}
 };return q;}};
-const ranking=await load('src/rankingProductos.ts',{'./supabase':{supabase:db}});
+const ranking=await load('src/rankingProductos.ts',{'./supabase':{supabase:db},'./reportesClient':{reportesClient:db}});
 await test('F14 ranking includes 1,200 lines in one 200-sale block',async()=>{
  const rows=await ranking.cargarRankingProductosSigo('tenant','2026-10-01','2026-10-18');assert.equal(rows[0].unidades,1200);assert.equal(rows[0].importe,1200);
  assert.ok(calls.filter(c=>c.table==='venta_items_sigo').some(c=>c.range[0]===1000));
 });
-const client=await load('src/clientes.ts',{'./supabase':{supabase:db}});
+const client=await load('src/clientes.ts',{'./supabase':{supabase:db},'./reportesClient':{reportesClient:db}});
 await test('F14 clients cross default PostgREST limit with stable ordering',async()=>{
  assert.equal((await client.listarClientesSigo('tenant')).length,1001);
  assert.ok(calls.filter(c=>c.table==='clientes_sigo').every(c=>c.orders.includes('id')));
 });
-const risk=await load('src/stockRiesgo.ts',{'./supabase':{supabase:db},'./productos':{listarProductosSigo:async()=>[{id:'p1',nombre:'QA',stock_actual:1,costo_actual:1}]}});
+const risk=await load('src/stockRiesgo.ts',{'./supabase':{supabase:db},'./reportesClient':{reportesClient:db},'./productos':{listarProductosSigo:async()=>[{id:'p1',nombre:'QA',stock_actual:1,costo_actual:1}]},'./reportesDatos':{listarProductosInforme:async()=>[{id:'p1',nombre:'QA',stock_actual:1,costo_actual:1}]}});
 await test('F14 stock risk uses all item pages',async()=>{
  const out=await risk.cargarRiesgoStockSigo('tenant',30);assert.equal(out.productosPrioritarios[0].ventasPeriodo,1200);
 });
-const returns=await load('src/devoluciones.ts',{'./supabase':{supabase:db}});
+const returns=await load('src/devoluciones.ts',{'./supabase':{supabase:db},'./reportesClient':{reportesClient:db}});
 await test('F11 historical sale search and pagination preserve tenant',async()=>{
  const page=await returns.listarVentasDevolviblesSigo('tenant',40,{pagina:2});assert.equal(page.length,40);assert.equal(page[0].id,'s80');
  const old=await returns.listarVentasDevolviblesSigo('tenant',40,{busqueda:'#199'});assert.equal(old[0].id,'s199');

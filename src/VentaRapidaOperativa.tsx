@@ -156,6 +156,19 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   const inicioResultados = Math.max(0, productosEncontrados.findIndex(p => p.id === productoSeleccionadoVisibleId) - 20);
   const productosVisibles = productosEncontrados.slice(inicioResultados, inicioResultados + 40);
 
+  // Adaptar el campo existente conserva los handlers del lector y permite combinar #77.
+  useEffect(() => {
+    const input = document.querySelector<HTMLInputElement>(".sigo-pos-scan .barcode-entry-row input");
+    if (!input) return;
+    const expanded = Boolean(busquedaProducto.trim() && productosEncontrados.length);
+    input.setAttribute("role", "combobox");
+    input.setAttribute("aria-autocomplete", "list");
+    input.setAttribute("aria-controls", "sigo-pos-resultados");
+    input.setAttribute("aria-expanded", String(expanded));
+    if (expanded && productoSeleccionadoVisibleId) input.setAttribute("aria-activedescendant", `sigo-pos-opcion-${productoSeleccionadoVisibleId}`);
+    else input.removeAttribute("aria-activedescendant");
+  }, [busquedaProducto, productoSeleccionadoVisibleId, productosEncontrados.length, scannerInstanceKey]);
+
   function marcarProductoBloqueado(producto: BarcodeProduct, razon: "precio" | "stock") {
     setProductoBloqueado({ producto, razon });
     setPrecioRapido(producto.precio_venta && Number(producto.precio_venta) > 0 ? String(producto.precio_venta) : "");
@@ -488,7 +501,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       </div>
       {descuentoAbierto&&<div className="sigo-pos-discount"><strong>Descuento</strong>{[0,5,10,15,20].map(n=><button type="button" className={descuentoPct===n?"active":""} onClick={()=>{setDescuentoPct(n);setDescuentoAbierto(false)}} key={n}>{n}%</button>)}<label>Otro % <input type="number" min="0" max="99.99" step="0.01" value={descuentoPct} onChange={e=>setDescuentoPct(Math.max(0,Math.min(99.99,Number(e.target.value)||0)))}/></label></div>}
       <div className="sigo-pos-scan">
-        <BarcodeScanner key={scannerInstanceKey} empresaId={empresaId} action="vender" onCachedCode={(code)=>{const encontrados=catalogo.filter((p)=>p.empresa_id===empresaId&&(normalizeBarcode(p.codigo_barras??"")===code||normalizeBarcode(p.codigo_interno??"")===code));return encontrados.length?encontrados:null}} onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null)}} onManualQuery={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null);return !/^\\d{6,}$/.test(query.trim())}} searchAccessibility={{ controls: "sigo-pos-resultados", expanded: Boolean(busquedaProducto.trim() && productosEncontrados.length), activeDescendant: productoSeleccionadoVisibleId ? `sigo-pos-opcion-${productoSeleccionadoVisibleId}` : undefined }} onProductSearchKeyDown={manejarTeclaBusquedaProducto}/>
+        <BarcodeScanner key={scannerInstanceKey} empresaId={empresaId} action="vender" onCachedCode={(code)=>{const encontrados=catalogo.filter((p)=>p.empresa_id===empresaId&&(normalizeBarcode(p.codigo_barras??"")===code||normalizeBarcode(p.codigo_interno??"")===code));return encontrados.length?encontrados:null}} onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null)}} onManualQuery={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null);return !/^\\d{6,}$/.test(query.trim())}} onProductSearchKeyDown={manejarTeclaBusquedaProducto}/>
         
         {busquedaProducto.trim()&&productosEncontrados.length>0&&<div><p role="status">{productosEncontrados.length} coincidencias. Usá las flechas, Inicio/Fin y Enter para elegir.</p><div className="sigo-pos-results" id="sigo-pos-resultados" role="listbox" aria-label="Productos encontrados">{productosVisibles.map((p, index)=><button type="button" role="option" id={`sigo-pos-opcion-${p.id}`} aria-posinset={inicioResultados + index + 1} aria-setsize={productosEncontrados.length} data-pos-suggestion="" data-product-id={p.id} aria-selected={p.id===productoSeleccionadoVisibleId} className={p.id===productoSeleccionadoVisibleId?"active":""} key={p.id} onMouseEnter={()=>{productoSeleccionadoIdRef.current=p.id;setProductoSeleccionadoId(p.id)}} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}{Number(p.stock_actual??0)<=0?" · SIN STOCK":""}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} · Stock {p.stock_actual??0}</span></button>)}</div></div>}{busquedaProducto.trim()&&productosEncontrados.length===0&&!catalogoError&&<div className="sigo-pos-results"><div className="table-empty">No encontré productos. Probá con nombre, marca, código interno o EAN.</div></div>}
       </div>

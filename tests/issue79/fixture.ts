@@ -23,5 +23,19 @@ export const supabase:any={
   const data=table==='productos'?catalog:reportMode&&table==='ventas_sigo'?[{id:'qa-sale',empresa_id,estado:'confirmada',total:state.version*100,created_at:now}]:reportMode&&table==='compras_sigo'?[{id:'qa-purchase',empresa_id,estado:'confirmada',total:state.version*50,created_at:now}]:[];
   return query(data,table);
  },
- auth:{getSession:async()=>({data:{session:null},error:null})},
+ auth:{getSession:async()=>({data:{session:{access_token:'isolated-fixture-token'}},error:null})},
+};
+
+// Transport adapter for the combined reports.read branch; fixture data only.
+const originalFetch = window.fetch.bind(window);
+window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+ if (String(input) === '/api/informes/consultar') {
+  const body = JSON.parse(String(init?.body || '{}'));
+  let q = body.rpc ? supabase.rpc(body.rpc) : supabase.from(body.table);
+  q = q.select(body.select);
+  for (const [column, operator, value] of body.filters || []) q = q[operator](column, value);
+  const result = await q.range(body.range[0],body.range[1]);
+  return new Response(JSON.stringify(result),{headers:{'Content-Type':'application/json'}});
+ }
+ return originalFetch(input,init);
 };

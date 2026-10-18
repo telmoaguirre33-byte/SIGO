@@ -18,7 +18,6 @@ type Props = {
   onManualQuery?: (query: string) => boolean;
   onProductSearchKeyDown?: (key: string) => boolean;
   onCachedCode?: (code: string) => BarcodeProduct[] | null;
-  searchAccessibility?: { controls: string; activeDescendant?: string; expanded: boolean };
   queryResetKey?: number;
 };
 
@@ -66,7 +65,6 @@ export default function BarcodeScanner({
   onQueryChange,
   onManualQuery,
   onProductSearchKeyDown,
-  searchAccessibility,
   onCachedCode,
   queryResetKey,
 }: Props) {
@@ -519,11 +517,6 @@ export default function BarcodeScanner({
             }
           }}
           placeholder="Código de barras, interno o nombre del producto"
-          role={searchAccessibility ? "combobox" : undefined}
-          aria-autocomplete={searchAccessibility ? "list" : undefined}
-          aria-controls={searchAccessibility?.controls}
-          aria-activedescendant={searchAccessibility?.expanded ? searchAccessibility.activeDescendant : undefined}
-          aria-expanded={searchAccessibility?.expanded}
           aria-label="Código de barras, código interno o nombre del producto"
         />
         <button className="admin-button" type="button" disabled={busy || !code.trim()} onClick={() => void resolveCode(code, "manual")}>
@@ -564,4 +557,3 @@ export default function BarcodeScanner({
     </section>
   );
 }
-
