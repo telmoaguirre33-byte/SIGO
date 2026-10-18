@@ -79,6 +79,8 @@ jobs:
           node ../tests/commercial-assets.mjs
           node ../tests/seller-workflow.mjs
           node ../tests/device-session-client.mjs
+      - name: Railway QA publicado, sonda anónima de sólo lectura
+        run: node ../tests/published-qa-readonly.mjs
       - name: Políticas RLS en PostgreSQL efímero local
         run: npm run test:rls
       - name: Autenticación firmada y API HTTP contra PostgreSQL aislado
