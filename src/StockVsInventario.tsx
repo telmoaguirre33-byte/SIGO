@@ -131,7 +131,7 @@ export default function StockVsInventario({empresaId}:{empresaId:string}) {
       const imagenes=await Promise.all(fotos.map(f=>convertirParaAnalisis(f.blob)));
       if(imagenes.reduce((suma,img)=>suma+img.length,0)>4_000_000)throw new Error("El conjunto de fotos supera el límite seguro. Probá con menos fotos.");
       const out=await analizarInventarioSigo(empresaId,imagenes);
-      setBloque(out.bloque||""); setHallazgos((out.hallazgos||[]).map((h,i)=>({...h,color:PALETA[i%PALETA.length]}))); setMensaje(`Bloque detectado: ${out.bloque||"a revisar"}. Comparación terminada.`);
+      setBloque(out.bloque||""); setHallazgos((out.hallazgos||[]).map((h,i)=>({...h,color:PALETA[i%PALETA.length]}))); setMensaje(`Bloque detectado: ${out.bloque||"a revisar"}. Comparación terminada.${out.catalogoCompleto === false ? " Catálogo parcial: los productos no vinculados quedan para revisar; no se declaran faltantes." : ""}`);
     } catch(e){const m=e instanceof Error?e.message:"No se pudo analizar el inventario."; setMensaje(m==="Failed to fetch"?"No se pudo conectar con la IA de SIGO. Revisá la conexión y volvé a intentar.":m);} finally{setAnalizando(false)}
   }
 
@@ -187,3 +187,4 @@ export default function StockVsInventario({empresaId}:{empresaId:string}) {
     </div>
   </div>;
 }
+

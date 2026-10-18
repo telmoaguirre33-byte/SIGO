@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import inventory, { leerCatalogoInventario, construirHallazgosInventario } from '../api/inventario/analizar.js';
 import report from '../api/informes/consultar.js';
+import invoiceInventory from '../api/compras/analizar-factura.js';
 const originalFetch=globalThis.fetch;
 const names=['SUPABASE_URL','SUPABASE_ANON_KEY','GEMINI_API_KEY'];
 const previous=Object.fromEntries(names.map(k=>[k,process.env[k]]));
@@ -29,6 +30,24 @@ try{
  await test('F09 failed products.read authorization is closed',async()=>{
   let calls=0;globalThis.fetch=async(url)=>{calls++;return new Response(JSON.stringify(calls===1?{id:'qa'}:{error:'offline'}),{status:calls===1?200:503});};
   const response=res();await inventory({method:'POST',headers:{authorization:'Bearer qa'},body:{empresaId:tenant,imagenes:['data:image/png;base64,AA==']}},response);assert.equal(response.statusCode,403);assert.equal(calls,2);
+ });
+ await test('F09 actual screen route preserves two-phase scan and refuses absence from family truncation',async()=>{
+  process.env.GEMINI_API_KEY='qa-mocked-only';
+  for(const size of [2,600]){
+   let aiCalls=0;
+   globalThis.fetch=async(url,init={})=>{
+    if(url.endsWith('/auth/v1/user'))return new Response(JSON.stringify({id:'qa'}));
+    if(url.endsWith('/rpc/tiene_permiso_empresa')){assert.equal(JSON.parse(init.body).p_permiso,'stock.read');return new Response('true');}
+    if(url.includes('/rest/v1/productos?'))return new Response(JSON.stringify(Array.from({length:size},(_,i)=>({id:`qa-${i}`,nombre:`Lápiz ${i}`,categoria:'Librería',marca:'QA',stock_actual:5}))),{headers:{'content-range':`0-${size-1}/${size}`}});
+    assert.ok(url.startsWith('https://generativelanguage.googleapis.com/'));
+    const output=aiCalls++===0?{bloque:'Librería',visuales:[{descripcion:'Lápiz distante',confianza:1,foto:1}]}:{cruces:[{visual_index:0,catalogo_id:null,estado:'falta_sigo',confianza:1}],ids_catalogo_no_vistos:[]};
+    return new Response(JSON.stringify({candidates:[{content:{parts:[{text:JSON.stringify(output)}]}}]}));
+   };
+   const response=res();await invoiceInventory({method:'POST',headers:{authorization:'Bearer qa'},body:{modo:'inventario',empresaId:tenant,imagenes:['data:image/png;base64,AA==']}},response);
+   assert.equal(response.statusCode,200);assert.equal(aiCalls,2);
+   assert.equal(response.body.catalogoCompleto,size===2);
+   assert.equal(response.body.hallazgos[0].estado,size===2?'falta_sigo':'revisar');
+  }
  });
  const query={empresaId:tenant,table:'ventas_sigo',select:'total,created_at',filters:[['empresa_id','eq',tenant],['estado','eq','confirmada']],orders:[['id',true]],range:[0,999]};
  let reads=0,permissionCalls=0;
