@@ -1,3 +1,4 @@
+import { leerCatalogoInventario } from "../inventario/analizar.js";
 const MAX_DATA_URL_LENGTH = 8_000_000;
 const MAX_INVOICE_ITEMS = 300;
 const GEMINI_TIMEOUT_MS = 45_000;
@@ -414,14 +415,13 @@ export default async function handler(req, res) {
       const bloque=textoSeguro(raw.bloque,100)||"Bloque a revisar";
       if(visuales.length===0)return json(res,200,{bloque,hallazgos:[],resumen:{visuales:0}});
       // Fetch the tenant catalogue only after the complete visual sweep and family detection.
-      let pr;
-      try{pr=await fetch(`${supabaseUrl}/rest/v1/productos?empresa_id=eq.${encodeURIComponent(empresaId)}&select=id,nombre,codigo_interno,codigo_barras,categoria,marca,stock_actual&limit=5000`,{headers:{apikey:anonKey,Authorization:auth}});}catch{return json(res,502,{error:"PRODUCTS_UNAVAILABLE",message:"No pude consultar el stock de SIGO."});}
-      if(!pr.ok)return json(res,502,{error:"PRODUCTS_UNAVAILABLE",message:"No pude consultar el stock de SIGO."});
-      const productos=await pr.json().catch(()=>null);
-      if(!Array.isArray(productos))return json(res,502,{error:"PRODUCTS_UNAVAILABLE",message:"No pude leer el catálogo de stock de SIGO."});
+      let productos, completo;
+      try { ({ productos, completo } = await leerCatalogoInventario(supabaseUrl,anonKey,auth,empresaId)); }
+      catch { return json(res,502,{error:"PRODUCTS_UNAVAILABLE",message:"No pude consultar el catálogo completo de SIGO."}); }
       const familia=productos.filter((p)=>productoDelBloque(p,bloque,visuales)).slice(0,500);
+      const catalogoCompleto=completo && familia.length===productos.length;
       const catalogo=familia.map((p)=>({id:p.id,nombre:p.nombre,codigo:p.codigo_barras||p.codigo_interno||null,categoria:p.categoria||null,marca:p.marca||null,stock:Number(p.stock_actual||0)}));
-      const crucePrompt=`Cruce de inventario SIGO en dos etapas. La detección visual ya terminó y no se debe borrar ni fusionar ningún elemento de VISUALES. El bloque detectado es ${bloque}. Compará cada visual_index con el producto del catálogo más exacto posible, considerando marca, variedad y presentación. Sólo asigná catalogo_id si la correspondencia es segura; si no, null. No inventes productos. Si el producto está claramente identificado y no tiene correspondencia segura en el catálogo de este bloque, estado=falta_sigo con confianza>=0.8. Si hay duda de producto, variante o tamaño, estado=revisar. ids_catalogo_no_vistos sólo puede contener productos del catálogo de esta misma familia que razonablemente pertenecerían a la exhibición y no aparecen en VISUALES. JSON exacto: {"cruces":[{"visual_index":number,"catalogo_id":string|null,"estado":"ok"|"sin_stock"|"falta_sigo"|"revisar","confianza":number}],"ids_catalogo_no_vistos":[string]}. VISUALES: ${JSON.stringify(visuales)} CATÁLOGO FAMILIAR: ${JSON.stringify(catalogo)}`;
+      const crucePrompt=`Cruce de inventario SIGO en dos etapas. La detección visual ya terminó y no se debe borrar ni fusionar ningún elemento de VISUALES. El bloque detectado es ${bloque}. Compará cada visual_index con el producto del catálogo más exacto posible, considerando marca, variedad y presentación. Sólo asigná catalogo_id si la correspondencia es segura; si no, null. No inventes productos. Si el producto está claramente identificado y no tiene correspondencia segura en el catálogo de este bloque, estado=falta_sigo con confianza>=0.8. Si hay duda de producto, variante o tamaño, estado=revisar. ids_catalogo_no_vistos sólo puede contener productos del catálogo de esta misma familia que razonablemente pertenecerían a la exhibición y no aparecen en VISUALES. JSON exacto: {"cruces":[{"visual_index":number,"catalogo_id":string|null,"estado":"ok"|"sin_stock"|"falta_sigo"|"revisar","confianza":number}],"ids_catalogo_no_vistos":[string]}. VISUALES: ${JSON.stringify(visuales)} CATÁLOGO FAMILIAR ${catalogoCompleto ? "COMPLETO" : "PARCIAL: los productos no vinculados deben quedar en revisar, no afirmar ausencia"}: ${JSON.stringify(catalogo)}`;
       const faseCruce=await fetchInventoryGemini("cruce",crucePrompt,false);
       if(!faseCruce?.response?.ok)return errorGemini(faseCruce);
       const cruce=await salidaTexto(faseCruce);
@@ -432,10 +432,10 @@ export default async function handler(req, res) {
         const producto=porId.get(String(d.catalogo_id||""));
         const confianzaProducto=confianza(d.confianza??v.confianza);
         const relacionado=producto&&productoDelBloque(producto,bloque,visuales);
-        const matchSeguro=relacionado&&confianzaProducto>=0.78;
+        const matchSeguro=relacionado&&confianzaProducto>=0.78&&producto.stock_actual!=null&&Number.isFinite(Number(producto.stock_actual));
         const estado=matchSeguro
           ? Number(producto.stock_actual||0)>0?"ok":"sin_stock"
-          : d.estado==="falta_sigo"&&confianzaProducto>=0.8&&v.confianza>=0.8?"falta_sigo"
+          : catalogoCompleto&&!d.catalogo_id&&d.estado==="falta_sigo"&&confianzaProducto>=0.8&&v.confianza>=0.8?"falta_sigo"
           : "revisar";
         return {
           id:`v-${i}`,
@@ -459,7 +459,7 @@ export default async function handler(req, res) {
       const hallazgos=[...detectados,...noVistos];
       const resumen={visuales:visuales.length,ok:detectados.filter(h=>h.estado==="ok").length,sin_stock:detectados.filter(h=>h.estado==="sin_stock").length,falta_sigo:detectados.filter(h=>h.estado==="falta_sigo").length,no_visto:noVistos.length,revisar:detectados.filter(h=>h.estado==="revisar").length};
       console.info("SIGO inventory completed",{bloque,imagenes:imagenes.length,payloadChars:imagenes.reduce((n,img)=>n+img.length,0),modelVision:faseVisual.model,modelCruce:faseCruce.model,...resumen});
-      return json(res,200,{bloque,hallazgos,resumen});
+      return json(res,200,{bloque,hallazgos,resumen,catalogoCompleto});
     } catch(e){console.error("SIGO inventory parse error",e);return json(res,502,{error:"AI_INVALID_OUTPUT",message:"La IA respondió pero el análisis de inventario no fue válido."});}
   }
 
@@ -629,3 +629,4 @@ confianza_general y confianza van de 0 a 1.`;
     return json(res, 502, { error: "AI_INVALID_OUTPUT", message: "La IA respondió, pero no devolvió una factura segura y utilizable." });
   }
 }
+

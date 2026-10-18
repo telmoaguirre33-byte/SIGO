@@ -1,0 +1,73 @@
+name: Minorista issue 79 - compatibilidad con PR 77
+on:
+  pull_request:
+    branches: [main]
+    paths: ['src/**','api/**','scripts/**','.github/workflows/issue79-compatibilidad.yml']
+permissions:
+  contents: read
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Combine pinned candidates in runner only; never update remote refs
+        env:
+          CANDIDATE_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          base=d9a5a9dddb3910ba5a0c53e96c79caa0f6da71d9
+          git config user.name "SIGO isolated compatibility"
+          git config user.email "codex@users.noreply.github.com"
+          git checkout --detach "$base"
+          for candidate in 7c7794d643f711160591c19bdbaad9827b72fae1 e167221087689a426b13624aa9eecf4cee27f26e 6d5d0ab480171e479e5443a73ac25225b5fc13d7 "$CANDIDATE_HEAD"; do
+            git diff "$base" "$candidate" > /tmp/issue79-candidate.patch
+            git apply --3way --index /tmp/issue79-candidate.patch
+            git commit -m "Isolated compatibility snapshot $candidate"
+          done
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npm run verify:critical
+      - run: node scripts/verify-guardar-compra-ia.mjs
+      - run: node --experimental-vm-modules scripts/test-issue79-integridad.mjs
+      - run: node scripts/test-issue79-informes-ui.mjs
+      - run: node --experimental-vm-modules scripts/test-issue79-operacion.mjs
+      - run: node scripts/test-issue79-estabilidad.mjs
+      - name: Original PR 77 scanner and fiscal regressions
+        run: |
+          node scripts/test-minorista-scanner.mjs
+          node --experimental-vm-modules scripts/test-caja-fiscal-read.mjs
+      - name: PDF inspection and browser dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils zbar-tools
+          npm install --no-save --package-lock=false --no-audit --no-fund @playwright/test@1.56.1
+          npx playwright install --with-deps chromium
+      - run: node scripts/test-caja-comprobantes.mjs
+      - name: Adapt original test selectors to the new accessible combobox role
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          for (const file of ['tests/minorista/scanner.spec.mjs','tests/minorista/comprobantes.spec.mjs']) {
+            let s=fs.readFileSync(file,'utf8');
+            const before='page.getByRole("textbox", { name: "Código de barras, código interno o nombre del producto", exact: true })';
+            const after='page.locator(".barcode-entry-row input")';
+            if(!s.includes(before))throw Error('COMPATIBILITY_SELECTOR_ANCHOR_MISSING:'+file);
+            fs.writeFileSync(file,s.replace(before,after));
+          }
+          NODE
+      - run: npx playwright test --config tests/minorista/playwright.config.mjs
+      - run: npx playwright test --config tests/issue79/playwright.config.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: issue79-compatible-evidence
+          path: test-results/
+
+

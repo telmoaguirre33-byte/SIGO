@@ -16,11 +16,13 @@ const helpers = load('src/guardarCompraIA.ts');
 const base = () => ({ factura: { proveedor: { razon_social:'QA proveedor',cuit:null }, fecha:'2026-09-25',tipo_comprobante:'Remito',numero_comprobante:'QA-1',total:99999,advertencias:['Total distinto'],confianza_general:.1,items:[{descripcion:'QA artículo',codigo:null,codigo_barras:null,cantidad:6,costo_unitario:100,total_linea:900,confianza:.1}] }, productos:[],vinculos:{},barras:{},codigos:{},precios:{0:'150'},margenes:{0:'50'} });
 await test('new product without EAN/internal code is allowed', () => { const r=helpers.construirCompraIA(base());assert.equal(r.items[0].codigo_barras,null);assert.equal(r.items[0].codigo_interno,null);assert.equal(r.items[0].precio_venta,150); });
 await test('reviewed discrepancies/confidence do not block save',()=>assert.equal(helpers.construirCompraIA(base()).items.length,1));
-await test('existing product reuses its own code, not supplier code',()=>{const i=base();i.productos=[{id:'p1',nombre:'QA artículo',codigo_interno:'PROPIO-1',codigo_barras:null}];i.factura.items[0].codigo='PROVEEDOR-9';const r=helpers.construirCompraIA(i).items[0];assert.equal(r.producto_id,'p1');assert.equal(r.codigo_interno,'PROPIO-1');assert.equal(r.precio_venta,null);});
+await test('existing product reuses own code and honors explicit sale price',()=>{const i=base();i.productos=[{id:'p1',nombre:'QA artículo',codigo_interno:'PROPIO-1',codigo_barras:null}];i.factura.items[0].codigo='PROVEEDOR-9';const r=helpers.construirCompraIA(i).items[0];assert.equal(r.producto_id,'p1');assert.equal(r.codigo_interno,'PROPIO-1');assert.equal(r.precio_venta,150);});
+await test('existing product without an explicit price preserves current price',()=>{const i=base();i.productos=[{id:'p1',nombre:'QA artículo',codigo_interno:'PROPIO-1'}];i.precios={};assert.equal(helpers.construirCompraIA(i).items[0].precio_venta,null);});
+await test('new product derives price from reviewed margin when empty',()=>{const i=base();i.precios={};assert.equal(helpers.construirCompraIA(i).items[0].precio_venta,150);});
 await test('explicit association wins over invoice codes',()=>{const i=base();i.productos=[{id:'p1',nombre:'Otro',codigo_interno:'1'}];i.vinculos[0]='p1';assert.equal(helpers.construirCompraIA(i).items[0].producto_id,'p1');});
 await test('ambiguous identities need explicit association',()=>{const i=base();i.productos=[{id:'1',nombre:'QA artículo'},{id:'2',nombre:'QA artículo'}];assert.throws(()=>helpers.construirCompraIA(i),/más de un producto/);});
 await test('empty purchase rejected',()=>{const i=base();i.factura.items=[];assert.throws(()=>helpers.construirCompraIA(i));});
-await test('invalid quantity/cost/price rejected',()=>{for(const key of ['cantidad','costo_unitario']) { const i=base();i.factura.items[0][key]=NaN;assert.throws(()=>helpers.construirCompraIA(i)); } const i=base();i.precios[0]='';assert.throws(()=>helpers.construirCompraIA(i));});
+await test('invalid quantity/cost/price rejected',()=>{for(const key of ['cantidad','costo_unitario']) { const i=base();i.factura.items[0][key]=NaN;assert.throws(()=>helpers.construirCompraIA(i)); } const i=base();i.precios[0]='NaN';assert.throws(()=>helpers.construirCompraIA(i));});
 await test('7, 15, 30 lines accepted without barcodes',()=>{for(const n of [7,15,30]){const i=base();i.factura.items=Array.from({length:n},(_,k)=>({...i.factura.items[0],descripcion:`QA ${k}`}));i.precios=Object.fromEntries(Array.from({length:n},(_,k)=>[k,'150']));assert.equal(helpers.construirCompraIA(i).items.length,n);}});
 await test('document number is optional at save',()=>{const i=base();i.factura.numero_comprobante=null;assert.equal(helpers.construirCompraIA(i).numero_comprobante,null);});
 function harness(rpc, verify=async()=>({estado:'OK',detalle:'ok'})) {
@@ -43,4 +45,18 @@ await test('PostgreSQL rollback unlocks correction and retains invoice',async()=
 await test('readback error never retries a committed purchase',async()=>{values.clear();let calls=0;const h=harness(async()=>{calls++;return success;},async()=>{throw new Error('offline');});h.click();await tick();assert.equal(calls,1);assert.equal(h.callbacks.find(c=>c[0]==='saved')[2].estado,'NO_VERIFICADO');});
 await test('unmount/tenant change suppresses stale UI callbacks',async()=>{values.clear();let resolve;const h=harness(async()=>new Promise(r=>resolve=r));h.click();h.unmount();resolve(success);await tick();assert.equal(h.callbacks.filter(c=>c[0]==='saved').length,0);});
 await test('draft persistence failure prevents all writes',async()=>{values.clear();let calls=0;const h=harness(async()=>{calls++;return success;});h.props.onAntesGuardar=()=>{throw new Error('storage full');};h.click();await tick();assert.equal(calls,0);});
+await test('uncertain original is retained even if retry receives PostgreSQL rejection',async()=>{
+ values.clear();const first=harness(async()=>{throw new Error('timeout after commit');});first.click();await tick();assert.equal(values.size,1);
+ const retry=harness(async()=>({data:null,error:{code:'P0001',message:'FORBIDDEN'}}));retry.click();await tick();assert.equal(values.size,1);
+});
+await test('SQL connection/completion-unknown errors never release immutable request',async()=>{
+ for(const code of ['08006','08007','40003','PGRST','XX000']){values.clear();const h=harness(async()=>({data:null,error:{code,message:'connection uncertain'}}));h.click();await tick();assert.equal(values.size,1,code);}
+});
+await test('timeout after commit retries same request and recovers original once',async()=>{
+ values.clear();let writes=0,stored,original;
+ const rpc=async(_,args)=>{if(!stored){writes++;original=args;stored=success;throw Error('lost response');}assert.equal(JSON.stringify(args),JSON.stringify(original));return stored;};
+ const first=harness(rpc);first.click();await tick();assert.equal(values.size,1);
+ const retry=harness(rpc);retry.click();await tick();assert.equal(writes,1);assert.equal(values.size,0);assert.equal(retry.callbacks.filter(c=>c[0]==='saved').length,1);
+});
 console.log(`${passed}/${passed} Compra IA save tests passed (RPC/network mocks; no production writes).`);
+

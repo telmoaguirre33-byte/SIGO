@@ -1,0 +1,551 @@
+{
+  "base": "d9a5a9dddb3910ba5a0c53e96c79caa0f6da71d9",
+  "project": "COMERCIAL",
+  "projectRef": "pafnbxfgpedbvpimjmun",
+  "source": "Supabase list_migrations; read-only version/name metadata; no commercial rows",
+  "gitCount": 98,
+  "serverCount": 107,
+  "exactVersionAndName": 84,
+  "sameNameDifferentVersion": [
+    {
+      "name": "modulo_lector_celular_remoto",
+      "serverVersion": "20260919135223",
+      "gitVersion": "20260919110000"
+    },
+    {
+      "name": "lector_celular_sesiones",
+      "serverVersion": "20260919135320",
+      "gitVersion": "20260919113000"
+    },
+    {
+      "name": "compras_precio_automatico",
+      "serverVersion": "20260923094943",
+      "gitVersion": "20260922233000"
+    },
+    {
+      "name": "compra_ia_guardado_atomico",
+      "serverVersion": "20260925120924",
+      "gitVersion": "20260925120000"
+    },
+    {
+      "name": "configuracion_ticket_sigo",
+      "serverVersion": "20260925120933",
+      "gitVersion": "20260925121500"
+    },
+    {
+      "name": "compra_ia_precio_admin",
+      "serverVersion": "20260925124330",
+      "gitVersion": "20260925124500"
+    },
+    {
+      "name": "compra_ia_precio_existente",
+      "serverVersion": "20260925124916",
+      "gitVersion": "20260925135500"
+    },
+    {
+      "name": "editar_anular_compras",
+      "serverVersion": "20260925132010",
+      "gitVersion": "20260925141000"
+    },
+    {
+      "name": "borradores_compra_historial",
+      "serverVersion": "20260925133233",
+      "gitVersion": "20260925143000"
+    },
+    {
+      "name": "redondeo_precio_venta",
+      "serverVersion": "20260925211022",
+      "gitVersion": "20260925212000"
+    },
+    {
+      "name": "productos_oferta",
+      "serverVersion": "20260926175422",
+      "gitVersion": "20260926163000"
+    },
+    {
+      "name": "ofertas_permisos_administrador",
+      "serverVersion": "20260926181111",
+      "gitVersion": "20260926183000"
+    },
+    {
+      "name": "admin_push_notifications",
+      "serverVersion": "20261011222726",
+      "gitVersion": "20261011190000"
+    },
+    {
+      "name": "mayorista_modulo_matriz",
+      "serverVersion": "20261013011806",
+      "gitVersion": "20261013090000"
+    }
+  ],
+  "serverOnly": [
+    {
+      "version": "20260919134945",
+      "name": "fix_matriz_ean_status_readback"
+    },
+    {
+      "version": "20260919145909",
+      "name": "matriz_lector_celular_status"
+    },
+    {
+      "version": "20260919151655",
+      "name": "lector_celular_pairing_rpc_realtime"
+    },
+    {
+      "version": "20260919151940",
+      "name": "fix_lector_celular_rls_insert"
+    },
+    {
+      "version": "20260919153502",
+      "name": "lector_celular_create_session_rpc"
+    },
+    {
+      "version": "20260919155219",
+      "name": "lector_celular_pc_estado"
+    },
+    {
+      "version": "20260919164124",
+      "name": "matriz_clientes_comerciales"
+    },
+    {
+      "version": "20260919232654",
+      "name": "padron_clientes_matriz_seguimiento_v2"
+    },
+    {
+      "version": "20261006100123",
+      "name": "matriz_trial_contacto"
+    }
+  ],
+  "gitOnly": [],
+  "conclusion": "Version/name match is not SQL checksum equivalence; no migration was applied, repaired or marked.",
+  "serverSnapshot": [
+    {
+      "version": "20260909191300",
+      "name": "multiempresa_base"
+    },
+    {
+      "version": "20260909201500",
+      "name": "permisos_backend"
+    },
+    {
+      "version": "20260909211500",
+      "name": "tenant_operacional_preparacion"
+    },
+    {
+      "version": "20260909221300",
+      "name": "tenant_guardrails"
+    },
+    {
+      "version": "20260909231300",
+      "name": "productos_lectura_segura"
+    },
+    {
+      "version": "20260910001300",
+      "name": "barcode_lookup_seguro"
+    },
+    {
+      "version": "20260910010900",
+      "name": "portal_cliente_seguro"
+    },
+    {
+      "version": "20260910021200",
+      "name": "arca_config_segura"
+    },
+    {
+      "version": "20260910031300",
+      "name": "permisos_denegados_granulares"
+    },
+    {
+      "version": "20260910100800",
+      "name": "superadmin_plataforma_seguro"
+    },
+    {
+      "version": "20260910110800",
+      "name": "mis_empresas_operativas"
+    },
+    {
+      "version": "20260910142200",
+      "name": "productos_escritura_segura"
+    },
+    {
+      "version": "20260910192000",
+      "name": "productos_borrado_seguro"
+    },
+    {
+      "version": "20260911043000",
+      "name": "ventas_caja_operativas"
+    },
+    {
+      "version": "20260911051800",
+      "name": "bloquear_cuenta_corriente_sin_cliente"
+    },
+    {
+      "version": "20260911062000",
+      "name": "clientes_cuenta_corriente"
+    },
+    {
+      "version": "20260911073000",
+      "name": "compras_proveedores_operativos"
+    },
+    {
+      "version": "20260911112000",
+      "name": "cobros_cuenta_corriente_caja"
+    },
+    {
+      "version": "20260911200000",
+      "name": "bootstrap_acceso_sigo"
+    },
+    {
+      "version": "20260911202500",
+      "name": "sigo_access_healthcheck"
+    },
+    {
+      "version": "20260912004500",
+      "name": "bootstrap_telmo_owner"
+    },
+    {
+      "version": "20260912032000",
+      "name": "precio_venta_para_operacion"
+    },
+    {
+      "version": "20260912102000",
+      "name": "roles_operativos_hardening"
+    },
+    {
+      "version": "20260912111800",
+      "name": "evitar_codigos_duplicados_por_empresa"
+    },
+    {
+      "version": "20260912122500",
+      "name": "ventas_idempotencia_cliente_segura"
+    },
+    {
+      "version": "20260912123000",
+      "name": "compras_idempotencia_stock_segura"
+    },
+    {
+      "version": "20260912131700",
+      "name": "mercado_pago_ventas"
+    },
+    {
+      "version": "20260912142200",
+      "name": "productos_precio_operativo_seguro"
+    },
+    {
+      "version": "20260912142500",
+      "name": "productos_edicion_no_pisa_stock_costo"
+    },
+    {
+      "version": "20260912151800",
+      "name": "productos_baja_logica_segura"
+    },
+    {
+      "version": "20260912162000",
+      "name": "idempotencia_payload_y_productos_activos"
+    },
+    {
+      "version": "20260912185000",
+      "name": "usuarios_empresa_gestion_segura"
+    },
+    {
+      "version": "20260912190000",
+      "name": "verificar_gestion_usuarios_produccion"
+    },
+    {
+      "version": "20260912193000",
+      "name": "portal_cliente_vinculacion_segura"
+    },
+    {
+      "version": "20260912215500",
+      "name": "matriz_superadmin_operativa"
+    },
+    {
+      "version": "20260912230000",
+      "name": "stock_import_base"
+    },
+    {
+      "version": "20260912230030",
+      "name": "stock_import_single_tenant_fix"
+    },
+    {
+      "version": "20260912230040",
+      "name": "stock_import_constraints_and_collisions"
+    },
+    {
+      "version": "20260912230100",
+      "name": "stock_libreria_01"
+    },
+    {
+      "version": "20260912230200",
+      "name": "stock_libreria_02"
+    },
+    {
+      "version": "20260912230300",
+      "name": "stock_libreria_03"
+    },
+    {
+      "version": "20260912230400",
+      "name": "stock_libreria_04"
+    },
+    {
+      "version": "20260912230500",
+      "name": "stock_libreria_05"
+    },
+    {
+      "version": "20260912230600",
+      "name": "stock_libreria_06"
+    },
+    {
+      "version": "20260912230700",
+      "name": "stock_libreria_07"
+    },
+    {
+      "version": "20260912230800",
+      "name": "stock_libreria_08"
+    },
+    {
+      "version": "20260912230900",
+      "name": "stock_libreria_09"
+    },
+    {
+      "version": "20260912231000",
+      "name": "stock_libreria_10"
+    },
+    {
+      "version": "20260912231100",
+      "name": "stock_sertec_01"
+    },
+    {
+      "version": "20260912231200",
+      "name": "stock_sertec_02"
+    },
+    {
+      "version": "20260912231300",
+      "name": "stock_sertec_03"
+    },
+    {
+      "version": "20260912231400",
+      "name": "stock_sertec_04"
+    },
+    {
+      "version": "20260912231500",
+      "name": "stock_sertec_05"
+    },
+    {
+      "version": "20260912231600",
+      "name": "stock_import_verify"
+    },
+    {
+      "version": "20260912235500",
+      "name": "productos_alta_costos_cero"
+    },
+    {
+      "version": "20260913002000",
+      "name": "compras_documento_duplicado_guard"
+    },
+    {
+      "version": "20260913003000",
+      "name": "ventas_precio_positivo_guard"
+    },
+    {
+      "version": "20260913012500",
+      "name": "operational_readiness_stock_cost_guard"
+    },
+    {
+      "version": "20260913023000",
+      "name": "compras_identidad_documental_guard"
+    },
+    {
+      "version": "20260913053500",
+      "name": "productos_costos_no_nulos_write_guard"
+    },
+    {
+      "version": "20260913054000",
+      "name": "compras_max_300_items_guard"
+    },
+    {
+      "version": "20260913162000",
+      "name": "guard_movimientos_producto_operativo"
+    },
+    {
+      "version": "20260913183000",
+      "name": "tenant_diagnostico_lint_fix"
+    },
+    {
+      "version": "20260913194000",
+      "name": "producto_guardado_readback"
+    },
+    {
+      "version": "20260913203500",
+      "name": "desactivar_servicios_no_vendibles"
+    },
+    {
+      "version": "20260913205500",
+      "name": "carrito_devoluciones_anulaciones"
+    },
+    {
+      "version": "20260913212500",
+      "name": "go_live_proveedores_compras_arca_guard"
+    },
+    {
+      "version": "20260913214500",
+      "name": "cuit_validator_lint_clean"
+    },
+    {
+      "version": "20260913223000",
+      "name": "permisos_owner_configurables"
+    },
+    {
+      "version": "20260913224500",
+      "name": "venta_sin_cliente_efectivo_segura"
+    },
+    {
+      "version": "20260914001000",
+      "name": "arca_storage_certificado_privado"
+    },
+    {
+      "version": "20260914003500",
+      "name": "arca_cae_preflight_guards"
+    },
+    {
+      "version": "20260914003600",
+      "name": "arca_emision_read_policy"
+    },
+    {
+      "version": "20260914003700",
+      "name": "productos_fiscal_wsfe"
+    },
+    {
+      "version": "20260914084500",
+      "name": "compras_documentos_proveedores_db_guard"
+    },
+    {
+      "version": "20260914105000",
+      "name": "owner_sigo_administracion_arca"
+    },
+    {
+      "version": "20260914113000",
+      "name": "arca_ticket_wsaa_privado"
+    },
+    {
+      "version": "20260914204500",
+      "name": "listas_precios_margen_masivo"
+    },
+    {
+      "version": "20260915014000",
+      "name": "modulos_por_empresa"
+    },
+    {
+      "version": "20260916162000",
+      "name": "cristina_veron_libreria_stock"
+    },
+    {
+      "version": "20260916164500",
+      "name": "producto_codigos_alias_scanner"
+    },
+    {
+      "version": "20260916165000",
+      "name": "cristina_scanner_missing_catalog"
+    },
+    {
+      "version": "20260919083000",
+      "name": "modulo_busqueda_ean_matriz"
+    },
+    {
+      "version": "20260919134945",
+      "name": "fix_matriz_ean_status_readback"
+    },
+    {
+      "version": "20260919135223",
+      "name": "modulo_lector_celular_remoto"
+    },
+    {
+      "version": "20260919135320",
+      "name": "lector_celular_sesiones"
+    },
+    {
+      "version": "20260919145909",
+      "name": "matriz_lector_celular_status"
+    },
+    {
+      "version": "20260919151655",
+      "name": "lector_celular_pairing_rpc_realtime"
+    },
+    {
+      "version": "20260919151940",
+      "name": "fix_lector_celular_rls_insert"
+    },
+    {
+      "version": "20260919153502",
+      "name": "lector_celular_create_session_rpc"
+    },
+    {
+      "version": "20260919155219",
+      "name": "lector_celular_pc_estado"
+    },
+    {
+      "version": "20260919164124",
+      "name": "matriz_clientes_comerciales"
+    },
+    {
+      "version": "20260919232654",
+      "name": "padron_clientes_matriz_seguimiento_v2"
+    },
+    {
+      "version": "20260923094943",
+      "name": "compras_precio_automatico"
+    },
+    {
+      "version": "20260925120924",
+      "name": "compra_ia_guardado_atomico"
+    },
+    {
+      "version": "20260925120933",
+      "name": "configuracion_ticket_sigo"
+    },
+    {
+      "version": "20260925124330",
+      "name": "compra_ia_precio_admin"
+    },
+    {
+      "version": "20260925124916",
+      "name": "compra_ia_precio_existente"
+    },
+    {
+      "version": "20260925132010",
+      "name": "editar_anular_compras"
+    },
+    {
+      "version": "20260925133233",
+      "name": "borradores_compra_historial"
+    },
+    {
+      "version": "20260925211022",
+      "name": "redondeo_precio_venta"
+    },
+    {
+      "version": "20260926175422",
+      "name": "productos_oferta"
+    },
+    {
+      "version": "20260926181111",
+      "name": "ofertas_permisos_administrador"
+    },
+    {
+      "version": "20261003020716",
+      "name": "pos_manual_discount_atomic_v2"
+    },
+    {
+      "version": "20261006100123",
+      "name": "matriz_trial_contacto"
+    },
+    {
+      "version": "20261011222726",
+      "name": "admin_push_notifications"
+    },
+    {
+      "version": "20261013011806",
+      "name": "mayorista_modulo_matriz"
+    }
+  ]
+}
