@@ -40,7 +40,7 @@ await test('F03 EAN contradiction blocks same-name fallback', () => {
   assert.equal(row(2,'').productoId,'p1');
 });
 for (const file of ['api/arca/cae.js','api/arca/cae-v2.js']) {
-  const wsaa = Object.fromEntries(['WSAA','WSFE','escapeXml','decodeXml','extraer','extraerErroresWsfe','leerTicketWsaa'].map(k=>[k,()=>{throw Error('EXTERNAL_CALL_FORBIDDEN');}]));
+  const wsaa = Object.fromEntries(['WSAA','WSFE','escapeXml','decodeXml','extraer','extraerErroresWsfe','leerTicketWsaa','descargarSecreto','autenticarWsaa','guardarTicketWsaa'].map(k=>[k,()=>{throw Error('EXTERNAL_CALL_FORBIDDEN');}]));
   const extra = file.endsWith('v2.js') ? '\nexport { detalleFiscal };' : '';
   const fiscal = await load(file, { './wsaa.js': wsaa }, extra);
   const detail = (rate,id=5) => fiscal.detalleFiscal(6,121,[{producto_id:'p1',subtotal:121}],new Map([['p1',{iva_alicuota_id:id,iva_tasa:rate,precio_incluye_iva:true}]]));
