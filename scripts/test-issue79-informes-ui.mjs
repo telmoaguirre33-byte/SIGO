@@ -9,6 +9,7 @@ function render(values){
  let index=0;const exports={};const jsx=(type,props)=>({type,props});
  vm.runInNewContext(code,{exports,console,Intl,Date,document:new Proxy({},{get(){throw Error('UNEXPECTED_EXPORT');}}),require(name){
   if(name==='react')return{useState:initial=>[names[index++] in values?values[names[index-1]]:initial,()=>{}],useRef:initial=>({current:initial}),useEffect(){}};
+  if(name==='./fechaLocal')return{fechaLocalIso:(d=new Date())=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
   if(name==='react/jsx-runtime')return{jsx,jsxs:jsx,Fragment:'fragment'};
   return new Proxy({},{get(){return()=>{throw Error(`UNEXPECTED_IO:${name}`);};}});
  }});

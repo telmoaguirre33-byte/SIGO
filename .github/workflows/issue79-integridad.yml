@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 12
     services:
       postgres:
-        image: postgres:17
+        image: postgres:16
         env:
           POSTGRES_DB: sigo_returns_qa
           POSTGRES_USER: postgres

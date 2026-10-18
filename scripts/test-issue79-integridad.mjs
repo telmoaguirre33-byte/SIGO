@@ -94,7 +94,7 @@ await test('F01 storage failure prevents RPC',async()=>{
 });
 let failedTable = '';
 const reportDb = {from(table){return {select(){return this;},eq(){return this;},gte(){return this;},order(){return this;},range(){return Promise.resolve({data:[],error:table===failedTable?Error('offline'):null});}};}};
-const reports=await load('src/informes.ts',{'./supabase':{supabase:reportDb},'./productos':{listarProductosSigo:async()=>[]},'./clientes':{listarClientesSigo:async()=>[]}});
+const reports=await load('src/informes.ts',{'./supabase':{supabase:reportDb},'./reportesClient':{reportesClient:reportDb},'./reportesDatos':{listarProductosInforme:async()=>[],listarClientesInforme:async()=>[]},'./productos':{listarProductosSigo:async()=>[]},'./clientes':{listarClientesSigo:async()=>[]}});
 await test('F05 failed source cannot produce zero summary',async()=>{
   for(const table of ['ventas_sigo','compras_sigo','caja_movimientos_sigo']){failedTable=table;await assert.rejects(reports.cargarResumenOperativoSigo('tenant'),/Informe incompleto/);}
   failedTable='';assert.equal((await reports.cargarResumenOperativoSigo('tenant')).ventasTotal,0);

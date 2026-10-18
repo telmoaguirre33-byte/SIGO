@@ -479,13 +479,12 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
               <button onClick={() => { setVistaStock("actual"); void cargarValorizacionStock(); }}><span>📦</span><strong>Valorización de stock</strong><small>Costo y precio de venta</small></button>
               <button onClick={() => setVistaStock("rotacion")}><span>📉</span><strong>Rotación</strong><small>Movimiento</small></button>
             </div>}
-            {vistaStock === "actual" && valorizacionEstado && <p role="status">{valorizacionEstado}</p>}
             {vistaStock === "ranking" && <RankingProductosStock empresaId={empresaId} />}
             {(vistaStock === "actual" || vistaStock === "quiebre" || vistaStock === "rotacion") && <div className="stats-grid sigo-stock-stats-rows">
               <div className="stat-card"><span>Unidades en stock</span><strong>{resumen.unidadesStock}</strong><small>{resumen.productos} productos</small></div>
               {vistaStock === "actual" && !valorizacionEstado && <div className="stat-card"><span>Stock valorizado a costo</span><strong>{dinero(stockValorizadoCosto)}</strong><small>Stock × costo actual/última compra</small></div>}
               {vistaStock === "actual" && !valorizacionEstado && <div className="stat-card"><span>Stock valorizado a venta</span><strong>{dinero(stockValorizadoVenta)}</strong><small>Stock × precio de venta</small></div>}
-              {vistaStock === "actual" && <div className="stat-card"><span>Margen potencial</span><strong>{dinero(margenPotencialStock)}</strong><small>Venta potencial − costo</small></div>}
+              {vistaStock === "actual" && (valorizacionEstado ? <p role="status">{valorizacionEstado}</p> : <div className="stat-card"><span>Margen potencial</span><strong>{dinero(margenPotencialStock)}</strong><small>Venta potencial − costo</small></div>)}
               <div className="stat-card"><span>Stock crítico</span><strong>{resumen.productosCriticos}</strong><small>{resumen.productosSinStock} sin stock</small></div>
               {riesgoStock && <div className="stat-card"><span>Quiebre urgente</span><strong>{riesgoStock.urgentes}</strong><small>≤ 7 días de cobertura</small></div>}
               {riesgoStock && <div className="stat-card"><span>Próximo quiebre</span><strong>{riesgoStock.proximos}</strong><small>8 a 15 días de cobertura</small></div>}
