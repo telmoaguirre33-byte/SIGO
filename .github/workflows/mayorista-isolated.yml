@@ -84,6 +84,8 @@ jobs:
           node ../tests/unified-company-policy.mjs
       - name: Railway QA publicado, sonda anónima de sólo lectura
         run: node ../tests/published-qa-readonly.mjs
+      - name: Diagnóstico TLS nativo del pooler QA, sin credenciales ni SQL
+        run: node ../tests/qa-pooler-tls.mjs
       - name: Políticas RLS en PostgreSQL efímero local
         run: npm run test:rls
       - name: Autenticación firmada y API HTTP contra PostgreSQL aislado
