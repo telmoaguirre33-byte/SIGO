@@ -10,6 +10,18 @@ type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
+
+let promptInstalacionPendiente: BeforeInstallPromptEvent | null = null;
+
+// Capturar el evento al cargar el módulo, antes de que React ejecute efectos.
+// Chrome/Edge pueden emitirlo al abrir una PWA ya reconocida por el navegador.
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    promptInstalacionPendiente = event as BeforeInstallPromptEvent;
+    window.dispatchEvent(new Event("sigo:install-prompt-ready"));
+  });
+}
 type AuthMode = "login" | "register" | "register_member" | "subscription" | "recovery";
 
 const SIGO_PRODUCTION_URL = "https://comercial-lilac.vercel.app/";
@@ -84,7 +96,7 @@ export default function SigoAuthGate({ children }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [mode, setMode] = useState<AuthMode>("login");
   const [puedeReenviarActivacion, setPuedeReenviarActivacion] = useState(false);
-  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(() => promptInstalacionPendiente);
   const [aplicacionInstalada, setAplicacionInstalada] = useState(false);
   const [mostrarAyudaInstalacion, setMostrarAyudaInstalacion] = useState(false);
   const [mensajeInstalacion, setMensajeInstalacion] = useState("");
@@ -136,9 +148,8 @@ export default function SigoAuthGate({ children }: Props) {
     const actualizarEstadoInstalacion = () => {
       setAplicacionInstalada(modoAplicacion.matches || (navigator as Navigator & { standalone?: boolean }).standalone === true);
     };
-    const capturarInstalacion = (event: Event) => {
-      event.preventDefault();
-      setInstallPrompt(event as BeforeInstallPromptEvent);
+    const capturarInstalacion = () => {
+      setInstallPrompt(promptInstalacionPendiente);
     };
     const instalacionCompletada = () => {
       setAplicacionInstalada(true);
@@ -158,11 +169,11 @@ export default function SigoAuthGate({ children }: Props) {
         .catch(() => undefined);
     }
 
-    window.addEventListener("beforeinstallprompt", capturarInstalacion);
+    window.addEventListener("sigo:install-prompt-ready", capturarInstalacion);
     window.addEventListener("appinstalled", instalacionCompletada);
     return () => {
       modoAplicacion.removeEventListener("change", actualizarEstadoInstalacion);
-      window.removeEventListener("beforeinstallprompt", capturarInstalacion);
+      window.removeEventListener("sigo:install-prompt-ready", capturarInstalacion);
       window.removeEventListener("appinstalled", instalacionCompletada);
     };
   }, []);
@@ -174,15 +185,16 @@ export default function SigoAuthGate({ children }: Props) {
       setMensajeInstalacion("SIGO ya está instalada en este dispositivo.");
       return;
     }
-    if (!installPrompt) {
+    const prompt = installPrompt ?? promptInstalacionPendiente;
+    if (!prompt) {
       setMostrarAyudaInstalacion(true);
       return;
     }
 
     try {
-      const prompt = installPrompt;
       await prompt.prompt();
       const { outcome } = await prompt.userChoice;
+      promptInstalacionPendiente = null;
       setInstallPrompt(null);
       if (outcome === "accepted") {
         setMostrarAyudaInstalacion(false);
