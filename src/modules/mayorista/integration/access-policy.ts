@@ -44,3 +44,10 @@ export function resolveMayoristaAccess(context: AccessContext, config?: CompanyA
   return {enabled:true, reason:"Módulo Mayorista integrado en SIGO.", adminUrl, sellerUrl};
 }
 
+
+/** Prefijo fijo publicado por el backend QA. Nunca se toma de parámetros del navegador. */
+export function mayoristaBackendBase(config: CompanyAccessConfig): string {
+ const admin=new URL(config.administracionUrl),seller=new URL(config.vendedorUrl);
+ if(admin.origin!==config.origenAprobado||seller.origin!==config.origenAprobado)throw Error('Destino Mayorista inválido');
+ return config.origenAprobado+(admin.pathname==='/integracion-qa/portal.html'&&seller.pathname==='/integracion-qa/secure.html'?'/integracion-qa':'');
+}

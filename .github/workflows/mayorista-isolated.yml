@@ -76,6 +76,8 @@ jobs:
           node ../tests/launch-upgrade.mjs
           node ../tests/release-preparation.mjs
           node ../tests/commercial-runtime.mjs
+          node ../tests/integration-qa-runtime.mjs
+          node ../tests/integration-qa-client.mjs
           node ../tests/commercial-assets.mjs
           node ../tests/seller-workflow.mjs
           node ../tests/device-session-client.mjs

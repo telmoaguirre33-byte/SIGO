@@ -3,7 +3,7 @@ import {construirSolicitud,verificarAcuse} from './contrato-pedidos.js';
  * La cola IndexedDB existente conserva el pedido ante cualquier fallo. */
 export function createMayoristaClient({enabled=false,baseUrl,qaAislado=false,getSigoToken,expectedEmpresaId,fetchImpl=globalThis.fetch}={}){
   let token=null,principal=null,generation=0,renewing=null,closed=0,sessionExpiry=0;
-  const gate=()=>{if(!enabled)throw new Error('Conexión Mayorista desactivada');const u=new URL(baseUrl);if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash||u.pathname!=='/')throw new Error('API HTTPS independiente inválida');return u.origin;};
+  const gate=()=>{if(!enabled)throw new Error('Conexión Mayorista desactivada');const u=new URL(baseUrl);if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash||!['/','/integracion-qa'].includes(u.pathname))throw new Error('API HTTPS independiente inválida');return u.origin+(u.pathname==='/'?'':u.pathname);};
   const failure=(message,status,path)=>Object.assign(new Error(message),{status,path});
   async function request(path,body,authorization=token,recovered=false){
     const url=gate()+path,isAuth=path.startsWith('/auth/'),epoch=closed;let r;
