@@ -69,9 +69,14 @@ export async function exerciseUnifiedUi({unified,pool,fixture,evaluate,wait,comm
  await evaluate(`(async()=>{await window.portal?.destroy();window.seller?.dispose();window.activationModule?.unmountActivation();const r=await fetch('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(${JSON.stringify(fixture.creds.gerencia)})});if(!r.ok)throw Error('Unified login failed');window.unifiedToken=(await r.json()).accessToken;document.body.innerHTML='<div id="root"></div>';const css=document.createElement('link');css.rel='stylesheet';css.href='/__unified.css';document.head.append(css);window.unified=await import('/__unified.js');})()`);
  await wait("document.querySelector('select')?.options.length===3 && !!document.querySelector('.sidebar .menu')");
  async function select(id){await evaluate(`(()=>{const s=[...document.querySelectorAll('select')].find(s=>[...s.options].some(o=>o.value===${JSON.stringify(id)}));s.value=${JSON.stringify(id)};s.dispatchEvent(new Event('change',{bubbles:true}));})()`);await wait(`document.querySelector('.user-card')?.textContent.includes(${JSON.stringify(unified.labels.get(id))})`);}
+ // La identidad y los permisos nativos terminan de cargar después de la tarjeta de empresa.
+ // Esperar los accesos owner completos evita comparar una captura parcial con otra ya resuelta.
+ const ownerMenuReady="['Configuración','Devoluciones'].every(label=>[...document.querySelectorAll('.sidebar .menu > .menu-item')].some(b=>b.textContent.includes(label)))";
+ await wait(ownerMenuReady);
  const native=await evaluate("[...document.querySelectorAll('.sidebar .menu > .menu-item')].map(b=>b.textContent)");assert.ok(native.length>=10);
  for(const [id,enabled,product] of [[fixture.B,false,'Producto Minorista único CI'],[fixture.E,true,'Producto SIGO'],[unified.M,true,'Producto Mixto único CI']]){
   await select(id);await wait(enabled?"document.querySelectorAll('.mayorista-menu-section nav button').length===10":"!document.querySelector('.mayorista-menu-section')");
+  await wait(ownerMenuReady);
   assert.deepEqual(await evaluate("[...document.querySelectorAll('.sidebar .menu > .menu-item')].map(b=>b.textContent)"),native);
   await evaluate("[...document.querySelectorAll('.sidebar .menu > button')].find(b=>b.textContent.includes('Productos')).click()");
   const expected=(await pool.query('SELECT nombre FROM public.productos WHERE empresa_id=$1 ORDER BY nombre LIMIT 1',[id])).rows[0].nombre;
