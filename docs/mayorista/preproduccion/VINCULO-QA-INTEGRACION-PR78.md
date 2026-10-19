@@ -13,7 +13,7 @@ Destino exclusivo: MAYORISTA-QA / qa / mayorista-api-qa. Supabase canónico: SIG
 - Las variables nuevas llevan MAYORISTA_INTEGRATION_. No sustituyen DATABASE_URL, Auth, firma ni bootstrap del QA anterior.
 - Inicio propuesto: node /app/src/modules/mayorista/backend/integration-qa-server.mjs.
 - Predeploy propuesto: el mismo archivo con --check; verifica conexión/ledger/RLS en lectura. No instala migraciones, crea empresas ni ejecuta aceptación comercial.
-- No se modifica Minorista, main, producción, Compras, SOVI, PROSPECCIÓN ni los dos pedidos del dispositivo.
+- No se modifica Minorista, main, producción, Compras, otros proyectos ni los dos pedidos del dispositivo.
 
 ## Conexión acreditada antes de preparar el patch
 
