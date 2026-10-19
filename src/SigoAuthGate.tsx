@@ -84,7 +84,8 @@ export default function SigoAuthGate({ children }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [mode, setMode] = useState<AuthMode>("login");
   const [puedeReenviarActivacion, setPuedeReenviarActivacion] = useState(false);
-  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);\n  const [aplicacionInstalada, setAplicacionInstalada] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [aplicacionInstalada, setAplicacionInstalada] = useState(false);
   const [mostrarAyudaInstalacion, setMostrarAyudaInstalacion] = useState(false);
   const [mensajeInstalacion, setMensajeInstalacion] = useState("");
   const requestInFlight = useRef(false);
