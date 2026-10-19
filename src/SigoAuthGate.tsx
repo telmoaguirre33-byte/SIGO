@@ -203,6 +203,7 @@ export default function SigoAuthGate({ children }: Props) {
         setMostrarAyudaInstalacion(true);
       }
     } catch {
+      promptInstalacionPendiente = null;
       setInstallPrompt(null);
       setMostrarAyudaInstalacion(true);
     }
