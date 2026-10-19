@@ -103,6 +103,8 @@ jobs:
       - name: Verificar paquete runtime y bloqueo por defecto
         run: |
           docker run --rm --network none --entrypoint node sigo-mayorista-qa:ci --input-type=module -e "await import('./server.mjs');const {railwayRuntime}=await import('./railway-runtime.mjs');try{railwayRuntime({});throw new Error('Habilitación inesperada')}catch(e){if(e.message!=='Mayorista QA está desactivado')throw e}const {acceptLiveDemo}=await import('./accept-live-demo.mjs');try{await acceptLiveDemo({});throw new Error('Aceptación live inesperada')}catch(e){if(e.message!=='Aceptación live requiere opt-in explícito')throw e};console.log('Runtime importado y desactivado por defecto; sin red ni despliegue')"
+      - name: TLS del pooler en imagen Node exacta de Railway, sin credenciales ni SQL
+        run: docker run --rm --mount "type=bind,source=${{ github.workspace }}/src/modules/mayorista/tests,target=/qa-probe,readonly" --entrypoint node sigo-mayorista-qa:ci /qa-probe/qa-pooler-tls.mjs --stdout-only
       - name: Guardar evidencia y lockfile generado
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
