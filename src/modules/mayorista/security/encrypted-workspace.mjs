@@ -1,4 +1,5 @@
-const DB='sigo-mayorista-secure-v1',encoder=new TextEncoder(),decoder=new TextDecoder();
+import {encryptedDatabase} from './operational-context.mjs';
+const DB=encryptedDatabase(import.meta.url),encoder=new TextEncoder(),decoder=new TextDecoder();
 const scopeKey=s=>JSON.stringify([s.empresaId,s.vendedorId]);
 const safeIdentity=i=>({empresaId:i.empresaId,vendedorId:i.vendedorId,userId:i.userId,...(Number.isFinite(i.expiresAt??i.sessionValidUntil)?{sessionValidUntil:i.expiresAt??i.sessionValidUntil}:{}),...(i.fuenteComercial==='sigo'?{fuenteComercial:'sigo'}:{}),...(typeof i.nombre==='string'&&i.nombre.length<=160?{nombre:i.nombre}:{}),...(typeof i.empresaNombre==='string'&&i.empresaNombre.length<=160?{empresaNombre:i.empresaNombre}:{})});
 function validOffline(identity,scope,now,maxHours=168){const age=now-Date.parse(identity.offlineValidatedAt);if(!Number.isFinite(now)||!Number.isFinite(maxHours)||maxHours<=0||maxHours>168||identity.empresaId!==scope.empresaId||identity.vendedorId!==scope.vendedorId||!identity.userId||!Number.isFinite(age)||age< -300000||age>maxHours*3600000||Number.isFinite(identity.sessionValidUntil)&&now>=identity.sessionValidUntil)throw new Error('El acceso offline requiere renovar la validación online');}

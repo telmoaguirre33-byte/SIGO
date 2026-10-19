@@ -7,6 +7,7 @@ Destino exclusivo: MAYORISTA-QA / qa / mayorista-api-qa. Supabase canónico: SIG
 - Se conserva el servidor P0 y sus variables originales.
 - La ruta fija /integracion-qa monta otra aplicación con pool, firma y Auth propios. El Origin sólo verifica CORS; no elige empresa ni base.
 - Las tres empresas utilizan las tablas canónicas de SIGO del Supabase nuevo. El PostgreSQL P0 no se migra, copia ni vuelve a sembrar.
+- La entrada de vendedor/portal deriva su base del destino aprobado; no mezcla la raíz P0 con el prefijo. Caché e IndexedDB del prefijo usan nombres propios y nunca abren ni limpian el almacén P0, incluso en el mismo navegador.
 - El cliente admite exclusivamente raíz HTTPS o /integracion-qa. El panel deriva ese prefijo de los destinos publicados, sin UUID manual ni otro importador/transporte comercial.
 - El nuevo runtime exige proyecto, entorno y servicio QA exactos, el proyecto Supabase aprobado y un perfil aprobado con SHA-256. El modo comercial existente sigue rechazando los IDs del QA P0.
 - El rol nuevo no tiene SUPERUSER, BYPASSRLS ni CREATE ROLE; pool máximo 2. Conserva RLS y validación de membresía.

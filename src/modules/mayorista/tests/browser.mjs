@@ -13,7 +13,7 @@ const profile=await mkdtemp('/tmp/sigo-mayorista-browser-');
 const artifacts=path.join(path.dirname(fileURLToPath(import.meta.url)), 'artifacts');
 await mkdir(artifacts,{recursive:true});
 const server=createServer(async(req,res)=>{
-  try{const url=new URL(req.url,'http://localhost');const name=url.pathname==='/'?'index.html':decodeURIComponent(url.pathname).slice(1);const file=path.resolve(root,name);if(!file.startsWith(root+path.sep))throw new Error('path');const content=await readFile(file);res.setHeader('Content-Type',({'.mjs':'text/javascript','.js':'text/javascript','.html':'text/html','.css':'text/css','.svg':'image/svg+xml','.webmanifest':'application/manifest+json','.png':'image/png'})[path.extname(file)]??'text/plain');res.end(content);}catch{res.writeHead(404);res.end('Not found');}
+  try{const url=new URL(req.url,'http://localhost');const pathname=url.pathname.startsWith('/integracion-qa/')?url.pathname.slice('/integracion-qa'.length):url.pathname;const name=pathname==='/'?'index.html':decodeURIComponent(pathname).slice(1);const file=path.resolve(root,name);if(!file.startsWith(root+path.sep))throw new Error('path');const content=await readFile(file);res.setHeader('Content-Type',({'.mjs':'text/javascript','.js':'text/javascript','.html':'text/html','.css':'text/css','.svg':'image/svg+xml','.webmanifest':'application/manifest+json','.png':'image/png'})[path.extname(file)]??'text/plain');res.end(content);}catch{res.writeHead(404);res.end('Not found');}
 });
 await new Promise((resolve,reject)=>{
   const timer=setTimeout(()=>{server.close();reject(new Error('BLOCKED: servidor local no pudo abrirse en 5 segundos; revisar permisos del entorno'));},5000);
@@ -154,6 +154,23 @@ try{
   assert.equal(JSON.parse(secureManifest.data).name,'SIGO Vendedor');passed++;console.log('PASS entrada segura tiene manifest propio e instalación PWA válida en Chromium (sin Android físico)');
   await test('iconos negros any y maskable se descargan y conservan dimensión real desde navegador', `const check=(c,msg)=>{if(!c)throw new Error(msg)};const m=await(await fetch('./secure.webmanifest')).json();for(const i of m.icons){const response=await fetch(i.src);check(response.ok,'icono no accesible');const bitmap=await createImageBitmap(await response.blob()),size=Number(i.sizes.split('x')[0]);check(bitmap.width===size&&bitmap.height===size,'dimensión');const canvas=document.createElement('canvas');canvas.width=canvas.height=size;canvas.getContext('2d').drawImage(bitmap,0,0);const data=canvas.getContext('2d').getImageData(0,0,size,size).data;check(data[0]===255&&data[1]===255&&data[2]===255&&data[3]===255,'fondo blanco opaco');check([...data].some((v,n)=>n%4===0&&v<20),'marca negra');bitmap.close();}`);
   await writeFile(path.join(artifacts,'sigo-vendedor-installation.json'),JSON.stringify({manifestUrl:secureManifest.url,manifest:JSON.parse(secureManifest.data),secureInstallability,physicalAndroid:false},null,2));
+
+  await test('QA con prefijo conserva dos pedidos cifrados del namespace original y usa otro almacén', `
+    const original=await import('/security/encrypted-workspace.mjs'),integration=await import('/integracion-qa/security/encrypted-workspace.mjs');
+    const scope={empresaId:crypto.randomUUID(),vendedorId:crypto.randomUUID()},identity={...scope,userId:crypto.randomUUID(),expiresAt:Date.now()+3600000};
+    const p0=new original.EncryptedWorkspace(scope);await p0.initializeDevice(identity,'test-only-device');
+    for(let n=1;n<=2;n++){const id=crypto.randomUUID();await p0.write('orders',id,{id,estado:'pendiente',cantidad:n});}
+    const before=JSON.stringify(await p0.list('orders'));
+    const qa=new integration.EncryptedWorkspace(scope);await qa.initializeDevice(identity,'test-only-device');
+    if((await qa.list('orders')).length!==0)throw Error('El prefijo abrió pedidos P0');
+    const id=crypto.randomUUID();await qa.write('orders',id,{id,estado:'pendiente',cantidad:3});
+    if((await qa.list('orders')).length!==1||JSON.stringify(await p0.list('orders'))!==before)throw Error('Se modificaron pedidos originales');
+    const registration=await navigator.serviceWorker.register('/integracion-qa/operational-sw.js',{scope:'/integracion-qa/'});
+    for(let n=0;n<200&&!registration.active;n++)await new Promise(r=>setTimeout(r,50));
+    if(!registration.active)throw Error('SW del prefijo no quedó activo');
+    const keys=await caches.keys();if(!keys.includes('sigo-mayorista-operational-v10')||!keys.includes('sigo-mayorista-integracion-qa-v1'))throw Error('Caché P0 borrada o caché del prefijo ausente');
+    p0.lock();qa.lock();
+  `);
   assert.deepEqual(runtimeErrors,[],'errores JavaScript');
   console.log(`${passed} pruebas aprobadas en Chromium real. Sin API remota ni Supabase.`);
   await writeFile(path.join(artifacts,'last-result.json'),JSON.stringify({date:new Date().toISOString(),browser:'Chromium headless',passed,runtimeErrors},null,2));
