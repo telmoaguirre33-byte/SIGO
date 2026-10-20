@@ -9,7 +9,7 @@ export default function IvaAPagar({ compras, ventas }: { compras: CompraSigo[]; 
   const [valores, setValores] = useState(["", "", "", "", "", "0"]);
   const [confirmado, setConfirmado] = useState(false);
   const campos = ["IVA débito fiscal verificado", "IVA crédito fiscal computable", "Retenciones computables", "Percepciones computables", "Saldo a favor anterior", "Otros ajustes (+/-)"];
-  const completos = valores.slice(0, 5).every(v => v.trim() !== "" && Number.isFinite(Number(v)) && Number(v) >= 0);
+  const completos = valores.slice(0, 5).every(v => v.trim() !== "" && Number.isFinite(Number(v)) && Number(v) >= 0) && valores[5].trim() !== "" && Number.isFinite(Number(valores[5]));
   const calculo = completos ? (() => {
     try { return calcularPosicionIva({ debitoFiscal: Number(valores[0]), creditoFiscalComputable: Number(valores[1]), retencionesComputables: Number(valores[2]), percepcionesComputables: Number(valores[3]), saldoAFavorAnterior: Number(valores[4]), otrosAjustes: Number(valores[5]), conciliado: confirmado }); }
     catch { return null; }
