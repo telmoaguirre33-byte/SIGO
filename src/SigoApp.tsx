@@ -77,7 +77,7 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
         </div>
         <div className="sidebar-scroll">
         <nav className="menu">
-          {sections.filter((item) => item !== "Informes" || Boolean(onAbrirInformes)).map((item) => (
+          {sections.filter((item) => (item !== "Informes" || Boolean(onAbrirInformes)) && (item !== "Contabilidad" || empresa.rol === "owner" || empresa.rol === "admin")).map((item) => (
             <button key={item} className={section === item ? "menu-item active" : "menu-item"} onClick={() => { if (item === "Informes") { onAbrirInformes?.(); return; } setSection(item); }}>
               <span className="menu-icon">{item === "Ofertas y etiquetas" ? "🏷" : item === "Negocio seguro" ? "🛡" : item.slice(0, 2).toUpperCase()}</span>
               <span>{item === "Compras" ? "Compras / Proveedores" : item}</span>
@@ -109,7 +109,7 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
           {section === "Ventas por día" && <IngresosDiariosOperativos empresaId={empresa.empresa_id} />}
           {section === "Stock vs Inventario" && <StockVsInventario empresaId={empresa.empresa_id} />}
           {section === "Negocio seguro" && <NegocioSeguro />}
-          {section === "Contabilidad" && <Contabilidad empresaId={empresa.empresa_id} />}
+          {section === "Contabilidad" && (empresa.rol === "owner" || empresa.rol === "admin") && <Contabilidad empresaId={empresa.empresa_id} />}
           {section === "Ventas" && <VentaRapidaOperativa empresaId={empresa.empresa_id} puedeEditarProductos={puedeEditarProductos} />}
           {section === "Compras" && <ComprasHub empresaId={empresa.empresa_id} />}
            {section === "Compras sugeridas" && <ComprasSugeridas empresaId={empresa.empresa_id} />}
