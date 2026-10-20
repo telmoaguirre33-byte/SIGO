@@ -7,6 +7,8 @@ function replaceOnce(source, before, after, label) {
   // Idempotent build patch: once the target form is already present, leave it alone
   // even when the old text is still a substring of the new form.
   if (source.includes(after)) return source;
+  // Accounting adds a role guard to the existing reports filter without changing its destination.
+  if (label === "reports visibility follows workspace permissions" && source.includes('(item !== "Informes" || Boolean(onAbrirInformes)) && (item !== "Contabilidad" || empresa.rol === "owner" || empresa.rol === "admin")')) return source;
   if (source.split(before).length !== 2) {
     throw new Error(`SIGO_INFORMES_NAV_TARGET_NOT_FOUND: ${label}`);
   }

@@ -223,6 +223,7 @@ export default function MobileOperationsMenu() {
               {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={() => irWorkspace("Clientes / Ctas. corrientes")}><span>▣</span><strong>Cuentas corrientes</strong><b>›</b></button>}
               {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={() => irOperacion("Stock vs Inventario")}><span>📷</span><strong>Stock vs Inventario</strong><b>›</b></button>}
               {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={() => irWorkspace("Informes")}><span>◔</span><strong>Informes</strong><b>›</b></button>}
+              {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={() => irOperacion("Contabilidad")}><span>▦</span><strong>Contabilidad</strong><b>›</b></button>}
               {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={() => irWorkspace("Usuarios")}><span>♙</span><strong>Usuarios / permisos</strong><b>›</b></button>}
               {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={abrirConfiguracion}><span>⚙</span><strong>Configuración</strong><b>›</b></button>}
               <button className="sigo-mobile-drawer-item" type="button" onClick={abrirAyuda}><span>?</span><strong>Ayuda</strong><b>›</b></button>
