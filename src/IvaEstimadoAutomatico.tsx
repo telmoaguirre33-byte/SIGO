@@ -1,10 +1,11 @@
+import type { CompraSigo } from "./compras";
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
 
 type FilaFiscal = { iva: number | null; total: number | null; tipo_comprobante: string | null };
 const pesos = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n);
 
-export default function IvaEstimadoAutomatico({ empresaId, periodo }: { empresaId: string; periodo: string }) {
+export default function IvaEstimadoAutomatico({ empresaId, periodo, compras }: { empresaId: string; periodo: string; compras: CompraSigo[] }) {
   const [datos, setDatos] = useState<{ ivaCompras: number; comprobantes: number; sinDesglose: number } | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -33,13 +34,17 @@ export default function IvaEstimadoAutomatico({ empresaId, periodo }: { empresaI
     })().catch(e => { if (activo) setError(e instanceof Error ? e.message : "No se pudo consultar el IVA registrado."); });
     return () => { activo = false; };
   }, [empresaId, periodo]);
+  const comprasActuales = compras.filter(c => c.fecha_compra.slice(0, 7) === periodo);
+  const totalActual = comprasActuales.reduce((n, c) => n + Number(c.total || 0), 0);
   return <section style={{ padding: 12, border: "1px solid #94a3b8", borderRadius: 8, marginBottom: 12 }}>
     <h4>Estimación automática del período</h4>
     <p><strong>IVA estimado a pagar: pendiente de información fiscal suficiente.</strong></p>
+    <p>Compras actuales de SIGO: {comprasActuales.length} por {pesos(totalActual)}. No se confunden con compras fiscales históricas.</p>
     {error ? <p role="alert">No se pudo verificar el IVA de compras: {error}</p> : datos ? <>
-      <p>IVA informado en compras históricas: {pesos(datos.ivaCompras)} ({datos.comprobantes} comprobantes con importe IVA registrado).</p>
+      <p>IVA discriminado en compras históricas: {pesos(datos.ivaCompras)} ({datos.comprobantes} comprobantes con importe IVA registrado).</p>
       <p>Compras sin IVA discriminado: {datos.sinDesglose}.</p>
     </> : <p>Consultando comprobantes…</p>}
+    <p>Las compras actuales de SIGO no registran un desglose de IVA por alícuota: no se les atribuye crédito fiscal automáticamente.</p>
     <p>No se puede calcular IVA neto a ingresar sin el débito fiscal de ventas, créditos computables validados y ajustes. Los importes de compras mostrados no se descuentan automáticamente hasta verificar su tratamiento fiscal.</p>
   </section>;
 }
