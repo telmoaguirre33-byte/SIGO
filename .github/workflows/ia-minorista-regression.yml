@@ -1,0 +1,46 @@
+name: IA minorista - resilience and browsers
+
+on:
+  pull_request:
+    paths:
+      - 'api/compras/analizar-factura.js'
+      - 'api/inventario/analizar.js'
+      - 'src/facturaIA.ts'
+      - 'src/iaImagenes.ts'
+      - 'src/inventarioIA.ts'
+      - 'src/StockVsInventario.tsx'
+      - 'scripts/verify-*-resilience.mjs'
+      - 'scripts/verify-ai-browser.mjs'
+      - 'scripts/verify-inventory-ui-browser.mjs'
+      - '.github/workflows/ia-minorista-regression.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: API regression - no external services
+        run: node scripts/verify-invoice-resilience.mjs && node scripts/verify-inventory-resilience.mjs
+      - name: Install pinned browser test tools
+        run: npm install --no-save --package-lock=false --no-audit --no-fund playwright@1.62.1
+      - run: npx playwright install --with-deps chromium
+      - name: Chromium and simulated Android - synthetic images and network faults
+        run: node scripts/verify-ai-browser.mjs
+      - name: Inventory screen - persistence, monthly report and Excel download
+        run: node scripts/verify-inventory-ui-browser.mjs
+      - name: Synthetic inventory screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: inventory-ui-synthetic
+          path: test-results/inventory-ui
+          if-no-files-found: ignore

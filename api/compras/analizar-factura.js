@@ -1,6 +1,9 @@
-const MAX_DATA_URL_LENGTH = 8_000_000;
+// Leave room for the JSON envelope below Vercel's 4.5 MB request limit.
+const MAX_DATA_URL_LENGTH = 4_100_000;
 const MAX_INVOICE_ITEMS = 300;
-const GEMINI_TIMEOUT_MS = 45_000;
+const GEMINI_TIMEOUT_MS = 18_000;
+const REQUEST_TIMEOUT_MS = 45_000;
+const AUTH_TIMEOUT_MS = 8_000;
 const ALLOWED_IMAGE = /^data:image\/(jpeg|jpg|png|webp);base64,/i;
 const ALLOWED_PDF = /^data:application\/pdf;base64,/i;
 const GTIN_LENGTHS = new Set([8, 12, 13, 14]);
@@ -9,6 +12,117 @@ const MIN_LINE_CONFIDENCE_AUTO = 0.30;
 
 function json(res, status, body) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8").send(JSON.stringify(body));
+}
+
+function timeoutError() {
+  const error = new Error("AI_TIMEOUT");
+  error.name = "AbortError";
+  return error;
+}
+
+// One deadline covers authorization, both inventory stages, fallback and body reads.
+// A timer per retry would allow the pipeline to outlive the function itself.
+function createRequestContext(req, res) {
+  const deadline = Date.now() + REQUEST_TIMEOUT_MS;
+  const vercelId = String(req.headers?.["x-vercel-id"] || "");
+  const requestId = /^[a-zA-Z0-9:._-]{1,128}$/.test(vercelId)
+    ? vercelId
+    : `ia-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  const close = () => { if (!res.writableEnded) abort(); };
+  req.once?.("aborted", abort);
+  res.once?.("close", close);
+  if (req.aborted) abort();
+  return {
+    requestId,
+    remaining: () => Math.max(0, deadline - Date.now()),
+    async fetch(url, options = {}, maxMs = GEMINI_TIMEOUT_MS) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0 || controller.signal.aborted) throw timeoutError();
+      const attempt = new AbortController();
+      const abortAttempt = () => attempt.abort();
+      controller.signal.addEventListener("abort", abortAttempt, { once: true });
+      const timer = setTimeout(abortAttempt, Math.min(maxMs, remaining));
+      try {
+        const response = await fetch(url, { ...options, signal: attempt.signal });
+        // Read the body while the timeout is still active (fetch resolves at headers).
+        const text = await response.text();
+        return {
+          ok: response.ok,
+          status: response.status,
+          retryAfter: response.headers?.get?.("retry-after"),
+          json: async () => JSON.parse(text),
+        };
+      } finally {
+        clearTimeout(timer);
+        controller.signal.removeEventListener("abort", abortAttempt);
+      }
+    },
+    dispose() {
+      req.removeListener?.("aborted", abort);
+      res.removeListener?.("close", close);
+    },
+  };
+}
+
+function parseGeminiResponse(data) {
+  const candidates = Array.isArray(data?.candidates) ? data.candidates : [];
+  // Never accept a syntactically valid prefix/partial response as a complete invoice.
+  if (candidates.length !== 1 || (candidates[0].finishReason && candidates[0].finishReason !== "STOP")) {
+    throw new Error(candidates[0]?.finishReason === "MAX_TOKENS" ? "AI_OUTPUT_TRUNCATED" : "AI_INVALID_OUTPUT");
+  }
+  const text = getGeminiOutputText(data);
+  if (!text) throw new Error("EMPTY_AI_OUTPUT");
+  return parseJsonText(text);
+}
+
+function outputErrorCode(error) {
+  // JSON.parse errors can quote invoice/product text; log a code, never that text.
+  return /^[A-Z_]{1,80}$/.test(error?.message || "") ? error.message : "AI_INVALID_OUTPUT";
+}
+
+function geminiFailure(res, result, inventory = false) {
+  const subject = inventory ? "el inventario" : "el comprobante";
+  if (result?.error === "timeout") return json(res, 504, { error: "AI_TIMEOUT", message: `La IA no terminó de analizar ${subject} dentro del tiempo disponible. Volvé a intentar más tarde. No se guardó ninguna compra ni se modificó stock.` });
+  if (result?.error) return json(res, 502, { error: "AI_UNAVAILABLE", message: "No se pudo conectar con el servicio de IA. Volvé a intentar en unos segundos." });
+  const status = result?.response?.status || 502;
+  console.warn("SIGO Gemini request failed", { requestId: result?.requestId, status, model: result?.model });
+  if ([401, 403].includes(status)) return json(res, 503, { error: "AI_CREDENTIALS_ERROR", message: "El servicio de IA no pudo autorizar la solicitud. La configuración debe ser revisada por el administrador." });
+  if (status === 404) return json(res, 502, { error: "AI_MODEL_UNAVAILABLE", message: "El modelo de IA configurado no está disponible para este proyecto." });
+  if (status === 413) return json(res, 413, { error: "AI_DOCUMENT_TOO_LARGE", message: "El documento supera el tamaño que puede procesar la IA. Reducí el archivo o dividí la carga." });
+  if (status === 429) {
+    if (/^\d{1,6}$/.test(result?.response?.retryAfter || "")) res.setHeader("Retry-After", result.response.retryAfter);
+    return json(res, 429, { error: "AI_RATE_LIMIT", message: "Gemini alcanzó temporalmente su límite de uso. Intentá nuevamente en unos minutos." });
+  }
+  if (status === 504) return json(res, 504, { error: "AI_TIMEOUT", message: `Gemini agotó el tiempo para analizar ${subject}. Volvé a intentar más tarde.` });
+  if ([500, 502, 503].includes(status)) return json(res, 503, { error: "AI_TEMPORARILY_UNAVAILABLE", message: "Gemini está temporalmente fuera de servicio o con alta demanda. Volvé a intentar más tarde." });
+  return json(res, 502, { error: "AI_ERROR", message: `La IA no pudo analizar ${subject} (HTTP ${status}).` });
+}
+
+async function requestGemini(context, { apiKey, models, body, stage }) {
+  const uniqueModels = [...new Set(models.filter(Boolean))].slice(0, 2);
+  let result;
+  for (const [index, model] of uniqueModels.entries()) {
+    // At most one fallback after an explicit transient response. Never retry 429,
+    // a timeout or an uncertain network result and multiply provider load/cost.
+    if (index > 0 && (![500, 502, 503, 404].includes(result?.response?.status) || context.remaining() < 5_000)) break;
+    const started = Date.now();
+    try {
+      const response = await context.fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method: "POST",
+        headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      result = { response, model, requestId: context.requestId };
+      console.info("SIGO Gemini attempt", { requestId: context.requestId, stage, intento: index + 1, status: response.status, model, ms: Date.now() - started });
+      if (response.ok) return result;
+    } catch (error) {
+      console.warn("SIGO Gemini connection", { requestId: context.requestId, stage, model, error: error?.name || "network", ms: Date.now() - started });
+      return { error: error?.name === "AbortError" ? "timeout" : "network", model, requestId: context.requestId };
+    }
+  }
+  return result;
 }
 
 function getGeminiOutputText(data) {
@@ -223,11 +337,11 @@ function normalizarFacturaIA(raw) {
   const items = [];
 
   for (const item of itemsRaw) {
-    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    if (!item || typeof item !== "object" || Array.isArray(item)) throw errorRevision("INVALID_INVOICE_LINE");
     const descripcion = textoSeguro(item.descripcion, 240);
     const cantidad = numeroSeguro(item.cantidad, { min: 0.000001, max: 1_000_000 });
     const costoUnitario = numeroSeguro(item.costo_unitario, { min: 0, max: 1_000_000_000_000 });
-    if (!descripcion || !Number.isFinite(cantidad) || !Number.isFinite(costoUnitario)) continue;
+    if (!descripcion || !Number.isFinite(cantidad) || !Number.isFinite(costoUnitario)) throw errorRevision("INVALID_INVOICE_LINE", descripcion);
 
     const confianzaLinea = confianza(item.confianza);
     if (confianzaLinea < MIN_LINE_CONFIDENCE_AUTO) {
@@ -314,18 +428,18 @@ function normalizarFacturaIA(raw) {
   };
 }
 
-async function validarUsuarioYPermiso(req, empresaId, permiso = "stock.read") {
+async function validarUsuarioYPermiso(req, empresaId, permiso = "stock.read", context) {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
   const auth = String(req.headers.authorization || "");
   if (!supabaseUrl || !anonKey || !auth.startsWith("Bearer ")) return false;
 
-  const userResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
+  const userResponse = await context.fetch(`${supabaseUrl}/auth/v1/user`, {
     headers: { apikey: anonKey, Authorization: auth },
-  });
+  }, AUTH_TIMEOUT_MS);
   if (!userResponse.ok) return false;
 
-  const permisoResponse = await fetch(`${supabaseUrl}/rest/v1/rpc/tiene_permiso_empresa`, {
+  const permisoResponse = await context.fetch(`${supabaseUrl}/rest/v1/rpc/tiene_permiso_empresa`, {
     method: "POST",
     headers: {
       apikey: anonKey,
@@ -333,76 +447,40 @@ async function validarUsuarioYPermiso(req, empresaId, permiso = "stock.read") {
       "Content-Type": "application/json",
     },
       body: JSON.stringify({ p_empresa_id: empresaId, p_permiso: permiso }),
-  });
+  }, AUTH_TIMEOUT_MS);
   if (!permisoResponse.ok) return false;
   const permitido = await permisoResponse.json().catch(() => false);
   return permitido === true;
 }
 
-export default async function handler(req, res) {
+async function handleRequest(req, res, context) {
   if (req.method !== "POST") return json(res, 405, { error: "METHOD_NOT_ALLOWED" });
 
   if (req.body?.modo === "inventario") {
     const empresaId = String(req.body?.empresaId || "").trim();
-    const imagenes = Array.isArray(req.body?.imagenes) ? req.body.imagenes.slice(0,10) : [];
-    if (!empresaId || !imagenes.length || imagenes.some((x)=>typeof x!=="string" || !ALLOWED_IMAGE.test(x) || x.length>MAX_DATA_URL_LENGTH)) return json(res,400,{error:"INVALID_INVENTORY_INPUT",message:"Revisá las fotos del inventario."});
+    const imagenes = Array.isArray(req.body?.imagenes) ? req.body.imagenes : [];
+    if (!empresaId || !imagenes.length || imagenes.length>10 || imagenes.some((x)=>typeof x!=="string" || !ALLOWED_IMAGE.test(x) || x.length>MAX_DATA_URL_LENGTH)) return json(res,400,{error:"INVALID_INVENTORY_INPUT",message:"Enviá entre 1 y 10 fotos JPG, PNG o WebP del inventario."});
     if (imagenes.reduce((total,img)=>total+img.length,0)>4_000_000) return json(res,413,{error:"INVENTORY_IMAGES_TOO_LARGE",message:"Las fotos superan el límite de tamaño. Volvé a intentarlo con menos fotos."});
-    try { if (!(await validarUsuarioYPermiso(req, empresaId, "stock.read"))) return json(res,403,{error:"FORBIDDEN"}); } catch { return json(res,403,{error:"FORBIDDEN"}); }
+    try { if (!(await validarUsuarioYPermiso(req, empresaId, "stock.read", context))) return json(res,403,{error:"FORBIDDEN"}); } catch(error) { return json(res,error?.name==="AbortError"?504:502,{error:"AUTH_UNAVAILABLE",message:"No se pudo verificar el acceso a SIGO. Volvé a intentar."}); }
     const supabaseUrl=process.env.SUPABASE_URL||process.env.VITE_SUPABASE_URL, anonKey=process.env.SUPABASE_ANON_KEY||process.env.VITE_SUPABASE_ANON_KEY||process.env.VITE_SUPABASE_PUBLISHABLE_KEY, auth=String(req.headers.authorization||"");
     const imagenPrompt=`Auditor visual de SIGO. Hacé un BARRIDO VISUAL COMPLETO e independiente del catálogo: mirá toda la superficie de cada foto, dividila mentalmente en una cuadrícula de 3×3 y recorré cada fila de izquierda a derecha, desde arriba hacia abajo. Registrá cada tipo de producto/frente distinto que sea razonablemente identificable; no te limites a los más grandes o fáciles, no omitas productos visibles y no inventes etiquetas ocultas. Para cada producto transcribí marca, variedad y presentación sólo hasta donde se lean; si faltan datos o la foto no da seguridad, incluilo con menor confianza para REVISAR. Un producto con varias unidades iguales cuenta una sola vez; variantes o tamaños distintos son productos distintos. Primero definí el bloque dominante. x/y son porcentajes 0..100: elegí espacio libre cercano que no tape marca, logo, variedad, tamaño, código ni precio; si no hay espacio, preferí un borde libre. Respondé sólo JSON válido: {"bloque":string,"visuales":[{"descripcion":string,"marca":string|null,"variedad":string|null,"presentacion":string|null,"confianza":number,"foto":number,"x":number,"y":number}]}. Incluí todas las detecciones hasta un máximo de 200, ordenadas por foto, fila y columna.`;
     const apiKey=process.env.GEMINI_API_KEY;if(!apiKey)return json(res,503,{error:"AI_NOT_CONFIGURED",message:"La IA de SIGO no está configurada."});
-    // Vercel runtime logs proved this model is the reliable path for inventory images.
-    // Keep the purchases model isolated; only this modo=inventario branch changes.
     const model=process.env.GEMINI_INVENTORY_MODEL||process.env.GEMINI_INVOICE_FALLBACK_MODEL||"gemini-3.1-flash-lite-preview";
     const fallbackModel=process.env.GEMINI_INVENTORY_FALLBACK_MODEL||process.env.GEMINI_INVOICE_MODEL||"gemini-3.8-flash";
-    const fetchInventoryGemini=async(stage,prompt,withImages)=>{
-      const modelos=[...new Set([model,fallbackModel].filter(Boolean))];
-      let ultimaRespuesta=null;
-      for(let modeloIndex=0;modeloIndex<modelos.length;modeloIndex+=1){
-        const modelo=modelos[modeloIndex];
-        const maxReintentos=modeloIndex===modelos.length-1?2:0;
-        for(let intento=0;intento<=maxReintentos;intento+=1){
-          if(intento>0)await new Promise((resolve)=>setTimeout(resolve,intento===1?700:1400));
-          const controller=new AbortController();
-          const timeout=setTimeout(()=>controller.abort(),GEMINI_TIMEOUT_MS);
-          const inicio=Date.now();
-          try{
-            const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`,{
-              method:"POST",signal:controller.signal,
-              headers:{"x-goog-api-key":apiKey,"Content-Type":"application/json"},
-              body:JSON.stringify({contents:[{role:"user",parts:[
-                {text:prompt},
-                ...(withImages?imagenes.map((img)=>({inlineData:{mimeType:img.match(/^data:([^;]+);/)?.[1]||"image/jpeg",data:img.split(",")[1]}})):[]),
-              ]}],generationConfig:{temperature:0,responseMimeType:"application/json",maxOutputTokens:7000}}),
-            });
-            console.info("SIGO inventory Gemini",{stage,intento:intento+1,status:response.status,model:modelo,ms:Date.now()-inicio});
-            if(response.ok)return {response,model:modelo};
-            ultimaRespuesta={response,model:modelo};
-            if(![429,503].includes(response.status))return ultimaRespuesta;
-          }catch(error){
-            console.warn("SIGO inventory Gemini connection",{stage,intento:intento+1,model:modelo,error:error?.name||"network"});
-            if(error?.name==="AbortError")ultimaRespuesta={error:"timeout",model:modelo};
-            else ultimaRespuesta={error:"network",model:modelo};
-            break;
-          }finally{clearTimeout(timeout);}
-        }
-      }
-      return ultimaRespuesta;
-    };
-    const errorGemini=(result)=>{
-      if(result?.error==="timeout")return json(res,504,{error:"AI_TIMEOUT",message:"El análisis de inventario tardó demasiado. Probá nuevamente con menos fotos o en unos segundos."});
-      if(result?.error)return json(res,502,{error:"AI_UNAVAILABLE",message:"No se pudo conectar con la IA de SIGO. Volvé a intentar en unos segundos."});
-      const status=result?.response?.status||502;
-      if(status===503)return json(res,503,{error:"AI_TEMPORARILY_UNAVAILABLE",message:"Gemini sigue temporalmente con alta demanda en el modelo de inventario. Volvé a intentar en unos segundos."});
-      if(status===429)return json(res,429,{error:"AI_RATE_LIMIT",message:"Gemini alcanzó temporalmente su límite de uso. Intentá nuevamente en unos minutos."});
-      if(status===404)return json(res,502,{error:"AI_MODEL_UNAVAILABLE",message:"El modelo de IA de inventario no está disponible para este proyecto."});
-      return json(res,502,{error:"AI_ERROR",message:`La IA no pudo analizar el inventario (HTTP ${status}).`});
-    };
-    const salidaTexto=async(result)=>parseJsonText(getGeminiOutputText(await result.response.json()));
+    const fetchInventoryGemini=(stage,prompt,withImages)=>requestGemini(context,{
+      apiKey,models:[model,fallbackModel],stage:`inventory-${stage}`,
+      body:{contents:[{role:"user",parts:[
+        {text:prompt},
+        ...(withImages?imagenes.map((img)=>({inlineData:{mimeType:img.match(/^data:([^;]+);/)?.[1]||"image/jpeg",data:img.split(",")[1]}})):[]),
+      ]}],generationConfig:{temperature:0,responseMimeType:"application/json",maxOutputTokens:7000}},
+    });
+    const errorGemini=(result)=>geminiFailure(res,result,true);
+    const salidaTexto=async(result)=>parseGeminiResponse(await result.response.json());
     let faseVisual=await fetchInventoryGemini("barrido",imagenPrompt,true);
     if(!faseVisual?.response?.ok)return errorGemini(faseVisual);
     try {
       const raw=await salidaTexto(faseVisual);
+      if(!raw || !Array.isArray(raw.visuales) || typeof raw.bloque!=="string" || raw.visuales.length>200)throw new Error("AI_INVALID_OUTPUT");
       const visuales=(Array.isArray(raw.visuales)?raw.visuales:[]).slice(0,200).map((v,i)=>({
         visual_index:i,
         descripcion:textoSeguro([v.marca,v.variedad,v.presentacion].filter(Boolean).join(" ")||v.descripcion,180)||"Producto visible a revisar",
@@ -415,7 +493,7 @@ export default async function handler(req, res) {
       if(visuales.length===0)return json(res,200,{bloque,hallazgos:[],resumen:{visuales:0}});
       // Fetch the tenant catalogue only after the complete visual sweep and family detection.
       let pr;
-      try{pr=await fetch(`${supabaseUrl}/rest/v1/productos?empresa_id=eq.${encodeURIComponent(empresaId)}&select=id,nombre,codigo_interno,codigo_barras,categoria,marca,stock_actual&limit=5000`,{headers:{apikey:anonKey,Authorization:auth}});}catch{return json(res,502,{error:"PRODUCTS_UNAVAILABLE",message:"No pude consultar el stock de SIGO."});}
+      try{pr=await context.fetch(`${supabaseUrl}/rest/v1/productos?empresa_id=eq.${encodeURIComponent(empresaId)}&select=id,nombre,codigo_interno,codigo_barras,categoria,marca,stock_actual&limit=5000`,{headers:{apikey:anonKey,Authorization:auth}},AUTH_TIMEOUT_MS);}catch(error){return json(res,error?.name==="AbortError"?504:502,{error:"PRODUCTS_UNAVAILABLE",message:"No pude consultar el stock de SIGO."});}
       if(!pr.ok)return json(res,502,{error:"PRODUCTS_UNAVAILABLE",message:"No pude consultar el stock de SIGO."});
       const productos=await pr.json().catch(()=>null);
       if(!Array.isArray(productos))return json(res,502,{error:"PRODUCTS_UNAVAILABLE",message:"No pude leer el catálogo de stock de SIGO."});
@@ -425,6 +503,7 @@ export default async function handler(req, res) {
       const faseCruce=await fetchInventoryGemini("cruce",crucePrompt,false);
       if(!faseCruce?.response?.ok)return errorGemini(faseCruce);
       const cruce=await salidaTexto(faseCruce);
+      if(!cruce || !Array.isArray(cruce.cruces) || !Array.isArray(cruce.ids_catalogo_no_vistos))throw new Error("AI_INVALID_OUTPUT");
       const porId=new Map(productos.map((p)=>[String(p.id),p]));
       const cruces=new Map((Array.isArray(cruce.cruces)?cruce.cruces:[]).map(c=>[Number(c.visual_index),c]));
       const detectados=visuales.map((v,i)=>{
@@ -458,9 +537,9 @@ export default async function handler(req, res) {
         .map((p,i)=>({id:`n-${i}`,descripcion:p.nombre,codigo:p.codigo_barras||p.codigo_interno||"",categoria:p.categoria||bloque,stock_actual:Number(p.stock_actual||0),estado:"no_visto",confianza:1,foto:0,x:0,y:0}));
       const hallazgos=[...detectados,...noVistos];
       const resumen={visuales:visuales.length,ok:detectados.filter(h=>h.estado==="ok").length,sin_stock:detectados.filter(h=>h.estado==="sin_stock").length,falta_sigo:detectados.filter(h=>h.estado==="falta_sigo").length,no_visto:noVistos.length,revisar:detectados.filter(h=>h.estado==="revisar").length};
-      console.info("SIGO inventory completed",{bloque,imagenes:imagenes.length,payloadChars:imagenes.reduce((n,img)=>n+img.length,0),modelVision:faseVisual.model,modelCruce:faseCruce.model,...resumen});
+      console.info("SIGO inventory completed",{requestId:context.requestId,bloque,imagenes:imagenes.length,payloadChars:imagenes.reduce((n,img)=>n+img.length,0),modelVision:faseVisual.model,modelCruce:faseCruce.model,...resumen});
       return json(res,200,{bloque,hallazgos,resumen});
-    } catch(e){console.error("SIGO inventory parse error",e);return json(res,502,{error:"AI_INVALID_OUTPUT",message:"La IA respondió pero el análisis de inventario no fue válido."});}
+    } catch(e){console.warn("SIGO inventory parse error",{requestId:context.requestId,code:outputErrorCode(e)});return json(res,502,{error:e?.message==="AI_OUTPUT_TRUNCATED"?"AI_OUTPUT_TRUNCATED":"AI_INVALID_OUTPUT",message:"La IA devolvió un análisis incompleto o inválido. No se aplicaron resultados parciales. Volvé a intentar con menos fotos."});}
   }
 
   const empresaId = String(req.body?.empresaId || "").trim();
@@ -470,21 +549,21 @@ export default async function handler(req, res) {
   const filename = textoSeguro(req.body?.filename, 120) || (documentType === "pdf" ? "documento.pdf" : "documento.jpg");
   if (!empresaId) return json(res, 400, { error: "EMPRESA_REQUIRED" });
   const formatoValido = documentType === "texto" ? mensajeTexto.length >= 4 && mensajeTexto.length <= 15000 : documentType === "pdf" ? ALLOWED_PDF.test(documentDataUrl) : ALLOWED_IMAGE.test(documentDataUrl);
-  if (!formatoValido || documentDataUrl.length > MAX_DATA_URL_LENGTH) {
+  if (documentDataUrl.length > MAX_DATA_URL_LENGTH) return json(res, 413, { error: "DOCUMENT_TOO_LARGE", message: "El documento supera el límite de envío. Reducí el archivo o dividí el PDF antes de analizarlo." });
+  if (!formatoValido) {
     return json(res, 400, { error: "INVALID_DOCUMENT" });
   }
 
   try {
-    if (!(await validarUsuarioYPermiso(req, empresaId, "purchases.write"))) return json(res, 403, { error: "FORBIDDEN" });
-  } catch {
-    return json(res, 403, { error: "FORBIDDEN" });
+    if (!(await validarUsuarioYPermiso(req, empresaId, "purchases.write", context))) return json(res, 403, { error: "FORBIDDEN" });
+  } catch (error) {
+    return json(res, error?.name === "AbortError" ? 504 : 502, { error: "AUTH_UNAVAILABLE", message: "No se pudo verificar el acceso a SIGO. Volvé a intentar." });
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return json(res, 503, { error: "AI_NOT_CONFIGURED" });
-
-  const model = process.env.GEMINI_INVOICE_MODEL || "gemini-3.8-flash";
-  const fallbackModel = process.env.GEMINI_INVOICE_FALLBACK_MODEL || "gemini-3.1-flash-lite-preview";
+  // Prefer a generally available fast model; explicit environment overrides remain respected.
+  const model = process.env.GEMINI_INVOICE_MODEL || "gemini-2.5-flash-lite";
+  const fallbackModel = process.env.GEMINI_INVOICE_FALLBACK_MODEL || "gemini-2.5-flash";
   const prompt = `Analizá este comprobante o mensaje comercial argentino para cargar mercadería en un sistema comercial. Puede ser factura, ticket, remito, nota de pedido, orden/pedido de compra, talonario X, comprobante X, mensaje de WhatsApp u otro registro de compra/recepción. Identificá el tipo real en tipo_comprobante.
 No inventes datos. Si algo no es legible, usá null y baja confianza.
 Extraé únicamente productos/servicios efectivamente facturados; no conviertas IVA, descuentos globales, percepciones, subtotales ni totales en productos.
@@ -499,81 +578,121 @@ Respondé SOLAMENTE JSON válido con esta forma exacta:
 {"proveedor":{"razon_social":string|null,"cuit":string|null},"fecha":string|null,"tipo_comprobante":string|null,"numero_comprobante":string|null,"moneda":string|null,"total":number|null,"confianza_general":number,"items":[{"descripcion":string,"codigo":string|null,"codigo_barras":string|null,"cantidad":number,"costo_unitario":number,"total_linea":number|null,"confianza":number}]}
 confianza_general y confianza van de 0 a 1.`;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
-  let aiResponse;
-  try {
-    const fetchGemini = (modelo) => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        "x-goog-api-key": apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [{
-          role: "user",
-          parts: [
-            { text: prompt },
-            ...(documentType === "texto" ? [{ text: `Mensaje comercial a registrar como compra:\n${mensajeTexto}` }] : [{
-              inlineData: {
-                mimeType: documentType === "pdf"
-                  ? "application/pdf"
-                  : (documentDataUrl.match(/^data:([^;]+);base64,/i)?.[1] || "image/jpeg"),
-                data: documentDataUrl.split(",")[1],
-              },
-            }]),
-          ],
-        }],
-        generationConfig: {
-          maxOutputTokens: 6000,
+  // OpenAI invoice analysis is opt-in and isolated from inventory and stock writes.
+  // The OpenAI API key is read only on the server; never return it to the client.
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (openaiKey) {
+    try {
+      const parts = [{ type: "text", text: prompt }];
+      if (documentType === "texto") {
+        parts.push({ type: "text", text: mensajeTexto });
+      } else if (documentType === "pdf") {
+        parts.push({ type: "file", file: { filename, file_data: documentDataUrl } });
+      } else {
+        parts.push({ type: "image_url", image_url: { url: documentDataUrl, detail: "high" } });
+      }
+      const response = await context.fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: process.env.OPENAI_INVOICE_MODEL || "gpt-4.1-mini",
+          messages: [{ role: "system", content: "Extraé datos fieles del comprobante. Devolvé exclusivamente JSON válido, sin inventar información." }, { role: "user", content: parts }],
+          response_format: { type: "json_object" },
+          max_completion_tokens: 6000,
           temperature: 0,
-          responseMimeType: "application/json",
-          responseSchema: FACTURA_RESPONSE_SCHEMA,
-        },
-      }),
-    });
-    const esperas = [800, 1800, 3500];
-    const inicioGemini = Date.now();
-    aiResponse = await fetchGemini(model);
-    console.info("SIGO Gemini attempt", { intento: 1, status: aiResponse.status, model, ms: Date.now() - inicioGemini });
-    let intento = 1;
-    for (const espera of esperas) {
-      if (aiResponse.status !== 503) break;
-      await new Promise((resolve) => setTimeout(resolve, espera));
-      intento += 1;
-      const inicioReintento = Date.now();
-      aiResponse = await fetchGemini(model);
-      console.info("SIGO Gemini attempt", { intento, status: aiResponse.status, model, ms: Date.now() - inicioReintento });
+        }),
+      }, 35_000);
+      if (!response.ok) {
+        console.warn("SIGO OpenAI invoice request failed", { requestId: context.requestId, status: response.status });
+        return json(res, response.status === 429 ? 429 : 502, {
+          error: response.status === 429 ? "AI_RATE_LIMIT" : "AI_UNAVAILABLE",
+          message: "OpenAI no pudo procesar el comprobante. No se guardó la compra.",
+        });
+      }
+      const data = await response.json();
+      const output = data?.choices?.[0]?.message?.content;
+      if (typeof output !== "string" || !output.trim()) throw new Error("AI_INVALID_OUTPUT");
+      const leido = JSON.parse(output);
+      const tipo = String(leido?.tipo_comprobante || "").toLowerCase();
+      if (documentType === "texto" || (tipo && !tipo.includes("factura"))) {
+        if (!leido.proveedor?.razon_social && !leido.proveedor?.cuit) leido.proveedor = { razon_social: "Proveedor sin identificar", cuit: null };
+        if (!leido.numero_comprobante) leido.numero_comprobante = `COMPRA-${Date.now()}`;
+        if (!leido.tipo_comprobante) leido.tipo_comprobante = documentType === "texto" ? "Mensaje de WhatsApp" : "Comprobante";
+      }
+      const factura = normalizarFacturaIA(leido);
+      return json(res, 200, { factura, model: data?.model || "openai" });
+    } catch (error) {
+      console.warn("SIGO OpenAI invoice processing error", { requestId: context.requestId, error: error?.name || "invalid" });
+      return json(res, error?.name === "AbortError" ? 504 : 422, {
+        error: error?.name === "AbortError" ? "AI_TIMEOUT" : "AI_REVIEW_REQUIRED",
+        message: "La lectura no se completó con seguridad. No se guardó ninguna compra ni se modificó stock.",
+      });
     }
-    if ((aiResponse.status === 503 || aiResponse.status === 429) && fallbackModel && fallbackModel !== model) {
-      const inicioFallback = Date.now();
-      aiResponse = await fetchGemini(fallbackModel);
-      console.info("SIGO Gemini fallback", { status: aiResponse.status, model: fallbackModel, ms: Date.now() - inicioFallback });
-    }
-  } catch (error) {
-    if (error?.name === "AbortError") {
-      return json(res, 504, { error: "AI_TIMEOUT", message: "La lectura de la factura tardó demasiado. Probá nuevamente con una foto más nítida." });
-    }
-    return json(res, 502, { error: "AI_UNAVAILABLE", message: "No se pudo conectar con el servicio de IA." });
-  } finally {
-    clearTimeout(timeout);
   }
+  if (!apiKey) return json(res, 503, { error: "AI_NOT_CONFIGURED" });
 
-  if (!aiResponse.ok) {
-    const detail = await aiResponse.text().catch(() => "");
-    console.error("SIGO invoice Gemini error", aiResponse.status, detail.slice(0, 1200));
-    if (aiResponse.status === 404) return json(res, 502, { error: "AI_MODEL_UNAVAILABLE", message: "El modelo de IA configurado no está disponible para este proyecto." });
-    if (aiResponse.status === 503) return json(res, 503, { error: "AI_TEMPORARILY_UNAVAILABLE", message: "Gemini está temporalmente con alta demanda. SIGO reintentó automáticamente; esperá unos segundos y volvé a intentar." });
-    if (aiResponse.status === 429) return json(res, 429, { error: "AI_RATE_LIMIT", message: "Gemini alcanzó temporalmente su límite de uso. Intentá nuevamente en unos minutos." });
-    return json(res, 502, { error: "AI_ERROR", message: "La IA no pudo procesar el comprobante." });
+  // Discover models accessible to this exact API key instead of guessing model IDs.
+  // The catalog request is read-only and never sends invoice content.
+  let availableModels;
+  try {
+    const catalog = await context.fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=100", {
+      headers: { "x-goog-api-key": apiKey },
+    }, 5_000);
+    if (!catalog.ok) {
+      console.warn("SIGO Gemini catalog unavailable", { requestId: context.requestId, status: catalog.status });
+      return json(res, catalog.status === 401 || catalog.status === 403 ? 503 : 502, {
+        error: catalog.status === 401 || catalog.status === 403 ? "AI_CREDENTIALS_ERROR" : "AI_MODEL_UNAVAILABLE",
+        message: "No se pudo verificar el catálogo de modelos Gemini para esta clave.",
+      });
+    }
+    const listing = await catalog.json();
+    availableModels = (Array.isArray(listing.models) ? listing.models : [])
+      .filter(item => Array.isArray(item.supportedGenerationMethods) && item.supportedGenerationMethods.includes("generateContent"))
+      .map(item => String(item.name || "").replace("models/", ""))
+      .filter(name => /^gemini-[a-zA-Z0-9.-]+$/.test(name));
+  } catch (error) {
+    console.warn("SIGO Gemini catalog error", { requestId: context.requestId, error: error?.name || "network" });
+    return json(res, 502, { error: "AI_MODEL_UNAVAILABLE", message: "No se pudo consultar qué modelos admite Gemini." });
   }
+  // Never prioritize deprecated hard-coded models over the live catalog. Prefer stable, image-capable Flash models.
+  const candidates = availableModels.filter(name => /flash/i.test(name) && !/image|tts|audio|live|embedding|preview/i.test(name));
+  const preferred = [model, fallbackModel].filter(name => candidates.includes(name));
+  const selectedModels = [...new Set([...candidates.sort((a, b) => b.localeCompare(a, undefined, { numeric: true })), ...preferred])].slice(0, 2);
+  if (!selectedModels.length) {
+    console.warn("SIGO Gemini no compatible models", { requestId: context.requestId, catalogCount: availableModels.length });
+    return json(res, 502, { error: "AI_MODEL_UNAVAILABLE", message: "Esta clave no tiene modelos compatibles con la lectura de facturas." });
+  }
+  const result = await requestGemini(context, {
+    apiKey, models: selectedModels, stage: "invoice",
+    body: {
+      contents: [{
+        role: "user",
+        parts: [
+          { text: prompt },
+          ...(documentType === "texto" ? [{ text: `Mensaje comercial a registrar como compra:\n${mensajeTexto}` }] : [{
+            inlineData: {
+              mimeType: documentType === "pdf"
+                ? "application/pdf"
+                : (documentDataUrl.match(/^data:([^;]+);base64,/i)?.[1] || "image/jpeg"),
+              data: documentDataUrl.split(",")[1],
+            },
+          }]),
+        ],
+      }],
+      generationConfig: {
+        maxOutputTokens: 6000,
+        temperature: 0,
+        responseMimeType: "application/json",
+        responseSchema: FACTURA_RESPONSE_SCHEMA,
+      },
+    },
+  });
+  if (!result?.response?.ok) return geminiFailure(res, result);
+  const aiResponse = result.response;
 
   try {
     const aiData = await aiResponse.json();
-    const text = getGeminiOutputText(aiData);
-    if (!text) throw new Error("EMPTY_AI_OUTPUT");
-    const leido = parseJsonText(text);
+    const leido = parseGeminiResponse(aiData);
     const tipo = String(leido?.tipo_comprobante || "").toLowerCase();
     if (documentType === "texto" || (tipo && !tipo.includes("factura"))) {
       if (!leido.proveedor?.razon_social && !leido.proveedor?.cuit) leido.proveedor = { razon_social: "Proveedor sin identificar", cuit: null };
@@ -581,8 +700,14 @@ confianza_general y confianza van de 0 a 1.`;
       if (!leido.tipo_comprobante) leido.tipo_comprobante = documentType === "texto" ? "Mensaje de WhatsApp" : "Comprobante";
     }
     const factura = normalizarFacturaIA(leido);
-    return json(res, 200, { factura, model: aiData?.modelVersion || model });
+    return json(res, 200, { factura, model: aiData?.modelVersion || result.model });
   } catch (error) {
+    if (error?.message === "INVALID_INVOICE_LINE") {
+      return json(res, 422, { error: "AI_REVIEW_REQUIRED", message: "La IA devolvió una o más líneas incompletas. Revisá el comprobante o cargalo manualmente para evitar una compra parcial." });
+    }
+    if (error?.message === "AI_OUTPUT_TRUNCATED") {
+      return json(res, 502, { error: "AI_OUTPUT_TRUNCATED", message: "La IA devolvió el comprobante incompleto. Dividí el documento o cargalo manualmente. No se aplicaron líneas parciales." });
+    }
     if (error?.message === "AMBIGUOUS_INVOICE_CODES") {
       return json(res, 422, {
         error: "AI_REVIEW_REQUIRED",
@@ -625,7 +750,17 @@ confianza_general y confianza van de 0 a 1.`;
         message: `La línea ${error?.detalle ? `“${String(error.detalle).slice(0, 120)}” ` : ""}tiene una diferencia crítica entre cantidad × costo y total leído. Revisala manualmente antes de ingresar stock.`,
       });
     }
-    console.error("SIGO invoice parse error", error);
+    console.warn("SIGO invoice parse error", { requestId: context.requestId, code: outputErrorCode(error) });
     return json(res, 502, { error: "AI_INVALID_OUTPUT", message: "La IA respondió, pero no devolvió una factura segura y utilizable." });
   }
 }
+
+export default async function handler(req, res) {
+  const context = createRequestContext(req, res);
+  try {
+    return await handleRequest(req, res, context);
+  } finally {
+    context.dispose();
+  }
+}
+

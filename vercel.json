@@ -1,6 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
+    "api/compras/analizar-factura.js": {
+      "regions": ["gru1"],
+      "maxDuration": 60
+    },
     "api/arca/*.js": {
       "regions": [
         "gru1"
@@ -68,3 +72,4 @@
     }
   ]
 }
+

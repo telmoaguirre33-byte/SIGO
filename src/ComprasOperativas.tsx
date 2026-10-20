@@ -658,8 +658,8 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
           <span style={{ fontSize: 12, fontWeight: 700, color: "#1d4ed8" }}>IA · revisión antes de stock</span>
           <p style={{ margin:"8px 0 0", fontWeight:800, color:"#92400e" }}>⚠️ Importante: cargá y revisá los comprobantes de a uno.</p>
         </div>
-        <input ref={fotoRef} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden onChange={(e) => void leerFactura(e.target.files?.[0])} />
-        <input ref={archivoRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.pdf" hidden onChange={(e) => void leerFactura(e.target.files?.[0])} />
+        <input ref={fotoRef} type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" capture="environment" hidden onChange={(e) => void leerFactura(e.target.files?.[0])} />
+        <input ref={archivoRef} type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.pdf,.heic,.heif" hidden onChange={(e) => void leerFactura(e.target.files?.[0])} />
         <div className="form-actions" style={{ justifyContent: "flex-start", gap: 10, flexWrap: "wrap" }}>
           <button type="button" className="primary-button" disabled={facturaProcesando || facturaAplicando || saving || guardadoPendienteIA} onClick={() => fotoRef.current?.click()}>{facturaProcesando ? "Analizando…" : "📸 Tomar foto de comprobante"}</button>
           <button type="button" className="admin-button" disabled={facturaProcesando || facturaAplicando || saving || guardadoPendienteIA} onClick={() => archivoRef.current?.click()}>Elegir foto / PDF</button>
@@ -895,3 +895,4 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
     </div>
   );
 }
+

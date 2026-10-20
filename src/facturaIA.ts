@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { leerDocumentoIA, prepararImagenIA } from "./iaImagenes";
 
 export type FacturaItemIA = {
   descripcion: string;
@@ -38,9 +39,8 @@ type ProveedorMaestroFactura = {
   cuit: string | null;
 };
 
-const TIPOS_IMAGEN_PERMITIDOS = new Set(["image/jpeg", "image/png", "image/webp"]);
 const TIPO_PDF = "application/pdf";
-const MAX_PDF_BYTES = 4 * 1024 * 1024;
+const MAX_PDF_BYTES = 3_000_000;
 const GTIN_LENGTHS = new Set([8, 12, 13, 14]);
 const MAX_INVOICE_ITEMS = 300;
 const CLIENT_TIMEOUT_MS = 55_000;
@@ -49,49 +49,13 @@ const MIN_LINE_CONFIDENCE_AUTO = 0.30;
 const PAGINA_MAESTROS_FACTURA = 1000;
 const MAX_MAESTROS_FACTURA = 10000;
 
-function leerComoDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(new Error("No se pudo leer la imagen de la factura."));
-    reader.readAsDataURL(blob);
-  });
-}
-
 async function prepararDocumento(file: File): Promise<{ dataUrl: string; tipo: "imagen" | "pdf"; nombre: string }> {
-  if (file.type === TIPO_PDF) {
+  if (file.type === TIPO_PDF || (!file.type && /\.pdf$/i.test(file.name))) {
     if (file.size <= 0) throw new Error("El PDF está vacío.");
-    if (file.size > MAX_PDF_BYTES) throw new Error("El PDF supera 4 MB. Reducilo o dividilo antes de cargarlo.");
-    return { dataUrl: await leerComoDataUrl(file), tipo: "pdf", nombre: file.name || "documento.pdf" };
+    if (file.size > MAX_PDF_BYTES) throw new Error("El PDF supera 3 MB. Reducilo o dividilo antes de cargarlo; el envío en base64 ocupa más espacio.");
+    return { dataUrl: await leerDocumentoIA(file.slice(0, file.size, TIPO_PDF)), tipo: "pdf", nombre: file.name || "documento.pdf" };
   }
-
-  if (!TIPOS_IMAGEN_PERMITIDOS.has(file.type)) throw new Error("Usá una foto o imagen JPG, PNG o WebP de la factura.");
-  if (file.size <= 0) throw new Error("La imagen de la factura está vacía.");
-  if (file.size > 15 * 1024 * 1024) throw new Error("La imagen supera 15 MB. Tomá una foto más liviana.");
-
-  const original = await leerComoDataUrl(file);
-  const img = new Image();
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => resolve();
-    img.onerror = () => reject(new Error("No se pudo abrir la imagen de la factura."));
-    img.src = original;
-  });
-
-  if (!Number.isFinite(img.naturalWidth) || !Number.isFinite(img.naturalHeight) || img.naturalWidth < 320 || img.naturalHeight < 320) {
-    throw new Error("La foto es demasiado chica para leer una factura con seguridad. Tomá otra más cerca y nítida.");
-  }
-
-  const max = 1800;
-  const escala = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
-  const width = Math.max(1, Math.round(img.naturalWidth * escala));
-  const height = Math.max(1, Math.round(img.naturalHeight * escala));
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return { dataUrl: original, tipo: "imagen", nombre: file.name || "documento.jpg" };
-  ctx.drawImage(img, 0, 0, width, height);
-  return { dataUrl: canvas.toDataURL("image/jpeg", 0.84), tipo: "imagen", nombre: file.name || "documento.jpg" };
+  return { dataUrl: await prepararImagenIA(file), tipo: "imagen", nombre: file.name || "documento.jpg" };
 }
 
 function normalizarMoneda(value: unknown): string | null {
@@ -441,6 +405,12 @@ export async function analizarFacturaCompraSigo(empresaId: string, file: File | 
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
   let response: Response;
+  let payload: Record<string, any>;
+  const body = JSON.stringify({ empresaId, documentDataUrl: documento?.dataUrl, documentType: documento?.tipo ?? "texto", filename: documento?.nombre, mensajeTexto: typeof file === "string" ? file : undefined });
+  if (new TextEncoder().encode(body).byteLength > 4_300_000) {
+    window.clearTimeout(timeout);
+    throw new Error("El archivo supera el tamaño permitido para el envío. Reducilo o dividí el PDF.");
+  }
   try {
     response = await fetch("/api/compras/analizar-factura", {
       method: "POST",
@@ -449,27 +419,42 @@ export async function analizarFacturaCompraSigo(empresaId: string, file: File | 
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ empresaId, documentDataUrl: documento?.dataUrl, documentType: documento?.tipo ?? "texto", filename: documento?.nombre, mensajeTexto: typeof file === "string" ? file : undefined }),
+      body,
     });
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error("La lectura de la factura tardó demasiado. Probá otra vez con una foto más nítida.");
+    const text = await response.text();
+    try { payload = JSON.parse(text); }
+    catch {
+      if (response.ok) throw new Error("INVALID_AI_RESPONSE");
+      payload = {};
     }
+  } catch (error) {
+    if (controller.signal.aborted || (error instanceof Error && error.name === "AbortError")) {
+      throw new Error("Se agotó el tiempo de respuesta del analizador. La compra no se guardó ni se modificó stock. Podés reintentar más tarde.");
+    }
+    if (error instanceof Error && error.message === "INVALID_AI_RESPONSE") throw new Error("El analizador devolvió una respuesta incompleta. Reintentá el análisis; todavía no se guardó la compra.");
     throw new Error("No se pudo conectar con el analizador de facturas. Revisá la conexión e intentá nuevamente.");
   } finally {
     window.clearTimeout(timeout);
   }
 
-  const payload = await response.json().catch(() => ({}));
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("El analizador devolvió una respuesta inválida. Reintentá el análisis.");
   if (!response.ok) {
     const code = String(payload?.error ?? "");
+    if (response.status === 401) throw new Error("La sesión venció. Volvé a ingresar a SIGO.");
+    if (response.status === 413) throw new Error("El archivo supera el tamaño permitido para el envío. Reducilo o dividí el PDF.");
+    if (response.status === 429 || code === "AI_RATE_LIMITED") throw new Error("Gemini alcanzó su límite de solicitudes. Esperá antes de reintentar; la compra no se guardó.");
     if (code === "AI_NOT_CONFIGURED") throw new Error("La IA de facturas todavía no tiene configurada su clave en producción.");
+    if (code === "AI_CREDENTIALS_ERROR") throw new Error("Gemini rechazó la credencial de IA. Avisá al administrador para revisar la configuración.");
+    if (code === "AI_MODEL_UNAVAILABLE") throw new Error("El modelo de IA configurado no está disponible. Avisá al administrador.");
     if (code === "FORBIDDEN") throw new Error("Tu usuario no tiene permiso para ingresar compras en esta empresa.");
     if (code === "INVALID_IMAGE" || code === "INVALID_DOCUMENT") throw new Error("El archivo no tiene un formato válido o supera el límite permitido.");
-    if (code === "AI_TIMEOUT") throw new Error("La lectura de la factura tardó demasiado. Probá nuevamente con una foto más nítida.");
+    if (code === "AI_TIMEOUT" || response.status === 504) throw new Error("Se agotó el tiempo de respuesta del analizador. Reintentá más tarde; la compra no se guardó ni se modificó stock.");
+    if (code === "AI_TEMPORARILY_UNAVAILABLE" || response.status === 503) throw new Error("Gemini está saturado o temporalmente fuera de servicio. Reintentá más tarde; la compra no se guardó ni se modificó stock.");
     if (code === "AI_UNAVAILABLE") throw new Error("El servicio de lectura de facturas no está disponible en este momento. La compra manual sigue funcionando.");
     if (code === "AI_REVIEW_REQUIRED") throw new Error(String(payload?.message ?? "La factura necesita revisión manual antes de ingresar stock."));
-    if (code === "AI_INVALID_OUTPUT") throw new Error("La IA no pudo interpretar la factura con seguridad. Probá con otra foto o cargá la compra manualmente.");
+    if (code === "AI_INVALID_OUTPUT") throw new Error("La IA devolvió una respuesta incompleta o inválida. Reintentá el análisis o cargá la compra manualmente.");
+    if (response.status === 403) throw new Error("No se pudo autorizar el análisis. Revisá tus permisos o la configuración de IA.");
+    if (response.status >= 500) throw new Error("El servicio de IA no está disponible en este momento. Reintentá más tarde; la compra manual sigue funcionando.");
     throw new Error(String(payload?.message ?? payload?.error ?? "No se pudo analizar la factura con IA."));
   }
 
@@ -477,3 +462,4 @@ export async function analizarFacturaCompraSigo(empresaId: string, file: File | 
   await validarFacturaContraMaestrosSigo(empresaId, factura);
   return factura;
 }
+
