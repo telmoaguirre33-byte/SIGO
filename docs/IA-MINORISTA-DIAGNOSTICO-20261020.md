@@ -29,6 +29,18 @@ Se incorporaron regresiones de API, cliente e imágenes sintéticas. Compras cub
 
 La suite existente de guardado prueba el RPC contra PostgreSQL efímero en GitHub Actions y los reintentos del cliente con mocks. La nueva suite de navegador se ejecuta en Chromium y Android simulado. Consultar el PR para el resultado y los enlaces de cada ejecución; un test configurado no equivale a un test aprobado.
 
+Evidencia de CI del commit `2c2611c`:
+
+| Verificación | Resultado |
+|---|---|
+| TypeScript, build, seguridad de notificaciones y suite crítica completa | [Aprobado](https://github.com/telmoaguirre33-byte/SIGO/actions/runs/39356129178) |
+| 17 casos del cliente de guardado, regresión móvil e idempotencia/rollback en PostgreSQL 17 aislado | [Aprobado](https://github.com/telmoaguirre33-byte/SIGO/actions/runs/39356129186) |
+| APIs, 56 controles de inventario y 92 casos de navegador Chromium/Pixel 7 | [Aprobado](https://github.com/telmoaguirre33-byte/SIGO/actions/runs/39356129260) |
+
+Se añade también una prueba de la pantalla React real con HTTP sintético: carga de diez fotos, fallo de tercer lote y reanudación, marcadores, reapertura desde IndexedDB, expiración de 24 horas, cambio de empresa, consolidado y cierre mensual, y descarga CSV con BOM. Sus capturas sintéticas se adjuntan como artifact de CI; el PR registra el resultado del HEAD final.
+
+Archivos funcionales: `api/compras/analizar-factura.js`, `api/inventario/analizar.js`, `src/ComprasOperativas.tsx`, `src/GuardarCompraIA.tsx`, `src/StockVsInventario.tsx`, `src/facturaIA.ts`, `src/inventarioIA.ts`, `src/iaImagenes.ts` y la configuración acotada de Compras en `vercel.json`. Los demás cambios corresponden a pruebas, workflow y este informe.
+
 ## Limitaciones y validación pendiente
 
 - No se declara resuelta la disponibilidad de Gemini por aprobar simulaciones. No se invocó un modelo real para generar consumo durante estas pruebas.

@@ -22,6 +22,17 @@ try {
     const context = await browser.newContext(options);
     const page = await context.newPage();
     try {
+      await page.setContent('<input id="ai-file" type="file" accept="image/*" capture="environment">');
+      const cameraFile = await page.evaluate(() => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 800; canvas.height = 600;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = 'white'; ctx.fillRect(0, 0, 800, 600);
+        ctx.fillStyle = 'black'; ctx.font = '30px sans-serif';
+        ctx.fillText('FOTO SINTÉTICA', 30, 50);
+        return canvas.toDataURL('image/jpeg').split(',')[1];
+      });
+      await page.locator('#ai-file').setInputFiles({ name: 'synthetic-camera.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(cameraFile, 'base64') });
       const results = await page.evaluate(async ({ imageModule, facturaModule, inventoryModule }) => {
         const results = [];
         const equal = (actual, expected, label) => {
@@ -79,6 +90,12 @@ try {
         const images = await import(imageModule);
         const invoice = await import(facturaModule);
         const inventory = await import(inventoryModule);
+        await test('Archivo seleccionado por input de cámara llega al preparador', async () => {
+          const input = document.querySelector('#ai-file');
+          equal(input.files.length, 1, 'File input receives uploaded synthetic image');
+          const out = await images.prepararImagenIA(input.files[0]);
+          check(out.startsWith('data:image/jpeg;base64,'), 'Selected camera image decoded and prepared');
+        });
         const factura = (count) => ({
           proveedor: { razon_social: 'Proveedor sintético', cuit: null }, fecha: '2026-10-01',
           tipo_comprobante: 'Factura B', numero_comprobante: '0001-00000123', moneda: 'ARS',
