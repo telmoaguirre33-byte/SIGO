@@ -36,4 +36,4 @@ La suite existente de guardado prueba el RPC contra PostgreSQL efímero en GitHu
 - IVA y descuentos mantienen el contrato existente: total del comprobante y advertencias de conciliación, sin desglose fiscal ni prorrateo automático. Requieren revisión manual; no se acredita extracción real con mocks.
 - La exportación existente es CSV UTF-8 con BOM y separador `;`, compatible con Excel; no se convierte en un libro XLSX.
 - Validación física Android pendiente: cámara y galería reales, orientación EXIF, HEIC según dispositivo, diez fotos con red móvil, cancelación y reapertura del navegador, recuperación durante 24 horas, marcadores, cierre mensual y apertura del CSV en Excel.
-- Sin merge ni publicación productiva. Caja, Ventas, ARCA, cuenta corriente, Mayorista (#72), integración #78, SOVI y PROSPECCIÓN quedan fuera de los archivos funcionales modificados.
+- Sin merge ni publicación productiva. Caja, Ventas, ARCA, cuenta corriente, Mayorista (#72), integración #78 y los demás proyectos quedan fuera de los archivos funcionales modificados.

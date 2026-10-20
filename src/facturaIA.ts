@@ -444,6 +444,8 @@ export async function analizarFacturaCompraSigo(empresaId: string, file: File | 
     if (response.status === 413) throw new Error("El archivo supera el tamaño permitido para el envío. Reducilo o dividí el PDF.");
     if (response.status === 429 || code === "AI_RATE_LIMITED") throw new Error("Gemini alcanzó su límite de solicitudes. Esperá antes de reintentar; la compra no se guardó.");
     if (code === "AI_NOT_CONFIGURED") throw new Error("La IA de facturas todavía no tiene configurada su clave en producción.");
+    if (code === "AI_CREDENTIALS_ERROR") throw new Error("Gemini rechazó la credencial de IA. Avisá al administrador para revisar la configuración.");
+    if (code === "AI_MODEL_UNAVAILABLE") throw new Error("El modelo de IA configurado no está disponible. Avisá al administrador.");
     if (code === "FORBIDDEN") throw new Error("Tu usuario no tiene permiso para ingresar compras en esta empresa.");
     if (code === "INVALID_IMAGE" || code === "INVALID_DOCUMENT") throw new Error("El archivo no tiene un formato válido o supera el límite permitido.");
     if (code === "AI_TIMEOUT" || response.status === 504) throw new Error("Se agotó el tiempo de respuesta del analizador. Reintentá más tarde; la compra no se guardó ni se modificó stock.");
