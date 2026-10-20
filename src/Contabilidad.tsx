@@ -45,7 +45,7 @@ export default function Contabilidad({ empresaId }: { empresaId: string }) {
       {(tab === "IVA Compras" || tab === "Resumen IVA") && <p>Compras registradas: {compras.length} · Total comercial: {pesos(totalCompras)}</p>}
       {(tab === "IVA Ventas" || tab === "Resumen IVA") && <p>Ventas registradas: {ventas?.cantidadVentas ?? 0} · Total comercial: {pesos(ventas?.totalVentas ?? 0)}</p>}
       {tab === "IVA Compras" && <div style={{ overflowX: "auto" }}><table><thead><tr><th>Fecha</th><th>Comprobante</th><th>Total comercial</th></tr></thead><tbody>{compras.map(c => <tr key={c.id}><td>{c.fecha_compra}</td><td>{c.tipo_comprobante || "Sin tipo"} {c.numero_comprobante || ""}</td><td>{pesos(Number(c.total || 0))}</td></tr>)}</tbody></table></div>}
-      {tab === "IVA a pagar" && <IvaAPagar compras={compras} ventas={ventas} />}
+      {tab === "IVA a pagar" && <IvaAPagar key={`${empresaId}:${periodo}`} compras={compras} ventas={ventas} />}
       {tab === "Conciliación fiscal" && <ConciliacionFiscal empresaId={empresaId} ventas={ventas} />}
       {tab === "IVA Ventas" && <p>Resumen operativo del período. Falta discriminar comprobantes fiscales y notas de crédito.</p>}
       {(tab === "Resumen IVA" || tab === "Informes" || tab === "Gastos") && <p>IVA débito, IVA crédito y saldo fiscal: pendientes de conciliación de comprobantes, alícuotas y condición tributaria. No se estiman aplicando 21% a los totales.</p>}
