@@ -580,8 +580,37 @@ Respondé SOLAMENTE JSON válido con esta forma exacta:
 {"proveedor":{"razon_social":string|null,"cuit":string|null},"fecha":string|null,"tipo_comprobante":string|null,"numero_comprobante":string|null,"moneda":string|null,"total":number|null,"confianza_general":number,"items":[{"descripcion":string,"codigo":string|null,"codigo_barras":string|null,"cantidad":number,"costo_unitario":number,"total_linea":number|null,"confianza":number}]}
 confianza_general y confianza van de 0 a 1.`;
 
+  // Discover models accessible to this exact API key instead of guessing model IDs.
+  // The catalog request is read-only and never sends invoice content.
+  let availableModels;
+  try {
+    const catalog = await context.fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=100", {
+      headers: { "x-goog-api-key": apiKey },
+    }, 5_000);
+    if (!catalog.ok) {
+      console.warn("SIGO Gemini catalog unavailable", { requestId: context.requestId, status: catalog.status });
+      return json(res, catalog.status === 401 || catalog.status === 403 ? 503 : 502, {
+        error: catalog.status === 401 || catalog.status === 403 ? "AI_CREDENTIALS_ERROR" : "AI_MODEL_UNAVAILABLE",
+        message: "No se pudo verificar el catálogo de modelos Gemini para esta clave.",
+      });
+    }
+    const listing = await catalog.json();
+    availableModels = (Array.isArray(listing.models) ? listing.models : [])
+      .filter(item => Array.isArray(item.supportedGenerationMethods) && item.supportedGenerationMethods.includes("generateContent"))
+      .map(item => String(item.name || "").replace(/^models\\//, ""))
+      .filter(name => /^gemini-[a-zA-Z0-9.-]+$/.test(name));
+  } catch (error) {
+    console.warn("SIGO Gemini catalog error", { requestId: context.requestId, error: error?.name || "network" });
+    return json(res, 502, { error: "AI_MODEL_UNAVAILABLE", message: "No se pudo consultar qué modelos admite Gemini." });
+  }
+  const preferred = [model, fallbackModel, ...availableModels.filter(name => /flash/i.test(name) && !/image|tts|audio|live|embedding/i.test(name))];
+  const selectedModels = [...new Set(preferred)].filter(name => availableModels.includes(name)).slice(0, 2);
+  if (!selectedModels.length) {
+    console.warn("SIGO Gemini no compatible models", { requestId: context.requestId, catalogCount: availableModels.length });
+    return json(res, 502, { error: "AI_MODEL_UNAVAILABLE", message: "Esta clave no tiene modelos compatibles con la lectura de facturas." });
+  }
   const result = await requestGemini(context, {
-    apiKey, models: [model, fallbackModel], stage: "invoice",
+    apiKey, models: selectedModels, stage: "invoice",
     body: {
       contents: [{
         role: "user",
