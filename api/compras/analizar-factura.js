@@ -561,8 +561,6 @@ async function handleRequest(req, res, context) {
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return json(res, 503, { error: "AI_NOT_CONFIGURED" });
-
   // Prefer a generally available fast model; explicit environment overrides remain respected.
   const model = process.env.GEMINI_INVOICE_MODEL || "gemini-2.5-flash-lite";
   const fallbackModel = process.env.GEMINI_INVOICE_FALLBACK_MODEL || "gemini-2.5-flash";
@@ -579,6 +577,59 @@ fecha en formato YYYY-MM-DD cuando sea posible. CUIT sólo dígitos. moneda debe
 Respondé SOLAMENTE JSON válido con esta forma exacta:
 {"proveedor":{"razon_social":string|null,"cuit":string|null},"fecha":string|null,"tipo_comprobante":string|null,"numero_comprobante":string|null,"moneda":string|null,"total":number|null,"confianza_general":number,"items":[{"descripcion":string,"codigo":string|null,"codigo_barras":string|null,"cantidad":number,"costo_unitario":number,"total_linea":number|null,"confianza":number}]}
 confianza_general y confianza van de 0 a 1.`;
+
+  // OpenAI invoice analysis is opt-in and isolated from inventory and stock writes.
+  // The OpenAI API key is read only on the server; never return it to the client.
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (openaiKey) {
+    try {
+      const parts = [{ type: "text", text: prompt }];
+      if (documentType === "texto") {
+        parts.push({ type: "text", text: mensajeTexto });
+      } else if (documentType === "pdf") {
+        parts.push({ type: "file", file: { filename, file_data: documentDataUrl } });
+      } else {
+        parts.push({ type: "image_url", image_url: { url: documentDataUrl, detail: "high" } });
+      }
+      const response = await context.fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: process.env.OPENAI_INVOICE_MODEL || "gpt-4.1-mini",
+          messages: [{ role: "system", content: "Extraé datos fieles del comprobante. Devolvé exclusivamente JSON válido, sin inventar información." }, { role: "user", content: parts }],
+          response_format: { type: "json_object" },
+          max_completion_tokens: 6000,
+          temperature: 0,
+        }),
+      }, 35_000);
+      if (!response.ok) {
+        console.warn("SIGO OpenAI invoice request failed", { requestId: context.requestId, status: response.status });
+        return json(res, response.status === 429 ? 429 : 502, {
+          error: response.status === 429 ? "AI_RATE_LIMIT" : "AI_UNAVAILABLE",
+          message: "OpenAI no pudo procesar el comprobante. No se guardó la compra.",
+        });
+      }
+      const data = await response.json();
+      const output = data?.choices?.[0]?.message?.content;
+      if (typeof output !== "string" || !output.trim()) throw new Error("AI_INVALID_OUTPUT");
+      const leido = JSON.parse(output);
+      const tipo = String(leido?.tipo_comprobante || "").toLowerCase();
+      if (documentType === "texto" || (tipo && !tipo.includes("factura"))) {
+        if (!leido.proveedor?.razon_social && !leido.proveedor?.cuit) leido.proveedor = { razon_social: "Proveedor sin identificar", cuit: null };
+        if (!leido.numero_comprobante) leido.numero_comprobante = `COMPRA-${Date.now()}`;
+        if (!leido.tipo_comprobante) leido.tipo_comprobante = documentType === "texto" ? "Mensaje de WhatsApp" : "Comprobante";
+      }
+      const factura = normalizarFacturaIA(leido);
+      return json(res, 200, { factura, model: data?.model || "openai" });
+    } catch (error) {
+      console.warn("SIGO OpenAI invoice processing error", { requestId: context.requestId, error: error?.name || "invalid" });
+      return json(res, error?.name === "AbortError" ? 504 : 422, {
+        error: error?.name === "AbortError" ? "AI_TIMEOUT" : "AI_REVIEW_REQUIRED",
+        message: "La lectura no se completó con seguridad. No se guardó ninguna compra ni se modificó stock.",
+      });
+    }
+  }
+  if (!apiKey) return json(res, 503, { error: "AI_NOT_CONFIGURED" });
 
   // Discover models accessible to this exact API key instead of guessing model IDs.
   // The catalog request is read-only and never sends invoice content.
