@@ -5,7 +5,7 @@ import { supabase } from "./supabase";
 type FilaFiscal = { iva: number | null; total: number | null; tipo_comprobante: string | null };
 const pesos = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n);
 
-export default function IvaEstimadoAutomatico({ empresaId, periodo, compras }: { empresaId: string; periodo: string; compras: CompraSigo[] }) {
+export default function IvaEstimadoAutomatico({ empresaId, periodo, compras, totalVentas }: { empresaId: string; periodo: string; compras: CompraSigo[]; totalVentas: number }) {
   const [datos, setDatos] = useState<{ ivaCompras: number; comprobantes: number; sinDesglose: number } | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -36,9 +36,18 @@ export default function IvaEstimadoAutomatico({ empresaId, periodo, compras }: {
   }, [empresaId, periodo]);
   const comprasActuales = compras.filter(c => c.fecha_compra.slice(0, 7) === periodo);
   const totalActual = comprasActuales.reduce((n, c) => n + Number(c.total || 0), 0);
+  // A separate illustrative scenario, never a fiscal determination.
+  const venta21 = Number.isFinite(totalVentas) && totalVentas >= 0 ? totalVentas * 21 / 121 : null;
+  const compra21 = Number.isFinite(totalActual) && totalActual >= 0 ? totalActual * 21 / 121 : null;
+  const escenario = venta21 !== null && compra21 !== null ? Math.max(0, venta21 - compra21) : null;
   return <section style={{ padding: 12, border: "1px solid #94a3b8", borderRadius: 8, marginBottom: 12 }}>
     <h4>Estimación automática del período</h4>
-    <p><strong>IVA estimado a pagar: pendiente de información fiscal suficiente.</strong></p>
+    <p><strong>IVA fiscal a ingresar: pendiente de información suficiente.</strong></p>
+    <div style={{ background: "#fff7ed", border: "1px solid #f59e0b", padding: 12, borderRadius: 8, color: "#78350f" }}>
+      <strong>Proyección orientativa (NO es el IVA a pagar): {escenario === null ? "sin datos" : pesos(escenario)}</strong>
+      <p>Escenario hipotético: todas las ventas y compras incluyen IVA del 21%, todo el IVA de compras sería computable y no hay saldos, retenciones ni percepciones. Estas condiciones NO están verificadas y pueden cambiar mucho el resultado.</p>
+      <small>No utilizar esta cifra para declarar, pagar impuestos ni decidir cuánto reservar sin revisión del contador.</small>
+    </div>
     <p>Compras actuales de SIGO: {comprasActuales.length} por {pesos(totalActual)}. No se confunden con compras fiscales históricas.</p>
     {error ? <p role="alert">No se pudo verificar el IVA de compras: {error}</p> : datos ? <>
       <p>IVA discriminado en compras históricas: {pesos(datos.ivaCompras)} ({datos.comprobantes} comprobantes con importe IVA registrado).</p>
