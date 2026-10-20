@@ -8,6 +8,7 @@ export default function IvaAPagar({ compras, ventas }: { compras: CompraSigo[]; 
   return <section aria-label="IVA a pagar">
     <h3>¿Cuánto IVA tengo que pagar?</h3>
     <p><strong>Importe a ingresar: pendiente de determinar.</strong></p>
+    <p>La tabla actual de comprobantes ARCA guarda CAE y referencias, pero no un desglose fiscal completo por alícuota. Por eso aún no se puede obtener un débito fiscal confiable automáticamente.</p>
     <p>SIGO registra {ventas?.cantidadVentas ?? 0} ventas por {pesos(ventas?.totalVentas ?? 0)} y {compras.length} compras por {pesos(totalCompras)} en el período seleccionado.</p>
     <p>Estos importes incluyen operaciones comerciales, pero no identifican por sí solos el IVA a ingresar.</p>
     <h4>Para obtener el importe real</h4>
