@@ -563,8 +563,9 @@ async function handleRequest(req, res, context) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return json(res, 503, { error: "AI_NOT_CONFIGURED" });
 
-  const model = process.env.GEMINI_INVOICE_MODEL || "gemini-3.8-flash";
-  const fallbackModel = process.env.GEMINI_INVOICE_FALLBACK_MODEL || "gemini-3.1-flash-lite-preview";
+  // Prefer a generally available fast model; explicit environment overrides remain respected.
+  const model = process.env.GEMINI_INVOICE_MODEL || "gemini-2.5-flash-lite";
+  const fallbackModel = process.env.GEMINI_INVOICE_FALLBACK_MODEL || "gemini-2.5-flash";
   const prompt = `Analizá este comprobante o mensaje comercial argentino para cargar mercadería en un sistema comercial. Puede ser factura, ticket, remito, nota de pedido, orden/pedido de compra, talonario X, comprobante X, mensaje de WhatsApp u otro registro de compra/recepción. Identificá el tipo real en tipo_comprobante.
 No inventes datos. Si algo no es legible, usá null y baja confianza.
 Extraé únicamente productos/servicios efectivamente facturados; no conviertas IVA, descuentos globales, percepciones, subtotales ni totales en productos.
