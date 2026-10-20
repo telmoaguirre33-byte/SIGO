@@ -76,6 +76,8 @@ jobs:
           node ../tests/launch-upgrade.mjs
           node ../tests/release-preparation.mjs
           node ../tests/commercial-runtime.mjs
+          node ../tests/commercial-company-allowlist.mjs
+          node ../tests/production-schema-fixture-unit.mjs ../../../.. ../tests/fixtures/production-schema.fixture.json
           node ../tests/integration-qa-runtime.mjs
           node ../tests/integration-qa-client.mjs
           node ../tests/commercial-assets.mjs
@@ -92,6 +94,8 @@ jobs:
         run: MAYORISTA_TEST_LAUNCH=true node ../tests/native-api.mjs
       - name: Migraciones comerciales versionadas en PostgreSQL compatible aislado
         run: node ../tests/commercial-migrations-postgres.mjs
+      - name: Esquema productivo sin datos y operaciones sintéticas en PostgreSQL aislado
+        run: node ../tests/production-schema-compatibility-postgres.mjs --repo ../../../.. --schema ../tests/fixtures/production-schema.fixture.json --out ../tests/artifacts/production-schema-compatibility.json
       - name: Circuito SIGO completo y Mayorista en Chromium y PostgreSQL aislado
         run: |
           npm run build --prefix ../../../..
@@ -116,5 +120,6 @@ jobs:
             src/modules/mayorista/backend/package-lock.json
           if-no-files-found: warn
           retention-days: 7
+
 
 

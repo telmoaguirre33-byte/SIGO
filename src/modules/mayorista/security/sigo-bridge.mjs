@@ -1,6 +1,7 @@
 import {randomBytes} from 'node:crypto';
 import {ApiError} from '../api/receive-order.mjs';
 import {passwordRecord} from './isolated-auth.mjs';
+import {createCompanyAllowlist} from './company-allowlist.mjs';
 const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 /** Solo entorno Auth SIGO configurado por el servidor. No se aceptan issuer/URL desde el cliente. */
 export function trustedSigoVerifier(env){
@@ -8,10 +9,12 @@ export function trustedSigoVerifier(env){
  const u=new URL(env.MAYORISTA_SIGO_AUTH_URL);if(u.protocol!=='https:'||u.origin!==env.MAYORISTA_SIGO_AUTH_URL||u.username||u.password)throw Error('Origen Auth SIGO inválido');
  return async token=>{const response=await fetch(u.origin+'/auth/v1/user',{headers:{apikey:env.MAYORISTA_SIGO_AUTH_ANON_KEY,Authorization:'Bearer '+token},signal:AbortSignal.timeout(10000)});if(!response.ok)throw new ApiError(401,'Sesión SIGO no válida');return response.json();};
 }
-export function createSigoBridge({pool,authenticateSigo,sourceRevision,auth,commercialMode=false}){
+export function createSigoBridge({pool,authenticateSigo,sourceRevision,auth,commercialMode=false,allowedCompanyIds}){
+ const companyAllowlist=createCompanyAllowlist(allowedCompanyIds);
  return async(request,empresaId)=>{
   if(typeof authenticateSigo!=='function'||!/^[a-f0-9]{40}$/.test(sourceRevision??''))throw new ApiError(503,'El acceso desde SIGO requiere su entorno Auth aprobado');
   const token=request.headers.get('Authorization')?.replace(/^Bearer /,'');if(!token||token.length>16000||!uuid(empresaId))throw new ApiError(401,'Sesión SIGO requerida');
+  companyAllowlist.assertAllowed(empresaId);
   const user=await authenticateSigo(token);if(!uuid(user?.id)||typeof user.email!=='string'||!/^\S+@\S+\.\S+$/.test(user.email))throw new ApiError(401,'Identidad SIGO no válida');
   if(commercialMode){
    const r=await passwordRecord(randomBytes(32).toString('hex'));

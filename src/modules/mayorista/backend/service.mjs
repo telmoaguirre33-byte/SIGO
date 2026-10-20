@@ -10,6 +10,7 @@ import {createOrderHttpHandler} from '../api/http-handler.mjs';
 import {assertIsolatedPool,createPostgresRepository} from '../api/postgres-repository.mjs';
 import {createIsolatedAuth} from '../security/isolated-auth.mjs';
 import {createSharedSource} from '../commercial/shared-source.mjs';
+import {createCompanyAllowlist} from '../security/company-allowlist.mjs';
 
 async function smallJson(request,limit=4096){
   // Límite real sobre stream, también sin Content-Length.
@@ -20,13 +21,15 @@ async function smallJson(request,limit=4096){
 
 /** Backend Mayorista: localhost QA o Railway QA explícito con TLS verificado. No monta rutas en SIGO.
  * Llaves Ed25519 y rate limiter son obligatorios; no contiene credenciales remotas. */
-export function createIsolatedService({enabled=false,pool,privateKey,publicKey,origin,issuer,rateLimit,inventoryRequired=false,accountsEnabled=false,databasePolicy,operational=false,readSharedMetrics,integrationOrigins=[],sharedSourceEnabled=false,authenticateSigo,qaSigoLink,sourceRevision=process.env.RAILWAY_GIT_COMMIT_SHA,emitMetrics=()=>{},commercialMode=false}={}){
+export function createIsolatedService({enabled=false,pool,privateKey,publicKey,origin,issuer,rateLimit,inventoryRequired=false,accountsEnabled=false,databasePolicy,operational=false,readSharedMetrics,integrationOrigins=[],sharedSourceEnabled=false,authenticateSigo,qaSigoLink,sourceRevision=process.env.RAILWAY_GIT_COMMIT_SHA,emitMetrics=()=>{},commercialMode=false,allowedCompanyIds}={}){
+  const companyAllowlist=createCompanyAllowlist(allowedCompanyIds);
+  if(companyAllowlist.ids&&qaSigoLink)throw new ApiError(503,'La habilitación comercial no admite vínculos QA');
   if(databasePolicy&&!operational)throw new ApiError(503,'Railway requiere permisos operativos persistentes');
   if(enabled)(databasePolicy?.assertPool??assertIsolatedPool)(pool);
   const sharedSource=enabled&&sharedSourceEnabled?createSharedSource({pool,commercialMode,databasePolicy:databasePolicy??{assertPool:assertIsolatedPool}}):null;
-  const nativeAuth=createIsolatedAuth({enabled,pool,privateKey,publicKey,issuer,databasePolicy,operational,requireSharedCompany:sharedSourceEnabled,commercialMode});
-  const auth={...nativeAuth,...(qaSigoLink?{signIn:body=>qaSigoLink.signInLocal(body,nativeAuth)}:{}),verify:async token=>{let p=await nativeAuth.verify(token);if(qaSigoLink)p=await qaSigoLink.verify(p);return sharedSource?sharedSource.identity(p):p;}};
-  const sigoSignIn=qaSigoLink?(request,id)=>qaSigoLink.signIn(request,id,nativeAuth):sharedSource&&operational?createSigoBridge({pool,authenticateSigo,sourceRevision,auth:nativeAuth,commercialMode}):null;
+  const nativeAuth=createIsolatedAuth({enabled,pool,privateKey,publicKey,issuer,databasePolicy,operational,requireSharedCompany:sharedSourceEnabled,commercialMode,allowedCompanyIds:companyAllowlist.ids});
+  const auth={...nativeAuth,...(qaSigoLink?{signIn:body=>qaSigoLink.signInLocal(body,nativeAuth)}:{}),verify:async token=>{let p=await nativeAuth.verify(token);if(qaSigoLink)p=await qaSigoLink.verify(p);companyAllowlist.assertAllowed(p?.empresaId);p=sharedSource?await sharedSource.identity(p):p;companyAllowlist.assertAllowed(p?.empresaId);return p;}};
+  const sigoSignIn=qaSigoLink?(request,id)=>qaSigoLink.signIn(request,id,nativeAuth):sharedSource&&operational?createSigoBridge({pool,authenticateSigo,sourceRevision,auth:nativeAuth,commercialMode,allowedCompanyIds:companyAllowlist.ids}):null;
   const directory=operational?createUserDirectory({pool,databasePolicy,commercialMode}):null;
   const repository=createPostgresRepository({enabled,pool,inventoryRequired,accountsEnabled,databasePolicy,operational,readSharedMetrics,sharedSource});
   const orders=createOrderHttpHandler({enabled,allowedOrigin:origin,integrationOrigins,rateLimit,receive:createOrderReceiver({enabled,auth,repository})});

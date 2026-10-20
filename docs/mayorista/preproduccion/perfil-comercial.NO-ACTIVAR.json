@@ -1,6 +1,7 @@
 {
   "formatVersion": 1,
   "approved": false,
+  "allowedCompanyIds": [],
   "projectId": null,
   "environmentId": null,
   "supabaseProjectRef": null,
