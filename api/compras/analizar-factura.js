@@ -603,8 +603,10 @@ confianza_general y confianza van de 0 a 1.`;
     console.warn("SIGO Gemini catalog error", { requestId: context.requestId, error: error?.name || "network" });
     return json(res, 502, { error: "AI_MODEL_UNAVAILABLE", message: "No se pudo consultar qué modelos admite Gemini." });
   }
-  const preferred = [model, fallbackModel, ...availableModels.filter(name => /flash/i.test(name) && !/image|tts|audio|live|embedding/i.test(name))];
-  const selectedModels = [...new Set(preferred)].filter(name => availableModels.includes(name)).slice(0, 2);
+  // Never prioritize deprecated hard-coded models over the live catalog. Prefer stable, image-capable Flash models.
+  const candidates = availableModels.filter(name => /flash/i.test(name) && !/image|tts|audio|live|embedding|preview/i.test(name));
+  const preferred = [model, fallbackModel].filter(name => candidates.includes(name));
+  const selectedModels = [...new Set([...candidates.sort((a, b) => b.localeCompare(a, undefined, { numeric: true })), ...preferred])].slice(0, 2);
   if (!selectedModels.length) {
     console.warn("SIGO Gemini no compatible models", { requestId: context.requestId, catalogCount: availableModels.length });
     return json(res, 502, { error: "AI_MODEL_UNAVAILABLE", message: "Esta clave no tiene modelos compatibles con la lectura de facturas." });
