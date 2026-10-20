@@ -1,6 +1,6 @@
 # Recuperación de SIGO / Mayorista — PR #78
 
-Preparación documental del 2026-10-20. Producción al iniciar: `d9a5a9dddb3910ba5a0c53e96c79caa0f6da71d9`; actualización concurrente verificada al cerrar: `8e0f49d8a109aa6f0781a4c8fc9a4bd05c70752b` (`dpl_621d1vNYM26ekXSQmU3MPqkMKBVw`). Revalidar el punto de rollback al autorizar publicación. Candidato indicado: `a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b`. Supabase COMERCIAL: `pafnbxfgpedbvpimjmun`.
+Preparación documental del 2026-10-20. Producción al iniciar: `d9a5a9dddb3910ba5a0c53e96c79caa0f6da71d9`; última actualización concurrente verificada al cerrar: `aa104b572bc1af9d4b97054c702b444c693721a5` (`dpl_5wiuaSNWuATzwz4i7KsD3fg1S9V7`). Revalidar el punto de rollback al autorizar publicación. Candidato indicado: `a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b`. Supabase COMERCIAL: `pafnbxfgpedbvpimjmun`.
 
 **Estado: recuperación del proveedor no acreditada.** No se consultaron filas comerciales, descargaron backups, restauraron bases, ejecutaron migraciones ni cambiaron servicios. No se crearon recursos, costos, commits o publicaciones. Este directorio contiene procedimientos y una plantilla de evidencia; no autoriza su ejecución futura.
 

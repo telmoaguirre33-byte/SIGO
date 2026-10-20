@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import ts from "typescript";
+import vm from "node:vm";
+const source = fs.readFileSync("src/calculoIva.ts", "utf8");
+const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+const exports = {};
+vm.runInNewContext(js, { exports });
+const base = { debitoFiscal: 105000, creditoFiscalComputable: 65000, retencionesComputables: 0, percepcionesComputables: 0, saldoAFavorAnterior: 0, otrosAjustes: 0, conciliado: true };
+assert.equal(exports.calcularPosicionIva(base).importeEstimado, 40000);
+assert.equal(exports.calcularPosicionIva({ ...base, conciliado: false }).importeEstimado, null);
+assert.equal(exports.calcularPosicionIva({ ...base, saldoAFavorAnterior: 50000 }).saldoAFavorEstimado, 10000);
+assert.throws(() => exports.calcularPosicionIva({ ...base, debitoFiscal: -1 }), /IMPORTE_FISCAL_INVALIDO/);
+console.log("IVA_CALCULATION_TESTS_OK");

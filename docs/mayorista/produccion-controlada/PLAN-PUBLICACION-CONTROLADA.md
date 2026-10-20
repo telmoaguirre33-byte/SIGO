@@ -1,6 +1,6 @@
 # Plan preparado · NO EJECUTAR
 
-Baseline final de main/producción observado: `8e0f49d8a109aa6f0781a4c8fc9a4bd05c70752b`, deployment `dpl_621d1vNYM26ekXSQmU3MPqkMKBVw`. Se preservan los seis blobs entrantes de main en el candidato; no se ejecutó merge. Revalidar antes de usar este punto de retorno.
+Baseline final de main/producción observado: `aa104b572bc1af9d4b97054c702b444c693721a5`, deployment `dpl_5wiuaSNWuATzwz4i7KsD3fg1S9V7`. Se preservan los nueve blobs entrantes de main en el candidato; no se ejecutó merge. Revalidar antes de usar este punto de retorno.
 
 Destino web deseado: `https://www.sigo-gestion.com`. Empresa inicial: lapizcito5, identidad verificada por metadata, mantenida fuera del código de frontend. No cambia la plataforma Minorista ni sus fuentes de verdad.
 
@@ -36,6 +36,6 @@ Verificar acceso a Caja, Ventas, Compras, Productos, Stock, Precios, Clientes, C
 
 Operaciones de venta/stock/cobro reales no se usan como prueba inocua: requieren el caso de aceptación acordado, UUID estable, valores revisados y conciliación. No sincronizar los dos pedidos Android reservados de QA.
 
-Rollback operativo: desactivar disponibilidad del destino por empresa para cortar la entrada, retirar el runtime de servicio o bloquear su allowlist según el alcance aprobado, y volver el alias Vercel al deployment productivo previo confirmado al autorizar la publicación (último observado: `dpl_621d1vNYM26ekXSQmU3MPqkMKBVw`, no el baseline d9a5a9dd anterior a PR #85). Conservar esquema/ledger/auditoría y movimientos. Revisar tokens ya emitidos y las revocaciones aplicables; esconder menú no equivale a revocar sesiones. El guard de servidor protege también la verificación de tokens. Recuperar configuración sólo contra snapshots sin drift; no sobrescribir cambios simultáneos de otras empresas.
+Rollback operativo: desactivar disponibilidad del destino por empresa para cortar la entrada, retirar el runtime de servicio o bloquear su allowlist según el alcance aprobado, y volver el alias Vercel al deployment productivo previo confirmado al autorizar la publicación (último observado: `dpl_5wiuaSNWuATzwz4i7KsD3fg1S9V7`, no el baseline d9a5a9dd anterior a PR #85/#86). Conservar esquema/ledger/auditoría y movimientos. Revisar tokens ya emitidos y las revocaciones aplicables; esconder menú no equivale a revocar sesiones. El guard de servidor protege también la verificación de tokens. Recuperar configuración sólo contra snapshots sin drift; no sobrescribir cambios simultáneos de otras empresas.
 
 La restauración de una base vieja sobre ventas posteriores no es rollback de código. Para pérdida/corrupción, restore aislado probado, conciliación y procedimiento del proveedor antes de autorizar reemplazo; nunca DROP, resembrado o down migrations destructivas. Un esquema instalado queda conservado aunque se revierta la aplicación.

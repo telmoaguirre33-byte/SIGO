@@ -99,6 +99,8 @@
   "technicalAcceptance": null,
   "commercialAcceptance": null,
   "productionRecoveryOrReleaseApprovedByThisPackage": false,
-  "productionHeadObservedAtClose": "8e0f49d8a109aa6f0781a4c8fc9a4bd05c70752b",
-  "productionDeploymentObservedAtClose": "dpl_621d1vNYM26ekXSQmU3MPqkMKBVw"
+  "productionHeadObservedAtClose": "aa104b572bc1af9d4b97054c702b444c693721a5",
+  "productionDeploymentObservedAtClose": "dpl_5wiuaSNWuATzwz4i7KsD3fg1S9V7",
+  "productionHeadObserved": "aa104b572bc1af9d4b97054c702b444c693721a5",
+  "productionDeploymentObserved": "dpl_5wiuaSNWuATzwz4i7KsD3fg1S9V7"
 }

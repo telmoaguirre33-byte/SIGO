@@ -19,6 +19,10 @@ Durante el cierre, main y producción avanzaron a `8e0f49d8a109aa6f0781a4c8fc9a4
 
 Los 14 commits entrantes cambian seis archivos; ninguno coincide con un archivo modificado por Mayorista. Se preservan los seis blobs byte por byte desde main en la rama de integración, mediante un commit explícito de reconciliación, sin merge, cambio de main o edición funcional. Esto incluye las correcciones de pruebas de Compra IA ya incorporadas por main; no se corrigió Compras dentro de Mayorista. El plan productivo debe tomar esta versión vigente como rollback inicial y revalidarla antes de publicar.
 
+## Segundo avance de main preservado
+
+Mientras se completaba esta preparación, main incorporó PR #86 y quedó en `aa104b572bc1af9d4b97054c702b444c693721a5`. Producción verificada: `dpl_5wiuaSNWuATzwz4i7KsD3fg1S9V7`, READY, `comercial-6y42noxb4-telmoaguirre33-byte.vercel.app`. Se preservan los cuatro blobs adicionales de IVA/Contabilidad byte por byte, sin modificar su comportamiento. Nueve archivos de main son distintos del baseline inicial y se conservan exactos. Éste es el último punto productivo observado y el candidato a rollback, sujeto a revalidación al publicar. No se ejecutó merge ni se cambió producción.
+
 ## Resultado y límites
 
 Se prepara una allowlist de empresas **sólo de servidor**, vinculada al hash del perfil comercial. Sin lista explícita válida el runtime comercial no arranca; una empresa excluida no puede autenticarse, recuperar una sesión ni enviar pedidos al runtime. QA/P0 conservan sus modos existentes. No se alteran roles, membresías, permisos, licencias, suscripciones o flags comerciales existentes. La allowlist no reemplaza las políticas RLS ni cambia las RPC de declaración de tipo.
