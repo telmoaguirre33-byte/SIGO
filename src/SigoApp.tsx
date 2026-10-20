@@ -1,3 +1,4 @@
+import Contabilidad from "./Contabilidad";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { EmpresaOperativa } from "./tenant";
 import { supabase } from "./supabase";
@@ -22,9 +23,9 @@ import {
   type ProductoSigo,
 } from "./productos";
 
-type Section = "Inicio" | "Productos" | "Ventas" | "Clientes" | "Compras" | "Stock" | "Lista de precios" | "Ofertas y etiquetas" | "Ventas por día" | "Informes" | "Stock vs Inventario" | "Negocio seguro" | "Compras sugeridas";
+type Section = "Inicio" | "Productos" | "Ventas" | "Clientes" | "Compras" | "Stock" | "Lista de precios" | "Ofertas y etiquetas" | "Ventas por día" | "Informes" | "Stock vs Inventario" | "Negocio seguro" | "Compras sugeridas" | "Contabilidad";
 
-const sections: Section[] = ["Inicio", "Productos", "Ventas", "Stock", "Compras", "Compras sugeridas", "Lista de precios", "Ofertas y etiquetas", "Ventas por día", "Informes", "Negocio seguro"];
+const sections: Section[] = ["Inicio", "Productos", "Ventas", "Stock", "Compras", "Compras sugeridas", "Lista de precios", "Ofertas y etiquetas", "Ventas por día", "Informes", "Contabilidad", "Negocio seguro"];
 
 type ProductoForm = {
   nombre: string;
@@ -108,10 +109,11 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
           {section === "Ventas por día" && <IngresosDiariosOperativos empresaId={empresa.empresa_id} />}
           {section === "Stock vs Inventario" && <StockVsInventario empresaId={empresa.empresa_id} />}
           {section === "Negocio seguro" && <NegocioSeguro />}
+          {section === "Contabilidad" && <Contabilidad empresaId={empresa.empresa_id} />}
           {section === "Ventas" && <VentaRapidaOperativa empresaId={empresa.empresa_id} puedeEditarProductos={puedeEditarProductos} />}
           {section === "Compras" && <ComprasHub empresaId={empresa.empresa_id} />}
            {section === "Compras sugeridas" && <ComprasSugeridas empresaId={empresa.empresa_id} />}
-          {section !== "Inicio" && section !== "Productos" && section !== "Stock" && section !== "Ventas" && section !== "Compras" && section !== "Stock vs Inventario" && section !== "Lista de precios" && section !== "Ofertas y etiquetas" && section !== "Ventas por día" && section !== "Negocio seguro" && section !== "Compras sugeridas" && <Pendiente title={section} />}
+          {section !== "Inicio" && section !== "Productos" && section !== "Stock" && section !== "Ventas" && section !== "Compras" && section !== "Stock vs Inventario" && section !== "Lista de precios" && section !== "Ofertas y etiquetas" && section !== "Ventas por día" && section !== "Negocio seguro" && section !== "Compras sugeridas" && section !== "Contabilidad" && <Pendiente title={section} />}
         </section>
       </main>
     </div>
