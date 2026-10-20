@@ -449,6 +449,7 @@ export async function analizarFacturaCompraSigo(empresaId: string, file: File | 
     if (code === "FORBIDDEN") throw new Error("Tu usuario no tiene permiso para ingresar compras en esta empresa.");
     if (code === "INVALID_IMAGE" || code === "INVALID_DOCUMENT") throw new Error("El archivo no tiene un formato válido o supera el límite permitido.");
     if (code === "AI_TIMEOUT" || response.status === 504) throw new Error("Se agotó el tiempo de respuesta del analizador. Reintentá más tarde; la compra no se guardó ni se modificó stock.");
+    if (code === "AI_TEMPORARILY_UNAVAILABLE" || response.status === 503) throw new Error("Gemini está saturado o temporalmente fuera de servicio. Reintentá más tarde; la compra no se guardó ni se modificó stock.");
     if (code === "AI_UNAVAILABLE") throw new Error("El servicio de lectura de facturas no está disponible en este momento. La compra manual sigue funcionando.");
     if (code === "AI_REVIEW_REQUIRED") throw new Error(String(payload?.message ?? "La factura necesita revisión manual antes de ingresar stock."));
     if (code === "AI_INVALID_OUTPUT") throw new Error("La IA devolvió una respuesta incompleta o inválida. Reintentá el análisis o cargá la compra manualmente.");
