@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createTestProjectAuth} from '../api/test-project-auth.mjs';
 import {createOrderHttpHandler} from '../api/http-handler.mjs';
+import {createIsolatedService} from '../backend/service.mjs';
 const userId=crypto.randomUUID(),empresaId=crypto.randomUUID(),vendedorId=crypto.randomUUID();
 const claims={sub:userId,session_id:crypto.randomUUID(),aud:'authenticated',exp:Math.floor(Date.now()/1000)+3600};
 const token='fake-header.'+Buffer.from(JSON.stringify(claims)).toString('base64url')+'.fake-signature';
@@ -26,3 +27,26 @@ test('Logout borra inmediatamente sesión aunque revocación remota siga pendien
  let revoke;const blocked=new Promise(r=>revoke=r);const client=createMayoristaClient({enabled:true,baseUrl:'https://qa.example.test/',fetchImpl:async url=>url.endsWith('/auth/login')?new Response(JSON.stringify({accessToken:'qa-token',expiresAt:Date.now()+100000})):url.endsWith('/me')?new Response(JSON.stringify({empresaId,vendedorId,userId})):blocked});
  await client.login({empresaId});const signingOut=client.logout();assert.equal(client.identity(),null);await assert.rejects(()=>client.send({empresaId,vendedorId}),/Iniciá sesión/);revoke(new Response('{}'));await signingOut;assert.equal(client.identity(),null);
 });
+
+for(const [name,code,message,status] of [
+ ['empresa sin permiso','42501','COMMERCIAL_FORBIDDEN',403],
+ ['acceso revocado','42501','COMMERCIAL_REVOKED',403],
+ ['privilegios SQL insuficientes','42501','permission denied for relation productos',503],
+ ['conexión interrumpida','ECONNREFUSED','Connection refused',503],
+ ['esquema incompleto','42P01','relation missing',503],
+ ['servidor reiniciando','57P01','terminating connection',503],
+ ['pool sin conexiones','53300','too many connections',503],
+ ['código SQL inesperado','P0001','COMMERCIAL_FORBIDDEN',503],
+ ['mensaje de permiso diferente','42501','COMMERCIAL_FORBIDDEN unexpected detail',503],
+ ['fallo interno',undefined,'unexpected internal failure',503]
+])test('SSO comercial: '+name+' devuelve '+status,async()=>{
+ let attempts=0;
+ const failure=Object.assign(new Error(message),{code});
+ const pool={options:{host:'127.0.0.1',port:55471,database:'mayorista_qa'},query:async sql=>{
+  assert.match(sql,/^SELECT mayorista_private\.bootstrap_commercial_identity\(/);attempts++;throw failure;
+ }};
+ const service=createIsolatedService({enabled:true,pool,origin,operational:true,sharedSourceEnabled:true,commercialMode:true,sourceRevision:'a'.repeat(40),rateLimit:async()=>true,authenticateSigo:async()=>({id:userId,email:'sso-fixture@invalid.test'})});
+ const response=await service(new Request('https://api.example.test/auth/sigo',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',Authorization:'Bearer fixture-validated-by-provider'},body:JSON.stringify({empresaId})}));
+ assert.equal(response.status,status);assert.deepEqual(await response.json(),{error:status===403?'Sin permisos':'Servicio no disponible'});assert.equal(attempts,1);
+});
+

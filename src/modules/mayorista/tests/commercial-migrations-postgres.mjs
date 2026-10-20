@@ -4,6 +4,7 @@ import {randomBytes,createHash} from 'node:crypto';
 import pg from '../backend/node_modules/pg/lib/index.js';
 import {acceptanceNamespace} from '../railway/acceptance-namespace.mjs';
 import {prepareCommercialMigrations,applyCommercialMigrationTransaction} from '../backend/commercial-migrations.mjs';
+import {createIsolatedService} from '../backend/service.mjs';
 // Únicamente PostgreSQL efímero CI. Sin URLs de entorno, Railway ni Supabase.
 const pool=new pg.Pool({host:'127.0.0.1',port:55471,database:'mayorista_qa',user:'postgres',password:'mayorista_ci_only',max:2});
 const name='mayorista_acceptance_'+randomBytes(6).toString('hex'),fixture=acceptanceNamespace(pool,name),role='migration_ci_'+randomBytes(6).toString('hex');
@@ -40,6 +41,12 @@ try{
  assert.deepEqual((await fixture.query("SELECT to_regnamespace('mayorista') operational,to_regnamespace('mayorista_private') private")).rows[0],{operational:null,private:null});
  assert.equal(await snapshot(),before);results.push('rollback PostgreSQL tras fallo en versión 21 conserva datos y revierte DDL');
  assert.deepEqual(await run(),{installed:21,reused:false,seeded:false});assert.equal(await snapshot(),before);
+ // Rechazo real de la función versionada: 403, sin crear identidad ni sesión.
+ const deniedBefore=(await fixture.query('SELECT (SELECT count(*) FROM mayorista_private.usuarios) users,(SELECT count(*) FROM mayorista_private.sesiones) sessions')).rows;
+ const deniedService=createIsolatedService({enabled:true,pool:fixture,origin:'https://commercial-ci.invalid',operational:true,sharedSourceEnabled:true,commercialMode:true,sourceRevision:'a'.repeat(40),databasePolicy:{assertPool:p=>assert.equal(p,fixture)},rateLimit:async()=>true,authenticateSigo:async()=>({id:'10000000-0000-4000-8000-000000000002',email:'fixture@invalid.test'})});
+ const deniedResponse=await deniedService(new Request('https://commercial-ci.invalid/auth/sigo',{method:'POST',headers:{Origin:'https://commercial-ci.invalid','Content-Type':'application/json',Authorization:'Bearer fixture-validated-by-provider'},body:JSON.stringify({empresaId:'10000000-0000-4000-8000-000000000001'})}));
+ assert.equal(deniedResponse.status,403);assert.deepEqual(await deniedResponse.json(),{error:'Sin permisos'});assert.deepEqual((await fixture.query('SELECT (SELECT count(*) FROM mayorista_private.usuarios) users,(SELECT count(*) FROM mayorista_private.sesiones) sessions')).rows,deniedBefore);assert.equal(await snapshot(),before);
+ results.push('SSO comercial denegado por PostgreSQL devuelve 403 sin crear identidad o sesión');
  const ledger=(await fixture.query('SELECT version,source_hash FROM mayorista_private.release_migrations ORDER BY version')).rows;
  assert.deepEqual(ledger,steps.map(s=>({version:s.version,source_hash:s.sourceHash})));
  assert.deepEqual(await run(),{installed:21,reused:true,seeded:false});assert.equal(await snapshot(),before);

@@ -15,7 +15,11 @@ export function createSigoBridge({pool,authenticateSigo,sourceRevision,auth,comm
   const user=await authenticateSigo(token);if(!uuid(user?.id)||typeof user.email!=='string'||!/^\S+@\S+\.\S+$/.test(user.email))throw new ApiError(401,'Identidad SIGO no válida');
   if(commercialMode){
    const r=await passwordRecord(randomBytes(32).toString('hex'));
-   await pool.query('SELECT mayorista_private.bootstrap_commercial_identity($1,$2,$3,$4,$5,$6)',[user.id,empresaId,user.email.toLowerCase(),r.salt,r.hash,sourceRevision]);
+   try{await pool.query('SELECT mayorista_private.bootstrap_commercial_identity($1,$2,$3,$4,$5,$6)',[user.id,empresaId,user.email.toLowerCase(),r.salt,r.hash,sourceRevision]);}
+   catch(error){
+    if(error.code==='42501'&&['COMMERCIAL_FORBIDDEN','COMMERCIAL_REVOKED'].includes(error.message))throw new ApiError(403,'Mayorista no habilitado o empresa no autorizada');
+    throw error;
+   }
    return auth.signInTrustedIdentity(user.id,empresaId);
   }
   const c=await pool.connect();try{
