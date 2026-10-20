@@ -597,7 +597,7 @@ confianza_general y confianza van de 0 a 1.`;
     const listing = await catalog.json();
     availableModels = (Array.isArray(listing.models) ? listing.models : [])
       .filter(item => Array.isArray(item.supportedGenerationMethods) && item.supportedGenerationMethods.includes("generateContent"))
-      .map(item => String(item.name || "").replace(/^models\\//, ""))
+      .map(item => String(item.name || "").replace("models/", ""))
       .filter(name => /^gemini-[a-zA-Z0-9.-]+$/.test(name));
   } catch (error) {
     console.warn("SIGO Gemini catalog error", { requestId: context.requestId, error: error?.name || "network" });
