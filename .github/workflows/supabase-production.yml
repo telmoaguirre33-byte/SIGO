@@ -1,0 +1,266 @@
+name: Supabase Production
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - '.github/workflows/supabase-production.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: supabase-production
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+      SIGO_PRODUCTION_URL: https://comercial-lilac.vercel.app/
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check production database credentials
+        shell: bash
+        run: |
+          missing=0
+          for key in SUPABASE_PROJECT_REF; do
+            if [ -z "${!key}" ]; then
+              echo "::error title=Missing production secret::$key is not configured in GitHub Actions secrets."
+              missing=1
+            fi
+          done
+          if [ -z "${SUPABASE_DB_URL:-}" ] && [ -z "${SUPABASE_POOLER_URL:-}" ] && [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then
+            echo "::error title=Missing production database credential::Configure SUPABASE_DB_URL/SUPABASE_POOLER_URL or SUPABASE_DB_PASSWORD."
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            echo "Production migration cannot continue until database credentials are configured."
+            exit 1
+          fi
+          if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+            echo "::warning title=Supabase management token unavailable::Database deployment will use the Postgres fallback; Auth redirect sync will be skipped."
+          fi
+          echo "Supabase production database credentials detected."
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Prepare safe database fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${SUPABASE_DB_URL:-}" ]; then
+            echo "::add-mask::$SUPABASE_DB_URL"
+            echo "SIGO_DB_URL=$SUPABASE_DB_URL" >> "$GITHUB_ENV"
+            echo "SIGO_DB_URL_SOURCE=configured" >> "$GITHUB_ENV"
+            echo "Configured database URL detected (session pooler recommended for hosted CI)."
+            exit 0
+          fi
+
+          if [ -n "${SUPABASE_POOLER_URL:-}" ]; then
+            echo "::add-mask::$SUPABASE_POOLER_URL"
+            echo "SIGO_DB_URL=$SUPABASE_POOLER_URL" >> "$GITHUB_ENV"
+            echo "SIGO_DB_URL_SOURCE=configured-pooler" >> "$GITHUB_ENV"
+            echo "Configured Supabase pooler URL detected."
+            exit 0
+          fi
+
+          encoded_password="$(python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+          print(quote(os.environ['SUPABASE_DB_PASSWORD'], safe=''))
+          PY
+          )"
+          echo "::add-mask::$encoded_password"
+          echo "SIGO_DB_PASSWORD_ENCODED=$encoded_password" >> "$GITHUB_ENV"
+          db_url="postgresql://postgres:${encoded_password}@db.${SUPABASE_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require"
+          echo "::add-mask::$db_url"
+          echo "SIGO_DB_URL=$db_url" >> "$GITHUB_ENV"
+          echo "SIGO_DB_URL_SOURCE=direct" >> "$GITHUB_ENV"
+          echo "Direct database URL prepared. If hosted CI cannot use IPv6, the next step will discover the Supabase session pooler automatically."
+
+      - name: Resolve production database connection
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] && [ -n "${SUPABASE_DB_PASSWORD:-}" ] && supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"; then
+            echo "SIGO_DB_MODE=linked" >> "$GITHUB_ENV"
+            echo "Supabase linked mode available."
+            exit 0
+          fi
+
+          echo "::warning title=Supabase linked mode unavailable::Trying the configured/direct Postgres connection so migrations are independent of the Management API."
+          if supabase migration list --db-url "$SIGO_DB_URL" >/tmp/sigo-migrations.txt 2>/tmp/sigo-db-error.txt; then
+            cat /tmp/sigo-migrations.txt
+            echo "SIGO_DB_MODE=direct" >> "$GITHUB_ENV"
+            echo "Postgres fallback verified."
+            exit 0
+          fi
+
+          if [ "${SIGO_DB_URL_SOURCE:-}" = "direct" ] && [ -n "${SUPABASE_DB_PASSWORD:-}" ]; then
+            echo "Direct database endpoint was unavailable. Trying Supabase-owned session poolers without exposing credentials."
+            regions=(
+              sa-east-1 us-east-1 us-east-2 us-west-1 us-west-2 ca-central-1
+              eu-west-1 eu-west-2 eu-west-3 eu-central-1 eu-central-2 eu-north-1
+              ap-southeast-1 ap-southeast-2 ap-northeast-1 ap-northeast-2 ap-south-1
+            )
+            encoded_password="${SIGO_DB_PASSWORD_ENCODED:-}"
+            if [ -z "$encoded_password" ]; then
+              encoded_password="$(python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+          print(quote(os.environ['SUPABASE_DB_PASSWORD'], safe=''))
+          PY
+              )"
+              echo "::add-mask::$encoded_password"
+            fi
+
+            for region in "${regions[@]}"; do
+              for pooler_generation in aws-0 aws-1; do
+                host="${pooler_generation}-${region}.pooler.supabase.com"
+                candidate="postgresql://postgres.${SUPABASE_PROJECT_REF}:${encoded_password}@${host}:5432/postgres?sslmode=require"
+                echo "::add-mask::$candidate"
+                echo "Testing Supabase session pooler in ${pooler_generation}/${region}..."
+                if timeout 7s supabase migration list --db-url "$candidate" >/tmp/sigo-pooler-migrations.txt 2>/tmp/sigo-pooler-error.txt; then
+                  cat /tmp/sigo-pooler-migrations.txt
+                  echo "SIGO_DB_URL=$candidate" >> "$GITHUB_ENV"
+                  echo "SIGO_DB_URL_SOURCE=auto-pooler:${pooler_generation}:${region}" >> "$GITHUB_ENV"
+                  echo "SIGO_DB_MODE=direct" >> "$GITHUB_ENV"
+                  echo "Supabase session pooler resolved automatically in ${pooler_generation}/${region}."
+                  exit 0
+                fi
+              done
+            done
+          fi
+
+          cat /tmp/sigo-db-error.txt >&2 || true
+          if [ "${SIGO_DB_URL_SOURCE:-}" = "direct" ]; then
+            echo "::error title=Production database unreachable::Linked access is unauthorized and neither direct IPv6 nor an auto-discovered Supabase session pooler could reach production. Configure SUPABASE_DB_URL/SUPABASE_POOLER_URL from Supabase Dashboard > Connect or renew SUPABASE_ACCESS_TOKEN."
+          else
+            echo "::error title=Production database unreachable::The configured Supabase database/pooler URL could not reach production. Verify the pooler URL/network credentials or renew SUPABASE_ACCESS_TOKEN."
+          fi
+          exit 1
+
+      - name: Ensure SIGO auth redirect
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+            echo "::warning title=Auth redirect sync skipped::SUPABASE_ACCESS_TOKEN is unavailable. Database migrations can continue independently."
+            exit 0
+          fi
+
+          endpoint="https://api.supabase.com/v1/projects/${SUPABASE_PROJECT_REF}/config/auth"
+          if ! current="$(curl -fsS "$endpoint" -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}")"; then
+            echo "::warning title=Auth redirect sync unavailable::Supabase management token was rejected. Keeping database deployment independent; renew the token to resync Auth settings."
+            exit 0
+          fi
+
+          current_allow="$(printf '%s' "$current" | jq -r '.uri_allow_list // ""')"
+          desired_root="${SIGO_PRODUCTION_URL}"
+          desired_wildcard="${SIGO_PRODUCTION_URL}**"
+          merged_allow="$current_allow"
+
+          case ",${merged_allow}," in
+            *",${desired_root},"*) ;;
+            *) merged_allow="${merged_allow:+${merged_allow},}${desired_root}" ;;
+          esac
+          case ",${merged_allow}," in
+            *",${desired_wildcard},"*) ;;
+            *) merged_allow="${merged_allow:+${merged_allow},}${desired_wildcard}" ;;
+          esac
+
+          payload="$(jq -n --arg site "$SIGO_PRODUCTION_URL" --arg allow "$merged_allow" '{site_url: $site, uri_allow_list: $allow}')"
+          if ! curl -fsS -X PATCH "$endpoint" \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data "$payload" >/dev/null; then
+            echo "::warning title=Auth redirect update failed::Database deployment will continue; renew SUPABASE_ACCESS_TOKEN to update Auth configuration."
+            exit 0
+          fi
+
+          verified="$(curl -fsS "$endpoint" -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}")"
+          verified_site="$(printf '%s' "$verified" | jq -r '.site_url // ""')"
+          verified_allow="$(printf '%s' "$verified" | jq -r '.uri_allow_list // ""')"
+
+          if [ "$verified_site" != "$SIGO_PRODUCTION_URL" ] || ! printf '%s' "$verified_allow" | grep -Fq "$desired_root"; then
+            echo "::warning title=Auth redirect not fully synchronized::Database deployment will continue; Auth configuration still requires attention."
+            exit 0
+          fi
+          echo "SIGO production auth redirect verified."
+
+      - name: Normalize legacy migration history
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$SIGO_DB_MODE" = "linked" ]; then
+            state="$(supabase migration list --linked)"
+          else
+            state="$(supabase migration list --db-url "$SIGO_DB_URL")"
+          fi
+          echo "$state"
+          if echo "$state" | grep -q '20260912081420'; then
+            echo "Legacy migration 20260912081420 duplicates local 20260909191300_multiempresa_base; repairing history only."
+            if [ "$SIGO_DB_MODE" = "linked" ]; then
+              supabase migration repair --linked --status reverted 20260912081420
+              supabase migration repair --linked --status applied 20260909191300
+            else
+              supabase migration repair --db-url "$SIGO_DB_URL" --status reverted 20260912081420
+              supabase migration repair --db-url "$SIGO_DB_URL" --status applied 20260909191300
+            fi
+          else
+            echo "Legacy migration history already normalized."
+          fi
+
+      - name: Show pending migrations
+        shell: bash
+        run: |
+          if [ "$SIGO_DB_MODE" = "linked" ]; then
+            supabase migration list --linked
+          else
+            supabase migration list --db-url "$SIGO_DB_URL"
+          fi
+
+      - name: Apply pending migrations
+        shell: bash
+        run: |
+          if [ "$SIGO_DB_MODE" = "linked" ]; then
+            supabase db push --linked --include-all
+          else
+            supabase db push --db-url "$SIGO_DB_URL" --include-all
+          fi
+
+      - name: Verify remote migration state
+        shell: bash
+        run: |
+          if [ "$SIGO_DB_MODE" = "linked" ]; then
+            supabase migration list --linked
+          else
+            supabase migration list --db-url "$SIGO_DB_URL"
+          fi
+
+      - name: Lint production database
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$SIGO_DB_MODE" = "linked" ]; then
+            supabase db lint --linked --level warning | tee /tmp/sigo-db-lint.json
+          else
+            supabase db lint --db-url "$SIGO_DB_URL" --level warning | tee /tmp/sigo-db-lint.json
+          fi
+          if grep -Eq '"level"[[:space:]]*:[[:space:]]*"error"' /tmp/sigo-db-lint.json; then
+            echo "::error title=Production database lint error::Supabase lint found at least one database error. Fix it before considering the production schema verified."
+            exit 1
+          fi
+          echo "Production database lint completed without error-level findings."

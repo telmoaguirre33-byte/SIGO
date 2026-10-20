@@ -1,0 +1,5736 @@
+{
+  "readOnly": true,
+  "businessRowsExported": 0,
+  "schema": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "sessions",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "table": "sessions",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "sessions",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 3,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "table": "sessions",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 4,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "factor_id",
+        "type": "uuid",
+        "table": "sessions",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 5,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "aal",
+        "type": "auth.aal_level",
+        "table": "sessions",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 6,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "not_after",
+        "type": "timestamp with time zone",
+        "table": "sessions",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 7,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "refreshed_at",
+        "type": "timestamp without time zone",
+        "table": "sessions",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 8,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "user_agent",
+        "type": "text",
+        "table": "sessions",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 9,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "ip",
+        "type": "inet",
+        "table": "sessions",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 10,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "tag",
+        "type": "text",
+        "table": "sessions",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 11,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "oauth_client_id",
+        "type": "uuid",
+        "table": "sessions",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 12,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "refresh_token_hmac_key",
+        "type": "text",
+        "table": "sessions",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 13,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "refresh_token_counter",
+        "type": "bigint",
+        "table": "sessions",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 14,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "scopes",
+        "type": "text",
+        "table": "sessions",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 15,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "instance_id",
+        "type": "uuid",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 1,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "aud",
+        "type": "character varying(255)",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 3,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "role",
+        "type": "character varying(255)",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 4,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "email",
+        "type": "character varying(255)",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 5,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "encrypted_password",
+        "type": "character varying(255)",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 6,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "email_confirmed_at",
+        "type": "timestamp with time zone",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 7,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "invited_at",
+        "type": "timestamp with time zone",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 8,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "confirmation_token",
+        "type": "character varying(255)",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 9,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "confirmation_sent_at",
+        "type": "timestamp with time zone",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 10,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "recovery_token",
+        "type": "character varying(255)",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 11,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "recovery_sent_at",
+        "type": "timestamp with time zone",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 12,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "email_change_token_new",
+        "type": "character varying(255)",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 13,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "email_change",
+        "type": "character varying(255)",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 14,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "email_change_sent_at",
+        "type": "timestamp with time zone",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 15,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "last_sign_in_at",
+        "type": "timestamp with time zone",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 16,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "raw_app_meta_data",
+        "type": "jsonb",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 17,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "raw_user_meta_data",
+        "type": "jsonb",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 18,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "is_super_admin",
+        "type": "boolean",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 19,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 20,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 21,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "phone",
+        "type": "text",
+        "table": "users",
+        "schema": "auth",
+        "default": "NULL::character varying",
+        "ordinal": 22,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "phone_confirmed_at",
+        "type": "timestamp with time zone",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 23,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "phone_change",
+        "type": "text",
+        "table": "users",
+        "schema": "auth",
+        "default": "''::character varying",
+        "ordinal": 24,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "phone_change_token",
+        "type": "character varying(255)",
+        "table": "users",
+        "schema": "auth",
+        "default": "''::character varying",
+        "ordinal": 25,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "phone_change_sent_at",
+        "type": "timestamp with time zone",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 26,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "confirmed_at",
+        "type": "timestamp with time zone",
+        "table": "users",
+        "schema": "auth",
+        "default": "LEAST(email_confirmed_at, phone_confirmed_at)",
+        "ordinal": 27,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": "s"
+      },
+      {
+        "name": "email_change_token_current",
+        "type": "character varying(255)",
+        "table": "users",
+        "schema": "auth",
+        "default": "''::character varying",
+        "ordinal": 28,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "email_change_confirm_status",
+        "type": "smallint",
+        "table": "users",
+        "schema": "auth",
+        "default": "0",
+        "ordinal": 29,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "banned_until",
+        "type": "timestamp with time zone",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 30,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "reauthentication_token",
+        "type": "character varying(255)",
+        "table": "users",
+        "schema": "auth",
+        "default": "''::character varying",
+        "ordinal": 31,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "reauthentication_sent_at",
+        "type": "timestamp with time zone",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 32,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "is_sso_user",
+        "type": "boolean",
+        "table": "users",
+        "schema": "auth",
+        "default": "false",
+        "ordinal": 33,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp with time zone",
+        "table": "users",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 34,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "is_anonymous",
+        "type": "boolean",
+        "table": "users",
+        "schema": "auth",
+        "default": "false",
+        "ordinal": 35,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "default": "gen_random_uuid()",
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "empresa_id",
+        "type": "uuid",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "punto_venta",
+        "type": "integer",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "default": null,
+        "ordinal": 3,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "tipo_cbte",
+        "type": "integer",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "default": null,
+        "ordinal": 4,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "numero_cbte",
+        "type": "bigint",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "default": null,
+        "ordinal": 5,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "cae",
+        "type": "text",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "default": null,
+        "ordinal": 6,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "cae_vencimiento",
+        "type": "date",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "default": null,
+        "ordinal": 7,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "resultado",
+        "type": "text",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "default": null,
+        "ordinal": 8,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "observaciones",
+        "type": "jsonb",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "default": "'[]'::jsonb",
+        "ordinal": 9,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "request_id",
+        "type": "text",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "default": null,
+        "ordinal": 10,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "emitido_at",
+        "type": "timestamp with time zone",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 11,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 12,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "venta_id",
+        "type": "uuid",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "default": null,
+        "ordinal": 13,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "caja_movimientos_sigo",
+        "schema": "public",
+        "default": "gen_random_uuid()",
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "empresa_id",
+        "type": "uuid",
+        "table": "caja_movimientos_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "venta_id",
+        "type": "uuid",
+        "table": "caja_movimientos_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 3,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "tipo",
+        "type": "text",
+        "table": "caja_movimientos_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 4,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "medio_pago",
+        "type": "text",
+        "table": "caja_movimientos_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 5,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "importe",
+        "type": "numeric(14,2)",
+        "table": "caja_movimientos_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 6,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "concepto",
+        "type": "text",
+        "table": "caja_movimientos_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 7,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "created_by",
+        "type": "uuid",
+        "table": "caja_movimientos_sigo",
+        "schema": "public",
+        "default": "auth.uid()",
+        "ordinal": 8,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "caja_movimientos_sigo",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 9,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "devolucion_id",
+        "type": "uuid",
+        "table": "caja_movimientos_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 10,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "cliente_movimientos_sigo",
+        "schema": "public",
+        "default": "gen_random_uuid()",
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "empresa_id",
+        "type": "uuid",
+        "table": "cliente_movimientos_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "cliente_id",
+        "type": "uuid",
+        "table": "cliente_movimientos_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 3,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "venta_id",
+        "type": "uuid",
+        "table": "cliente_movimientos_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 4,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "tipo",
+        "type": "text",
+        "table": "cliente_movimientos_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 5,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "importe",
+        "type": "numeric(14,2)",
+        "table": "cliente_movimientos_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 6,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "concepto",
+        "type": "text",
+        "table": "cliente_movimientos_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 7,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "created_by",
+        "type": "uuid",
+        "table": "cliente_movimientos_sigo",
+        "schema": "public",
+        "default": "auth.uid()",
+        "ordinal": 8,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "cliente_movimientos_sigo",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 9,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "devolucion_id",
+        "type": "uuid",
+        "table": "cliente_movimientos_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 10,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "default": "gen_random_uuid()",
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "empresa_id",
+        "type": "uuid",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "nombre",
+        "type": "text",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 3,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "documento",
+        "type": "text",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 4,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "telefono",
+        "type": "text",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 5,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "email",
+        "type": "text",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 6,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "direccion",
+        "type": "text",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 7,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "limite_credito",
+        "type": "numeric(14,2)",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 8,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "saldo_actual",
+        "type": "numeric(14,2)",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "default": "0",
+        "ordinal": 9,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "activo",
+        "type": "boolean",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "default": "true",
+        "ordinal": 10,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_by",
+        "type": "uuid",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "default": "auth.uid()",
+        "ordinal": 11,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 12,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 13,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "arca_doc_tipo",
+        "type": "integer",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 14,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "condicion_iva_receptor_id",
+        "type": "integer",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 15,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "devolucion_items_sigo",
+        "schema": "public",
+        "default": "gen_random_uuid()",
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "devolucion_id",
+        "type": "uuid",
+        "table": "devolucion_items_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "empresa_id",
+        "type": "uuid",
+        "table": "devolucion_items_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 3,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "venta_item_id",
+        "type": "uuid",
+        "table": "devolucion_items_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 4,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "producto_id",
+        "type": "uuid",
+        "table": "devolucion_items_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 5,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "cantidad",
+        "type": "numeric(14,3)",
+        "table": "devolucion_items_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 6,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "precio_unitario",
+        "type": "numeric(14,2)",
+        "table": "devolucion_items_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 7,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "subtotal",
+        "type": "numeric(14,2)",
+        "table": "devolucion_items_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 8,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "devoluciones_sigo",
+        "schema": "public",
+        "default": "gen_random_uuid()",
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "empresa_id",
+        "type": "uuid",
+        "table": "devoluciones_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "venta_id",
+        "type": "uuid",
+        "table": "devoluciones_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 3,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "tipo",
+        "type": "text",
+        "table": "devoluciones_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 4,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "total",
+        "type": "numeric(14,2)",
+        "table": "devoluciones_sigo",
+        "schema": "public",
+        "default": "0",
+        "ordinal": 5,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "motivo",
+        "type": "text",
+        "table": "devoluciones_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 6,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "idempotency_key",
+        "type": "text",
+        "table": "devoluciones_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 7,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "created_by",
+        "type": "uuid",
+        "table": "devoluciones_sigo",
+        "schema": "public",
+        "default": "auth.uid()",
+        "ordinal": 8,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "devoluciones_sigo",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 9,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "default": "gen_random_uuid()",
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "empresa_id",
+        "type": "uuid",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "default": null,
+        "ordinal": 3,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "rol",
+        "type": "text",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "default": null,
+        "ordinal": 4,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "permisos_extra",
+        "type": "text[]",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "default": "'{}'::text[]",
+        "ordinal": 5,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "activo",
+        "type": "boolean",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "default": "true",
+        "ordinal": 6,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 7,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 8,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "permisos_denegados",
+        "type": "text[]",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "default": "'{}'::text[]",
+        "ordinal": 9,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "empresas",
+        "schema": "public",
+        "default": "gen_random_uuid()",
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "nombre",
+        "type": "text",
+        "table": "empresas",
+        "schema": "public",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "razon_social",
+        "type": "text",
+        "table": "empresas",
+        "schema": "public",
+        "default": null,
+        "ordinal": 3,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "cuit",
+        "type": "text",
+        "table": "empresas",
+        "schema": "public",
+        "default": null,
+        "ordinal": 4,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "activa",
+        "type": "boolean",
+        "table": "empresas",
+        "schema": "public",
+        "default": "true",
+        "ordinal": 5,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_by",
+        "type": "uuid",
+        "table": "empresas",
+        "schema": "public",
+        "default": "auth.uid()",
+        "ordinal": 6,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "empresas",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 7,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "table": "empresas",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 8,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "ofertas_productos_sigo",
+        "schema": "public",
+        "default": "gen_random_uuid()",
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "empresa_id",
+        "type": "uuid",
+        "table": "ofertas_productos_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "producto_id",
+        "type": "uuid",
+        "table": "ofertas_productos_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 3,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "fecha_inicio",
+        "type": "date",
+        "table": "ofertas_productos_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 4,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "fecha_fin",
+        "type": "date",
+        "table": "ofertas_productos_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 5,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "descuento_porcentaje",
+        "type": "numeric(5,2)",
+        "table": "ofertas_productos_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 6,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_by",
+        "type": "uuid",
+        "table": "ofertas_productos_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 7,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "ofertas_productos_sigo",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 8,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "productos",
+        "schema": "public",
+        "default": "gen_random_uuid()",
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "codigo_interno",
+        "type": "text",
+        "table": "productos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "nombre",
+        "type": "text",
+        "table": "productos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 3,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "descripcion",
+        "type": "text",
+        "table": "productos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 4,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "marca_id",
+        "type": "uuid",
+        "table": "productos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 5,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "categoria_id",
+        "type": "uuid",
+        "table": "productos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 6,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "proveedor_principal_id",
+        "type": "uuid",
+        "table": "productos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 7,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "unidad_medida",
+        "type": "text",
+        "table": "productos",
+        "schema": "public",
+        "default": "'UNIDAD'::text",
+        "ordinal": 8,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "costo_actual",
+        "type": "numeric(14,2)",
+        "table": "productos",
+        "schema": "public",
+        "default": "0",
+        "ordinal": 9,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "costo_ultima_compra",
+        "type": "numeric(14,2)",
+        "table": "productos",
+        "schema": "public",
+        "default": "0",
+        "ordinal": 10,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "precio_venta",
+        "type": "numeric(14,2)",
+        "table": "productos",
+        "schema": "public",
+        "default": "0",
+        "ordinal": 11,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "margen_ganancia",
+        "type": "numeric(14,2)",
+        "table": "productos",
+        "schema": "public",
+        "default": "0",
+        "ordinal": 12,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "margen_porcentaje",
+        "type": "numeric(8,2)",
+        "table": "productos",
+        "schema": "public",
+        "default": "0",
+        "ordinal": 13,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "iva_porcentaje",
+        "type": "numeric(5,2)",
+        "table": "productos",
+        "schema": "public",
+        "default": "21",
+        "ordinal": 14,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "stock_actual",
+        "type": "numeric(14,3)",
+        "table": "productos",
+        "schema": "public",
+        "default": "0",
+        "ordinal": 15,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "stock_minimo",
+        "type": "numeric(14,3)",
+        "table": "productos",
+        "schema": "public",
+        "default": "0",
+        "ordinal": 16,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "stock_maximo",
+        "type": "numeric(14,3)",
+        "table": "productos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 17,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "imagen_url",
+        "type": "text",
+        "table": "productos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 18,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "activo",
+        "type": "boolean",
+        "table": "productos",
+        "schema": "public",
+        "default": "true",
+        "ordinal": 19,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "fecha_ultima_compra",
+        "type": "timestamp with time zone",
+        "table": "productos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 20,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "fecha_ultima_venta",
+        "type": "timestamp with time zone",
+        "table": "productos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 21,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "productos",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 22,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "table": "productos",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 23,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "codigo_barras",
+        "type": "text",
+        "table": "productos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 24,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "categoria",
+        "type": "text",
+        "table": "productos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 25,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "marca",
+        "type": "text",
+        "table": "productos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 26,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "proveedor",
+        "type": "text",
+        "table": "productos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 27,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "empresa_id",
+        "type": "uuid",
+        "table": "productos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 28,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "iva_alicuota_id",
+        "type": "integer",
+        "table": "productos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 29,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "iva_tasa",
+        "type": "numeric(6,3)",
+        "table": "productos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 30,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "precio_incluye_iva",
+        "type": "boolean",
+        "table": "productos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 31,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "empresa_id",
+        "type": "uuid",
+        "table": "sigo_empresa_modulos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "modulo_clave",
+        "type": "text",
+        "table": "sigo_empresa_modulos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "habilitado",
+        "type": "boolean",
+        "table": "sigo_empresa_modulos",
+        "schema": "public",
+        "default": "false",
+        "ordinal": 3,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "actualizado_por",
+        "type": "uuid",
+        "table": "sigo_empresa_modulos",
+        "schema": "public",
+        "default": null,
+        "ordinal": 4,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "table": "sigo_empresa_modulos",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 5,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "clave",
+        "type": "text",
+        "table": "sigo_modulos_catalogo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "nombre",
+        "type": "text",
+        "table": "sigo_modulos_catalogo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "descripcion",
+        "type": "text",
+        "table": "sigo_modulos_catalogo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 3,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "categoria",
+        "type": "text",
+        "table": "sigo_modulos_catalogo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 4,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "disponible",
+        "type": "boolean",
+        "table": "sigo_modulos_catalogo",
+        "schema": "public",
+        "default": "true",
+        "ordinal": 5,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "obligatorio",
+        "type": "boolean",
+        "table": "sigo_modulos_catalogo",
+        "schema": "public",
+        "default": "false",
+        "ordinal": 6,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "orden",
+        "type": "integer",
+        "table": "sigo_modulos_catalogo",
+        "schema": "public",
+        "default": "100",
+        "ordinal": 7,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "sigo_modulos_catalogo",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 8,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "table": "sigo_modulos_catalogo",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 9,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "venta_items_sigo",
+        "schema": "public",
+        "default": "gen_random_uuid()",
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "venta_id",
+        "type": "uuid",
+        "table": "venta_items_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "empresa_id",
+        "type": "uuid",
+        "table": "venta_items_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 3,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "producto_id",
+        "type": "uuid",
+        "table": "venta_items_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 4,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "cantidad",
+        "type": "numeric(14,3)",
+        "table": "venta_items_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 5,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "precio_unitario",
+        "type": "numeric(14,2)",
+        "table": "venta_items_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 6,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "subtotal",
+        "type": "numeric(14,2)",
+        "table": "venta_items_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 7,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "default": "gen_random_uuid()",
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "empresa_id",
+        "type": "uuid",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "numero",
+        "type": "bigint",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 3,
+        "identity": "d",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "estado",
+        "type": "text",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "default": "'confirmada'::text",
+        "ordinal": 4,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "medio_pago",
+        "type": "text",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "default": "'efectivo'::text",
+        "ordinal": 5,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "total",
+        "type": "numeric(14,2)",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 6,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "idempotency_key",
+        "type": "text",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 7,
+        "identity": "",
+        "not_null": true,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "created_by",
+        "type": "uuid",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "default": "auth.uid()",
+        "ordinal": 8,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 9,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "cliente_id",
+        "type": "uuid",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 10,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "request_fingerprint",
+        "type": "text",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 11,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "anulada_at",
+        "type": "timestamp with time zone",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 12,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "anulada_by",
+        "type": "uuid",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 13,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "motivo_anulacion",
+        "type": "text",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "default": null,
+        "ordinal": 14,
+        "identity": "",
+        "not_null": false,
+        "collation": "\"default\"",
+        "generated": ""
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "oauth_clients",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "client_secret_hash",
+        "type": "text",
+        "table": "oauth_clients",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 3,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "registration_type",
+        "type": "auth.oauth_registration_type",
+        "table": "oauth_clients",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 4,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "redirect_uris",
+        "type": "text",
+        "table": "oauth_clients",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 5,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "grant_types",
+        "type": "text",
+        "table": "oauth_clients",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 6,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "client_name",
+        "type": "text",
+        "table": "oauth_clients",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 7,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "client_uri",
+        "type": "text",
+        "table": "oauth_clients",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 8,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "logo_uri",
+        "type": "text",
+        "table": "oauth_clients",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 9,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "oauth_clients",
+        "schema": "auth",
+        "default": "now()",
+        "ordinal": 10,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "table": "oauth_clients",
+        "schema": "auth",
+        "default": "now()",
+        "ordinal": 11,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp with time zone",
+        "table": "oauth_clients",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 12,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "client_type",
+        "type": "auth.oauth_client_type",
+        "table": "oauth_clients",
+        "schema": "auth",
+        "default": "'confidential'::auth.oauth_client_type",
+        "ordinal": 13,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "token_endpoint_auth_method",
+        "type": "text",
+        "table": "oauth_clients",
+        "schema": "auth",
+        "default": null,
+        "ordinal": 14,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "categorias",
+        "schema": "public",
+        "default": "gen_random_uuid()",
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "nombre",
+        "type": "text",
+        "table": "categorias",
+        "schema": "public",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "descripcion",
+        "type": "text",
+        "table": "categorias",
+        "schema": "public",
+        "default": null,
+        "ordinal": 3,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "activo",
+        "type": "boolean",
+        "table": "categorias",
+        "schema": "public",
+        "default": "true",
+        "ordinal": 4,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "categorias",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 5,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "table": "categorias",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 6,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "marcas",
+        "schema": "public",
+        "default": "gen_random_uuid()",
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "nombre",
+        "type": "text",
+        "table": "marcas",
+        "schema": "public",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "activo",
+        "type": "boolean",
+        "table": "marcas",
+        "schema": "public",
+        "default": "true",
+        "ordinal": 3,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "marcas",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 4,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "table": "marcas",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 5,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "portal_cliente_usuarios",
+        "schema": "public",
+        "default": "gen_random_uuid()",
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "empresa_id",
+        "type": "uuid",
+        "table": "portal_cliente_usuarios",
+        "schema": "public",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "cliente_id",
+        "type": "uuid",
+        "table": "portal_cliente_usuarios",
+        "schema": "public",
+        "default": null,
+        "ordinal": 3,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "table": "portal_cliente_usuarios",
+        "schema": "public",
+        "default": null,
+        "ordinal": 4,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "activo",
+        "type": "boolean",
+        "table": "portal_cliente_usuarios",
+        "schema": "public",
+        "default": "true",
+        "ordinal": 5,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "creado_en",
+        "type": "timestamp with time zone",
+        "table": "portal_cliente_usuarios",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 6,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "proveedores",
+        "schema": "public",
+        "default": "gen_random_uuid()",
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "razon_social",
+        "type": "text",
+        "table": "proveedores",
+        "schema": "public",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "nombre_fantasia",
+        "type": "text",
+        "table": "proveedores",
+        "schema": "public",
+        "default": null,
+        "ordinal": 3,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "cuit",
+        "type": "text",
+        "table": "proveedores",
+        "schema": "public",
+        "default": null,
+        "ordinal": 4,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "telefono",
+        "type": "text",
+        "table": "proveedores",
+        "schema": "public",
+        "default": null,
+        "ordinal": 5,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "email",
+        "type": "text",
+        "table": "proveedores",
+        "schema": "public",
+        "default": null,
+        "ordinal": 6,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "direccion",
+        "type": "text",
+        "table": "proveedores",
+        "schema": "public",
+        "default": null,
+        "ordinal": 7,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "ciudad",
+        "type": "text",
+        "table": "proveedores",
+        "schema": "public",
+        "default": null,
+        "ordinal": 8,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "provincia",
+        "type": "text",
+        "table": "proveedores",
+        "schema": "public",
+        "default": null,
+        "ordinal": 9,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "observaciones",
+        "type": "text",
+        "table": "proveedores",
+        "schema": "public",
+        "default": null,
+        "ordinal": 10,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "activo",
+        "type": "boolean",
+        "table": "proveedores",
+        "schema": "public",
+        "default": "true",
+        "ordinal": 11,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "proveedores",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 12,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "table": "proveedores",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 13,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "empresa_id",
+        "type": "uuid",
+        "table": "proveedores",
+        "schema": "public",
+        "default": null,
+        "ordinal": 14,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "sigo_admin_notifications",
+        "schema": "public",
+        "default": "gen_random_uuid()",
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "event_key",
+        "type": "text",
+        "table": "sigo_admin_notifications",
+        "schema": "public",
+        "default": null,
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "title",
+        "type": "text",
+        "table": "sigo_admin_notifications",
+        "schema": "public",
+        "default": null,
+        "ordinal": 3,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "body",
+        "type": "text",
+        "table": "sigo_admin_notifications",
+        "schema": "public",
+        "default": null,
+        "ordinal": 4,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "sigo_admin_notifications",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 5,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "read_at",
+        "type": "timestamp with time zone",
+        "table": "sigo_admin_notifications",
+        "schema": "public",
+        "default": null,
+        "ordinal": 6,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "sent_at",
+        "type": "timestamp with time zone",
+        "table": "sigo_admin_notifications",
+        "schema": "public",
+        "default": null,
+        "ordinal": 7,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "claimed_at",
+        "type": "timestamp with time zone",
+        "table": "sigo_admin_notifications",
+        "schema": "public",
+        "default": null,
+        "ordinal": 8,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "claim_token",
+        "type": "uuid",
+        "table": "sigo_admin_notifications",
+        "schema": "public",
+        "default": null,
+        "ordinal": 9,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "last_error",
+        "type": "text",
+        "table": "sigo_admin_notifications",
+        "schema": "public",
+        "default": null,
+        "ordinal": 10,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "table": "sigo_superadmins",
+        "schema": "public",
+        "default": null,
+        "ordinal": 1,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "activo",
+        "type": "boolean",
+        "table": "sigo_superadmins",
+        "schema": "public",
+        "default": "true",
+        "ordinal": 2,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "sigo_superadmins",
+        "schema": "public",
+        "default": "now()",
+        "ordinal": 3,
+        "identity": "",
+        "not_null": true,
+        "collation": null,
+        "generated": ""
+      },
+      {
+        "name": "created_by",
+        "type": "uuid",
+        "table": "sigo_superadmins",
+        "schema": "public",
+        "default": null,
+        "ordinal": 4,
+        "identity": "",
+        "not_null": false,
+        "collation": null,
+        "generated": ""
+      }
+    ],
+    "indexes": [
+      {
+        "name": "auth.sessions_pkey",
+        "table": "sessions",
+        "schema": "auth",
+        "definition": "CREATE UNIQUE INDEX sessions_pkey ON auth.sessions USING btree (id)"
+      },
+      {
+        "name": "auth.user_id_created_at_idx",
+        "table": "sessions",
+        "schema": "auth",
+        "definition": "CREATE INDEX user_id_created_at_idx ON auth.sessions USING btree (user_id, created_at)"
+      },
+      {
+        "name": "auth.sessions_user_id_idx",
+        "table": "sessions",
+        "schema": "auth",
+        "definition": "CREATE INDEX sessions_user_id_idx ON auth.sessions USING btree (user_id)"
+      },
+      {
+        "name": "auth.sessions_not_after_idx",
+        "table": "sessions",
+        "schema": "auth",
+        "definition": "CREATE INDEX sessions_not_after_idx ON auth.sessions USING btree (not_after DESC)"
+      },
+      {
+        "name": "auth.sessions_oauth_client_id_idx",
+        "table": "sessions",
+        "schema": "auth",
+        "definition": "CREATE INDEX sessions_oauth_client_id_idx ON auth.sessions USING btree (oauth_client_id)"
+      },
+      {
+        "name": "auth.users_pkey",
+        "table": "users",
+        "schema": "auth",
+        "definition": "CREATE UNIQUE INDEX users_pkey ON auth.users USING btree (id)"
+      },
+      {
+        "name": "auth.users_instance_id_idx",
+        "table": "users",
+        "schema": "auth",
+        "definition": "CREATE INDEX users_instance_id_idx ON auth.users USING btree (instance_id)"
+      },
+      {
+        "name": "auth.users_instance_id_email_idx",
+        "table": "users",
+        "schema": "auth",
+        "definition": "CREATE INDEX users_instance_id_email_idx ON auth.users USING btree (instance_id, lower((email)::text))"
+      },
+      {
+        "name": "auth.confirmation_token_idx",
+        "table": "users",
+        "schema": "auth",
+        "definition": "CREATE UNIQUE INDEX confirmation_token_idx ON auth.users USING btree (confirmation_token) WHERE ((confirmation_token)::text !~ '^[0-9 ]*$'::text)"
+      },
+      {
+        "name": "auth.recovery_token_idx",
+        "table": "users",
+        "schema": "auth",
+        "definition": "CREATE UNIQUE INDEX recovery_token_idx ON auth.users USING btree (recovery_token) WHERE ((recovery_token)::text !~ '^[0-9 ]*$'::text)"
+      },
+      {
+        "name": "auth.email_change_token_current_idx",
+        "table": "users",
+        "schema": "auth",
+        "definition": "CREATE UNIQUE INDEX email_change_token_current_idx ON auth.users USING btree (email_change_token_current) WHERE ((email_change_token_current)::text !~ '^[0-9 ]*$'::text)"
+      },
+      {
+        "name": "auth.email_change_token_new_idx",
+        "table": "users",
+        "schema": "auth",
+        "definition": "CREATE UNIQUE INDEX email_change_token_new_idx ON auth.users USING btree (email_change_token_new) WHERE ((email_change_token_new)::text !~ '^[0-9 ]*$'::text)"
+      },
+      {
+        "name": "auth.reauthentication_token_idx",
+        "table": "users",
+        "schema": "auth",
+        "definition": "CREATE UNIQUE INDEX reauthentication_token_idx ON auth.users USING btree (reauthentication_token) WHERE ((reauthentication_token)::text !~ '^[0-9 ]*$'::text)"
+      },
+      {
+        "name": "auth.users_email_partial_key",
+        "table": "users",
+        "schema": "auth",
+        "definition": "CREATE UNIQUE INDEX users_email_partial_key ON auth.users USING btree (email) WHERE (is_sso_user = false)"
+      },
+      {
+        "name": "auth.users_phone_key",
+        "table": "users",
+        "schema": "auth",
+        "definition": "CREATE UNIQUE INDEX users_phone_key ON auth.users USING btree (phone)"
+      },
+      {
+        "name": "auth.users_is_anonymous_idx",
+        "table": "users",
+        "schema": "auth",
+        "definition": "CREATE INDEX users_is_anonymous_idx ON auth.users USING btree (is_anonymous)"
+      },
+      {
+        "name": "auth.idx_users_email",
+        "table": "users",
+        "schema": "auth",
+        "definition": "CREATE INDEX idx_users_email ON auth.users USING btree (email)"
+      },
+      {
+        "name": "auth.idx_users_created_at_desc",
+        "table": "users",
+        "schema": "auth",
+        "definition": "CREATE INDEX idx_users_created_at_desc ON auth.users USING btree (created_at DESC)"
+      },
+      {
+        "name": "auth.idx_users_last_sign_in_at_desc",
+        "table": "users",
+        "schema": "auth",
+        "definition": "CREATE INDEX idx_users_last_sign_in_at_desc ON auth.users USING btree (last_sign_in_at DESC)"
+      },
+      {
+        "name": "auth.idx_users_name",
+        "table": "users",
+        "schema": "auth",
+        "definition": "CREATE INDEX idx_users_name ON auth.users USING btree (((raw_user_meta_data ->> 'name'::text))) WHERE ((raw_user_meta_data ->> 'name'::text) IS NOT NULL)"
+      },
+      {
+        "name": "public.arca_comprobantes_pkey",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX arca_comprobantes_pkey ON public.arca_comprobantes USING btree (id)"
+      },
+      {
+        "name": "public.arca_comprobantes_empresa_id_punto_venta_tipo_cbte_numero_c_key",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX arca_comprobantes_empresa_id_punto_venta_tipo_cbte_numero_c_key ON public.arca_comprobantes USING btree (empresa_id, punto_venta, tipo_cbte, numero_cbte)"
+      },
+      {
+        "name": "public.arca_comprobantes_empresa_fecha_idx",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "definition": "CREATE INDEX arca_comprobantes_empresa_fecha_idx ON public.arca_comprobantes USING btree (empresa_id, emitido_at DESC)"
+      },
+      {
+        "name": "public.arca_comprobantes_empresa_venta_uidx",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX arca_comprobantes_empresa_venta_uidx ON public.arca_comprobantes USING btree (empresa_id, venta_id) WHERE (venta_id IS NOT NULL)"
+      },
+      {
+        "name": "public.arca_comprobantes_empresa_request_uidx",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX arca_comprobantes_empresa_request_uidx ON public.arca_comprobantes USING btree (empresa_id, request_id) WHERE ((request_id IS NOT NULL) AND (btrim(request_id) <> ''::text))"
+      },
+      {
+        "name": "public.caja_movimientos_sigo_pkey",
+        "table": "caja_movimientos_sigo",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX caja_movimientos_sigo_pkey ON public.caja_movimientos_sigo USING btree (id)"
+      },
+      {
+        "name": "public.caja_movimientos_sigo_empresa_fecha_idx",
+        "table": "caja_movimientos_sigo",
+        "schema": "public",
+        "definition": "CREATE INDEX caja_movimientos_sigo_empresa_fecha_idx ON public.caja_movimientos_sigo USING btree (empresa_id, created_at DESC)"
+      },
+      {
+        "name": "public.cliente_movimientos_sigo_pkey",
+        "table": "cliente_movimientos_sigo",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX cliente_movimientos_sigo_pkey ON public.cliente_movimientos_sigo USING btree (id)"
+      },
+      {
+        "name": "public.cliente_movimientos_empresa_cliente_fecha_idx",
+        "table": "cliente_movimientos_sigo",
+        "schema": "public",
+        "definition": "CREATE INDEX cliente_movimientos_empresa_cliente_fecha_idx ON public.cliente_movimientos_sigo USING btree (empresa_id, cliente_id, created_at DESC)"
+      },
+      {
+        "name": "public.clientes_sigo_pkey",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX clientes_sigo_pkey ON public.clientes_sigo USING btree (id)"
+      },
+      {
+        "name": "public.clientes_sigo_empresa_nombre_idx",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "definition": "CREATE INDEX clientes_sigo_empresa_nombre_idx ON public.clientes_sigo USING btree (empresa_id, nombre)"
+      },
+      {
+        "name": "public.clientes_sigo_empresa_documento_uidx",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX clientes_sigo_empresa_documento_uidx ON public.clientes_sigo USING btree (empresa_id, documento) WHERE ((documento IS NOT NULL) AND (btrim(documento) <> ''::text))"
+      },
+      {
+        "name": "public.devolucion_items_sigo_pkey",
+        "table": "devolucion_items_sigo",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX devolucion_items_sigo_pkey ON public.devolucion_items_sigo USING btree (id)"
+      },
+      {
+        "name": "public.devolucion_items_sigo_devolucion_id_venta_item_id_key",
+        "table": "devolucion_items_sigo",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX devolucion_items_sigo_devolucion_id_venta_item_id_key ON public.devolucion_items_sigo USING btree (devolucion_id, venta_item_id)"
+      },
+      {
+        "name": "public.devolucion_items_sigo_venta_item_idx",
+        "table": "devolucion_items_sigo",
+        "schema": "public",
+        "definition": "CREATE INDEX devolucion_items_sigo_venta_item_idx ON public.devolucion_items_sigo USING btree (venta_item_id)"
+      },
+      {
+        "name": "public.devoluciones_sigo_pkey",
+        "table": "devoluciones_sigo",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX devoluciones_sigo_pkey ON public.devoluciones_sigo USING btree (id)"
+      },
+      {
+        "name": "public.devoluciones_sigo_empresa_id_idempotency_key_key",
+        "table": "devoluciones_sigo",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX devoluciones_sigo_empresa_id_idempotency_key_key ON public.devoluciones_sigo USING btree (empresa_id, idempotency_key)"
+      },
+      {
+        "name": "public.devoluciones_sigo_empresa_fecha_idx",
+        "table": "devoluciones_sigo",
+        "schema": "public",
+        "definition": "CREATE INDEX devoluciones_sigo_empresa_fecha_idx ON public.devoluciones_sigo USING btree (empresa_id, created_at DESC)"
+      },
+      {
+        "name": "public.devoluciones_sigo_venta_idx",
+        "table": "devoluciones_sigo",
+        "schema": "public",
+        "definition": "CREATE INDEX devoluciones_sigo_venta_idx ON public.devoluciones_sigo USING btree (venta_id, created_at DESC)"
+      },
+      {
+        "name": "public.empresa_usuarios_pkey",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX empresa_usuarios_pkey ON public.empresa_usuarios USING btree (id)"
+      },
+      {
+        "name": "public.empresa_usuarios_empresa_id_user_id_key",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX empresa_usuarios_empresa_id_user_id_key ON public.empresa_usuarios USING btree (empresa_id, user_id)"
+      },
+      {
+        "name": "public.empresa_usuarios_user_id_idx",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "definition": "CREATE INDEX empresa_usuarios_user_id_idx ON public.empresa_usuarios USING btree (user_id)"
+      },
+      {
+        "name": "public.empresa_usuarios_empresa_id_idx",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "definition": "CREATE INDEX empresa_usuarios_empresa_id_idx ON public.empresa_usuarios USING btree (empresa_id)"
+      },
+      {
+        "name": "public.empresas_pkey",
+        "table": "empresas",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX empresas_pkey ON public.empresas USING btree (id)"
+      },
+      {
+        "name": "public.ofertas_productos_sigo_pkey",
+        "table": "ofertas_productos_sigo",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX ofertas_productos_sigo_pkey ON public.ofertas_productos_sigo USING btree (id)"
+      },
+      {
+        "name": "public.ofertas_productos_empresa_producto_fecha_idx",
+        "table": "ofertas_productos_sigo",
+        "schema": "public",
+        "definition": "CREATE INDEX ofertas_productos_empresa_producto_fecha_idx ON public.ofertas_productos_sigo USING btree (empresa_id, producto_id, fecha_inicio, fecha_fin)"
+      },
+      {
+        "name": "public.productos_pkey",
+        "table": "productos",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX productos_pkey ON public.productos USING btree (id)"
+      },
+      {
+        "name": "public.idx_productos_nombre",
+        "table": "productos",
+        "schema": "public",
+        "definition": "CREATE INDEX idx_productos_nombre ON public.productos USING gin (to_tsvector('spanish'::regconfig, nombre))"
+      },
+      {
+        "name": "public.idx_productos_codigo_interno",
+        "table": "productos",
+        "schema": "public",
+        "definition": "CREATE INDEX idx_productos_codigo_interno ON public.productos USING btree (codigo_interno)"
+      },
+      {
+        "name": "public.idx_productos_activo",
+        "table": "productos",
+        "schema": "public",
+        "definition": "CREATE INDEX idx_productos_activo ON public.productos USING btree (activo)"
+      },
+      {
+        "name": "public.idx_productos_categoria",
+        "table": "productos",
+        "schema": "public",
+        "definition": "CREATE INDEX idx_productos_categoria ON public.productos USING btree (categoria_id)"
+      },
+      {
+        "name": "public.idx_productos_marca",
+        "table": "productos",
+        "schema": "public",
+        "definition": "CREATE INDEX idx_productos_marca ON public.productos USING btree (marca_id)"
+      },
+      {
+        "name": "public.idx_productos_codigo_barras",
+        "table": "productos",
+        "schema": "public",
+        "definition": "CREATE INDEX idx_productos_codigo_barras ON public.productos USING btree (codigo_barras)"
+      },
+      {
+        "name": "public.productos_empresa_id_idx",
+        "table": "productos",
+        "schema": "public",
+        "definition": "CREATE INDEX productos_empresa_id_idx ON public.productos USING btree (empresa_id)"
+      },
+      {
+        "name": "public.idx_productos_empresa_codigo_barras",
+        "table": "productos",
+        "schema": "public",
+        "definition": "CREATE INDEX idx_productos_empresa_codigo_barras ON public.productos USING btree (empresa_id, codigo_barras) WHERE ((codigo_barras IS NOT NULL) AND (btrim(codigo_barras) <> ''::text))"
+      },
+      {
+        "name": "public.idx_productos_empresa_codigo_interno",
+        "table": "productos",
+        "schema": "public",
+        "definition": "CREATE INDEX idx_productos_empresa_codigo_interno ON public.productos USING btree (empresa_id, codigo_interno) WHERE ((codigo_interno IS NOT NULL) AND (btrim(codigo_interno) <> ''::text))"
+      },
+      {
+        "name": "public.productos_empresa_codigo_interno_uidx",
+        "table": "productos",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX productos_empresa_codigo_interno_uidx ON public.productos USING btree (empresa_id, codigo_interno) WHERE ((empresa_id IS NOT NULL) AND (NULLIF(btrim(codigo_interno), ''::text) IS NOT NULL))"
+      },
+      {
+        "name": "public.productos_empresa_codigo_barras_uidx",
+        "table": "productos",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX productos_empresa_codigo_barras_uidx ON public.productos USING btree (empresa_id, codigo_barras) WHERE ((empresa_id IS NOT NULL) AND (NULLIF(btrim(codigo_barras), ''::text) IS NOT NULL))"
+      },
+      {
+        "name": "public.sigo_empresa_modulos_pkey",
+        "table": "sigo_empresa_modulos",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX sigo_empresa_modulos_pkey ON public.sigo_empresa_modulos USING btree (empresa_id, modulo_clave)"
+      },
+      {
+        "name": "public.sigo_modulos_catalogo_pkey",
+        "table": "sigo_modulos_catalogo",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX sigo_modulos_catalogo_pkey ON public.sigo_modulos_catalogo USING btree (clave)"
+      },
+      {
+        "name": "public.venta_items_sigo_pkey",
+        "table": "venta_items_sigo",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX venta_items_sigo_pkey ON public.venta_items_sigo USING btree (id)"
+      },
+      {
+        "name": "public.venta_items_sigo_venta_idx",
+        "table": "venta_items_sigo",
+        "schema": "public",
+        "definition": "CREATE INDEX venta_items_sigo_venta_idx ON public.venta_items_sigo USING btree (venta_id)"
+      },
+      {
+        "name": "public.ventas_sigo_pkey",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX ventas_sigo_pkey ON public.ventas_sigo USING btree (id)"
+      },
+      {
+        "name": "public.ventas_sigo_empresa_id_idempotency_key_key",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX ventas_sigo_empresa_id_idempotency_key_key ON public.ventas_sigo USING btree (empresa_id, idempotency_key)"
+      },
+      {
+        "name": "public.ventas_sigo_empresa_fecha_idx",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "definition": "CREATE INDEX ventas_sigo_empresa_fecha_idx ON public.ventas_sigo USING btree (empresa_id, created_at DESC)"
+      },
+      {
+        "name": "public.ventas_sigo_cliente_idx",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "definition": "CREATE INDEX ventas_sigo_cliente_idx ON public.ventas_sigo USING btree (empresa_id, cliente_id, created_at DESC)"
+      },
+      {
+        "name": "auth.oauth_clients_pkey",
+        "table": "oauth_clients",
+        "schema": "auth",
+        "definition": "CREATE UNIQUE INDEX oauth_clients_pkey ON auth.oauth_clients USING btree (id)"
+      },
+      {
+        "name": "auth.oauth_clients_deleted_at_idx",
+        "table": "oauth_clients",
+        "schema": "auth",
+        "definition": "CREATE INDEX oauth_clients_deleted_at_idx ON auth.oauth_clients USING btree (deleted_at)"
+      },
+      {
+        "name": "public.categorias_pkey",
+        "table": "categorias",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX categorias_pkey ON public.categorias USING btree (id)"
+      },
+      {
+        "name": "public.categorias_nombre_key",
+        "table": "categorias",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX categorias_nombre_key ON public.categorias USING btree (nombre)"
+      },
+      {
+        "name": "public.marcas_pkey",
+        "table": "marcas",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX marcas_pkey ON public.marcas USING btree (id)"
+      },
+      {
+        "name": "public.marcas_nombre_key",
+        "table": "marcas",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX marcas_nombre_key ON public.marcas USING btree (nombre)"
+      },
+      {
+        "name": "public.proveedores_pkey",
+        "table": "proveedores",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX proveedores_pkey ON public.proveedores USING btree (id)"
+      },
+      {
+        "name": "public.idx_proveedores_cuit",
+        "table": "proveedores",
+        "schema": "public",
+        "definition": "CREATE INDEX idx_proveedores_cuit ON public.proveedores USING btree (cuit)"
+      },
+      {
+        "name": "public.idx_proveedores_razon_social",
+        "table": "proveedores",
+        "schema": "public",
+        "definition": "CREATE INDEX idx_proveedores_razon_social ON public.proveedores USING btree (razon_social)"
+      },
+      {
+        "name": "public.proveedores_empresa_id_idx",
+        "table": "proveedores",
+        "schema": "public",
+        "definition": "CREATE INDEX proveedores_empresa_id_idx ON public.proveedores USING btree (empresa_id)"
+      },
+      {
+        "name": "public.sigo_superadmins_pkey",
+        "table": "sigo_superadmins",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX sigo_superadmins_pkey ON public.sigo_superadmins USING btree (user_id)"
+      },
+      {
+        "name": "public.sigo_admin_notifications_pkey",
+        "table": "sigo_admin_notifications",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX sigo_admin_notifications_pkey ON public.sigo_admin_notifications USING btree (id)"
+      },
+      {
+        "name": "public.sigo_admin_notifications_event_key_key",
+        "table": "sigo_admin_notifications",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX sigo_admin_notifications_event_key_key ON public.sigo_admin_notifications USING btree (event_key)"
+      },
+      {
+        "name": "public.portal_cliente_usuarios_pkey",
+        "table": "portal_cliente_usuarios",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX portal_cliente_usuarios_pkey ON public.portal_cliente_usuarios USING btree (id)"
+      },
+      {
+        "name": "public.portal_cliente_usuarios_empresa_id_cliente_id_user_id_key",
+        "table": "portal_cliente_usuarios",
+        "schema": "public",
+        "definition": "CREATE UNIQUE INDEX portal_cliente_usuarios_empresa_id_cliente_id_user_id_key ON public.portal_cliente_usuarios USING btree (empresa_id, cliente_id, user_id)"
+      },
+      {
+        "name": "public.portal_cliente_usuarios_user_idx",
+        "table": "portal_cliente_usuarios",
+        "schema": "public",
+        "definition": "CREATE INDEX portal_cliente_usuarios_user_idx ON public.portal_cliente_usuarios USING btree (user_id, empresa_id, cliente_id) WHERE (activo = true)"
+      }
+    ],
+    "triggers": [
+      {
+        "name": "arca_comprobantes_tenant_guard",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "enabled": "O",
+        "function": "public.validar_arca_comprobante_tenant()",
+        "definition": "CREATE TRIGGER arca_comprobantes_tenant_guard BEFORE INSERT OR UPDATE OF empresa_id, venta_id ON public.arca_comprobantes FOR EACH ROW EXECUTE FUNCTION public.validar_arca_comprobante_tenant()"
+      },
+      {
+        "name": "trg_sincronizar_portal_cliente_membresia_sigo",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "enabled": "O",
+        "function": "public.sincronizar_portal_cliente_membresia_sigo()",
+        "definition": "CREATE TRIGGER trg_sincronizar_portal_cliente_membresia_sigo AFTER UPDATE OF rol, activo ON public.empresa_usuarios FOR EACH ROW EXECUTE FUNCTION public.sincronizar_portal_cliente_membresia_sigo()"
+      },
+      {
+        "name": "sigo_notificar_nueva_empresa_admin",
+        "table": "empresas",
+        "schema": "public",
+        "enabled": "O",
+        "function": "public.sigo_notificar_nueva_empresa_admin()",
+        "definition": "CREATE TRIGGER sigo_notificar_nueva_empresa_admin AFTER INSERT ON public.empresas FOR EACH ROW EXECUTE FUNCTION public.sigo_notificar_nueva_empresa_admin()"
+      },
+      {
+        "name": "productos_inactivos_proteccion_sigo",
+        "table": "productos",
+        "schema": "public",
+        "enabled": "O",
+        "function": "public.proteger_producto_inactivo_sigo()",
+        "definition": "CREATE TRIGGER productos_inactivos_proteccion_sigo BEFORE UPDATE OF activo, stock_actual, costo_actual, costo_ultima_compra ON public.productos FOR EACH ROW EXECUTE FUNCTION public.proteger_producto_inactivo_sigo()"
+      },
+      {
+        "name": "sigo_tenant_insert_guard",
+        "table": "productos",
+        "schema": "public",
+        "enabled": "O",
+        "function": "public.sigo_validar_empresa_operativa()",
+        "definition": "CREATE TRIGGER sigo_tenant_insert_guard BEFORE INSERT ON public.productos FOR EACH ROW EXECUTE FUNCTION public.sigo_validar_empresa_operativa()"
+      },
+      {
+        "name": "trg_sigo_productos_costos_no_nulos",
+        "table": "productos",
+        "schema": "public",
+        "enabled": "O",
+        "function": "public.sigo_productos_costos_no_nulos_guard()",
+        "definition": "CREATE TRIGGER trg_sigo_productos_costos_no_nulos BEFORE INSERT OR UPDATE OF costo_actual, costo_ultima_compra ON public.productos FOR EACH ROW EXECUTE FUNCTION public.sigo_productos_costos_no_nulos_guard()"
+      },
+      {
+        "name": "trg_validar_codigo_producto_unico_sigo",
+        "table": "productos",
+        "schema": "public",
+        "enabled": "O",
+        "function": "public.validar_codigo_producto_unico_sigo()",
+        "definition": "CREATE TRIGGER trg_validar_codigo_producto_unico_sigo BEFORE INSERT OR UPDATE OF empresa_id, codigo_barras, codigo_interno ON public.productos FOR EACH ROW EXECUTE FUNCTION public.validar_codigo_producto_unico_sigo()"
+      },
+      {
+        "name": "trigger_calcular_margen",
+        "table": "productos",
+        "schema": "public",
+        "enabled": "O",
+        "function": "public.calcular_margen_producto()",
+        "definition": "CREATE TRIGGER trigger_calcular_margen BEFORE INSERT OR UPDATE OF costo_actual, precio_venta ON public.productos FOR EACH ROW EXECUTE FUNCTION public.calcular_margen_producto()"
+      },
+      {
+        "name": "trigger_updated_at_productos",
+        "table": "productos",
+        "schema": "public",
+        "enabled": "O",
+        "function": "public.actualizar_updated_at()",
+        "definition": "CREATE TRIGGER trigger_updated_at_productos BEFORE UPDATE ON public.productos FOR EACH ROW EXECUTE FUNCTION public.actualizar_updated_at()"
+      },
+      {
+        "name": "trg_sigo_guard_venta_producto_operativo",
+        "table": "venta_items_sigo",
+        "schema": "public",
+        "enabled": "O",
+        "function": "public.sigo_validar_producto_movimiento()",
+        "definition": "CREATE TRIGGER trg_sigo_guard_venta_producto_operativo BEFORE INSERT OR UPDATE OF producto_id, empresa_id ON public.venta_items_sigo FOR EACH ROW EXECUTE FUNCTION public.sigo_validar_producto_movimiento()"
+      },
+      {
+        "name": "trg_venta_item_precio_positivo",
+        "table": "venta_items_sigo",
+        "schema": "public",
+        "enabled": "O",
+        "function": "public.validar_precio_venta_item_sigo()",
+        "definition": "CREATE TRIGGER trg_venta_item_precio_positivo BEFORE INSERT OR UPDATE OF precio_unitario, subtotal ON public.venta_items_sigo FOR EACH ROW EXECUTE FUNCTION public.validar_precio_venta_item_sigo()"
+      },
+      {
+        "name": "trigger_updated_at_categorias",
+        "table": "categorias",
+        "schema": "public",
+        "enabled": "O",
+        "function": "public.actualizar_updated_at()",
+        "definition": "CREATE TRIGGER trigger_updated_at_categorias BEFORE UPDATE ON public.categorias FOR EACH ROW EXECUTE FUNCTION public.actualizar_updated_at()"
+      },
+      {
+        "name": "trigger_updated_at_marcas",
+        "table": "marcas",
+        "schema": "public",
+        "enabled": "O",
+        "function": "public.actualizar_updated_at()",
+        "definition": "CREATE TRIGGER trigger_updated_at_marcas BEFORE UPDATE ON public.marcas FOR EACH ROW EXECUTE FUNCTION public.actualizar_updated_at()"
+      },
+      {
+        "name": "trigger_updated_at_proveedores",
+        "table": "proveedores",
+        "schema": "public",
+        "enabled": "O",
+        "function": "public.actualizar_updated_at()",
+        "definition": "CREATE TRIGGER trigger_updated_at_proveedores BEFORE UPDATE ON public.proveedores FOR EACH ROW EXECUTE FUNCTION public.actualizar_updated_at()"
+      },
+      {
+        "name": "sigo_tenant_insert_guard",
+        "table": "proveedores",
+        "schema": "public",
+        "enabled": "O",
+        "function": "public.sigo_validar_empresa_operativa()",
+        "definition": "CREATE TRIGGER sigo_tenant_insert_guard BEFORE INSERT ON public.proveedores FOR EACH ROW EXECUTE FUNCTION public.sigo_validar_empresa_operativa()"
+      }
+    ],
+    "functions": [
+      {
+        "acl": [
+          "=X/supabase_auth_admin",
+          "postgres=X/supabase_auth_admin",
+          "supabase_auth_admin=X/supabase_auth_admin",
+          "dashboard_user=X/supabase_auth_admin"
+        ],
+        "name": "jwt",
+        "owner": "supabase_auth_admin",
+        "config": null,
+        "schema": "auth",
+        "signature": "auth.jwt()",
+        "definition": "CREATE OR REPLACE FUNCTION auth.jwt()\n RETURNS jsonb\n LANGUAGE sql\n STABLE\nAS $function$\n  select \n    coalesce(\n        nullif(current_setting('request.jwt.claim', true), ''),\n        nullif(current_setting('request.jwt.claims', true), '')\n    )::jsonb\n$function$\n"
+      },
+      {
+        "acl": [
+          "=X/supabase_auth_admin",
+          "supabase_auth_admin=X/supabase_auth_admin",
+          "dashboard_user=X/supabase_auth_admin"
+        ],
+        "name": "uid",
+        "owner": "supabase_auth_admin",
+        "config": null,
+        "schema": "auth",
+        "signature": "auth.uid()",
+        "definition": "CREATE OR REPLACE FUNCTION auth.uid()\n RETURNS uuid\n LANGUAGE sql\n STABLE\nAS $function$\n  select \n  coalesce(\n    nullif(current_setting('request.jwt.claim.sub', true), ''),\n    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')\n  )::uuid\n$function$\n"
+      },
+      {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "anon=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "name": "actualizar_updated_at",
+        "owner": "postgres",
+        "config": null,
+        "schema": "public",
+        "signature": "public.actualizar_updated_at()",
+        "definition": "CREATE OR REPLACE FUNCTION public.actualizar_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\r\nbegin\r\n  new.updated_at := now();\r\n  return new;\r\nend;\r\n$function$\n"
+      },
+      {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "anon=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "name": "calcular_margen_producto",
+        "owner": "postgres",
+        "config": null,
+        "schema": "public",
+        "signature": "public.calcular_margen_producto()",
+        "definition": "CREATE OR REPLACE FUNCTION public.calcular_margen_producto()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\r\nbegin\r\n\r\n  if new.precio_venta > 0 then\r\n\r\n    new.margen_ganancia :=\r\n      new.precio_venta - new.costo_actual;\r\n\r\n    new.margen_porcentaje :=\r\n      ((new.precio_venta - new.costo_actual)\r\n      / new.precio_venta) * 100;\r\n\r\n  else\r\n\r\n    new.margen_ganancia := 0;\r\n    new.margen_porcentaje := 0;\r\n\r\n  end if;\r\n\r\n  new.updated_at := now();\r\n\r\n  return new;\r\n\r\nend;\r\n$function$\n"
+      },
+      {
+        "acl": [
+          "postgres=X/postgres",
+          "anon=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "name": "es_superadmin_sigo",
+        "owner": "postgres",
+        "config": [
+          "search_path=public"
+        ],
+        "schema": "public",
+        "signature": "public.es_superadmin_sigo()",
+        "definition": "CREATE OR REPLACE FUNCTION public.es_superadmin_sigo()\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1\n    from public.sigo_superadmins sa\n    where sa.user_id = auth.uid()\n      and sa.activo = true\n  );\n$function$\n"
+      },
+      {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "anon=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "name": "proteger_producto_inactivo_sigo",
+        "owner": "postgres",
+        "config": [
+          "search_path=public"
+        ],
+        "schema": "public",
+        "signature": "public.proteger_producto_inactivo_sigo()",
+        "definition": "CREATE OR REPLACE FUNCTION public.proteger_producto_inactivo_sigo()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public'\nAS $function$\nbegin\n  if old.activo = true and new.activo = false and coalesce(old.stock_actual, 0) <> 0 then\n    raise exception 'PRODUCT_HAS_STOCK';\n  end if;\n\n  if old.activo = false and (\n    new.stock_actual is distinct from old.stock_actual\n    or new.costo_actual is distinct from old.costo_actual\n    or new.costo_ultima_compra is distinct from old.costo_ultima_compra\n  ) then\n    raise exception 'PRODUCT_INACTIVE';\n  end if;\n\n  return new;\nend;\n$function$\n"
+      },
+      {
+        "acl": [
+          "postgres=X/postgres",
+          "anon=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "name": "registrar_cobro_cliente_sigo_v2",
+        "owner": "postgres",
+        "config": [
+          "search_path=public"
+        ],
+        "schema": "public",
+        "signature": "public.registrar_cobro_cliente_sigo_v2(uuid,uuid,numeric,text,text)",
+        "definition": "CREATE OR REPLACE FUNCTION public.registrar_cobro_cliente_sigo_v2(p_empresa_id uuid, p_cliente_id uuid, p_importe numeric, p_medio_pago text DEFAULT 'efectivo'::text, p_concepto text DEFAULT 'Cobro cuenta corriente'::text)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_user_id uuid := auth.uid();\n  v_movimiento_id uuid;\n  v_saldo numeric(14,2);\n  v_importe numeric(14,2) := round(coalesce(p_importe, 0), 2);\nbegin\n  if v_user_id is null then raise exception 'AUTH_REQUIRED'; end if;\n  if not public.tiene_permiso_empresa(p_empresa_id, 'clients.write') then raise exception 'CLIENTS_WRITE_FORBIDDEN'; end if;\n  if not public.tiene_permiso_empresa(p_empresa_id, 'sales.write') then raise exception 'SALES_WRITE_FORBIDDEN'; end if;\n  if v_importe <= 0 then raise exception 'PAYMENT_AMOUNT_INVALID'; end if;\n  if p_medio_pago not in ('efectivo','debito','credito','transferencia','otro') then raise exception 'PAYMENT_METHOD_INVALID'; end if;\n\n  select saldo_actual into v_saldo\n  from public.clientes_sigo\n  where id = p_cliente_id and empresa_id = p_empresa_id and activo = true\n  for update;\n\n  if not found then raise exception 'CLIENT_NOT_FOUND'; end if;\n  if v_saldo <= 0 then raise exception 'CLIENT_WITHOUT_DEBT'; end if;\n  if v_importe > v_saldo then raise exception 'PAYMENT_EXCEEDS_BALANCE'; end if;\n\n  insert into public.cliente_movimientos_sigo\n    (empresa_id, cliente_id, tipo, importe, concepto, created_by)\n  values\n    (p_empresa_id, p_cliente_id, 'haber', v_importe,\n     coalesce(nullif(trim(p_concepto), ''), 'Cobro cuenta corriente'), v_user_id)\n  returning id into v_movimiento_id;\n\n  update public.clientes_sigo\n  set saldo_actual = saldo_actual - v_importe,\n      updated_at = now()\n  where id = p_cliente_id and empresa_id = p_empresa_id;\n\n  insert into public.caja_movimientos_sigo\n    (empresa_id, venta_id, tipo, medio_pago, importe, concepto, created_by)\n  values\n    (p_empresa_id, null, 'ingreso', p_medio_pago, v_importe,\n     coalesce(nullif(trim(p_concepto), ''), 'Cobro cuenta corriente'), v_user_id);\n\n  return v_movimiento_id;\nend;\n$function$\n"
+      },
+      {
+        "acl": [
+          "postgres=X/postgres",
+          "anon=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "name": "registrar_devolucion_sigo",
+        "owner": "postgres",
+        "config": [
+          "search_path=public"
+        ],
+        "schema": "public",
+        "signature": "public.registrar_devolucion_sigo(uuid,uuid,jsonb,text,text,boolean)",
+        "definition": "CREATE OR REPLACE FUNCTION public.registrar_devolucion_sigo(p_empresa_id uuid, p_venta_id uuid, p_items jsonb, p_motivo text, p_idempotency_key text, p_anular_total boolean DEFAULT false)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_user_id uuid := auth.uid();\n  v_key text := nullif(btrim(coalesce(p_idempotency_key, '')), '');\n  v_motivo text := nullif(btrim(coalesce(p_motivo, '')), '');\n  v_venta record;\n  v_item jsonb;\n  v_venta_item record;\n  v_devolucion_id uuid;\n  v_cantidad numeric(14,3);\n  v_ya_devuelto numeric(14,3);\n  v_disponible numeric(14,3);\n  v_total numeric(14,2) := 0;\n  v_lineas integer := 0;\n  v_pendientes integer := 0;\n  v_cliente_saldo numeric(14,2);\nbegin\n  if v_user_id is null then raise exception 'AUTH_REQUIRED'; end if;\n  if not public.tiene_permiso_empresa(p_empresa_id, 'sales.write') then raise exception 'SALES_WRITE_FORBIDDEN'; end if;\n  if v_key is null or length(v_key) > 160 then raise exception 'RETURN_IDEMPOTENCY_KEY_INVALID'; end if;\n  if v_motivo is null or length(v_motivo) < 3 then raise exception 'RETURN_REASON_REQUIRED'; end if;\n\n  select id into v_devolucion_id\n  from public.devoluciones_sigo\n  where empresa_id = p_empresa_id and idempotency_key = v_key;\n  if v_devolucion_id is not null then return v_devolucion_id; end if;\n\n  select id, numero, empresa_id, cliente_id, medio_pago, total, estado\n    into v_venta\n    from public.ventas_sigo\n   where id = p_venta_id and empresa_id = p_empresa_id\n   for update;\n\n  if not found then raise exception 'SALE_NOT_FOUND'; end if;\n  if v_venta.estado = 'anulada' then raise exception 'SALE_ALREADY_VOIDED'; end if;\n  if v_venta.estado <> 'confirmada' then raise exception 'SALE_NOT_RETURNABLE'; end if;\n\n  if not p_anular_total then\n    if jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then\n      raise exception 'RETURN_ITEMS_REQUIRED';\n    end if;\n  end if;\n\n  insert into public.devoluciones_sigo\n    (empresa_id, venta_id, tipo, total, motivo, idempotency_key, created_by)\n  values\n    (p_empresa_id, p_venta_id, 'parcial', 0, v_motivo, v_key, v_user_id)\n  returning id into v_devolucion_id;\n\n  if p_anular_total then\n    for v_venta_item in\n      select vi.id, vi.producto_id, vi.cantidad, vi.precio_unitario\n        from public.venta_items_sigo vi\n       where vi.empresa_id = p_empresa_id and vi.venta_id = p_venta_id\n       order by vi.id\n       for update\n    loop\n      select coalesce(sum(di.cantidad), 0)\n        into v_ya_devuelto\n        from public.devolucion_items_sigo di\n        join public.devoluciones_sigo d on d.id = di.devolucion_id\n       where d.empresa_id = p_empresa_id\n         and d.venta_id = p_venta_id\n         and di.venta_item_id = v_venta_item.id\n         and d.id <> v_devolucion_id;\n\n      v_disponible := v_venta_item.cantidad - v_ya_devuelto;\n      if v_disponible <= 0 then continue; end if;\n\n      insert into public.devolucion_items_sigo\n        (devolucion_id, empresa_id, venta_item_id, producto_id, cantidad, precio_unitario, subtotal)\n      values\n        (v_devolucion_id, p_empresa_id, v_venta_item.id, v_venta_item.producto_id,\n         v_disponible, v_venta_item.precio_unitario, round(v_disponible * v_venta_item.precio_unitario, 2));\n\n      update public.productos\n         set stock_actual = coalesce(stock_actual, 0) + v_disponible\n       where id = v_venta_item.producto_id and empresa_id = p_empresa_id;\n\n      v_total := v_total + round(v_disponible * v_venta_item.precio_unitario, 2);\n      v_lineas := v_lineas + 1;\n    end loop;\n  else\n    for v_item in select value from jsonb_array_elements(p_items)\n    loop\n      if nullif(btrim(coalesce(v_item->>'venta_item_id', '')), '') is null then\n        raise exception 'RETURN_ITEM_INVALID';\n      end if;\n      begin\n        v_cantidad := (v_item->>'cantidad')::numeric;\n      exception when others then\n        raise exception 'RETURN_QUANTITY_INVALID';\n      end;\n      if v_cantidad is null or v_cantidad <= 0 then raise exception 'RETURN_QUANTITY_INVALID'; end if;\n\n      select vi.id, vi.producto_id, vi.cantidad, vi.precio_unitario\n        into v_venta_item\n        from public.venta_items_sigo vi\n       where vi.id = (v_item->>'venta_item_id')::uuid\n         and vi.empresa_id = p_empresa_id\n         and vi.venta_id = p_venta_id\n       for update;\n      if not found then raise exception 'RETURN_ITEM_NOT_FOUND'; end if;\n\n      select coalesce(sum(di.cantidad), 0)\n        into v_ya_devuelto\n        from public.devolucion_items_sigo di\n        join public.devoluciones_sigo d on d.id = di.devolucion_id\n       where d.empresa_id = p_empresa_id\n         and d.venta_id = p_venta_id\n         and di.venta_item_id = v_venta_item.id\n         and d.id <> v_devolucion_id;\n\n      v_disponible := v_venta_item.cantidad - v_ya_devuelto;\n      if v_cantidad > v_disponible then raise exception 'RETURN_QUANTITY_EXCEEDS_AVAILABLE'; end if;\n\n      insert into public.devolucion_items_sigo\n        (devolucion_id, empresa_id, venta_item_id, producto_id, cantidad, precio_unitario, subtotal)\n      values\n        (v_devolucion_id, p_empresa_id, v_venta_item.id, v_venta_item.producto_id,\n         v_cantidad, v_venta_item.precio_unitario, round(v_cantidad * v_venta_item.precio_unitario, 2));\n\n      update public.productos\n         set stock_actual = coalesce(stock_actual, 0) + v_cantidad\n       where id = v_venta_item.producto_id and empresa_id = p_empresa_id;\n\n      v_total := v_total + round(v_cantidad * v_venta_item.precio_unitario, 2);\n      v_lineas := v_lineas + 1;\n    end loop;\n  end if;\n\n  if v_lineas = 0 or v_total <= 0 then raise exception 'NOTHING_TO_RETURN'; end if;\n\n  -- Determinar si, sumando esta devolución, ya no queda cantidad pendiente de devolver.\n  select count(*)\n    into v_pendientes\n    from public.venta_items_sigo vi\n   where vi.empresa_id = p_empresa_id\n     and vi.venta_id = p_venta_id\n     and vi.cantidad > (\n       select coalesce(sum(di.cantidad), 0)\n         from public.devolucion_items_sigo di\n         join public.devoluciones_sigo d on d.id = di.devolucion_id\n        where d.empresa_id = p_empresa_id\n          and d.venta_id = p_venta_id\n          and di.venta_item_id = vi.id\n     );\n\n  update public.devoluciones_sigo\n     set total = v_total,\n         tipo = case when v_pendientes = 0 then 'total' else 'parcial' end\n   where id = v_devolucion_id;\n\n  if v_venta.medio_pago = 'cuenta_corriente' then\n    if v_venta.cliente_id is null then raise exception 'RETURN_CLIENT_REQUIRED'; end if;\n\n    select saldo_actual into v_cliente_saldo\n      from public.clientes_sigo\n     where id = v_venta.cliente_id and empresa_id = p_empresa_id\n     for update;\n    if not found then raise exception 'CLIENT_NOT_FOUND'; end if;\n    if v_cliente_saldo < v_total then raise exception 'ACCOUNT_RETURN_REQUIRES_MANUAL_REVIEW'; end if;\n\n    insert into public.cliente_movimientos_sigo\n      (empresa_id, cliente_id, venta_id, devolucion_id, tipo, importe, concepto, created_by)\n    values\n      (p_empresa_id, v_venta.cliente_id, p_venta_id, v_devolucion_id, 'haber', v_total,\n       'Devolución venta SIGO', v_user_id);\n\n    update public.clientes_sigo\n       set saldo_actual = saldo_actual - v_total, updated_at = now()\n     where id = v_venta.cliente_id and empresa_id = p_empresa_id;\n  else\n    insert into public.caja_movimientos_sigo\n      (empresa_id, venta_id, devolucion_id, tipo, medio_pago, importe, concepto, created_by)\n    values\n      (p_empresa_id, p_venta_id, v_devolucion_id, 'egreso', v_venta.medio_pago, v_total,\n       'Devolución venta SIGO', v_user_id);\n  end if;\n\n  if v_pendientes = 0 then\n    update public.ventas_sigo\n       set estado = 'anulada', anulada_at = now(), anulada_by = v_user_id, motivo_anulacion = v_motivo\n     where id = p_venta_id and empresa_id = p_empresa_id and estado = 'confirmada';\n  end if;\n\n  return v_devolucion_id;\nexception\n  when unique_violation then\n    select id into v_devolucion_id\n      from public.devoluciones_sigo\n     where empresa_id = p_empresa_id and idempotency_key = v_key;\n    if v_devolucion_id is not null then return v_devolucion_id; end if;\n    raise;\nend;\n$function$\n"
+      },
+      {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "name": "sigo_notificar_nueva_empresa_admin",
+        "owner": "postgres",
+        "config": [
+          "search_path=public"
+        ],
+        "schema": "public",
+        "signature": "public.sigo_notificar_nueva_empresa_admin()",
+        "definition": "CREATE OR REPLACE FUNCTION public.sigo_notificar_nueva_empresa_admin()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nbegin\n  insert into public.sigo_admin_notifications(event_key, title, body)\n  values (\n    'cliente-nuevo:' || new.id::text,\n    'SIGO Gestión',\n    'Se registró un cliente nuevo.'\n  ) on conflict (event_key) do nothing;\n  return new;\nend;\n$function$\n"
+      },
+      {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "anon=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "name": "sigo_productos_costos_no_nulos_guard",
+        "owner": "postgres",
+        "config": [
+          "search_path=public"
+        ],
+        "schema": "public",
+        "signature": "public.sigo_productos_costos_no_nulos_guard()",
+        "definition": "CREATE OR REPLACE FUNCTION public.sigo_productos_costos_no_nulos_guard()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public'\nAS $function$\nbegin\n  new.costo_actual := coalesce(new.costo_actual, 0);\n  new.costo_ultima_compra := coalesce(new.costo_ultima_compra, 0);\n  return new;\nend;\n$function$\n"
+      },
+      {
+        "acl": [
+          "postgres=X/postgres",
+          "anon=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "name": "sigo_validar_empresa_operativa",
+        "owner": "postgres",
+        "config": [
+          "search_path=public"
+        ],
+        "schema": "public",
+        "signature": "public.sigo_validar_empresa_operativa()",
+        "definition": "CREATE OR REPLACE FUNCTION public.sigo_validar_empresa_operativa()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nbegin\n  if new.empresa_id is null then\n    raise exception 'SIGO: empresa_id es obligatorio para nuevas operaciones';\n  end if;\n\n  if not public.es_miembro_empresa(new.empresa_id) then\n    raise exception 'SIGO: usuario sin acceso a la empresa indicada';\n  end if;\n\n  return new;\nend;\n$function$\n"
+      },
+      {
+        "acl": [
+          "postgres=X/postgres",
+          "anon=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "name": "sigo_validar_producto_movimiento",
+        "owner": "postgres",
+        "config": [
+          "search_path=public"
+        ],
+        "schema": "public",
+        "signature": "public.sigo_validar_producto_movimiento()",
+        "definition": "CREATE OR REPLACE FUNCTION public.sigo_validar_producto_movimiento()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_producto record;\nbegin\n  select id, empresa_id, activo, codigo_interno, categoria, stock_actual, costo_actual, precio_venta\n    into v_producto\n  from public.productos\n  where id = new.producto_id\n    and empresa_id = new.empresa_id;\n\n  if not found or v_producto.activo is distinct from true then\n    raise exception 'PRODUCT_NOT_FOUND';\n  end if;\n\n  if upper(trim(coalesce(v_producto.categoria, ''))) = 'NO_VENDIBLE' then\n    raise exception 'PRODUCT_NOT_SELLABLE';\n  end if;\n\n  if upper(trim(coalesce(v_producto.codigo_interno, ''))) like 'LEGACY-DUP-%' then\n    raise exception 'PRODUCT_IDENTITY_REVIEW_REQUIRED';\n  end if;\n\n  if v_producto.stock_actual is null then\n    raise exception 'PRODUCT_STOCK_REQUIRED';\n  end if;\n\n  if v_producto.costo_actual is null then\n    raise exception 'PRODUCT_COST_REQUIRED';\n  end if;\n\n  if tg_table_name = 'venta_items_sigo'\n     and (v_producto.precio_venta is null or v_producto.precio_venta <= 0) then\n    raise exception 'PRODUCT_PRICE_REQUIRED';\n  end if;\n\n  return new;\nend;\n$function$\n"
+      },
+      {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "anon=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "name": "sincronizar_portal_cliente_membresia_sigo",
+        "owner": "postgres",
+        "config": [
+          "search_path=public"
+        ],
+        "schema": "public",
+        "signature": "public.sincronizar_portal_cliente_membresia_sigo()",
+        "definition": "CREATE OR REPLACE FUNCTION public.sincronizar_portal_cliente_membresia_sigo()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nbegin\n  if new.rol <> 'client' or new.activo is not true then\n    update public.portal_cliente_usuarios\n       set activo = false\n     where empresa_id = new.empresa_id\n       and user_id = new.user_id\n       and activo = true;\n  end if;\n  return new;\nend;\n$function$\n"
+      },
+      {
+        "acl": [
+          "postgres=X/postgres",
+          "anon=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "name": "tiene_permiso_empresa",
+        "owner": "postgres",
+        "config": [
+          "search_path=public"
+        ],
+        "schema": "public",
+        "signature": "public.tiene_permiso_empresa(uuid,text)",
+        "definition": "CREATE OR REPLACE FUNCTION public.tiene_permiso_empresa(p_empresa_id uuid, p_permiso text)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1\n    from public.empresa_usuarios eu\n    where eu.empresa_id = p_empresa_id\n      and eu.user_id = auth.uid()\n      and eu.activo = true\n      and public.permiso_sigo_valido(p_permiso)\n      and not (p_permiso = any(coalesce(eu.permisos_denegados, '{}'::text[])))\n      and (\n        p_permiso = any(coalesce(eu.permisos_extra, '{}'::text[]))\n        or case eu.rol\n          when 'owner' then p_permiso = any(array[\n            'companies.manage','users.manage',\n            'products.read','products.write',\n            'stock.read','stock.write',\n            'sales.read','sales.write',\n            'purchases.read','purchases.write',\n            'clients.read','clients.write',\n            'suppliers.read','suppliers.write',\n            'reports.read',\n            'costs.read','margins.read','price_lists.read',\n            'arca.configure','invoices.issue',\n            'client_portal.read'\n          ]::text[])\n          when 'admin' then p_permiso = any(array[\n            'users.manage',\n            'products.read','products.write',\n            'stock.read','stock.write',\n            'sales.read','sales.write',\n            'purchases.read','purchases.write',\n            'clients.read','clients.write',\n            'suppliers.read','suppliers.write',\n            'reports.read','invoices.issue'\n          ]::text[])\n          when 'seller' then p_permiso = any(array[\n            'products.read','stock.read',\n            'sales.read','sales.write',\n            'clients.read','invoices.issue'\n          ]::text[])\n          when 'warehouse' then p_permiso = any(array[\n            'products.read','stock.read','stock.write'\n          ]::text[])\n          when 'client' then p_permiso = 'client_portal.read'\n          else false\n        end\n      )\n  );\n$function$\n"
+      },
+      {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "anon=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "name": "validar_arca_comprobante_tenant",
+        "owner": "postgres",
+        "config": [
+          "search_path=public"
+        ],
+        "schema": "public",
+        "signature": "public.validar_arca_comprobante_tenant()",
+        "definition": "CREATE OR REPLACE FUNCTION public.validar_arca_comprobante_tenant()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_empresa_venta uuid;\nbegin\n  if new.venta_id is null then\n    return new;\n  end if;\n\n  select empresa_id into v_empresa_venta\n  from public.ventas_sigo\n  where id = new.venta_id;\n\n  if v_empresa_venta is null then\n    raise exception 'ARCA_SALE_NOT_FOUND';\n  end if;\n  if v_empresa_venta <> new.empresa_id then\n    raise exception 'ARCA_SALE_TENANT_MISMATCH';\n  end if;\n\n  return new;\nend;\n$function$\n"
+      },
+      {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "anon=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "name": "validar_codigo_producto_unico_sigo",
+        "owner": "postgres",
+        "config": [
+          "search_path=public"
+        ],
+        "schema": "public",
+        "signature": "public.validar_codigo_producto_unico_sigo()",
+        "definition": "CREATE OR REPLACE FUNCTION public.validar_codigo_producto_unico_sigo()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_codigo_barras text := nullif(btrim(coalesce(new.codigo_barras, '')), '');\n  v_codigo_interno text := nullif(btrim(coalesce(new.codigo_interno, '')), '');\nbegin\n  if new.empresa_id is null then\n    raise exception 'EMPRESA_REQUIRED';\n  end if;\n\n  -- Guardamos los códigos normalizados en bordes para que pistola/manual/cámara\n  -- consulten exactamente la misma identidad comercial.\n  new.codigo_barras := v_codigo_barras;\n  new.codigo_interno := v_codigo_interno;\n\n  if v_codigo_barras is not null and exists (\n    select 1\n    from public.productos p\n    where p.empresa_id = new.empresa_id\n      and p.id <> coalesce(new.id, gen_random_uuid())\n      and nullif(btrim(coalesce(p.codigo_barras, '')), '') = v_codigo_barras\n  ) then\n    raise exception 'BARCODE_DUPLICATE_IN_COMPANY';\n  end if;\n\n  if v_codigo_interno is not null and exists (\n    select 1\n    from public.productos p\n    where p.empresa_id = new.empresa_id\n      and p.id <> coalesce(new.id, gen_random_uuid())\n      and nullif(btrim(coalesce(p.codigo_interno, '')), '') = v_codigo_interno\n  ) then\n    raise exception 'INTERNAL_CODE_DUPLICATE_IN_COMPANY';\n  end if;\n\n  return new;\nend;\n$function$\n"
+      },
+      {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "anon=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "name": "validar_precio_venta_item_sigo",
+        "owner": "postgres",
+        "config": [
+          "search_path=public"
+        ],
+        "schema": "public",
+        "signature": "public.validar_precio_venta_item_sigo()",
+        "definition": "CREATE OR REPLACE FUNCTION public.validar_precio_venta_item_sigo()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public'\nAS $function$\nbegin\n  if new.precio_unitario is null or new.precio_unitario <= 0 then\n    raise exception 'PRODUCT_PRICE_REQUIRED';\n  end if;\n  if new.subtotal is null or new.subtotal <= 0 then\n    raise exception 'SALE_SUBTOTAL_INVALID';\n  end if;\n  return new;\nend;\n$function$\n"
+      },
+      {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "anon=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "name": "es_miembro_empresa",
+        "owner": "postgres",
+        "config": [
+          "search_path=public"
+        ],
+        "schema": "public",
+        "signature": "public.es_miembro_empresa(uuid)",
+        "definition": "CREATE OR REPLACE FUNCTION public.es_miembro_empresa(p_empresa_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1\n    from public.empresa_usuarios eu\n    where eu.empresa_id = p_empresa_id\n      and eu.user_id = auth.uid()\n      and eu.activo = true\n  );\n$function$\n"
+      },
+      {
+        "acl": [
+          "postgres=X/postgres",
+          "anon=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "name": "permiso_sigo_valido",
+        "owner": "postgres",
+        "config": null,
+        "schema": "public",
+        "signature": "public.permiso_sigo_valido(text)",
+        "definition": "CREATE OR REPLACE FUNCTION public.permiso_sigo_valido(p_permiso text)\n RETURNS boolean\n LANGUAGE sql\n IMMUTABLE\nAS $function$\n  select p_permiso = any (array[\n    'companies.manage',\n    'users.manage',\n    'products.read',\n    'products.write',\n    'stock.read',\n    'stock.write',\n    'sales.read',\n    'sales.write',\n    'purchases.read',\n    'purchases.write',\n    'clients.read',\n    'clients.write',\n    'suppliers.read',\n    'suppliers.write',\n    'reports.read',\n    'costs.read',\n    'margins.read',\n    'price_lists.read',\n    'arca.configure',\n    'invoices.issue',\n    'client_portal.read'\n  ]::text[]);\n$function$\n"
+      },
+      {
+        "acl": [
+          "postgres=X/postgres",
+          "anon=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "name": "permisos_sigo_validos",
+        "owner": "postgres",
+        "config": null,
+        "schema": "public",
+        "signature": "public.permisos_sigo_validos(text[])",
+        "definition": "CREATE OR REPLACE FUNCTION public.permisos_sigo_validos(p_permisos text[])\n RETURNS boolean\n LANGUAGE sql\n IMMUTABLE\nAS $function$\n  select coalesce(bool_and(public.permiso_sigo_valido(p)), true)\n  from unnest(coalesce(p_permisos, '{}'::text[])) as p;\n$function$\n"
+      },
+      {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "anon=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "name": "es_owner_empresa",
+        "owner": "postgres",
+        "config": [
+          "search_path=public"
+        ],
+        "schema": "public",
+        "signature": "public.es_owner_empresa(uuid)",
+        "definition": "CREATE OR REPLACE FUNCTION public.es_owner_empresa(p_empresa_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1\n    from public.empresa_usuarios eu\n    where eu.empresa_id = p_empresa_id\n      and eu.user_id = auth.uid()\n      and eu.activo = true\n      and eu.rol = 'owner'\n  );\n$function$\n"
+      }
+    ],
+    "constraints": [
+      {
+        "kind": "f",
+        "name": "sessions_oauth_client_id_fkey",
+        "table": "sessions",
+        "schema": "auth",
+        "validated": true,
+        "definition": "FOREIGN KEY (oauth_client_id) REFERENCES auth.oauth_clients(id) ON DELETE CASCADE"
+      },
+      {
+        "kind": "p",
+        "name": "sessions_pkey",
+        "table": "sessions",
+        "schema": "auth",
+        "validated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "kind": "c",
+        "name": "sessions_scopes_length",
+        "table": "sessions",
+        "schema": "auth",
+        "validated": true,
+        "definition": "CHECK ((char_length(scopes) <= 4096))"
+      },
+      {
+        "kind": "f",
+        "name": "sessions_user_id_fkey",
+        "table": "sessions",
+        "schema": "auth",
+        "validated": true,
+        "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+      },
+      {
+        "kind": "c",
+        "name": "users_email_change_confirm_status_check",
+        "table": "users",
+        "schema": "auth",
+        "validated": true,
+        "definition": "CHECK (((email_change_confirm_status >= 0) AND (email_change_confirm_status <= 2)))"
+      },
+      {
+        "kind": "u",
+        "name": "users_phone_key",
+        "table": "users",
+        "schema": "auth",
+        "validated": true,
+        "definition": "UNIQUE (phone)"
+      },
+      {
+        "kind": "p",
+        "name": "users_pkey",
+        "table": "users",
+        "schema": "auth",
+        "validated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "kind": "c",
+        "name": "arca_comprobantes_cae_formato",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK (((cae IS NULL) OR (cae ~ '^[0-9]{14}$'::text)))"
+      },
+      {
+        "kind": "f",
+        "name": "arca_comprobantes_empresa_id_fkey",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (empresa_id) REFERENCES public.empresas(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "u",
+        "name": "arca_comprobantes_empresa_id_punto_venta_tipo_cbte_numero_c_key",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "validated": true,
+        "definition": "UNIQUE (empresa_id, punto_venta, tipo_cbte, numero_cbte)"
+      },
+      {
+        "kind": "p",
+        "name": "arca_comprobantes_pkey",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "validated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "kind": "f",
+        "name": "arca_comprobantes_venta_id_fkey",
+        "table": "arca_comprobantes",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (venta_id) REFERENCES public.ventas_sigo(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "f",
+        "name": "caja_movimientos_sigo_created_by_fkey",
+        "table": "caja_movimientos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "f",
+        "name": "caja_movimientos_sigo_devolucion_id_fkey",
+        "table": "caja_movimientos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (devolucion_id) REFERENCES public.devoluciones_sigo(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "f",
+        "name": "caja_movimientos_sigo_empresa_id_fkey",
+        "table": "caja_movimientos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (empresa_id) REFERENCES public.empresas(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "c",
+        "name": "caja_movimientos_sigo_importe_check",
+        "table": "caja_movimientos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK ((importe >= (0)::numeric))"
+      },
+      {
+        "kind": "p",
+        "name": "caja_movimientos_sigo_pkey",
+        "table": "caja_movimientos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "kind": "c",
+        "name": "caja_movimientos_sigo_tipo_check",
+        "table": "caja_movimientos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK ((tipo = ANY (ARRAY['ingreso'::text, 'egreso'::text])))"
+      },
+      {
+        "kind": "f",
+        "name": "caja_movimientos_sigo_venta_id_fkey",
+        "table": "caja_movimientos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (venta_id) REFERENCES public.ventas_sigo(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "f",
+        "name": "cliente_movimientos_sigo_cliente_id_fkey",
+        "table": "cliente_movimientos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (cliente_id) REFERENCES public.clientes_sigo(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "f",
+        "name": "cliente_movimientos_sigo_created_by_fkey",
+        "table": "cliente_movimientos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "f",
+        "name": "cliente_movimientos_sigo_devolucion_id_fkey",
+        "table": "cliente_movimientos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (devolucion_id) REFERENCES public.devoluciones_sigo(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "f",
+        "name": "cliente_movimientos_sigo_empresa_id_fkey",
+        "table": "cliente_movimientos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (empresa_id) REFERENCES public.empresas(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "c",
+        "name": "cliente_movimientos_sigo_importe_check",
+        "table": "cliente_movimientos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK ((importe > (0)::numeric))"
+      },
+      {
+        "kind": "p",
+        "name": "cliente_movimientos_sigo_pkey",
+        "table": "cliente_movimientos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "kind": "c",
+        "name": "cliente_movimientos_sigo_tipo_check",
+        "table": "cliente_movimientos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK ((tipo = ANY (ARRAY['debe'::text, 'haber'::text])))"
+      },
+      {
+        "kind": "f",
+        "name": "cliente_movimientos_sigo_venta_id_fkey",
+        "table": "cliente_movimientos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (venta_id) REFERENCES public.ventas_sigo(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "c",
+        "name": "clientes_sigo_arca_doc_tipo_rango",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK (((arca_doc_tipo IS NULL) OR ((arca_doc_tipo >= 1) AND (arca_doc_tipo <= 999))))"
+      },
+      {
+        "kind": "c",
+        "name": "clientes_sigo_condicion_iva_receptor_rango",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK (((condicion_iva_receptor_id IS NULL) OR ((condicion_iva_receptor_id >= 1) AND (condicion_iva_receptor_id <= 99))))"
+      },
+      {
+        "kind": "f",
+        "name": "clientes_sigo_created_by_fkey",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "f",
+        "name": "clientes_sigo_empresa_id_fkey",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (empresa_id) REFERENCES public.empresas(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "p",
+        "name": "clientes_sigo_pkey",
+        "table": "clientes_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "kind": "c",
+        "name": "devolucion_items_sigo_cantidad_check",
+        "table": "devolucion_items_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK ((cantidad > (0)::numeric))"
+      },
+      {
+        "kind": "f",
+        "name": "devolucion_items_sigo_devolucion_id_fkey",
+        "table": "devolucion_items_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (devolucion_id) REFERENCES public.devoluciones_sigo(id) ON DELETE CASCADE"
+      },
+      {
+        "kind": "u",
+        "name": "devolucion_items_sigo_devolucion_id_venta_item_id_key",
+        "table": "devolucion_items_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "UNIQUE (devolucion_id, venta_item_id)"
+      },
+      {
+        "kind": "f",
+        "name": "devolucion_items_sigo_empresa_id_fkey",
+        "table": "devolucion_items_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (empresa_id) REFERENCES public.empresas(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "p",
+        "name": "devolucion_items_sigo_pkey",
+        "table": "devolucion_items_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "kind": "c",
+        "name": "devolucion_items_sigo_precio_unitario_check",
+        "table": "devolucion_items_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK ((precio_unitario >= (0)::numeric))"
+      },
+      {
+        "kind": "f",
+        "name": "devolucion_items_sigo_producto_id_fkey",
+        "table": "devolucion_items_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (producto_id) REFERENCES public.productos(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "c",
+        "name": "devolucion_items_sigo_subtotal_check",
+        "table": "devolucion_items_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK ((subtotal >= (0)::numeric))"
+      },
+      {
+        "kind": "f",
+        "name": "devolucion_items_sigo_venta_item_id_fkey",
+        "table": "devolucion_items_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (venta_item_id) REFERENCES public.venta_items_sigo(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "f",
+        "name": "devoluciones_sigo_created_by_fkey",
+        "table": "devoluciones_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "f",
+        "name": "devoluciones_sigo_empresa_id_fkey",
+        "table": "devoluciones_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (empresa_id) REFERENCES public.empresas(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "u",
+        "name": "devoluciones_sigo_empresa_id_idempotency_key_key",
+        "table": "devoluciones_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "UNIQUE (empresa_id, idempotency_key)"
+      },
+      {
+        "kind": "p",
+        "name": "devoluciones_sigo_pkey",
+        "table": "devoluciones_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "kind": "c",
+        "name": "devoluciones_sigo_tipo_check",
+        "table": "devoluciones_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK ((tipo = ANY (ARRAY['parcial'::text, 'total'::text])))"
+      },
+      {
+        "kind": "c",
+        "name": "devoluciones_sigo_total_check",
+        "table": "devoluciones_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK ((total >= (0)::numeric))"
+      },
+      {
+        "kind": "f",
+        "name": "devoluciones_sigo_venta_id_fkey",
+        "table": "devoluciones_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (venta_id) REFERENCES public.ventas_sigo(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "f",
+        "name": "empresa_usuarios_empresa_id_fkey",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (empresa_id) REFERENCES public.empresas(id) ON DELETE CASCADE"
+      },
+      {
+        "kind": "u",
+        "name": "empresa_usuarios_empresa_id_user_id_key",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "validated": true,
+        "definition": "UNIQUE (empresa_id, user_id)"
+      },
+      {
+        "kind": "c",
+        "name": "empresa_usuarios_permisos_denegados_validos",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "validated": false,
+        "definition": "CHECK (public.permisos_sigo_validos(permisos_denegados)) NOT VALID"
+      },
+      {
+        "kind": "c",
+        "name": "empresa_usuarios_permisos_extra_validos",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "validated": false,
+        "definition": "CHECK (public.permisos_sigo_validos(permisos_extra)) NOT VALID"
+      },
+      {
+        "kind": "c",
+        "name": "empresa_usuarios_permisos_sin_conflictos",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "validated": false,
+        "definition": "CHECK ((NOT (permisos_extra && permisos_denegados))) NOT VALID"
+      },
+      {
+        "kind": "p",
+        "name": "empresa_usuarios_pkey",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "validated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "kind": "c",
+        "name": "empresa_usuarios_rol_check",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK ((rol = ANY (ARRAY['owner'::text, 'admin'::text, 'seller'::text, 'warehouse'::text, 'client'::text])))"
+      },
+      {
+        "kind": "f",
+        "name": "empresa_usuarios_user_id_fkey",
+        "table": "empresa_usuarios",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+      },
+      {
+        "kind": "f",
+        "name": "empresas_created_by_fkey",
+        "table": "empresas",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "p",
+        "name": "empresas_pkey",
+        "table": "empresas",
+        "schema": "public",
+        "validated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "kind": "c",
+        "name": "oferta_descuento_valido",
+        "table": "ofertas_productos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK (((descuento_porcentaje > (0)::numeric) AND (descuento_porcentaje < (100)::numeric)))"
+      },
+      {
+        "kind": "c",
+        "name": "oferta_fechas_validas",
+        "table": "ofertas_productos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK ((fecha_fin >= fecha_inicio))"
+      },
+      {
+        "kind": "f",
+        "name": "ofertas_productos_sigo_created_by_fkey",
+        "table": "ofertas_productos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (created_by) REFERENCES auth.users(id)"
+      },
+      {
+        "kind": "f",
+        "name": "ofertas_productos_sigo_empresa_id_fkey",
+        "table": "ofertas_productos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (empresa_id) REFERENCES public.empresas(id)"
+      },
+      {
+        "kind": "p",
+        "name": "ofertas_productos_sigo_pkey",
+        "table": "ofertas_productos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "kind": "f",
+        "name": "ofertas_productos_sigo_producto_id_fkey",
+        "table": "ofertas_productos_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (producto_id) REFERENCES public.productos(id)"
+      },
+      {
+        "kind": "f",
+        "name": "productos_categoria_id_fkey",
+        "table": "productos",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (categoria_id) REFERENCES public.categorias(id)"
+      },
+      {
+        "kind": "f",
+        "name": "productos_empresa_id_fkey",
+        "table": "productos",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (empresa_id) REFERENCES public.empresas(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "c",
+        "name": "productos_iva_alicuota_id_rango",
+        "table": "productos",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK (((iva_alicuota_id IS NULL) OR ((iva_alicuota_id >= 1) AND (iva_alicuota_id <= 99))))"
+      },
+      {
+        "kind": "c",
+        "name": "productos_iva_tasa_rango",
+        "table": "productos",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK (((iva_tasa IS NULL) OR ((iva_tasa >= (0)::numeric) AND (iva_tasa <= (100)::numeric))))"
+      },
+      {
+        "kind": "f",
+        "name": "productos_marca_id_fkey",
+        "table": "productos",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (marca_id) REFERENCES public.marcas(id)"
+      },
+      {
+        "kind": "p",
+        "name": "productos_pkey",
+        "table": "productos",
+        "schema": "public",
+        "validated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "kind": "f",
+        "name": "productos_proveedor_principal_id_fkey",
+        "table": "productos",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (proveedor_principal_id) REFERENCES public.proveedores(id)"
+      },
+      {
+        "kind": "f",
+        "name": "sigo_empresa_modulos_actualizado_por_fkey",
+        "table": "sigo_empresa_modulos",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (actualizado_por) REFERENCES auth.users(id) ON DELETE SET NULL"
+      },
+      {
+        "kind": "f",
+        "name": "sigo_empresa_modulos_empresa_id_fkey",
+        "table": "sigo_empresa_modulos",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (empresa_id) REFERENCES public.empresas(id) ON DELETE CASCADE"
+      },
+      {
+        "kind": "f",
+        "name": "sigo_empresa_modulos_modulo_clave_fkey",
+        "table": "sigo_empresa_modulos",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (modulo_clave) REFERENCES public.sigo_modulos_catalogo(clave) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "p",
+        "name": "sigo_empresa_modulos_pkey",
+        "table": "sigo_empresa_modulos",
+        "schema": "public",
+        "validated": true,
+        "definition": "PRIMARY KEY (empresa_id, modulo_clave)"
+      },
+      {
+        "kind": "p",
+        "name": "sigo_modulos_catalogo_pkey",
+        "table": "sigo_modulos_catalogo",
+        "schema": "public",
+        "validated": true,
+        "definition": "PRIMARY KEY (clave)"
+      },
+      {
+        "kind": "c",
+        "name": "venta_items_sigo_cantidad_check",
+        "table": "venta_items_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK ((cantidad > (0)::numeric))"
+      },
+      {
+        "kind": "f",
+        "name": "venta_items_sigo_empresa_id_fkey",
+        "table": "venta_items_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (empresa_id) REFERENCES public.empresas(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "p",
+        "name": "venta_items_sigo_pkey",
+        "table": "venta_items_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "kind": "c",
+        "name": "venta_items_sigo_precio_unitario_check",
+        "table": "venta_items_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK ((precio_unitario >= (0)::numeric))"
+      },
+      {
+        "kind": "f",
+        "name": "venta_items_sigo_producto_id_fkey",
+        "table": "venta_items_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (producto_id) REFERENCES public.productos(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "c",
+        "name": "venta_items_sigo_subtotal_check",
+        "table": "venta_items_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK ((subtotal >= (0)::numeric))"
+      },
+      {
+        "kind": "f",
+        "name": "venta_items_sigo_venta_id_fkey",
+        "table": "venta_items_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (venta_id) REFERENCES public.ventas_sigo(id) ON DELETE CASCADE"
+      },
+      {
+        "kind": "f",
+        "name": "ventas_sigo_anulada_by_fkey",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (anulada_by) REFERENCES auth.users(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "f",
+        "name": "ventas_sigo_cliente_id_fkey",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (cliente_id) REFERENCES public.clientes_sigo(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "f",
+        "name": "ventas_sigo_created_by_fkey",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "f",
+        "name": "ventas_sigo_empresa_id_fkey",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (empresa_id) REFERENCES public.empresas(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "u",
+        "name": "ventas_sigo_empresa_id_idempotency_key_key",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "UNIQUE (empresa_id, idempotency_key)"
+      },
+      {
+        "kind": "c",
+        "name": "ventas_sigo_estado_check",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK ((estado = ANY (ARRAY['confirmada'::text, 'anulada'::text])))"
+      },
+      {
+        "kind": "c",
+        "name": "ventas_sigo_medio_pago_check",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK ((medio_pago = ANY (ARRAY['efectivo'::text, 'debito'::text, 'credito'::text, 'transferencia'::text, 'mercado_pago'::text, 'cuenta_corriente'::text, 'otro'::text])))"
+      },
+      {
+        "kind": "p",
+        "name": "ventas_sigo_pkey",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "kind": "c",
+        "name": "ventas_sigo_total_check",
+        "table": "ventas_sigo",
+        "schema": "public",
+        "validated": true,
+        "definition": "CHECK ((total >= (0)::numeric))"
+      },
+      {
+        "kind": "c",
+        "name": "oauth_clients_client_name_length",
+        "table": "oauth_clients",
+        "schema": "auth",
+        "validated": true,
+        "definition": "CHECK (char_length(client_name) <= 1024)"
+      },
+      {
+        "kind": "c",
+        "name": "oauth_clients_client_uri_length",
+        "table": "oauth_clients",
+        "schema": "auth",
+        "validated": true,
+        "definition": "CHECK (char_length(client_uri) <= 2048)"
+      },
+      {
+        "kind": "c",
+        "name": "oauth_clients_logo_uri_length",
+        "table": "oauth_clients",
+        "schema": "auth",
+        "validated": true,
+        "definition": "CHECK (char_length(logo_uri) <= 2048)"
+      },
+      {
+        "kind": "p",
+        "name": "oauth_clients_pkey",
+        "table": "oauth_clients",
+        "schema": "auth",
+        "validated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "kind": "c",
+        "name": "oauth_clients_token_endpoint_auth_method_check",
+        "table": "oauth_clients",
+        "schema": "auth",
+        "validated": true,
+        "definition": "CHECK (token_endpoint_auth_method = ANY (ARRAY['client_secret_basic'::text, 'client_secret_post'::text, 'none'::text]))"
+      },
+      {
+        "kind": "u",
+        "name": "categorias_nombre_key",
+        "table": "categorias",
+        "schema": "public",
+        "validated": true,
+        "definition": "UNIQUE (nombre)"
+      },
+      {
+        "kind": "p",
+        "name": "categorias_pkey",
+        "table": "categorias",
+        "schema": "public",
+        "validated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "kind": "u",
+        "name": "marcas_nombre_key",
+        "table": "marcas",
+        "schema": "public",
+        "validated": true,
+        "definition": "UNIQUE (nombre)"
+      },
+      {
+        "kind": "p",
+        "name": "marcas_pkey",
+        "table": "marcas",
+        "schema": "public",
+        "validated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "kind": "f",
+        "name": "proveedores_empresa_id_fkey",
+        "table": "proveedores",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (empresa_id) REFERENCES public.empresas(id) ON DELETE RESTRICT"
+      },
+      {
+        "kind": "p",
+        "name": "proveedores_pkey",
+        "table": "proveedores",
+        "schema": "public",
+        "validated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "kind": "f",
+        "name": "sigo_superadmins_created_by_fkey",
+        "table": "sigo_superadmins",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL"
+      },
+      {
+        "kind": "p",
+        "name": "sigo_superadmins_pkey",
+        "table": "sigo_superadmins",
+        "schema": "public",
+        "validated": true,
+        "definition": "PRIMARY KEY (user_id)"
+      },
+      {
+        "kind": "f",
+        "name": "sigo_superadmins_user_id_fkey",
+        "table": "sigo_superadmins",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+      },
+      {
+        "kind": "u",
+        "name": "sigo_admin_notifications_event_key_key",
+        "table": "sigo_admin_notifications",
+        "schema": "public",
+        "validated": true,
+        "definition": "UNIQUE (event_key)"
+      },
+      {
+        "kind": "p",
+        "name": "sigo_admin_notifications_pkey",
+        "table": "sigo_admin_notifications",
+        "schema": "public",
+        "validated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "kind": "u",
+        "name": "portal_cliente_usuarios_empresa_id_cliente_id_user_id_key",
+        "table": "portal_cliente_usuarios",
+        "schema": "public",
+        "validated": true,
+        "definition": "UNIQUE (empresa_id, cliente_id, user_id)"
+      },
+      {
+        "kind": "f",
+        "name": "portal_cliente_usuarios_empresa_id_fkey",
+        "table": "portal_cliente_usuarios",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (empresa_id) REFERENCES public.empresas(id) ON DELETE CASCADE"
+      },
+      {
+        "kind": "p",
+        "name": "portal_cliente_usuarios_pkey",
+        "table": "portal_cliente_usuarios",
+        "schema": "public",
+        "validated": true,
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "kind": "f",
+        "name": "portal_cliente_usuarios_user_id_fkey",
+        "table": "portal_cliente_usuarios",
+        "schema": "public",
+        "validated": true,
+        "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+      }
+    ],
+    "types": [
+      {
+        "kind": "enum",
+        "name": "aal_level",
+        "labels": [
+          "aal1",
+          "aal2",
+          "aal3"
+        ],
+        "schema": "auth"
+      },
+      {
+        "kind": "enum",
+        "name": "oauth_client_type",
+        "labels": [
+          "public",
+          "confidential"
+        ],
+        "schema": "auth"
+      },
+      {
+        "kind": "enum",
+        "name": "oauth_registration_type",
+        "labels": [
+          "dynamic",
+          "manual"
+        ],
+        "schema": "auth"
+      }
+    ],
+    "sequences": [
+      {
+        "max": "9223372036854775807",
+        "min": "1",
+        "name": "ventas_sigo_numero_seq",
+        "cache": "1",
+        "cycle": false,
+        "start": "1",
+        "schema": "public",
+        "increment": "1"
+      }
+    ],
+    "relations": [
+      {
+        "name": "auth.sessions",
+        "owner": "supabase_auth_admin",
+        "relacl": [
+          "postgres=ar*wdDxtm/supabase_auth_admin",
+          "supabase_auth_admin=arwdDxtm/supabase_auth_admin",
+          "dashboard_user=arwdDxtm/supabase_auth_admin"
+        ],
+        "relkind": "r",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      },
+      {
+        "name": "auth.users",
+        "owner": "supabase_auth_admin",
+        "relacl": [
+          "supabase_auth_admin=arwdDxtm/supabase_auth_admin",
+          "dashboard_user=arwdDxtm/supabase_auth_admin",
+          "postgres=ar*wdDxtm/supabase_auth_admin"
+        ],
+        "relkind": "r",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      },
+      {
+        "name": "public.arca_comprobantes",
+        "owner": "postgres",
+        "relacl": [
+          "postgres=arwdDxtm/postgres",
+          "authenticated=arwdDxtm/postgres",
+          "service_role=arwdDxtm/postgres"
+        ],
+        "relkind": "r",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      },
+      {
+        "name": "public.caja_movimientos_sigo",
+        "owner": "postgres",
+        "relacl": [
+          "postgres=arwdDxtm/postgres",
+          "anon=arwdDxtm/postgres",
+          "authenticated=arwdDxtm/postgres",
+          "service_role=arwdDxtm/postgres"
+        ],
+        "relkind": "r",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      },
+      {
+        "name": "public.cliente_movimientos_sigo",
+        "owner": "postgres",
+        "relacl": [
+          "postgres=arwdDxtm/postgres",
+          "anon=arwdDxtm/postgres",
+          "authenticated=arwdDxtm/postgres",
+          "service_role=arwdDxtm/postgres"
+        ],
+        "relkind": "r",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      },
+      {
+        "name": "public.clientes_sigo",
+        "owner": "postgres",
+        "relacl": [
+          "postgres=arwdDxtm/postgres",
+          "anon=arwdDxtm/postgres",
+          "authenticated=arwdDxtm/postgres",
+          "service_role=arwdDxtm/postgres"
+        ],
+        "relkind": "r",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      },
+      {
+        "name": "public.devolucion_items_sigo",
+        "owner": "postgres",
+        "relacl": [
+          "postgres=arwdDxtm/postgres",
+          "anon=arwdDxtm/postgres",
+          "authenticated=arwdDxtm/postgres",
+          "service_role=arwdDxtm/postgres"
+        ],
+        "relkind": "r",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      },
+      {
+        "name": "public.devoluciones_sigo",
+        "owner": "postgres",
+        "relacl": [
+          "postgres=arwdDxtm/postgres",
+          "anon=arwdDxtm/postgres",
+          "authenticated=arwdDxtm/postgres",
+          "service_role=arwdDxtm/postgres"
+        ],
+        "relkind": "r",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      },
+      {
+        "name": "public.empresa_usuarios",
+        "owner": "postgres",
+        "relacl": [
+          "postgres=arwdDxtm/postgres",
+          "anon=arwdDxtm/postgres",
+          "authenticated=arwdDxtm/postgres",
+          "service_role=arwdDxtm/postgres"
+        ],
+        "relkind": "r",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      },
+      {
+        "name": "public.empresas",
+        "owner": "postgres",
+        "relacl": [
+          "postgres=arwdDxtm/postgres",
+          "anon=arwdDxtm/postgres",
+          "authenticated=arwdDxtm/postgres",
+          "service_role=arwdDxtm/postgres"
+        ],
+        "relkind": "r",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      },
+      {
+        "name": "public.ofertas_productos_sigo",
+        "owner": "postgres",
+        "relacl": [
+          "postgres=arwdDxtm/postgres",
+          "authenticated=arwdDxtm/postgres",
+          "service_role=arwdDxtm/postgres"
+        ],
+        "relkind": "r",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      },
+      {
+        "name": "public.productos",
+        "owner": "postgres",
+        "relacl": [
+          "postgres=arwdDxtm/postgres",
+          "anon=arwdDxtm/postgres",
+          "authenticated=arwdDxtm/postgres",
+          "service_role=arwdDxtm/postgres"
+        ],
+        "relkind": "r",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      },
+      {
+        "name": "public.sigo_empresa_modulos",
+        "owner": "postgres",
+        "relacl": [
+          "postgres=arwdDxtm/postgres",
+          "anon=arwdDxtm/postgres",
+          "authenticated=arwdDxtm/postgres",
+          "service_role=arwdDxtm/postgres"
+        ],
+        "relkind": "r",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      },
+      {
+        "name": "public.sigo_modulos_catalogo",
+        "owner": "postgres",
+        "relacl": [
+          "postgres=arwdDxtm/postgres",
+          "anon=arwdDxtm/postgres",
+          "authenticated=arwdDxtm/postgres",
+          "service_role=arwdDxtm/postgres"
+        ],
+        "relkind": "r",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      },
+      {
+        "name": "public.venta_items_sigo",
+        "owner": "postgres",
+        "relacl": [
+          "postgres=arwdDxtm/postgres",
+          "anon=arwdDxtm/postgres",
+          "authenticated=arwdDxtm/postgres",
+          "service_role=arwdDxtm/postgres"
+        ],
+        "relkind": "r",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      },
+      {
+        "name": "public.ventas_sigo",
+        "owner": "postgres",
+        "relacl": [
+          "postgres=arwdDxtm/postgres",
+          "anon=arwdDxtm/postgres",
+          "authenticated=arwdDxtm/postgres",
+          "service_role=arwdDxtm/postgres"
+        ],
+        "relkind": "r",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      }
+    ],
+    "policies": [
+      {
+        "cmd": "DELETE",
+        "qual": "false",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "arca_comprobantes",
+        "policyname": "arca_cbte_delete_bloqueado",
+        "schemaname": "public",
+        "with_check": null
+      },
+      {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "arca_comprobantes",
+        "policyname": "arca_cbte_insert",
+        "schemaname": "public",
+        "with_check": "tiene_permiso_empresa(empresa_id, 'invoices.issue'::text)"
+      },
+      {
+        "cmd": "SELECT",
+        "qual": "(tiene_permiso_empresa(empresa_id, 'invoices.issue'::text) OR tiene_permiso_empresa(empresa_id, 'reports.read'::text))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "arca_comprobantes",
+        "policyname": "arca_cbte_select",
+        "schemaname": "public",
+        "with_check": null
+      },
+      {
+        "cmd": "UPDATE",
+        "qual": "tiene_permiso_empresa(empresa_id, 'invoices.issue'::text)",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "arca_comprobantes",
+        "policyname": "arca_cbte_update",
+        "schemaname": "public",
+        "with_check": "tiene_permiso_empresa(empresa_id, 'invoices.issue'::text)"
+      },
+      {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "caja_movimientos_sigo",
+        "policyname": "caja_movimientos_sigo_insert_blocked",
+        "schemaname": "public",
+        "with_check": "false"
+      },
+      {
+        "cmd": "SELECT",
+        "qual": "tiene_permiso_empresa(empresa_id, 'sales.read'::text)",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "caja_movimientos_sigo",
+        "policyname": "caja_movimientos_sigo_select",
+        "schemaname": "public",
+        "with_check": null
+      },
+      {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "cliente_movimientos_sigo",
+        "policyname": "cliente_movimientos_sigo_insert_blocked",
+        "schemaname": "public",
+        "with_check": "false"
+      },
+      {
+        "cmd": "SELECT",
+        "qual": "tiene_permiso_empresa(empresa_id, 'clients.read'::text)",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "cliente_movimientos_sigo",
+        "policyname": "cliente_movimientos_sigo_select",
+        "schemaname": "public",
+        "with_check": null
+      },
+      {
+        "cmd": "DELETE",
+        "qual": "tiene_permiso_empresa(empresa_id, 'clients.write'::text)",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "clientes_sigo",
+        "policyname": "clientes_sigo_delete",
+        "schemaname": "public",
+        "with_check": null
+      },
+      {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "clientes_sigo",
+        "policyname": "clientes_sigo_insert",
+        "schemaname": "public",
+        "with_check": "tiene_permiso_empresa(empresa_id, 'clients.write'::text)"
+      },
+      {
+        "cmd": "SELECT",
+        "qual": "tiene_permiso_empresa(empresa_id, 'clients.read'::text)",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "clientes_sigo",
+        "policyname": "clientes_sigo_select",
+        "schemaname": "public",
+        "with_check": null
+      },
+      {
+        "cmd": "UPDATE",
+        "qual": "tiene_permiso_empresa(empresa_id, 'clients.write'::text)",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "clientes_sigo",
+        "policyname": "clientes_sigo_update",
+        "schemaname": "public",
+        "with_check": "tiene_permiso_empresa(empresa_id, 'clients.write'::text)"
+      },
+      {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "devolucion_items_sigo",
+        "policyname": "devolucion_items_sigo_insert_blocked",
+        "schemaname": "public",
+        "with_check": "false"
+      },
+      {
+        "cmd": "SELECT",
+        "qual": "tiene_permiso_empresa(empresa_id, 'sales.read'::text)",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "devolucion_items_sigo",
+        "policyname": "devolucion_items_sigo_select",
+        "schemaname": "public",
+        "with_check": null
+      },
+      {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "devoluciones_sigo",
+        "policyname": "devoluciones_sigo_insert_blocked",
+        "schemaname": "public",
+        "with_check": "false"
+      },
+      {
+        "cmd": "SELECT",
+        "qual": "tiene_permiso_empresa(empresa_id, 'sales.read'::text)",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "devoluciones_sigo",
+        "policyname": "devoluciones_sigo_select",
+        "schemaname": "public",
+        "with_check": null
+      },
+      {
+        "cmd": "DELETE",
+        "qual": "(es_owner_empresa(empresa_id) AND (user_id <> auth.uid()))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "empresa_usuarios",
+        "policyname": "empresa_usuarios_delete_owner",
+        "schemaname": "public",
+        "with_check": null
+      },
+      {
+        "cmd": "DELETE",
+        "qual": "(es_superadmin_sigo() AND (rol <> 'owner'::text))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "empresa_usuarios",
+        "policyname": "empresa_usuarios_delete_superadmin",
+        "schemaname": "public",
+        "with_check": null
+      },
+      {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "empresa_usuarios",
+        "policyname": "empresa_usuarios_insert_owner",
+        "schemaname": "public",
+        "with_check": "(es_owner_empresa(empresa_id) AND (rol <> 'owner'::text))"
+      },
+      {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "empresa_usuarios",
+        "policyname": "empresa_usuarios_insert_superadmin",
+        "schemaname": "public",
+        "with_check": "(es_superadmin_sigo() AND (rol = ANY (ARRAY['admin'::text, 'seller'::text, 'warehouse'::text, 'client'::text])))"
+      },
+      {
+        "cmd": "SELECT",
+        "qual": "((user_id = auth.uid()) OR es_owner_empresa(empresa_id))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "empresa_usuarios",
+        "policyname": "empresa_usuarios_select",
+        "schemaname": "public",
+        "with_check": null
+      },
+      {
+        "cmd": "SELECT",
+        "qual": "es_superadmin_sigo()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "empresa_usuarios",
+        "policyname": "empresa_usuarios_select_superadmin",
+        "schemaname": "public",
+        "with_check": null
+      },
+      {
+        "cmd": "UPDATE",
+        "qual": "es_owner_empresa(empresa_id)",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "empresa_usuarios",
+        "policyname": "empresa_usuarios_update_owner",
+        "schemaname": "public",
+        "with_check": "(es_owner_empresa(empresa_id) AND (rol <> 'owner'::text))"
+      },
+      {
+        "cmd": "UPDATE",
+        "qual": "es_superadmin_sigo()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "empresa_usuarios",
+        "policyname": "empresa_usuarios_update_superadmin",
+        "schemaname": "public",
+        "with_check": "(es_superadmin_sigo() AND (rol = ANY (ARRAY['admin'::text, 'seller'::text, 'warehouse'::text, 'client'::text])))"
+      },
+      {
+        "cmd": "DELETE",
+        "qual": "false",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "empresas",
+        "policyname": "empresas_delete_bloqueado",
+        "schemaname": "public",
+        "with_check": null
+      },
+      {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "empresas",
+        "policyname": "empresas_insert_directo_bloqueado",
+        "schemaname": "public",
+        "with_check": "false"
+      },
+      {
+        "cmd": "SELECT",
+        "qual": "es_miembro_empresa(id)",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "empresas",
+        "policyname": "empresas_select_miembros",
+        "schemaname": "public",
+        "with_check": null
+      },
+      {
+        "cmd": "SELECT",
+        "qual": "es_superadmin_sigo()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "empresas",
+        "policyname": "empresas_select_superadmin",
+        "schemaname": "public",
+        "with_check": null
+      },
+      {
+        "cmd": "UPDATE",
+        "qual": "es_owner_empresa(id)",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "empresas",
+        "policyname": "empresas_update_owner",
+        "schemaname": "public",
+        "with_check": "es_owner_empresa(id)"
+      },
+      {
+        "cmd": "UPDATE",
+        "qual": "es_superadmin_sigo()",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "empresas",
+        "policyname": "empresas_update_superadmin",
+        "schemaname": "public",
+        "with_check": "es_superadmin_sigo()"
+      },
+      {
+        "cmd": "SELECT",
+        "qual": "(COALESCE(tiene_permiso_empresa(empresa_id, 'products.write'::text), false) OR COALESCE(tiene_permiso_empresa(empresa_id, 'sales.write'::text), false))",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "ofertas_productos_sigo",
+        "policyname": "ofertas_productos_sigo_select",
+        "schemaname": "public",
+        "with_check": null
+      },
+      {
+        "cmd": "UPDATE",
+        "qual": "true",
+        "roles": [
+          "anon",
+          "authenticated"
+        ],
+        "tablename": "productos",
+        "policyname": "editar_productos",
+        "schemaname": "public",
+        "with_check": "true"
+      },
+      {
+        "cmd": "DELETE",
+        "qual": "true",
+        "roles": [
+          "anon",
+          "authenticated"
+        ],
+        "tablename": "productos",
+        "policyname": "eliminar_productos",
+        "schemaname": "public",
+        "with_check": null
+      },
+      {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "anon",
+          "authenticated"
+        ],
+        "tablename": "productos",
+        "policyname": "insertar_productos",
+        "schemaname": "public",
+        "with_check": "true"
+      },
+      {
+        "cmd": "SELECT",
+        "qual": "true",
+        "roles": [
+          "anon",
+          "authenticated"
+        ],
+        "tablename": "productos",
+        "policyname": "lectura_productos",
+        "schemaname": "public",
+        "with_check": null
+      },
+      {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "venta_items_sigo",
+        "policyname": "venta_items_sigo_insert_blocked",
+        "schemaname": "public",
+        "with_check": "false"
+      },
+      {
+        "cmd": "SELECT",
+        "qual": "tiene_permiso_empresa(empresa_id, 'sales.read'::text)",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "venta_items_sigo",
+        "policyname": "venta_items_sigo_select",
+        "schemaname": "public",
+        "with_check": null
+      },
+      {
+        "cmd": "INSERT",
+        "qual": null,
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "ventas_sigo",
+        "policyname": "ventas_sigo_insert_blocked",
+        "schemaname": "public",
+        "with_check": "false"
+      },
+      {
+        "cmd": "SELECT",
+        "qual": "tiene_permiso_empresa(empresa_id, 'sales.read'::text)",
+        "roles": [
+          "authenticated"
+        ],
+        "tablename": "ventas_sigo",
+        "policyname": "ventas_sigo_select",
+        "schemaname": "public",
+        "with_check": null
+      }
+    ],
+    "schemas": [
+      {
+        "owner": "supabase_admin",
+        "nspacl": [
+          "supabase_admin=UC/supabase_admin",
+          "anon=U/supabase_admin",
+          "authenticated=U/supabase_admin",
+          "service_role=U/supabase_admin",
+          "supabase_auth_admin=UC/supabase_admin",
+          "dashboard_user=UC/supabase_admin",
+          "postgres=U/supabase_admin"
+        ],
+        "nspname": "auth"
+      },
+      {
+        "owner": "pg_database_owner",
+        "nspacl": [
+          "pg_database_owner=UC/pg_database_owner",
+          "=U/pg_database_owner",
+          "postgres=U/pg_database_owner",
+          "anon=U/pg_database_owner",
+          "authenticated=U/pg_database_owner",
+          "service_role=U/pg_database_owner"
+        ],
+        "nspname": "public"
+      }
+    ]
+  },
+  "fixturePurpose": "CI-only schema and synthetic rows; no production connection",
+  "sourceHead": "a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b",
+  "productionRoleConfigured": false
+}

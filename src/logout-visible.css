@@ -1,0 +1,26 @@
+/* Keep session exit obvious on phones. The tenant switcher already owns the real sign-out action. */
+@media (max-width: 760px) {
+  .sigo-company-logout {
+    width: auto !important;
+    min-width: 72px;
+    padding: 0 12px !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: #b42318 !important;
+    border-color: #fecaca !important;
+    background: #fff7f7 !important;
+    font-size: 12px !important;
+    font-weight: 850 !important;
+  }
+
+  .sigo-company-logout > span:first-child {
+    display: inline !important;
+    font-size: 14px;
+  }
+
+  .sigo-company-logout > span:last-child {
+    display: inline !important;
+  }
+}

@@ -1,0 +1,1 @@
+export function mountOperationalPortal(app:HTMLElement,options?:{enabled?:boolean;baseUrl?:string;integrated?:boolean;qaAislado?:boolean;getSigoToken?:()=>Promise<string>;expectedEmpresaId?:string;sharedCommerce?:any;initialPage?:string}):{client:{logout:()=>Promise<void>};showPage:(page:string)=>void;destroy:()=>Promise<void>}|undefined;

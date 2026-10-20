@@ -1,0 +1,343 @@
+/* SIGO premium responsive shell. Loaded after base styles to refine presentation only. */
+
+.sigo-root {
+  background:
+    radial-gradient(circle at 8% 0%, rgba(59,130,246,.08), transparent 28rem),
+    linear-gradient(180deg, #f7f9fd 0%, #f3f6fb 100%);
+}
+
+.sigo-tenant-bar {
+  min-height: 66px;
+  padding: 8px 18px;
+  border-bottom-color: rgba(148,163,184,.22);
+  box-shadow: 0 6px 24px rgba(15,23,42,.045);
+}
+
+.sigo-tenant-copy {
+  position: relative;
+  padding-left: 48px;
+  min-height: 42px;
+  align-items: center;
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+
+.sigo-tenant-copy::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 38px;
+  height: 38px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  border-radius: 0;
+  background: url("/sigo-logo-oficial.png") center / contain no-repeat;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 900;
+  box-shadow: 0 10px 24px rgba(37,99,235,.25);
+}
+
+.sigo-tenant-copy strong { font-size: 17px; }
+.sigo-tenant-copy small {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #2555c7;
+  font-size: 11px;
+}
+
+.sigo-context-actions { align-items: center; }
+.sigo-context-actions button { min-height: 40px; }
+
+.sigo-company-switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 330px;
+  padding: 7px 8px 7px 12px;
+  border: 1px solid rgba(148,163,184,.22);
+  border-radius: 16px;
+  background: rgba(255,255,255,.92);
+  box-shadow: 0 7px 20px rgba(15,23,42,.05);
+}
+
+.sigo-company-field { min-width: 0; flex: 1; }
+.sigo-company-eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.sigo-company-select {
+  width: 100%;
+  border: 0 !important;
+  padding: 0 24px 0 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #172033;
+  font-weight: 800;
+  font-size: 13px;
+}
+.sigo-company-actions { display: flex; gap: 5px; }
+.sigo-company-button {
+  min-height: 36px;
+  border: 1px solid #e5eaf2;
+  border-radius: 10px;
+  padding: 7px 9px;
+  background: #fff;
+  color: #475569;
+  font-weight: 800;
+  font-size: 11px;
+}
+.sigo-company-button > span:first-child { display: none; }
+.sigo-company-button:hover { background:#f8fafc; border-color:#d8e0ea; }
+.sigo-company-logout { color:#b42318; }
+
+/* More polished operational cards */
+.products-page > .page-header {
+  padding: 18px 20px;
+  border: 1px solid #e3eaf4;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(255,255,255,.98), rgba(239,246,255,.86));
+  box-shadow: 0 12px 30px rgba(15,23,42,.055);
+}
+.products-page > .panel:first-of-type {
+  position: relative;
+  overflow: hidden;
+  border-color: #dbe7fb;
+  background: linear-gradient(145deg, #fff 0%, #f7fbff 100%);
+  box-shadow: 0 16px 38px rgba(37,99,235,.07);
+}
+.products-page > .panel:first-of-type::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg,#2563eb,#60a5fa,#93c5fd);
+}
+.products-page > .panel:first-of-type h3 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 19px;
+}
+.products-page > .panel:first-of-type h3::before {
+  content: "▣";
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: #eaf2ff;
+  color: #2563eb;
+  font-size: 15px;
+}
+.product-tools input {
+  min-height: 48px;
+  border-radius: 14px;
+  box-shadow: 0 5px 18px rgba(15,23,42,.035);
+}
+.panel { transition: box-shadow .18s ease, transform .18s ease; }
+@media (hover:hover) {
+  .panel:hover { box-shadow: 0 14px 34px rgba(20,31,51,.075); }
+}
+
+@media (max-width: 760px) {
+  body { padding-bottom: env(safe-area-inset-bottom); }
+
+  .sigo-tenant-bar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: minmax(0,1fr) auto;
+    align-items: center;
+    gap: 7px 10px;
+    min-height: 0;
+    padding: 9px 11px 8px;
+    background: rgba(248,250,252,.97);
+    backdrop-filter: blur(18px);
+  }
+
+  .sigo-tenant-copy {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: auto minmax(0,1fr);
+    padding-left: 42px;
+    min-height: 36px;
+    gap: 0 7px;
+  }
+  .sigo-tenant-copy::before { width:34px; height:34px; border-radius:0; }
+  .sigo-tenant-copy strong { font-size: 16px; align-self:end; }
+  .sigo-tenant-copy > span { font-size: 10px; align-self:end; max-width:none !important; }
+  .sigo-tenant-copy small {
+    grid-column: 1 / -1;
+    justify-self: start;
+    margin-top: 2px;
+    padding: 2px 7px;
+    font-size: 10px;
+  }
+
+  .sigo-context-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 1px 1px 3px;
+    scrollbar-width: none;
+  }
+  .sigo-context-actions::-webkit-scrollbar { display:none; }
+  .sigo-context-actions button {
+    flex: 0 0 auto;
+    min-height: 34px;
+    padding: 7px 11px;
+    border-radius: 11px;
+    font-size: 11px;
+    box-shadow: none;
+  }
+
+  .sigo-company-switcher {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+    padding: 5px 6px 5px 10px;
+    border-radius: 13px;
+    box-shadow: none;
+    background: #fff;
+  }
+  .sigo-company-eyebrow { font-size: 8px; margin-bottom: 0; }
+  .sigo-company-select { font-size: 12px; min-height: 23px; }
+  .sigo-company-actions { flex: 0 0 auto; }
+  .sigo-company-button {
+    width: 34px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    font-size: 15px;
+  }
+  .sigo-company-button > span:first-child { display: inline; }
+  .sigo-company-button > span:last-child { display: none; }
+
+  /* App-like bottom navigation for the four daily operational areas. */
+  .sigo-operation-only .sidebar {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    top: auto;
+    z-index: 45;
+    height: 68px;
+    padding: 6px;
+    border: 1px solid rgba(148,163,184,.2);
+    border-radius: 20px;
+    background: rgba(15,23,42,.96);
+    box-shadow: 0 18px 45px rgba(15,23,42,.28);
+    backdrop-filter: blur(18px);
+  }
+  .sigo-operation-only .sidebar .menu {
+    display: grid;
+    grid-template-columns: repeat(4,minmax(0,1fr));
+    gap: 4px;
+    overflow: visible;
+    height: 100%;
+  }
+  .sigo-operation-only .sidebar .menu-item {
+    min-width: 0;
+    width: 100%;
+    height: 100%;
+    padding: 5px 2px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    border-radius: 15px;
+    color: #aebbd0;
+    background: transparent;
+    font-size: 10px;
+    font-weight: 750;
+    text-align: center;
+  }
+  .sigo-operation-only .sidebar .menu-item.active {
+    background: linear-gradient(145deg,#2563eb,#3b82f6);
+    color:#fff;
+    box-shadow: 0 7px 17px rgba(37,99,235,.32);
+  }
+  .sigo-operation-only .sidebar .menu-icon {
+    display: grid;
+    min-width: 0;
+    width: 23px;
+    height: 23px;
+    padding: 0;
+    border-radius: 8px;
+    font-size: 8px;
+    background: rgba(255,255,255,.09);
+  }
+  .sigo-operation-only .sidebar .menu-item.active .menu-icon { background:rgba(255,255,255,.16); }
+
+  .sigo-operation-only .topbar { display:none; }
+  .sigo-operation-only .content { padding: 12px 12px 102px; }
+
+  .products-page > .page-header {
+    margin-bottom: 12px;
+    padding: 15px;
+    border-radius: 17px;
+  }
+  .products-page > .page-header h2 { font-size: 24px; }
+  .products-page > .page-header p {
+    display: none;
+  }
+  .product-actions {
+    display: grid !important;
+    grid-template-columns: .8fr 1.2fr;
+    width: 100%;
+    gap: 8px;
+  }
+  .product-actions button {
+    width: 100%;
+    min-height: 46px;
+    border-radius: 13px;
+  }
+
+  .products-page > .panel:first-of-type {
+    padding: 16px;
+    border-radius: 18px;
+  }
+  .products-page > .panel:first-of-type > p {
+    margin: 6px 0 12px;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .products-page .table-wrapper {
+    margin: 0 -4px;
+  }
+  .products-page .products-table {
+    min-width: 700px;
+  }
+
+  .modal-backdrop { padding: 8px; align-items: end; }
+  .modal {
+    width: 100%;
+    max-height: 92vh;
+    padding: 18px 15px calc(18px + env(safe-area-inset-bottom));
+    border-radius: 22px 22px 0 0;
+  }
+}
+
+@media (max-width: 430px) {
+  .sigo-tenant-copy > span { display:none; }
+  .sigo-context-actions button { padding: 7px 10px; }
+  .products-page > .page-header h2 { font-size: 22px; }
+  .products-page > .panel:first-of-type h3 { font-size: 18px; }
+}

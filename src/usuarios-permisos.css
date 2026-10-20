@@ -1,0 +1,25 @@
+.sigo-permission-modal { width:min(900px,calc(100vw - 30px)); max-height:92vh; overflow:auto; }
+.sigo-permission-presets { display:flex; flex-wrap:wrap; gap:9px; margin:4px 0 16px; }
+.sigo-permission-warning { margin:12px 0; padding:12px 14px; border:1px solid #f2d79a; border-radius:14px; background:#fff9e9; color:#7a5712; line-height:1.45; }
+.sigo-permission-groups { display:grid; gap:15px; }
+.sigo-permission-group { border:1px solid #e4eaf2; border-radius:18px; padding:16px; background:#fff; }
+.sigo-permission-group > div:first-child h3 { margin:0 0 4px; color:#172033; }
+.sigo-permission-group > div:first-child p { margin:0 0 12px; color:#6b778b; font-size:13px; }
+.sigo-permission-list { display:grid; gap:7px; }
+.sigo-permission-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:18px; min-height:68px; padding:10px 12px; border:1px solid #edf1f6; border-radius:14px; background:#fafbfd; cursor:pointer; }
+.sigo-permission-row > span { display:grid; gap:3px; min-width:0; }
+.sigo-permission-row strong { color:#263449; font-size:14px; }
+.sigo-permission-row small { color:#6b778b; line-height:1.35; }
+.sigo-permission-row em { width:max-content; max-width:100%; padding:3px 7px; border-radius:999px; background:#eef3fb; color:#53637b; font-size:10px; font-style:normal; font-weight:800; }
+.sigo-permission-row input[type="checkbox"] { width:24px; height:24px; accent-color:#2563eb; }
+.sigo-permission-row.disabled { opacity:.55; cursor:not-allowed; }
+.sigo-permission-actions { position:sticky; bottom:-1px; margin-top:17px; padding:12px 0 2px; background:linear-gradient(to top,#fff 72%,rgba(255,255,255,0)); }
+.sigo-user-permission-summary { display:flex; flex-wrap:wrap; gap:5px; margin-top:5px; }
+.sigo-user-permission-summary span { padding:3px 7px; border-radius:999px; background:#eef3fb; color:#5b6880; font-size:10px; font-weight:750; }
+
+@media (max-width:760px) {
+  .sigo-permission-modal { width:100%; max-height:94vh; }
+  .sigo-permission-group { padding:12px; border-radius:16px; }
+  .sigo-permission-row { min-height:72px; padding:10px; gap:10px; }
+  .sigo-permission-row small { font-size:11.5px; }
+}

@@ -1,0 +1,24 @@
+{
+  "status": "PREPARADO_NO_EJECUTADO",
+  "validation": {
+    "jsonFilesParsed": true,
+    "sqlTemplatesEndWithRollback": true,
+    "sqlTemplatesContainCommit": false,
+    "sqlTemplatesContainSchemaOrGrantChanges": false,
+    "sqlReviewedBySecondAgent": true,
+    "sqlExecutedLocallyOrRemotely": false,
+    "postgresParserOrDatabaseValidationPerformed": false,
+    "sharedApplicationModified": false,
+    "isolatedCodeProposalPrepared": true,
+    "githubSourcesVerifiedAtExactHead": true,
+    "targetUuidInvented": false,
+    "realBusinessDataQueried": false,
+    "deploymentOrInfrastructureChanged": false
+  },
+  "limits": [
+    "Inventario productivo por lectura completado; ensayo PG representativo del candidato pendiente de CI",
+    "No acredita readiness comercial; el guard se incorpora al candidato sin deployment",
+    "UUID objetivo ya verificado; actor, snapshot, origen y evidencia de allowlist integrada faltantes bloquean la activación",
+    "Los originales conservan ROLLBACK; una ejecución futura exige copia concreta revisada y autorizada"
+  ]
+}

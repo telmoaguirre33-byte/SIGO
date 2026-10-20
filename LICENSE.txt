@@ -1,0 +1,11 @@
+SIGO PROPRIETARY SOFTWARE LICENSE
+
+Copyright © 2026 Telmo Oscar Aguirre. All rights reserved.
+
+This repository and the SIGO software are proprietary intellectual property of Telmo Oscar Aguirre.
+
+No permission is granted to copy, reproduce, modify, adapt, distribute, publish, sublicense, sell, commercialize, reverse engineer, create derivative works from, or otherwise use the source code, documentation, interfaces, designs, business logic, workflows, reports or other original materials, in whole or in part, without prior written authorization from the copyright holder, except where applicable law expressly permits otherwise.
+
+Access to this repository or software, including public access to source code, does not grant any ownership right or license by implication, estoppel or otherwise.
+
+SIGO and associated branding may also be subject to trademark and other intellectual-property protections. This license does not state that any trademark or copyright registration has already been granted.
