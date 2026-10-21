@@ -191,6 +191,9 @@ export default function ArcaCaeEmission({
 
   useEffect(() => { void cargarVentas(); }, [empresaId]);
   useEffect(() => {
+    if (ventaInicialId && ventas.some((item) => item.id === ventaInicialId)) setVentaId(ventaInicialId);
+  }, [ventaInicialId, ventas]);
+  useEffect(() => {
     if (!puntosActivos.some((pv) => String(pv.numero) === puntoVenta)) {
       setPuntoVenta(puntosActivos[0] ? String(puntosActivos[0].numero) : "");
     }
