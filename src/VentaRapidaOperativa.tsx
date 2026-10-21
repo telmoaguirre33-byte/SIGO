@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import BarcodeScanner from "./BarcodeScanner";
+import EditorCantidadMedida from "./EditorCantidadMedida";
+import { supabase } from "./supabase";
+import { UNIDADES_VENTA, type UnidadVenta } from "./ventaPorMedidas";
 import { imprimirTicketVenta } from "./ticketVenta";
 import { isLegacyDuplicateProduct, normalizeBarcode, type BarcodeProduct } from "./barcode";
 import { listarClientesSigo, type ClienteSigo } from "./clientes";
@@ -44,6 +47,9 @@ function precioUnitarioVenta(item: ItemVenta, ofertas: OfertaProducto[], descuen
 
 export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos = false }: { empresaId: string; puedeEditarProductos?: boolean }) {
   const [items, setItems] = useState<ItemVenta[]>([]);
+  const [unidadesProducto, setUnidadesProducto] = useState<Record<string, UnidadVenta>>({});
+  const [unidadesCargadas, setUnidadesCargadas] = useState(false);
+  const [productoPorMedida, setProductoPorMedida] = useState<BarcodeProduct | null>(null);
   const [catalogo, setCatalogo] = useState<ProductoSigo[]>([]);
   const [ofertas, setOfertas] = useState<OfertaProducto[]>([]);
   const [ofertasError, setOfertasError] = useState("");
@@ -89,6 +95,9 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     let cancelled = false;
     empresaActivaRef.current = empresaId;
     setItems([]);
+    setUnidadesProducto({});
+    setUnidadesCargadas(false);
+    setProductoPorMedida(null);
     setCatalogo([]);
     setOfertas([]);
     setOfertasError("");
@@ -134,6 +143,20 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       if (!cancelled && empresaActivaRef.current === empresaId) await cargarVentasRecientes(empresaId);
     }
     void cargar();
+    // Si la RPC no está instalada, la venta fraccionaria permanece deshabilitada.
+    void supabase.rpc("listar_unidades_producto_sigo", { p_empresa_id: empresaId })
+      .then(({ data, error }) => {
+        if (cancelled || empresaActivaRef.current !== empresaId) return;
+        if (error) { setUnidadesCargadas(false); return; }
+        const mapa: Record<string, UnidadVenta> = {};
+        for (const fila of (data ?? []) as { producto_id: string; unidad_medida: string }[]) {
+          if (Object.prototype.hasOwnProperty.call(UNIDADES_VENTA, fila.unidad_medida)) {
+            mapa[fila.producto_id] = fila.unidad_medida as UnidadVenta;
+          }
+        }
+        setUnidadesProducto(mapa);
+        setUnidadesCargadas(true);
+      });
     return () => { cancelled = true; };
     // cargarVentasRecientes depende únicamente del mismo empresaId del efecto.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -278,6 +301,15 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   }
 
   function agregar(producto: BarcodeProduct) {
+    const unidad = unidadesProducto[producto.id];
+    if (unidadesCargadas && unidad && unidad !== "unidad") {
+      setProductoPorMedida(producto);
+      return;
+    }
+    agregarCantidad(producto, 1);
+  }
+
+  function agregarCantidad(producto: BarcodeProduct, cantidadAgregar: number) {
     if (confirmando) return;
     setError("");
     setExito("");
@@ -297,14 +329,14 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     setItems((actual) => {
       const existente = actual.find((item) => item.producto.id === producto.id);
       const cantidadActual = existente?.cantidad ?? 0;
-      if (cantidadActual + 1 > stock) {
+      if (cantidadActual + cantidadAgregar > stock) {
         setError(`${producto.nombre}: no hay stock para agregar otra unidad.`);
         return actual;
       }
       if (existente) {
-        return actual.map((item) => item.producto.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item);
+        return actual.map((item) => item.producto.id === producto.id ? { ...item, cantidad: Math.round((item.cantidad + cantidadAgregar) * 1000) / 1000 } : item);
       }
-      return [...actual, { producto, cantidad: 1 }];
+      return [...actual, { producto, cantidad: cantidadAgregar }];
     });
   }
 
@@ -312,7 +344,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     setError("");
     setItems((actual) => actual.flatMap((item) => {
       if (item.producto.id !== productoId) return [item];
-      const siguiente = item.cantidad + delta;
+      const siguiente = Math.round((item.cantidad + delta) * 1000) / 1000;
       if (siguiente <= 0) return [];
       if (item.producto.stock_actual != null && siguiente > Number(item.producto.stock_actual)) {
         setError(`${item.producto.nombre}: stock máximo disponible ${item.producto.stock_actual}.`);
@@ -325,6 +357,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   function vaciar() {
     if (confirmando) return;
     setItems([]);
+    setProductoPorMedida(null);
     setError("");
     setExito("");
     setAdvertencia("");
@@ -493,6 +526,14 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         <button type="button" onClick={()=>setDescuentoAbierto(v=>!v)}>◇ <strong>DESCUENTO</strong><small>F6 · {descuentoPct}%</small></button>
       </div>
       {descuentoAbierto&&<div className="sigo-pos-discount"><strong>Descuento</strong>{[0,5,10,15,20].map(n=><button type="button" className={descuentoPct===n?"active":""} onClick={()=>{setDescuentoPct(n);setDescuentoAbierto(false)}} key={n}>{n}%</button>)}<label>Otro % <input type="number" min="0" max="99.99" step="0.01" value={descuentoPct} onChange={e=>setDescuentoPct(Math.max(0,Math.min(99.99,Number(e.target.value)||0)))}/></label></div>}
+      {productoPorMedida && unidadesCargadas && <EditorCantidadMedida
+        nombre={productoPorMedida.nombre}
+        unidad={unidadesProducto[productoPorMedida.id] ?? "unidad"}
+        precio={Number(productoPorMedida.precio_venta)}
+        stockDisponible={Number(productoPorMedida.stock_actual) - (items.find(i => i.producto.id === productoPorMedida.id)?.cantidad ?? 0)}
+        onConfirmar={(cantidad) => { agregarCantidad(productoPorMedida, cantidad); setProductoPorMedida(null); }}
+        onCancelar={() => { setProductoPorMedida(null); buscarRef.current?.focus(); }}
+      />}
       <div className="sigo-pos-scan">
         <BarcodeScanner key={scannerInstanceKey} empresaId={empresaId} action="vender" onCachedCode={(code)=>{const encontrados=catalogo.filter((p)=>p.empresa_id===empresaId&&(normalizeBarcode(p.codigo_barras??"")===code||normalizeBarcode(p.codigo_interno??"")===code));return encontrados.length?encontrados:null}} onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null)}} onManualQuery={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null);return !/^\\d{6,}$/.test(query.trim())}} onProductSearchKeyDown={manejarTeclaBusquedaProducto}/>
         
@@ -502,7 +543,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       {error&&<p className="form-error" role="alert">{error}</p>}{ofertasError&&<p className="form-error" role="alert">No se puede cobrar hasta comprobar los precios de oferta: {ofertasError}</p>}{exito&&<span className="sigo-pos-success-inline" role="status">{exito}</span>}{advertencia&&<p className="form-error">{advertencia}</p>}
       <div className="sigo-pos-grid">
         <section className="sigo-pos-cart">
-          <div className="table-wrapper"><table className="products-table"><thead><tr><th>#</th><th>Producto</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th></th></tr></thead><tbody>{items.map((item,i)=>{const precio=precioUnitarioVenta(item,ofertas,descuentoPct);return <tr key={item.producto.id}><td>{i+1}</td><td><strong>{item.producto.nombre}</strong><small>{item.producto.codigo_interno||item.producto.codigo_barras||""}</small></td><td><div className="sigo-pos-qty"><button onClick={()=>cambiarCantidad(item.producto.id,-1)}>−</button><strong>{item.cantidad}</strong><button onClick={()=>cambiarCantidad(item.producto.id,1)}>+</button></div></td><td>$ {precio.toLocaleString("es-AR")}</td><td><strong>$ {(Math.round((precio*item.cantidad+Number.EPSILON)*100)/100).toLocaleString("es-AR")}</strong></td><td><button className="sigo-pos-remove" onClick={()=>setItems(a=>a.filter(x=>x.producto.id!==item.producto.id))}>🗑</button></td></tr>})}</tbody></table>{!items.length&&<div className="table-empty">Escaneá o buscá un producto para iniciar la venta.</div>}</div>
+          <div className="table-wrapper"><table className="products-table"><thead><tr><th>#</th><th>Producto</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th></th></tr></thead><tbody>{items.map((item,i)=>{const precio=precioUnitarioVenta(item,ofertas,descuentoPct);return <tr key={item.producto.id}><td>{i+1}</td><td><strong>{item.producto.nombre}</strong><small>{item.producto.codigo_interno||item.producto.codigo_barras||""}</small></td><td><div className="sigo-pos-qty"><button onClick={()=>cambiarCantidad(item.producto.id,-(unidadesProducto[item.producto.id] && unidadesProducto[item.producto.id] !== "unidad" ? 0.001 : 1))}>−</button><strong>{item.cantidad.toLocaleString("es-AR")} {unidadesProducto[item.producto.id] ?? "un."}</strong><button onClick={()=>cambiarCantidad(item.producto.id,(unidadesProducto[item.producto.id] && unidadesProducto[item.producto.id] !== "unidad" ? 0.001 : 1))}>+</button></div></td><td>$ {precio.toLocaleString("es-AR")}</td><td><strong>$ {(Math.round((precio*item.cantidad+Number.EPSILON)*100)/100).toLocaleString("es-AR")}</strong></td><td><button className="sigo-pos-remove" onClick={()=>setItems(a=>a.filter(x=>x.producto.id!==item.producto.id))}>🗑</button></td></tr>})}</tbody></table>{!items.length&&<div className="table-empty">Escaneá o buscá un producto para iniciar la venta.</div>}</div>
           <div className="sigo-pos-payments">{(["efectivo","debito","credito","transferencia","mercado_pago","cuenta_corriente"] as MedioPagoSigo[]).map(m=><button type="button" className={medioPago===m?"active":""} onClick={()=>setMedioPago(m)} key={m}>{etiquetaMedio(m)}</button>)}</div>
         </section>
         <aside className="sigo-pos-summary">

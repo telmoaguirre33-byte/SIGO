@@ -1,4 +1,5 @@
 import Contabilidad from "./Contabilidad";
+import { UNIDADES_VENTA, type UnidadVenta } from "./ventaPorMedidas";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { EmpresaOperativa } from "./tenant";
 import { supabase } from "./supabase";
@@ -38,6 +39,7 @@ type ProductoForm = {
   stockMaximo: string;
   stockInicial: string;
   costoReferencia: string;
+  unidadMedida: UnidadVenta;
 };
 
 const productoVacio: ProductoForm = {
@@ -51,6 +53,7 @@ const productoVacio: ProductoForm = {
   stockMaximo: "",
   stockInicial: "",
   costoReferencia: "",
+  unidadMedida: "unidad",
 };
 
 function numeroOpcional(valor: string, etiqueta: string): number | null {
@@ -206,6 +209,8 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<ProductoSigo | null>(null);
   const [form, setForm] = useState<ProductoForm>(productoVacio);
+  const [unidadesProducto, setUnidadesProducto] = useState<Record<string, UnidadVenta>>({});
+  const [unidadesDisponibles, setUnidadesDisponibles] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
@@ -223,6 +228,15 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
     setError("");
     try {
       setProductos(await listarProductosSigo(empresaId));
+      const { data: unidades, error: unidadesError } = await supabase.rpc("listar_unidades_producto_sigo", { p_empresa_id: empresaId });
+      setUnidadesDisponibles(!unidadesError);
+      if (!unidadesError) {
+        const mapa: Record<string, UnidadVenta> = {};
+        for (const fila of (unidades ?? []) as { producto_id: string; unidad_medida: string }[]) {
+          if (Object.prototype.hasOwnProperty.call(UNIDADES_VENTA, fila.unidad_medida)) mapa[fila.producto_id] = fila.unidad_medida as UnidadVenta;
+        }
+        setUnidadesProducto(mapa);
+      } else setUnidadesProducto({});
     } catch (err) {
       setProductos([]);
       setError(err instanceof Error ? err.message : "No se pudieron cargar los productos");
@@ -273,6 +287,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
       stockMaximo: producto.stock_maximo == null ? "" : String(producto.stock_maximo),
       stockInicial: "",
       costoReferencia: "",
+      unidadMedida: unidadesProducto[producto.id] ?? "unidad",
     });
     setFormError("");
     setAjusteStock(false);
@@ -341,7 +356,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
     setSaving(true);
     setFormError("");
     try {
-      await guardarProductoSigo({
+      const productoGuardadoId = await guardarProductoSigo({
         empresaId,
         productoId: editing?.id ?? null,
         nombre: form.nombre,
@@ -360,7 +375,18 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
         stockMinimo,
         stockMaximo,
       });
-      cerrarForm();
+      if (form.unidadMedida !== "unidad" && !unidadesDisponibles) throw new Error("Venta por medidas no habilitada en Supabase. No se guardó una unidad distinta; revisá el producto antes de usarlo.");
+      if (form.unidadMedida !== "unidad" || (editing && (unidadesProducto[editing.id] ?? "unidad") !== form.unidadMedida)) {
+        const { error: unidadError } = await supabase.rpc("configurar_unidad_producto_sigo", {
+          p_empresa_id: empresaId,
+          p_producto_id: productoGuardadoId,
+          p_unidad: form.unidadMedida,
+        });
+        if (unidadError) throw new Error("Producto guardado, pero no se pudo configurar su unidad: " + unidadError.message);
+      }
+      setFormOpen(false);
+      setEditing(null);
+      setForm(productoVacio);
       await cargar();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "No se pudo guardar el producto");
@@ -501,6 +527,13 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
             </div>
             <form onSubmit={(e) => void guardar(e)}>
               <div className="form-grid">
+                <div className="form-group">
+                  <label htmlFor="producto-unidad-medida">Unidad de venta</label>
+                  <select id="producto-unidad-medida" disabled={!unidadesDisponibles} value={form.unidadMedida} onChange={e => setForm(actual => ({ ...actual, unidadMedida: e.target.value as UnidadVenta }))}>
+                    {Object.entries(UNIDADES_VENTA).map(([clave, unidad]) => <option key={clave} value={clave}>{unidad.nombre}</option>)}
+                  </select>
+                  <small>{unidadesDisponibles ? "Los cambios de unidad con stock o historial requieren conversión segura." : "Venta por medidas pendiente de habilitación segura en Supabase. No se puede configurar todavía."}</small>
+                </div>
                 <div className="form-group form-span-2">
                   <label htmlFor="producto-nombre">Nombre *</label>
                   <input id="producto-nombre" value={form.nombre} onChange={(e) => setForm((actual) => ({ ...actual, nombre: e.target.value }))} autoFocus required />
