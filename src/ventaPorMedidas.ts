@@ -53,3 +53,24 @@ export function subtotalMedida(cantidad: number, precioPorUnidad: number): numbe
   }
   return Math.round((cantidad * precioPorUnidad + Number.EPSILON) * 100) / 100;
 }
+
+/** Consolida cantidades en la unidad base del producto sin perder milésimas.
+ * No reemplaza la validación transaccional de stock en Supabase.
+ */
+export function consolidarCantidadMedida(
+  cantidades: readonly number[],
+  unidad: UnidadVenta,
+  stockDisponible: number,
+): number {
+  const factor = 10 ** UNIDADES_VENTA[unidad].decimales;
+  if (!Number.isFinite(stockDisponible) || stockDisponible < 0) throw new Error("STOCK_INVALIDO");
+  const enteros = cantidades.map((cantidad) => {
+    if (!Number.isFinite(cantidad) || cantidad <= 0 || Math.round(cantidad * factor) !== cantidad * factor) {
+      throw new Error("CANTIDAD_INVALIDA");
+    }
+    return Math.round(cantidad * factor);
+  });
+  const total = enteros.reduce((suma, cantidad) => suma + cantidad, 0);
+  if (!Number.isSafeInteger(total) || total > Math.round(stockDisponible * factor)) throw new Error("STOCK_INSUFICIENTE");
+  return total / factor;
+}
