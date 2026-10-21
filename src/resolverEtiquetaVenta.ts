@@ -20,7 +20,7 @@ export function resolverEtiquetaVenta(
     throw new Error("ETIQUETA_IMPORTE_REQUIERE_SERVIDOR");
   }
   const cantidad = etiqueta.tipo === "unidad" ? 1 : etiqueta.cantidadOImporte;
-  if (!Number.isFinite(cantidad) || cantidad <= 0 || Math.round(cantidad * 1000) / 1000 !== cantidad) {
+  if (!Number.isFinite(cantidad) || cantidad <= 0 || Math.abs(Math.round(cantidad * 1000) - cantidad * 1000) > 1e-7) {
     throw new Error("ETIQUETA_CANTIDAD_INVALIDA");
   }
   if (producto.stock_actual == null || cantidad > Number(producto.stock_actual)) throw new Error("ETIQUETA_STOCK_INSUFICIENTE");
