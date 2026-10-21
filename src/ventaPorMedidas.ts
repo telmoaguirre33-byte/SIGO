@@ -33,7 +33,8 @@ export function cantidadPorMedida(entrada: string | number, unidad: UnidadVenta)
   if (!/^(?:\d+)(?:\.\d+)?$/.test(texto)) throw new Error("CANTIDAD_INVALIDA");
   const cantidad = Number(texto);
   const decimales = UNIDADES_VENTA[unidad].decimales;
-  if (!Number.isFinite(cantidad) || cantidad <= 0 || Math.round(cantidad * 10 ** decimales) / 10 ** decimales !== cantidad) {
+  const fraccion = texto.split(".")[1] ?? "";
+  if (!Number.isFinite(cantidad) || cantidad <= 0 || fraccion.length > decimales) {
     throw new Error("CANTIDAD_INVALIDA");
   }
   return cantidad;
@@ -65,7 +66,7 @@ export function consolidarCantidadMedida(
   const factor = 10 ** UNIDADES_VENTA[unidad].decimales;
   if (!Number.isFinite(stockDisponible) || stockDisponible < 0) throw new Error("STOCK_INVALIDO");
   const enteros = cantidades.map((cantidad) => {
-    if (!Number.isFinite(cantidad) || cantidad <= 0 || Math.round(cantidad * factor) !== cantidad * factor) {
+    if (!Number.isFinite(cantidad) || cantidad <= 0 || Math.abs(Math.round(cantidad * factor) - cantidad * factor) > 1e-7) {
       throw new Error("CANTIDAD_INVALIDA");
     }
     return Math.round(cantidad * factor);
