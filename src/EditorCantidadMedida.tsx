@@ -19,11 +19,11 @@ export default function EditorCantidadMedida({
   let error = "";
   try {
     cantidad = cantidadPorMedida(entrada, unidad);
-    if (stockDisponible != null && cantidad > stockDisponible) error = "La cantidad supera el stock disponible.";
+    if (stockDisponible != null && (!Number.isFinite(stockDisponible) || stockDisponible < 0 || cantidad > stockDisponible)) error = "La cantidad supera el stock disponible.";
   } catch {
     error = "Ingresá una cantidad válida para esta unidad.";
   }
-  const subtotal = cantidad == null || !Number.isFinite(precio) || precio < 0 ? null : subtotalMedida(cantidad, precio);
+  const subtotal = cantidad == null || !Number.isFinite(precio) || precio <= 0 ? null : subtotalMedida(cantidad, precio);
   if (!Number.isFinite(precio) || precio <= 0) error = "Configurá un precio válido.";
   return (
     <form className="sigo-medida-editor" onSubmit={(event) => {
