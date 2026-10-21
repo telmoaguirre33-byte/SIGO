@@ -23,7 +23,8 @@ export default function EditorCantidadMedida({
   } catch {
     error = "Ingresá una cantidad válida para esta unidad.";
   }
-  const subtotal = cantidad == null ? null : subtotalMedida(cantidad, precio);
+  const subtotal = cantidad == null || !Number.isFinite(precio) || precio < 0 ? null : subtotalMedida(cantidad, precio);
+  if (!Number.isFinite(precio) || precio <= 0) error = "Configurá un precio válido.";
   return (
     <form className="sigo-medida-editor" onSubmit={(event) => {
       event.preventDefault();
