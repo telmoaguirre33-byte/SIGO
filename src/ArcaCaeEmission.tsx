@@ -253,8 +253,8 @@ export default function ArcaCaeEmission({
     const c = ultimoComprobante;
     const termico = formato !== "a4";
     const ancho = formato === "58" ? "50mm" : formato === "80" ? "72mm" : "190mm";
-    const pageSize = formato === "a4" ? "A4" : `${formato}mm auto`;
-    const fontSize = formato === "58" ? "10px" : formato === "80" ? "11px" : "12px";
+    const pageSize = formato === "a4" ? "A4" : `${formato}mm`;
+    const fontSize = formato === "58" ? "10px" : formato === "80" ? "12px" : "12px";
     const filas = c.items.length > 0
       ? c.items.map((item) => `<tr><td>${escapeHtml(item.nombre)}</td><td class="num">${item.cantidad}</td><td class="num">${escapeHtml(moneda(item.precio_unitario))}</td><td class="num">${escapeHtml(moneda(item.subtotal))}</td></tr>`).join("")
       : `<tr><td colspan="4">Venta SIGO #${c.ventaNumero}</td></tr>`;
@@ -265,9 +265,9 @@ export default function ArcaCaeEmission({
       .doc{width:${ancho};max-width:100%;margin:0 auto}.center{text-align:center}.muted{color:#555}.strong{font-weight:800}.line{border-top:1px dashed #777;margin:8px 0}
       h1{font-size:${termico ? "16px" : "22px"};margin:0 0 4px} h2{font-size:${termico ? "14px" : "18px"};margin:6px 0}
       .grid{display:grid;grid-template-columns:${termico ? "1fr" : "1fr 1fr"};gap:4px 18px}.box{border:1px solid #aaa;padding:8px;margin:8px 0}
-      table{width:100%;border-collapse:collapse;margin-top:8px} th,td{padding:${termico ? "3px 2px" : "5px"};border-bottom:1px solid #ddd;vertical-align:top} th{text-align:left}.num{text-align:right;white-space:nowrap}
+      table{width:100%;table-layout:fixed;border-collapse:collapse;margin-top:8px} th,td{padding:${termico ? "3px 1px" : "5px"};border-bottom:1px solid #ddd;vertical-align:top;overflow-wrap:anywhere;word-break:normal} th{text-align:left}.num{text-align:right;white-space:normal} ${termico ? "th:first-child,td:first-child{width:37%}th:nth-child(2),td:nth-child(2){width:12%}th:nth-child(3),td:nth-child(3){width:24%}th:nth-child(4),td:nth-child(4){width:27%}" : ""}
       .total{font-size:${termico ? "15px" : "18px"};font-weight:900;text-align:right;margin-top:10px}.footer{margin-top:12px;font-size:${termico ? "9px" : "11px"};line-height:1.4}
-      @media print{button{display:none!important}}
+      @media print{html,body{width:100%;overflow:visible}button{display:none!important}.doc{margin:0}}
     </style></head><body><main class="doc">
       <div class="center"><h1>${escapeHtml(c.emisorRazonSocial || "SIGO")}</h1><div>CUIT ${escapeHtml(c.emisorCuit || "—")}</div></div>
       <div class="line"></div><div class="center"><h2>${escapeHtml(tipoComprobanteLabel(c.tipoCbteSeleccionado))}</h2><div class="strong">${String(c.punto_venta).padStart(4, "0")}-${String(c.numero_cbte).padStart(8, "0")}</div></div><div class="line"></div>
