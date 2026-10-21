@@ -179,7 +179,7 @@ export default function ArcaCaeEmission({
       const facturadas = new Set((emitidas ?? []).map((item) => String(item.venta_id || "")));
       const disponibles = ((rows ?? []) as Venta[]).filter((item) => !facturadas.has(item.id));
       setVentas(disponibles);
-      setVentaId((actual) => disponibles.some((item) => item.id === ventaInicialId) ? ventaInicialId! : disponibles.some((item) => item.id === actual) ? actual : (ventaInicialId ? "" : disponibles[0]?.id ?? ""));
+      setVentaId((actual) => disponibles.some((item) => item.id === actual) ? actual : disponibles[0]?.id ?? "");
       setEmisor((fiscal ?? null) as EmisorFiscal | null);
     } catch (cause) {
       console.error(cause);
