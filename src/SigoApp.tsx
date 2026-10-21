@@ -210,6 +210,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
   const [editing, setEditing] = useState<ProductoSigo | null>(null);
   const [form, setForm] = useState<ProductoForm>(productoVacio);
   const [unidadesProducto, setUnidadesProducto] = useState<Record<string, UnidadVenta>>({});
+  const [unidadesDisponibles, setUnidadesDisponibles] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
@@ -228,6 +229,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
     try {
       setProductos(await listarProductosSigo(empresaId));
       const { data: unidades, error: unidadesError } = await supabase.rpc("listar_unidades_producto_sigo", { p_empresa_id: empresaId });
+      setUnidadesDisponibles(!unidadesError);
       if (!unidadesError) {
         const mapa: Record<string, UnidadVenta> = {};
         for (const fila of (unidades ?? []) as { producto_id: string; unidad_medida: string }[]) {
@@ -373,6 +375,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
         stockMinimo,
         stockMaximo,
       });
+      if (form.unidadMedida !== "unidad" && !unidadesDisponibles) throw new Error("Venta por medidas no habilitada en Supabase. No se guardó una unidad distinta; revisá el producto antes de usarlo.");
       if (form.unidadMedida !== "unidad" || (editing && (unidadesProducto[editing.id] ?? "unidad") !== form.unidadMedida)) {
         const { error: unidadError } = await supabase.rpc("configurar_unidad_producto_sigo", {
           p_empresa_id: empresaId,
@@ -526,10 +529,10 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
               <div className="form-grid">
                 <div className="form-group">
                   <label htmlFor="producto-unidad-medida">Unidad de venta</label>
-                  <select id="producto-unidad-medida" value={form.unidadMedida} onChange={e => setForm(actual => ({ ...actual, unidadMedida: e.target.value as UnidadVenta }))}>
+                  <select id="producto-unidad-medida" disabled={!unidadesDisponibles} value={form.unidadMedida} onChange={e => setForm(actual => ({ ...actual, unidadMedida: e.target.value as UnidadVenta }))}>
                     {Object.entries(UNIDADES_VENTA).map(([clave, unidad]) => <option key={clave} value={clave}>{unidad.nombre}</option>)}
                   </select>
-                  <small>Los cambios de unidad con stock o historial requieren conversión segura.</small>
+                  <small>{unidadesDisponibles ? "Los cambios de unidad con stock o historial requieren conversión segura." : "Venta por medidas pendiente de habilitación segura en Supabase. No se puede configurar todavía."}</small>
                 </div>
                 <div className="form-group form-span-2">
                   <label htmlFor="producto-nombre">Nombre *</label>
