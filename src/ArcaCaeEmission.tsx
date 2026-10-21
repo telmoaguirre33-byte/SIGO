@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabase";
 
 type Ambiente = "homologacion" | "produccion";
@@ -124,6 +124,8 @@ export default function ArcaCaeEmission({
   puntos: PuntoVenta[];
 }) {
   const [ventas, setVentas] = useState<Venta[]>([]);
+  const emisionAutomaticaIniciada = useRef<string | null>(null);
+  const impresionAutomaticaPendiente = useRef(false);
   const [ventaId, setVentaId] = useState("");
   const [puntoVenta, setPuntoVenta] = useState("");
   const [tipoCbte, setTipoCbte] = useState("11");
@@ -177,7 +179,7 @@ export default function ArcaCaeEmission({
       const facturadas = new Set((emitidas ?? []).map((item) => String(item.venta_id || "")));
       const disponibles = ((rows ?? []) as Venta[]).filter((item) => !facturadas.has(item.id));
       setVentas(disponibles);
-      setVentaId((actual) => disponibles.some((item) => item.id === actual) ? actual : disponibles[0]?.id ?? "");
+      setVentaId((actual) => disponibles.some((item) => item.id === ventaInicialId) ? ventaInicialId! : disponibles.some((item) => item.id === actual) ? actual : (ventaInicialId ? "" : disponibles[0]?.id ?? ""));
       setEmisor((fiscal ?? null) as EmisorFiscal | null);
     } catch (cause) {
       console.error(cause);
@@ -295,6 +297,14 @@ export default function ArcaCaeEmission({
     window.setTimeout(() => popup.print(), 250);
   }
 
+  useEffect(() => {
+    const handler = (event: Event) => {
+      if ((event as CustomEvent<{ formato: "80" }>).detail?.formato === "80" && ultimoComprobante) imprimir("80");
+    };
+    window.addEventListener("sigo:arca:imprimir", handler);
+    return () => window.removeEventListener("sigo:arca:imprimir", handler);
+  }, [ultimoComprobante]);
+
   function compartirWhatsApp() {
     if (!ultimoComprobante) return;
     const c = ultimoComprobante;
@@ -314,7 +324,14 @@ export default function ArcaCaeEmission({
     window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank", "noopener,noreferrer");
   }
 
-  async function emitir() {
+  useEffect(() => {
+    if (!ventaInicialId || venta?.id !== ventaInicialId || !habilitado || !puntoVenta || loading || emitiendo || requiereDatosFiscales || itemsVenta.length === 0 || emisionAutomaticaIniciada.current === ventaInicialId) return;
+    emisionAutomaticaIniciada.current = ventaInicialId;
+    impresionAutomaticaPendiente.current = true;
+    void emitir(true);
+  }, [ventaInicialId, venta?.id, habilitado, puntoVenta, loading, emitiendo, requiereDatosFiscales, itemsVenta.length]);
+
+  async function emitir(automatico = false) {
     if (!venta || !puntoVenta || emitiendo) return;
 
     const cuit = soloDigitos(receptorCuit);
@@ -332,7 +349,7 @@ export default function ArcaCaeEmission({
     const mensaje = esProduccion
       ? `Vas a solicitar un CAE REAL para la venta ${venta.numero} por $${Number(venta.total).toLocaleString("es-AR")}${receptorTexto}. Esta acción tiene efecto fiscal. ¿Confirmás?`
       : `Vas a solicitar un CAE de HOMOLOGACIÓN para la venta ${venta.numero}${receptorTexto}. No tiene efecto fiscal real. ¿Continuar?`;
-    if (!window.confirm(mensaje)) return;
+    if (!automatico && !window.confirm(mensaje)) return;
 
     setEmitiendo(true);
     setError("");
@@ -388,6 +405,10 @@ export default function ArcaCaeEmission({
         items: itemsVenta,
       });
       await cargarVentas();
+      if (automatico && impresionAutomaticaPendiente.current) {
+        impresionAutomaticaPendiente.current = false;
+        window.setTimeout(() => window.dispatchEvent(new CustomEvent("sigo:arca:imprimir", { detail: { formato: "80" } })), 200);
+      }
     } catch (cause) {
       const code = cause instanceof Error ? cause.message : "ARCA_CAE_FAILED";
       setError(code === "SESSION_REQUIRED" ? "La sesión venció. Volvé a ingresar a SIGO." : ERROR_MESSAGES[code] || "No se pudo completar la solicitud de CAE.");
@@ -440,7 +461,7 @@ export default function ArcaCaeEmission({
       </button>
       {!habilitado ? <small>Bloqueado hasta validar WSAA + WSFEv1 en esta empresa.</small> : null}
       {requiereDatosFiscales ? <small>Para Responsable Inscripto o Monotributista, SIGO enviará el CUIT a ARCA como documento fiscal del receptor.</small> : null}
-      {ambiente === "produccion" ? <small>Producción: SIGO pedirá una confirmación explícita antes de cada emisión real.</small> : <small>Homologación: el comprobante no tiene efecto fiscal real.</small>}
+      {!ventaInicialId && (ambiente === "produccion" ? <small>La emisión manual requiere confirmación fiscal.</small> : <small>Homologación: el comprobante no tiene efecto fiscal real.</small>)}
       {comprobante ? <p className="sigo-matriz-success" role="status">CAE {comprobante.cae} · Comprobante {String(comprobante.punto_venta).padStart(4, "0")}-{String(comprobante.numero_cbte).padStart(8, "0")}{comprobante.cae_vencimiento ? ` · vence ${comprobante.cae_vencimiento}` : ""}</p> : null}
       {ultimoComprobante ? (
         <div className="form-actions" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
