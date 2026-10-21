@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cantidadPorMedida, convertirMedida, subtotalMedida } from "../src/ventaPorMedidas.ts";
+import { cantidadPorMedida, convertirMedida, subtotalMedida, consolidarCantidadMedida } from "../src/ventaPorMedidas.ts";
 
 test("heladería: 1 kg y cuarto y kilo y medio", () => {
   assert.equal(cantidadPorMedida("1,250", "kg"), 1.25);
@@ -26,4 +26,11 @@ test("cantidades inválidas", () => {
 test("redondeo monetario", () => {
   assert.equal(subtotalMedida(0.75, 12500), 9375);
   assert.equal(subtotalMedida(0.3, 123.45), 37.04);
+});
+
+test("consolidación de varias lecturas fraccionarias", () => {
+  assert.equal(consolidarCantidadMedida([0.25, 0.5], "kg", 1), 0.75);
+  assert.equal(consolidarCantidadMedida([0.1, 0.2], "kg", 0.3), 0.3);
+  assert.throws(() => consolidarCantidadMedida([0.75, 0.5], "kg", 1), /STOCK_INSUFICIENTE/);
+  assert.throws(() => consolidarCantidadMedida([0.25], "kg", Number.NaN), /STOCK_INVALIDO/);
 });
