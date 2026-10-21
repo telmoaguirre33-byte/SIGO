@@ -30,7 +30,7 @@ export const RUBROS_VENTA = [
 
 export function cantidadPorMedida(entrada: string | number, unidad: UnidadVenta): number {
   const texto = String(entrada).trim().replace(",", ".");
-  if (!/^(?:\\d+)(?:\\.\\d+)?$/.test(texto)) throw new Error("CANTIDAD_INVALIDA");
+  if (!/^(?:\d+)(?:\.\d+)?$/.test(texto)) throw new Error("CANTIDAD_INVALIDA");
   const cantidad = Number(texto);
   const decimales = UNIDADES_VENTA[unidad].decimales;
   if (!Number.isFinite(cantidad) || cantidad <= 0 || Math.round(cantidad * 10 ** decimales) / 10 ** decimales !== cantidad) {
