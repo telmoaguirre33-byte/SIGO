@@ -36,7 +36,7 @@ if (sale.includes("sugerenciaActiva") || sale.includes("productosEncontrados[sug
 }
 
 const selectionHandler = scanner.indexOf("onProductSearchKeyDown?.(e.key)");
-const scannerSubmit = scanner.indexOf('void resolveCode(code, "manual")', selectionHandler);
+const scannerSubmit = scanner.indexOf('void resolveCode(e.currentTarget.value, "manual")', selectionHandler);
 if (selectionHandler < 0 || scannerSubmit < 0 || selectionHandler > scannerSubmit) {
   throw new Error("Product selection keys must be handled before Enter can be interpreted as a barcode submission");
 }
@@ -50,3 +50,4 @@ if (!app.includes("puedeEditarProductos={puedeEditarProductos}")) {
 }
 
 console.log("SIGO_SALE_PRODUCT_PREPARATION_OK");
+

@@ -56,7 +56,7 @@ function fechaSql(value) {
   return /^\d{8}$/.test(clean) ? `${clean.slice(0, 4)}-${clean.slice(4, 6)}-${clean.slice(6, 8)}` : null;
 }
 
-async function rest(sesion, path, init = {}) {
+export async function rest(sesion, path, init = {}) {
   const response = await fetch(`${sesion.url}/rest/v1/${path}`, {
     ...init,
     headers: {
@@ -86,7 +86,7 @@ async function permiso(sesion, empresaId, nombre) {
   return response.ok && (await response.json().catch(() => false)) === true;
 }
 
-async function sesionUsuario(req, empresaId) {
+export async function sesionUsuario(req, empresaId) {
   const { url, anonKey } = env();
   const auth = String(req.headers.authorization || "");
   if (!url || !anonKey || !auth.startsWith("Bearer ")) return null;
@@ -162,7 +162,7 @@ async function ultimoAutorizado(sesion, ambiente, ticket, cuit, puntoVenta, tipo
   return numero;
 }
 
-async function consultarComprobante(sesion, ambiente, ticket, cuit, puntoVenta, tipoCbte, numeroCbte) {
+export async function consultarComprobante(sesion, ambiente, ticket, cuit, puntoVenta, tipoCbte, numeroCbte) {
   const { body, errors } = await soapBridge(
     sesion,
     ambiente,
@@ -181,6 +181,14 @@ async function consultarComprobante(sesion, ambiente, ticket, cuit, puntoVenta, 
     cae,
     caeVencimiento: fechaSql(extraer(result, "FchVto")),
     resultado: extraer(result, "Resultado") || "A",
+    fecha: fechaSql(extraer(result, "CbteFch")),
+    importe: Number(extraer(result, "ImpTotal")),
+    tipoDocRec: Number(extraer(result, "DocTipo")),
+    nroDocRec: digits(extraer(result, "DocNro")),
+    moneda: extraer(result, "MonId"),
+    ctz: Number(extraer(result, "MonCotiz")),
+    importes: { neto: Number(extraer(result, "ImpNeto")), iva: Number(extraer(result, "ImpIVA")),
+      exento: Number(extraer(result, "ImpOpEx")), noGravado: Number(extraer(result, "ImpTotConc")), tributos: Number(extraer(result, "ImpTrib")) },
   };
 }
 
@@ -341,23 +349,13 @@ export default async function handler(req, res) {
     const requestId = `sigo:${empresaId}:${ventaId}:${puntoVenta}:${tipoCbte}`;
     reserva = first(await rest(sesion, `arca_comprobantes?empresa_id=eq.${encodeURIComponent(empresaId)}&venta_id=eq.${encodeURIComponent(ventaId)}&select=id,venta_id,punto_venta,tipo_cbte,numero_cbte,cae,cae_vencimiento,resultado,request_id`));
     if (reserva?.cae) return json(res, 200, { ok: true, alreadyIssued: true, ambiente: config.ambiente, comprobante: reserva });
-    if (reserva && (Number(reserva.punto_venta) !== puntoVenta || Number(reserva.tipo_cbte) !== tipoCbte || reserva.request_id !== requestId)) return json(res, 409, { error: "ARCA_SALE_RESERVED_WITH_OTHER_FISCAL_IDENTITY" });
+    if (reserva) return json(res, 409, { error: "ARCA_FISCAL_RECONCILIATION_PENDING" });
 
     const ticket = await leerTicketWsaa(sesion, empresaId, config.ambiente, config.cuit_emisor);
     if (!ticket) return json(res, 409, { error: "ARCA_TICKET_REFRESH_REQUIRED" });
 
     stage = "conciliacion";
-    if (reserva) {
-      const recovered = await consultarComprobante(sesion, config.ambiente, ticket, config.cuit_emisor, reserva.punto_venta, reserva.tipo_cbte, Number(reserva.numero_cbte));
-      if (recovered) {
-        const persisted = first(await rest(sesion, `arca_comprobantes?id=eq.${encodeURIComponent(reserva.id)}`, {
-          method: "PATCH",
-          headers: { Prefer: "return=representation" },
-          body: JSON.stringify({ cae: recovered.cae, cae_vencimiento: recovered.caeVencimiento, resultado: recovered.resultado, observaciones: [], emitido_at: new Date().toISOString() }),
-        }));
-        return json(res, 200, { ok: true, reconciled: true, ambiente: config.ambiente, comprobante: persisted });
-      }
-    } else {
+    {
       const ultimo = await ultimoAutorizado(sesion, config.ambiente, ticket, config.cuit_emisor, puntoVenta, tipoCbte);
       const numeroCbte = ultimo + 1;
       try {
@@ -402,3 +400,4 @@ export default async function handler(req, res) {
     return json(res, safe.status, { error: safe.code, stage, retryable: Boolean(reserva), observaciones: observations });
   }
 }
+

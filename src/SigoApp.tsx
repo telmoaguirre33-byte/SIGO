@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { EmpresaOperativa } from "./tenant";
 import { supabase } from "./supabase";
 import BarcodeScanner from "./BarcodeScanner";
-import type { BarcodeAction, BarcodeProduct } from "./barcode";
+import { normalizeBarcode, type BarcodeAction, type BarcodeProduct } from "./barcode";
 import VentaRapidaOperativa from "./VentaRapidaOperativa";
 import ComprasOperativas from "./ComprasOperativas";
 import ComprasSugeridas from "./ComprasSugeridas";
@@ -245,11 +245,11 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
   }, [puedeEditar, scanAction]);
 
   const filtrados = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = normalizeBarcode(search || scanResult?.codigo_barras || scanResult?.codigo_interno || scanResult?.nombre || "").toLowerCase();
     if (!q) return productos;
     return productos.filter((p) => [p.nombre, p.codigo_interno, p.codigo_barras, p.marca, p.categoria]
       .filter(Boolean).join(" ").toLowerCase().includes(q));
-  }, [productos, search]);
+  }, [productos, search, scanResult]);
 
   function abrirNuevo() {
     if (!puedeEditar) return;
@@ -290,7 +290,6 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
 
   function handleScan(producto: BarcodeProduct, action: BarcodeAction) {
     setScanResult(producto);
-    setSearch(producto.codigo_barras || producto.codigo_interno || producto.nombre);
     if (action === "editar" && puedeEditar) {
       const original = productos.find((item) => item.id === producto.id);
       if (original) abrirEdicion(original);
@@ -436,13 +435,15 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
           action={puedeEditar ? scanAction : "consultar"}
           onActionChange={puedeEditar ? setScanAction : undefined}
           onProduct={handleScan}
-          onQueryChange={setSearch}
+          onQueryChange={(query) => { setSearch(query); if (query) setScanResult(null); }}
           onManualQuery={(query) => {
-            const q = query.trim().toLowerCase();
+            const q = normalizeBarcode(query).toLowerCase();
             if (!q) return false;
-            const exactCode = productos.some((p) => p.codigo_barras?.toLowerCase() === q || p.codigo_interno?.toLowerCase() === q);
+            const exactCode = productos.some((p) => normalizeBarcode(p.codigo_barras ?? "").toLowerCase() === q || normalizeBarcode(p.codigo_interno ?? "").toLowerCase() === q);
             if (exactCode) return false;
-            return productos.some((p) => [p.nombre, p.marca, p.categoria].filter(Boolean).join(" ").toLowerCase().includes(q));
+            setSearch(query.trim());
+            setScanResult(null);
+            return true;
           }}
         />
         {search.trim() && !scanResult && (
@@ -611,8 +612,9 @@ function Stock({ empresaId }: { empresaId: string }) {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
-  const normalizarBusqueda = (valor: string) => valor.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es-AR").trim();
-  const termino = normalizarBusqueda(busqueda);
+  const normalizarBusqueda = (valor: string) => normalizeBarcode(valor).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es-AR").trim();
+  // Una lectura confirmada conserva su resultado mientras el campo del lector está vacío.
+  const termino = normalizarBusqueda(scanResult ? (scanResult.codigo_barras || scanResult.codigo_interno || scanResult.nombre) : busqueda);
   const filas = (soloCriticos ? criticosCatalogo : visibles).filter((p) =>
     !termino || [p.nombre, p.codigo_interno, p.codigo_barras, p.marca]
       .some((valor) => valor && normalizarBusqueda(valor).includes(termino))
@@ -655,7 +657,7 @@ function Stock({ empresaId }: { empresaId: string }) {
         <BarcodeScanner
           empresaId={empresaId}
           action="consultar"
-          onQueryChange={(query) => { setBusqueda(query); setScanResult(null); }}
+          onQueryChange={(query) => { setBusqueda(query); if (query) setScanResult(null); }}
           onManualQuery={(query) => {
             const valor = normalizarBusqueda(query);
             if (!valor) return false;
@@ -664,9 +666,11 @@ function Stock({ empresaId }: { empresaId: string }) {
             if (productos.some((p) =>
               normalizarBusqueda(p.codigo_barras || "") === valor || normalizarBusqueda(p.codigo_interno || "") === valor
             )) return false;
-            return productos.some((p) => normalizarBusqueda(p.nombre).includes(valor));
+            setScanResult(null);
+            setBusqueda(query.trim());
+            return true;
           }}
-          onProduct={(producto) => { setScanResult(producto); setBusqueda(producto.codigo_barras || producto.codigo_interno || producto.nombre); }}
+          onProduct={(producto) => { setScanResult(producto); setBusqueda(""); }}
         />
         {scanResult && <p><strong>{scanResult.nombre}</strong> · Stock actual: {scanResult.stock_actual ?? "restringido"} · Mínimo: {scanResult.stock_minimo ?? "sin definir"}</p>}
       </div>
@@ -714,3 +718,4 @@ function ListaPreciosSection({ empresaId, puedeEditar }: { empresaId: string; pu
 function Pendiente({ title }: { title: string }) {
   return <div className="panel"><h2>{title}</h2><p>Módulo en integración operativa. No se marca como aprobado hasta probar el circuito real.</p></div>;
 }
+

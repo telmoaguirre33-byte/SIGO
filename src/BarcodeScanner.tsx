@@ -44,7 +44,6 @@ const ACTIONS: Array<{ value: BarcodeAction; label: string }> = [
   { value: "editar", label: "Buscar / editar producto" },
 ];
 
-const SCANNER_GAP_MS = 90;
 const CAMERA_DUPLICATE_GUARD_MS = 1200;
 const MAX_PENDING_SCANS = 50;
 const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
@@ -82,12 +81,12 @@ export default function BarcodeScanner({
   const inFlightRef = useRef(false);
   const queuedScansRef = useRef<QueuedScan[]>([]);
   const wedgeBufferRef = useRef("");
-  const wedgeLastKeyAtRef = useRef(0);
-  const inputWedgeRef = useRef({ buffer: "", lastAt: 0 });
   const lastCameraResolvedRef = useRef<{ code: string; at: number } | null>(null);
   const empresaActivaRef = useRef(empresaId);
   const actionActivaRef = useRef(action);
   const requestRef = useRef(0);
+  const callbacksRef = useRef({ onProduct, onBlockedProduct, onQueryChange, onManualQuery, onCachedCode });
+  callbacksRef.current = { onProduct, onBlockedProduct, onQueryChange, onManualQuery, onCachedCode };
 
   const detectorCtor = useMemo(() => {
     const w = window as typeof window & { BarcodeDetector?: BarcodeDetectorCtor };
@@ -146,7 +145,7 @@ export default function BarcodeScanner({
     try {
       // En Caja–Venta, los códigos principales conocidos se resuelven desde el catálogo ya cargado.
       // Códigos alternativos o no reconocidos conservan la consulta segura al servidor.
-      const matches = onCachedCode?.(normalized) ?? await buscarProductoPorCodigo(empresaOperacion, normalized);
+      const matches = callbacksRef.current.onCachedCode?.(normalized) ?? await buscarProductoPorCodigo(empresaOperacion, normalized);
       const contextoVigente = empresaActivaRef.current === empresaOperacion
         && actionActivaRef.current === actionOperacion
         && requestRef.current === requestId;
@@ -173,28 +172,23 @@ export default function BarcodeScanner({
       if (actionOperacion === "vender") {
         const precio = Number(producto.precio_venta ?? 0);
         if (!Number.isFinite(precio) || precio <= 0) {
-          onBlockedProduct?.(producto, "precio");
+          callbacksRef.current.onBlockedProduct?.(producto, "precio");
           setError(`${producto.nombre}: definí un precio de venta mayor a cero antes de vender.`);
           if (source === "camera") setCameraStatus("Producto leído, pero todavía no tiene precio de venta válido.");
           return;
         }
         const stock = Number(producto.stock_actual ?? 0);
         if (!Number.isFinite(stock) || stock <= 0) {
-          onBlockedProduct?.(producto, "stock");
+          callbacksRef.current.onBlockedProduct?.(producto, "stock");
           setError(`${producto.nombre}: sin stock disponible para vender.`);
           if (source === "camera") setCameraStatus("Producto leído, pero no tiene stock disponible.");
           return;
         }
       }
 
-      onProduct(producto, actionOperacion);
-      // Tras una lectura válida, liberar únicamente el campo del lector.
-      // No modifica carrito, búsqueda manual, flechas/Enter ni ninguna otra lógica.
-      if (source !== "camera") {
-        setCode("");
-        onQueryChange?.("");
-        focusScanner();
-      }
+      callbacksRef.current.onProduct(producto, actionOperacion);
+      // El campo se libera al enviar la lectura, nunca al terminar la consulta:
+      // una respuesta tardía no debe borrar la siguiente lectura ni el resultado del módulo.
       if (source === "camera") setCameraStatus(`Listo: ${producto.nombre}`);
       if ("vibrate" in navigator) navigator.vibrate?.(40);
     } catch (e) {
@@ -213,14 +207,16 @@ export default function BarcodeScanner({
   }
 
   async function resolveCode(raw: string, source: ScanSource = "manual") {
+    const normalized = normalizeBarcode(raw);
     // Enter/Tab de pistola o teclado cierra siempre la lectura actual antes de resolverla.
     // Evita que una segunda lectura se concatene aunque el callback de búsqueda manual la intercepte.
-    if (source === "manual") {
+    if (source !== "camera") {
+      if (inputRef.current) inputRef.current.value = "";
       setCode("");
-      onQueryChange?.("");
-      if (onManualQuery?.(raw)) { focusScanner(); return; }
+      callbacksRef.current.onQueryChange?.("");
+      focusScanner();
+      if (source === "manual" && !/^\d+$/.test(normalized) && callbacksRef.current.onManualQuery?.(raw)) return;
     }
-    const normalized = normalizeBarcode(raw);
     if (!normalized) return;
     const empresaOperacion = empresaId;
     const actionOperacion = action;
@@ -244,8 +240,6 @@ export default function BarcodeScanner({
     // Liberamos el campo en el mismo instante en que la pistola/manual envía Enter/Tab.
     // Así una segunda lectura rápida no se concatena con el código anterior mientras
     // la primera consulta todavía está viajando a Supabase.
-    if (source !== "manual") setCode("");
-
     if (inFlightRef.current) {
       if (queuedScansRef.current.length >= MAX_PENDING_SCANS) {
         setError("El scanner recibió demasiadas lecturas pendientes. Esperá a que procese la cola antes de continuar.");
@@ -387,7 +381,6 @@ export default function BarcodeScanner({
     requestRef.current += 1;
     clearQueuedScans();
     wedgeBufferRef.current = "";
-    wedgeLastKeyAtRef.current = 0;
     lastCameraResolvedRef.current = null;
     setCode("");
     setError("");
@@ -420,17 +413,17 @@ export default function BarcodeScanner({
       const active = document.activeElement as HTMLElement | null;
       const isScannerInput = active === inputRef.current;
       const isEditable = active?.tagName === "INPUT" || active?.tagName === "TEXTAREA" || active?.tagName === "SELECT" || active?.isContentEditable;
-      if (isEditable && !isScannerInput) return;
-      if (isScannerInput) return;
+      if (isEditable || isScannerInput) {
+        wedgeBufferRef.current = "";
+        return;
+      }
 
-      const now = Date.now();
-      if (now - wedgeLastKeyAtRef.current > SCANNER_GAP_MS) wedgeBufferRef.current = "";
-      wedgeLastKeyAtRef.current = now;
+      // Enter/Tab delimita el código. Una pausa entre teclas no puede descartar su prefijo.
 
       if (isLikelyScannerSubmit(event.key)) {
         const buffered = normalizeBarcode(wedgeBufferRef.current);
         wedgeBufferRef.current = "";
-        if (buffered.length >= 4) {
+        if (buffered) {
           event.preventDefault();
           void resolveCode(buffered, "wedge");
         }
@@ -438,6 +431,7 @@ export default function BarcodeScanner({
       }
 
       if (event.key.length === 1) wedgeBufferRef.current += event.key;
+      else wedgeBufferRef.current = "";
     }
 
     window.addEventListener("keydown", handleKeyboardWedge);
@@ -481,28 +475,15 @@ export default function BarcodeScanner({
           value={code}
           onChange={(e) => { setCode(e.target.value); setError(""); onQueryChange?.(e.target.value); }}
           onKeyDown={(e) => {
-            if (e.key.length === 1) {
-              const now = Date.now();
-              if (now - inputWedgeRef.current.lastAt > SCANNER_GAP_MS) inputWedgeRef.current.buffer = "";
-              inputWedgeRef.current.lastAt = now;
-              inputWedgeRef.current.buffer = /^\d$/.test(e.key)
-                ? inputWedgeRef.current.buffer + e.key
-                : "";
-              return;
-            }
-            if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Escape") {
-              inputWedgeRef.current = { buffer: "", lastAt: 0 };
-            }
             if (isLikelyScannerSubmit(e.key)) {
-              const scan = normalizeBarcode(inputWedgeRef.current.buffer);
-              const scanWasFast = Date.now() - inputWedgeRef.current.lastAt <= SCANNER_GAP_MS * 2;
-              inputWedgeRef.current = { buffer: "", lastAt: 0 };
-              if (scan.length >= 4 && /^\d{4,}$/.test(scan) && scanWasFast) {
+              // El valor del input contiene la lectura completa, incluso con pausas,
+              // pegado o un render de React pendiente. Nunca enviar un buffer parcial.
+              const raw = e.currentTarget.value;
+              const completeCode = normalizeBarcode(raw);
+              if (/^\d+$/.test(completeCode) || onCachedCode?.(completeCode)?.length) {
                 e.preventDefault();
                 e.stopPropagation();
-                setCode("");
-                onQueryChange?.("");
-                void resolveCode(scan, "wedge");
+                void resolveCode(raw, "wedge");
                 return;
               }
             }
@@ -513,13 +494,13 @@ export default function BarcodeScanner({
             }
             if (isLikelyScannerSubmit(e.key)) {
               e.preventDefault();
-              void resolveCode(code, "manual");
+              void resolveCode(e.currentTarget.value, "manual");
             }
           }}
           placeholder="Código de barras, interno o nombre del producto"
           aria-label="Código de barras, código interno o nombre del producto"
         />
-        <button className="admin-button" type="button" disabled={busy || !code.trim()} onClick={() => void resolveCode(code, "manual")}>
+        <button className="admin-button" type="button" disabled={busy || !code.trim()} onClick={() => void resolveCode(inputRef.current?.value ?? code, "manual")}>
           {busy ? "Procesando…" : "Buscar"}
         </button>
         {cameraOpen ? (
@@ -557,3 +538,4 @@ export default function BarcodeScanner({
     </section>
   );
 }
+
