@@ -373,7 +373,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
         stockMinimo,
         stockMaximo,
       });
-      if (form.unidadMedida !== "unidad" || (editing && unidadesProducto[editing.id] && unidadesProducto[editing.id] !== form.unidadMedida)) {
+      if (form.unidadMedida !== "unidad" || (editing && (unidadesProducto[editing.id] ?? "unidad") !== form.unidadMedida)) {
         const { error: unidadError } = await supabase.rpc("configurar_unidad_producto_sigo", {
           p_empresa_id: empresaId,
           p_producto_id: productoGuardadoId,
