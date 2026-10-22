@@ -94,8 +94,9 @@ function decodePng(bytes, binary = false) {
   }
   const reader = new MultiFormatReader();
   const hints = new Map([[DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]], [DecodeHintType.TRY_HARDER, true]]);
-  reader.setHints(hints);
-  return reader.decode(new BinaryBitmap(new HybridBinarizer(new RGBLuminanceSource(luminance, png.width, png.height)))).getText();
+  // decode(image) clears previous setHints state; pass them directly so dense
+  // QR finder patterns are not skipped on tall, full-page thermal PDF rasters.
+  return reader.decode(new BinaryBitmap(new HybridBinarizer(new RGBLuminanceSource(luminance, png.width, png.height))), hints).getText();
 }
 
 // Quantity/unit is historical display only; do not recalculate authoritative subtotals.
@@ -112,6 +113,31 @@ const qrPixels = html => Math.round(Number(html.match(/\.qr svg \{ width: ([0-9.
 const qr203dpi = await sharp(Buffer.from(qrSvg)).resize(qrPixels(safeHtml), qrPixels(safeHtml), { kernel: "nearest" }).png().toBuffer();
 assert.equal(decodePng(qr203dpi), urlQrFiscal(base));
 assert.equal(decodePng(qr203dpi, true), urlQrFiscal(base));
+// Reproduce the full-page detector bug without a browser: copy the exact QR
+// pixels, with no scaling/resampling, onto tall 203 dpi receipt-sized canvases.
+const originalQrRaster = PNG.sync.read(qr203dpi);
+let damagedTallPage;
+for (const height of [1286, 2296, 3996]) {
+  for (let offset = 0; offset < 6; offset++) {
+    const tall = new PNG({ width: 463, height });
+    tall.data.fill(255);
+    const left = Math.floor((tall.width - originalQrRaster.width) / 2);
+    const top = height - originalQrRaster.height - 100 - offset;
+    PNG.bitblt(originalQrRaster, tall, 0, 0, originalQrRaster.width, originalQrRaster.height, left, top);
+    assert.equal(decodePng(PNG.sync.write(tall), true), urlQrFiscal(base), `Exact QR pixels must decode on full page ${height}px, offset ${offset}`);
+    if (height === 3996 && offset === 5) {
+      // Destroy two finder patterns and half the payload, not merely whitespace.
+      for (let y = top; y < top + originalQrRaster.height; y++) {
+        for (let x = left; x < left + Math.ceil(originalQrRaster.width / 2); x++) {
+          tall.data.fill(255, (y * tall.width + x) * 4, (y * tall.width + x + 1) * 4);
+        }
+      }
+      damagedTallPage = PNG.sync.write(tall);
+    }
+  }
+}
+assert.ok(damagedTallPage);
+assert.throws(() => decodePng(damagedTallPage, true), undefined, "A damaged QR on the same tall page must still fail");
 const qrCases = [
   base,
   { ...base, tipo_cbte: 6, receptorDocTipo: 99, receptorDocumento: "0" },
