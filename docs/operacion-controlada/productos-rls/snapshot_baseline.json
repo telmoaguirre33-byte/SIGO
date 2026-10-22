@@ -1,0 +1,76 @@
+{
+  "snapshot_utc": "2026-10-22T02:34:00Z",
+  "table": "public.productos",
+  "postgres_major": 17,
+  "owner": "postgres",
+  "rls_enabled": true,
+  "rls_forced": false,
+  "table_acl_entries": [
+    "anon=arwdDxtm/postgres",
+    "authenticated=arwdDxtm/postgres",
+    "postgres=arwdDxtm/postgres",
+    "service_role=arwdDxtm/postgres"
+  ],
+  "column_acl_all_null": true,
+  "policies": [
+    {
+      "schemaname": "public",
+      "tablename": "productos",
+      "policyname": "editar_productos",
+      "permissive": "PERMISSIVE",
+      "roles": "{anon,authenticated}",
+      "cmd": "UPDATE",
+      "qual": "true",
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "productos",
+      "policyname": "eliminar_productos",
+      "permissive": "PERMISSIVE",
+      "roles": "{anon,authenticated}",
+      "cmd": "DELETE",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "productos",
+      "policyname": "insertar_productos",
+      "permissive": "PERMISSIVE",
+      "roles": "{anon,authenticated}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "productos",
+      "policyname": "lectura_productos",
+      "permissive": "PERMISSIVE",
+      "roles": "{anon,authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    }
+  ],
+  "tiene_permiso_empresa_definition_md5": "cf1fed566665fc8e2cfa204153d6ed6d",
+  "expected_granted_columns_after": [
+    "id",
+    "empresa_id",
+    "nombre",
+    "codigo_interno",
+    "codigo_barras",
+    "activo",
+    "categoria",
+    "marca",
+    "stock_actual",
+    "costo_actual",
+    "costo_ultima_compra",
+    "precio_venta",
+    "iva_alicuota_id",
+    "iva_tasa",
+    "precio_incluye_iva"
+  ],
+  "warning": "This snapshot is metadata only, not a backup of commercial records."
+}

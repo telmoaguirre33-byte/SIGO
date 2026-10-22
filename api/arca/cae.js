@@ -1,4 +1,6 @@
+import handlerV2 from "./cae-v2.js";
 import {
+  WSAA,
   WSFE,
   escapeXml,
   decodeXml,
@@ -9,6 +11,7 @@ import {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TIPOS_FACTURA = new Set([1, 6, 11]);
+const ARCA_BRIDGE_URL = process.env.ARCA_BRIDGE_URL || "https://sigo-arca-bridge-production.up.railway.app/wsfe";
 
 function json(res, status, body) {
   res.setHeader("Cache-Control", "no-store, max-age=0");
@@ -102,21 +105,32 @@ function authXml(ticket, cuit) {
   return `<ar:Auth><ar:Token>${escapeXml(ticket.token)}</ar:Token><ar:Sign>${escapeXml(ticket.sign)}</ar:Sign><ar:Cuit>${escapeXml(cuit)}</ar:Cuit></ar:Auth>`;
 }
 
-async function soapWsfe(endpoint, action, innerXml) {
+async function soapWsfe(endpoint, action, innerXml, transport = null) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);
+  const soap = `<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ar="http://ar.gov.afip.dif.FEV1/"><soapenv:Header/><soapenv:Body><ar:${action}>${innerXml}</ar:${action}></soapenv:Body></soapenv:Envelope>`;
+  const bridgeActivo = Boolean(transport?.authHeader && transport?.ambiente);
   try {
-    const response = await fetch(endpoint, {
+    const response = await fetch(bridgeActivo ? ARCA_BRIDGE_URL : endpoint, {
       method: "POST",
       signal: controller.signal,
-      headers: {
-        "Content-Type": "text/xml;charset=UTF-8",
-        SOAPAction: `http://ar.gov.afip.dif.FEV1/${action}`,
-        "User-Agent": "SIGO-WSFEv1-CAE/1.0",
-      },
-      body: `<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ar="http://ar.gov.afip.dif.FEV1/"><soapenv:Header/><soapenv:Body><ar:${action}>${innerXml}</ar:${action}></soapenv:Body></soapenv:Envelope>`,
+      headers: bridgeActivo
+        ? { Authorization: transport.authHeader, "Content-Type": "application/json" }
+        : { "Content-Type": "text/xml;charset=UTF-8", SOAPAction: `http://ar.gov.afip.dif.FEV1/${action}`, "User-Agent": "SIGO-WSFEv1-CAE/1.0" },
+      body: bridgeActivo ? JSON.stringify({ ambiente: transport.ambiente, action, soap }) : soap,
     });
-    const body = await response.text();
+    let body;
+    if (bridgeActivo) {
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload || typeof payload.body !== "string") {
+        const error = new Error(payload?.error || `ARCA_BRIDGE_HTTP_${response.status}`);
+        error.code = "WSFE_BRIDGE_FAILED";
+        throw error;
+      }
+      body = payload.body;
+    } else {
+      body = await response.text();
+    }
     const fault = decodeXml(extraer(body, "faultstring"));
     const errors = extraerErroresWsfe(body);
     if (!response.ok || fault) {
@@ -137,32 +151,35 @@ function wsfeError(errors, fallback = "WSFE rechazó la solicitud") {
   return error;
 }
 
-async function ultimoAutorizado(endpoint, ticket, cuit, puntoVenta, tipoCbte) {
+async function ultimoAutorizado(endpoint, ticket, cuit, puntoVenta, tipoCbte, transport = null) {
   const { body, errors } = await soapWsfe(
     endpoint,
     "FECompUltimoAutorizado",
     `${authXml(ticket, cuit)}<ar:PtoVta>${puntoVenta}</ar:PtoVta><ar:CbteTipo>${tipoCbte}</ar:CbteTipo>`,
+    transport,
   );
   if (errors.length) throw wsfeError(errors);
-  const numero = Number(extraer(body, "CbteNro"));
-  if (!Number.isInteger(numero) || numero < 0) throw new Error("WSFE_LAST_NUMBER_INVALID");
+  const rawNumero = extraer(body, "CbteNro");
+  const numero = Number(rawNumero);
+  if (!/^\d+$/.test(rawNumero) || !Number.isSafeInteger(numero) || numero < 0) throw new Error("WSFE_LAST_NUMBER_INVALID");
   return numero;
 }
 
-async function consultarComprobante(endpoint, ticket, cuit, puntoVenta, tipoCbte, numeroCbte) {
+async function consultarComprobante(endpoint, ticket, cuit, puntoVenta, tipoCbte, numeroCbte, transport = null) {
   const { body, errors } = await soapWsfe(
     endpoint,
     "FECompConsultar",
     `${authXml(ticket, cuit)}<ar:FeCompConsReq><ar:CbteTipo>${tipoCbte}</ar:CbteTipo><ar:CbteNro>${numeroCbte}</ar:CbteNro><ar:PtoVta>${puntoVenta}</ar:PtoVta></ar:FeCompConsReq>`,
+    transport,
   );
   if (errors.length) {
-    const recuperable = errors.every((item) => [601, 602].includes(Number(item.code)));
+    const recuperable = errors.every((item) => Number(item.code) === 602);
     if (recuperable) return null;
     throw wsfeError(errors);
   }
   const result = extraer(body, "ResultGet");
   const cae = digits(extraer(result, "CodAutorizacion"));
-  if (!result || !/^\d{14}$/.test(cae)) return null;
+  if (!result || !/^\d{14}$/.test(cae)) throw new Error("ARCA_RECEIPT_PROTOCOL_INVALID");
   return {
     cae,
     caeVencimiento: fechaSql(extraer(result, "FchVto")),
@@ -203,7 +220,7 @@ function detalleFiscal(tipoCbte, total, items, productMap) {
   return { impTotal: total, impNeto, impIva, ivaXml };
 }
 
-async function solicitarCae(endpoint, ticket, cuit, request) {
+async function solicitarCae(endpoint, ticket, cuit, request, transport = null) {
   const f = request.fiscal;
   const detail = [
     "<ar:FeCAEReq><ar:FeCabReq>",
@@ -216,7 +233,7 @@ async function solicitarCae(endpoint, ticket, cuit, request) {
     f.ivaXml,
     "</ar:FECAEDetRequest></ar:FeDetReq></ar:FeCAEReq>",
   ].join("");
-  const { body, errors } = await soapWsfe(endpoint, "FECAESolicitar", `${authXml(ticket, cuit)}${detail}`);
+  const { body, errors } = await soapWsfe(endpoint, "FECAESolicitar", `${authXml(ticket, cuit)}${detail}`, transport);
   if (errors.length) throw wsfeError(errors);
   const responseDetail = extraer(body, "FECAEDetResponse");
   const resultado = extraer(responseDetail, "Resultado") || extraer(extraer(body, "FeCabResp"), "Resultado");
@@ -246,6 +263,7 @@ function safeErrors(error) {
 export { detalleFiscal, solicitarCae, consultarComprobante, ultimoAutorizado };
 
 export default async function handler(req, res) {
+  if (process.env.ARCA_FISCAL_SERVER_WRITE_ENABLED === "true") return handlerV2(req, res);
   if (req.method !== "POST") return json(res, 405, { error: "METHOD_NOT_ALLOWED" });
   const empresaId = String(req.body?.empresaId || "").trim();
   const ventaId = String(req.body?.ventaId || "").trim();
@@ -327,19 +345,13 @@ export default async function handler(req, res) {
 
     const ticket = await leerTicketWsaa(sesion, empresaId, config.ambiente, config.cuit_emisor);
     if (!ticket) return json(res, 409, { error: "ARCA_TICKET_REFRESH_REQUIRED" });
+    const transport = { authHeader: sesion.auth, ambiente: config.ambiente };
 
     if (reserva) {
-      const recovered = await consultarComprobante(WSFE[config.ambiente], ticket, config.cuit_emisor, reserva.punto_venta, reserva.tipo_cbte, Number(reserva.numero_cbte));
-      if (recovered) {
-        const persisted = first(await rest(sesion, `arca_comprobantes?id=eq.${encodeURIComponent(reserva.id)}`, {
-          method: "PATCH",
-          headers: { Prefer: "return=representation" },
-          body: JSON.stringify({ cae: recovered.cae, cae_vencimiento: recovered.caeVencimiento, resultado: recovered.resultado, observaciones: [], emitido_at: new Date().toISOString() }),
-        }));
-        return json(res, 200, { ok: true, reconciled: true, ambiente: config.ambiente, comprobante: persisted });
-      }
+      // ARCA_LEGACY_RESERVATION_READ_ONLY: uncertain old attempts never reissue.
+      return json(res, 409, { error: "ARCA_RECEIPT_PENDING", retryable: false });
     } else {
-      const ultimo = await ultimoAutorizado(WSFE[config.ambiente], ticket, config.cuit_emisor, puntoVenta, tipoCbte);
+      const ultimo = await ultimoAutorizado(WSFE[config.ambiente], ticket, config.cuit_emisor, puntoVenta, tipoCbte, transport);
       const numeroCbte = ultimo + 1;
       try {
         reserva = first(await rest(sesion, "arca_comprobantes", {
@@ -359,7 +371,7 @@ export default async function handler(req, res) {
       numeroCbte: Number(reserva.numero_cbte),
       receptor,
       fiscal,
-    });
+    }, transport);
     const comprobante = first(await rest(sesion, `arca_comprobantes?id=eq.${encodeURIComponent(reserva.id)}`, {
       method: "PATCH",
       headers: { Prefer: "return=representation" },
@@ -387,3 +399,4 @@ export default async function handler(req, res) {
     return json(res, 502, { error: "ARCA_CAE_FAILED", retryable: Boolean(reserva) });
   }
 }
+

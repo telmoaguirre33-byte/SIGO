@@ -27,7 +27,10 @@ requireText('src/VentaRapidaOperativa.tsx', [
 ]);
 
 requireText('src/ventas.ts', [
-  'p_descuento_pct: input.descuentoPct ?? 0',
+  'const descuentoPct = input.descuentoPct ?? 0',
+  '!Number.isFinite(descuentoPct) || descuentoPct < 0 || descuentoPct >= 100',
+  'Math.round(descuentoPct * 100) / 100 !== descuentoPct',
+  'p_descuento_pct: descuentoPct',
   'SALE_DISCOUNT_INVALID',
 ]);
 

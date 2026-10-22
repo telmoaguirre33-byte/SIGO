@@ -1,10 +1,17 @@
+import { crearPresupuestoFiscal, fetchFiscal, esTimeoutFiscal } from "./lib/request-budget.js";
+import { almacenamientoFiscalSeguro, guardarComprobante } from "./lib/receipt-store.js";
+import { leerItemsImpresion, validarImpresionEmisor, camposSnapshotEmisor, coincideComprobanteOriginal } from "./lib/print-config.js";
 import {
+  WSAA,
   WSFE,
   escapeXml,
   decodeXml,
   extraer,
   extraerErroresWsfe,
   leerTicketWsaa,
+  descargarSecreto,
+  autenticarWsaa,
+  guardarTicketWsaa,
 } from "./wsaa.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -57,7 +64,7 @@ function fechaSql(value) {
 }
 
 async function rest(sesion, path, init = {}) {
-  const response = await fetch(`${sesion.url}/rest/v1/${path}`, {
+  const { response, payload } = await fetchFiscal(sesion, "database", `${sesion.url}/rest/v1/${path}`, {
     ...init,
     headers: {
       apikey: sesion.anonKey,
@@ -67,7 +74,6 @@ async function rest(sesion, path, init = {}) {
       ...(init.headers || {}),
     },
   });
-  const payload = await response.json().catch(() => null);
   if (!response.ok) {
     const error = new Error(`REST_${response.status}`);
     error.status = response.status;
@@ -78,21 +84,21 @@ async function rest(sesion, path, init = {}) {
 }
 
 async function permiso(sesion, empresaId, nombre) {
-  const response = await fetch(`${sesion.url}/rest/v1/rpc/tiene_permiso_empresa`, {
+  const { response, payload } = await fetchFiscal(sesion, "permission", `${sesion.url}/rest/v1/rpc/tiene_permiso_empresa`, {
     method: "POST",
     headers: { apikey: sesion.anonKey, Authorization: sesion.auth, "Content-Type": "application/json" },
     body: JSON.stringify({ p_empresa_id: empresaId, p_permiso: nombre }),
   });
-  return response.ok && (await response.json().catch(() => false)) === true;
+  return response.ok && payload === true;
 }
 
-async function sesionUsuario(req, empresaId) {
+async function sesionUsuario(req, empresaId, presupuesto = null) {
   const { url, anonKey } = env();
   const auth = String(req.headers.authorization || "");
   if (!url || !anonKey || !auth.startsWith("Bearer ")) return null;
-  const user = await fetch(`${url}/auth/v1/user`, { headers: { apikey: anonKey, Authorization: auth } });
+  const sesion = { url, anonKey, auth, presupuesto };
+  const { response: user } = await fetchFiscal(sesion, "authentication", `${url}/auth/v1/user`, { headers: { apikey: anonKey, Authorization: auth } });
   if (!user.ok) return null;
-  const sesion = { url, anonKey, auth };
   for (const nombre of ["invoices.issue", "sales.read", "products.read"]) {
     if (!(await permiso(sesion, empresaId, nombre))) return null;
   }
@@ -103,18 +109,22 @@ function authXml(ticket, cuit) {
   return `<ar:Auth><ar:Token>${escapeXml(ticket.token)}</ar:Token><ar:Sign>${escapeXml(ticket.sign)}</ar:Sign><ar:Cuit>${escapeXml(cuit)}</ar:Cuit></ar:Auth>`;
 }
 
+function crearTraWsaa() {
+  const now = Date.now();
+  const uniqueId = Math.floor(now / 1000) >>> 0;
+  const generationTime = new Date(now - 5 * 60_000).toISOString();
+  const expirationTime = new Date(now + 10 * 60_000).toISOString();
+  return `<?xml version="1.0" encoding="UTF-8"?><loginTicketRequest version="1.0"><header><uniqueId>${uniqueId}</uniqueId><generationTime>${generationTime}</generationTime><expirationTime>${expirationTime}</expirationTime></header><service>wsfe</service></loginTicketRequest>`;
+}
+
 async function soapBridge(sesion, ambiente, action, innerXml) {
   const soap = `<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ar="http://ar.gov.afip.dif.FEV1/"><soapenv:Header/><soapenv:Body><ar:${action}>${innerXml}</ar:${action}></soapenv:Body></soapenv:Envelope>`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 25_000);
   try {
-    const response = await fetch(BRIDGE_URL, {
+    const { response, payload } = await fetchFiscal(sesion, action, BRIDGE_URL, {
       method: "POST",
-      signal: controller.signal,
       headers: { Authorization: sesion.auth, "Content-Type": "application/json" },
       body: JSON.stringify({ ambiente, action, soap }),
-    });
-    const payload = await response.json().catch(() => null);
+    }, 16_000, action === "FECAESolicitar" ? 2_500 : 0);
     if (!response.ok || !payload || typeof payload.body !== "string") {
       const error = new Error(payload?.error || `ARCA_BRIDGE_${response.status}`);
       error.code = "WSFE_BRIDGE_FAILED";
@@ -137,8 +147,6 @@ async function soapBridge(sesion, ambiente, action, innerXml) {
       throw timeoutError;
     }
     throw error;
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -157,8 +165,9 @@ async function ultimoAutorizado(sesion, ambiente, ticket, cuit, puntoVenta, tipo
     `${authXml(ticket, cuit)}<ar:PtoVta>${puntoVenta}</ar:PtoVta><ar:CbteTipo>${tipoCbte}</ar:CbteTipo>`,
   );
   if (errors.length) throw wsfeError(errors);
-  const numero = Number(extraer(body, "CbteNro"));
-  if (!Number.isInteger(numero) || numero < 0) throw new Error("WSFE_LAST_NUMBER_INVALID");
+  const rawNumero = extraer(body, "CbteNro");
+  const numero = Number(rawNumero);
+  if (!/^\d+$/.test(rawNumero) || !Number.isSafeInteger(numero) || numero < 0) throw new Error("WSFE_LAST_NUMBER_INVALID");
   return numero;
 }
 
@@ -170,17 +179,37 @@ async function consultarComprobante(sesion, ambiente, ticket, cuit, puntoVenta, 
     `${authXml(ticket, cuit)}<ar:FeCompConsReq><ar:CbteTipo>${tipoCbte}</ar:CbteTipo><ar:CbteNro>${numeroCbte}</ar:CbteNro><ar:PtoVta>${puntoVenta}</ar:PtoVta></ar:FeCompConsReq>`,
   );
   if (errors.length) {
-    const recuperable = errors.every((item) => [601, 602].includes(Number(item.code)));
+    const recuperable = errors.every((item) => Number(item.code) === 602);
     if (recuperable) return null;
     throw wsfeError(errors);
   }
   const result = extraer(body, "ResultGet");
-  const cae = digits(extraer(result, "CodAutorizacion"));
-  if (!result || !/^\d{14}$/.test(cae)) return null;
+  const campo = (tag) => extraer(result, tag);
+  const cae = campo("CodAutorizacion");
+  const identidad = [["PtoVta", puntoVenta], ["CbteTipo", tipoCbte], ["CbteDesde", numeroCbte], ["CbteHasta", numeroCbte]];
+  if (!result || !/^[1-9]\d{13}$/.test(cae) || campo("Resultado") !== "A" || campo("EmisionTipo") !== "CAE"
+    || identidad.some(([tag, valor]) => !/^\d+$/.test(campo(tag)) || Number(campo(tag)) !== Number(valor))) {
+    throw new Error("ARCA_RECEIPT_IDENTITY_MISMATCH");
+  }
+  const numero = (tag, positivo = false) => {
+    const raw = campo(tag), value = Number(raw);
+    if (!/^(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?$/.test(raw) || !Number.isFinite(value) || value < 0 || (positivo && value === 0)) throw new Error("ARCA_RECEIPT_PROTOCOL_INVALID");
+    return value;
+  };
+  const fecha = (tag) => {
+    const value = fechaSql(campo(tag));
+    const parsed = value ? new Date(`${value}T12:00:00Z`) : null;
+    if (!parsed || !Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) throw new Error("ARCA_RECEIPT_PROTOCOL_INVALID");
+    return value;
+  };
+  const receptorDocTipo = numero("DocTipo", true), receptorDocumento = campo("DocNro"), moneda = campo("MonId");
+  if (!Number.isSafeInteger(receptorDocTipo) || !/^\d+$/.test(receptorDocumento) || !/^[A-Z0-9]{3}$/.test(moneda)) throw new Error("ARCA_RECEIPT_PROTOCOL_INVALID");
+  const cotizacion = numero("MonCotiz", true);
+  if (moneda === "PES" && cotizacion !== 1) throw new Error("ARCA_RECEIPT_PROTOCOL_INVALID");
   return {
-    cae,
-    caeVencimiento: fechaSql(extraer(result, "FchVto")),
-    resultado: extraer(result, "Resultado") || "A",
+    cae, caeVencimiento: fecha("FchVto"), resultado: "A", fecha: fecha("CbteFch"),
+    receptorDocTipo, receptorDocumento, total: numero("ImpTotal", true), neto: numero("ImpNeto"), iva: numero("ImpIVA"),
+    moneda, cotizacion, condicionIvaReceptorId: Number(campo("CondicionIVAReceptorId")) || null,
   };
 }
 
@@ -220,7 +249,7 @@ async function solicitarCae(sesion, ambiente, ticket, cuit, request) {
     `<ar:CantReg>1</ar:CantReg><ar:PtoVta>${request.puntoVenta}</ar:PtoVta><ar:CbteTipo>${request.tipoCbte}</ar:CbteTipo>`,
     "</ar:FeCabReq><ar:FeDetReq><ar:FECAEDetRequest>",
     `<ar:Concepto>1</ar:Concepto><ar:DocTipo>${request.receptor.docTipo}</ar:DocTipo><ar:DocNro>${request.receptor.docNro}</ar:DocNro>`,
-    `<ar:CbteDesde>${request.numeroCbte}</ar:CbteDesde><ar:CbteHasta>${request.numeroCbte}</ar:CbteHasta><ar:CbteFch>${fechaArca()}</ar:CbteFch>`,
+    `<ar:CbteDesde>${request.numeroCbte}</ar:CbteDesde><ar:CbteHasta>${request.numeroCbte}</ar:CbteHasta><ar:CbteFch>${request.fecha || fechaArca()}</ar:CbteFch>`,
     `<ar:ImpTotal>${f.impTotal.toFixed(2)}</ar:ImpTotal><ar:ImpTotConc>0.00</ar:ImpTotConc><ar:ImpNeto>${f.impNeto.toFixed(2)}</ar:ImpNeto><ar:ImpOpEx>0.00</ar:ImpOpEx><ar:ImpTrib>0.00</ar:ImpTrib><ar:ImpIVA>${f.impIva.toFixed(2)}</ar:ImpIVA>`,
     `<ar:MonId>PES</ar:MonId><ar:MonCotiz>1.00</ar:MonCotiz><ar:CondicionIVAReceptorId>${request.receptor.condicionIvaReceptorId}</ar:CondicionIVAReceptorId>`,
     f.ivaXml,
@@ -231,19 +260,30 @@ async function solicitarCae(sesion, ambiente, ticket, cuit, request) {
   if (errors.length) throw wsfeError(errors);
   const responseDetail = extraer(body, "FECAEDetResponse");
   const resultado = extraer(responseDetail, "Resultado") || extraer(extraer(body, "FeCabResp"), "Resultado");
-  const cae = digits(extraer(responseDetail, "CAE"));
+  const cae = extraer(responseDetail, "CAE");
   const observacionesXml = extraer(responseDetail, "Observaciones");
   const observaciones = (observacionesXml.match(/<(?:[A-Za-z0-9_]+:)?Obs(?:\s[^>]*)?>[\s\S]*?<\/(?:[A-Za-z0-9_]+:)?Obs>/gi) || []).map((block) => ({
     code: extraer(block, "Code"),
     message: decodeXml(extraer(block, "Msg")).slice(0, 300),
   }));
-  if (resultado !== "A" || !/^\d{14}$/.test(cae)) {
+  const cabecera = extraer(body, "FeCabResp");
+  const respuestaIdentificada = Boolean(responseDetail)
+    && Number(extraer(cabecera, "PtoVta")) === request.puntoVenta && Number(extraer(cabecera, "CbteTipo")) === request.tipoCbte
+    && Number(extraer(responseDetail, "CbteDesde")) === request.numeroCbte && Number(extraer(responseDetail, "CbteHasta")) === request.numeroCbte
+    && Number(extraer(responseDetail, "DocTipo")) === request.receptor.docTipo && extraer(responseDetail, "DocNro") === String(request.receptor.docNro)
+    && extraer(responseDetail, "CbteFch") === request.fecha;
+  if (resultado === "A" && !respuestaIdentificada) throw new Error("ARCA_RECEIPT_IDENTITY_MISMATCH");
+  if (resultado !== "A" || !/^[1-9]\d{13}$/.test(cae)) {
     const error = new Error(observaciones[0]?.message || "ARCA no autorizó el comprobante");
     error.code = "WSFE_CAE_REJECTED";
     error.wsfeErrors = observaciones;
+    error.rechazoDefinitivo = resultado === "R" && !cae && respuestaIdentificada;
     throw error;
   }
-  return { cae, caeVencimiento: fechaSql(extraer(responseDetail, "CAEFchVto")), resultado, observaciones };
+  const caeVencimiento = fechaSql(extraer(responseDetail, "CAEFchVto"));
+  const vencimiento = caeVencimiento ? new Date(`${caeVencimiento}T12:00:00Z`) : null;
+  if (!vencimiento || !Number.isFinite(vencimiento.getTime()) || vencimiento.toISOString().slice(0, 10) !== caeVencimiento) throw new Error("ARCA_RECEIPT_PROTOCOL_INVALID");
+  return { cae, caeVencimiento, resultado, observaciones };
 }
 
 function safeErrors(error) {
@@ -268,24 +308,34 @@ function errorSeguro(error, stage) {
 export default async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { error: "METHOD_NOT_ALLOWED" });
 
+  const flujoCaja = req.body?.flujoCaja === true;
   const empresaId = String(req.body?.empresaId || "").trim();
   const ventaId = String(req.body?.ventaId || "").trim();
   const puntoVenta = entero(req.body?.puntoVenta, 1, 99999);
   const tipoCbte = entero(req.body?.tipoCbte, 1, 999);
   const condicionIvaReceptorId = entero(req.body?.condicionIvaReceptorId, 1, 99);
+  const receptorCuit = digits(req.body?.receptorCuit);
+  const receptorRazonSocial = String(req.body?.receptorRazonSocial || "").trim().slice(0, 160);
   if (!UUID.test(empresaId) || !UUID.test(ventaId) || !puntoVenta || !tipoCbte || !TIPOS_FACTURA.has(tipoCbte)) {
     return json(res, 400, { error: "ARCA_CAE_INPUT_INVALID" });
   }
 
-  const sesion = await sesionUsuario(req, empresaId);
-  if (!sesion) return json(res, 403, { error: "ARCA_ISSUE_FORBIDDEN" });
-
+  const presupuesto = crearPresupuestoFiscal();
+  let sesion;
+  let reservaIntentada = false;
   let reserva = null;
-  let stage = "config";
+  let escrituraSegura = false;
+  let ticketEmision = null;
+  let configEmision = null;
+  let stage = "authentication";
   try {
-    const config = first(await rest(sesion, `arca_config?empresa_id=eq.${encodeURIComponent(empresaId)}&select=empresa_id,ambiente,cuit_emisor,certificado_ref,certificado_vence,wsaa_service,wsfe_version,activo,ultima_prueba_ok`));
+    sesion = await sesionUsuario(req, empresaId, presupuesto);
+    if (!sesion) return json(res, 403, { error: "ARCA_ISSUE_FORBIDDEN" });
+    stage = "config";
+    const config = first(await rest(sesion, `arca_config?empresa_id=eq.${encodeURIComponent(empresaId)}&select=empresa_id,ambiente,cuit_emisor,razon_social,certificado_ref,certificado_vence,wsaa_service,wsfe_version,activo,ultima_prueba_ok`));
     if (!config?.activo || config.ultima_prueba_ok !== true) return json(res, 409, { error: "ARCA_AUTH_NOT_VALIDATED" });
     if (!WSFE[config.ambiente]) return json(res, 409, { error: "ARCA_ENVIRONMENT_INVALID" });
+    configEmision = config;
     const expected = config.ambiente === "produccion" ? "EMITIR_CAE_PRODUCCION" : "SOLICITAR_CAE_HOMOLOGACION";
     if (String(req.body?.confirmacion || "") !== expected) return json(res, 409, { error: config.ambiente === "produccion" ? "ARCA_PRODUCTION_CONFIRMATION_REQUIRED" : "ARCA_HOMOLOGATION_CONFIRMATION_REQUIRED" });
     if (!/^\d{11}$/.test(String(config.cuit_emisor || "")) || config.wsaa_service !== "wsfe" || config.wsfe_version !== "WSFEv1") return json(res, 409, { error: "ARCA_CONFIG_INVALID" });
@@ -302,7 +352,7 @@ export default async function handler(req, res) {
     const total = dinero(venta.total);
     if (!Number.isFinite(total) || total <= 0) return json(res, 409, { error: "ARCA_SALE_TOTAL_INVALID" });
 
-    const items = await rest(sesion, `venta_items_sigo?venta_id=eq.${encodeURIComponent(ventaId)}&empresa_id=eq.${encodeURIComponent(empresaId)}&select=producto_id,subtotal`);
+    const items = await leerItemsImpresion(sesion, rest, empresaId, ventaId);
     if (!Array.isArray(items) || items.length === 0) return json(res, 409, { error: "ARCA_SALE_ITEMS_REQUIRED" });
     const itemTotal = dinero(items.reduce((sum, item) => sum + Number(item.subtotal || 0), 0));
     if (Math.abs(itemTotal - total) > 0.01) return json(res, 409, { error: "ARCA_SALE_TOTAL_MISMATCH" });
@@ -316,19 +366,23 @@ export default async function handler(req, res) {
       if (productMap.size !== productIds.length) return json(res, 409, { error: "ARCA_PRODUCT_FISCAL_DATA_REQUIRED" });
     }
 
-    let receptor = { docTipo: 99, docNro: "0", condicionIvaReceptorId };
+    let receptor = { docTipo: 99, docNro: "0", condicionIvaReceptorId, razonSocial: "Consumidor Final" };
     if (venta.cliente_id) {
       if (!(await permiso(sesion, empresaId, "clients.read"))) return json(res, 403, { error: "ARCA_CLIENT_READ_FORBIDDEN" });
-      const cliente = first(await rest(sesion, `clientes_sigo?id=eq.${encodeURIComponent(venta.cliente_id)}&empresa_id=eq.${encodeURIComponent(empresaId)}&activo=is.true&select=documento,arca_doc_tipo,condicion_iva_receptor_id`));
+      const cliente = first(await rest(sesion, `clientes_sigo?id=eq.${encodeURIComponent(venta.cliente_id)}&empresa_id=eq.${encodeURIComponent(empresaId)}&activo=is.true&select=nombre,documento,arca_doc_tipo,condicion_iva_receptor_id`));
       const docTipo = entero(cliente?.arca_doc_tipo, 1, 999);
       const docNro = digits(cliente?.documento);
       const condicion = entero(cliente?.condicion_iva_receptor_id, 1, 99);
       if (!docTipo || !docNro || !condicion) return json(res, 409, { error: "ARCA_CLIENT_FISCAL_DATA_REQUIRED" });
-      receptor = { docTipo, docNro, condicionIvaReceptorId: condicion };
+      receptor = { docTipo, docNro, condicionIvaReceptorId: condicion, razonSocial: String(cliente?.nombre || "").trim() };
     } else if (!condicionIvaReceptorId) {
       return json(res, 409, { error: "ARCA_CONSUMER_IVA_CONDITION_REQUIRED" });
+    } else if ([1, 6].includes(condicionIvaReceptorId)) {
+      if (!/^\d{11}$/.test(receptorCuit)) return json(res, 409, { error: "ARCA_RECEPTOR_CUIT_REQUIRED" });
+      if (receptorRazonSocial.length < 2) return json(res, 409, { error: "ARCA_RECEPTOR_RAZON_SOCIAL_REQUIRED" });
+      receptor = { docTipo: 80, docNro: receptorCuit, condicionIvaReceptorId, razonSocial: receptorRazonSocial };
     }
-    if (tipoCbte === 1 && (!venta.cliente_id || receptor.docTipo !== 80 || receptor.docNro.length !== 11 || receptor.condicionIvaReceptorId !== 1)) return json(res, 409, { error: "ARCA_INVOICE_A_CLIENT_REQUIRED" });
+    if (tipoCbte === 1 && (receptor.docTipo !== 80 || receptor.docNro.length !== 11 || receptor.condicionIvaReceptorId !== 1)) return json(res, 409, { error: "ARCA_INVOICE_A_CLIENT_REQUIRED" });
 
     let fiscal;
     try {
@@ -337,68 +391,141 @@ export default async function handler(req, res) {
       return json(res, 409, { error: error.message });
     }
 
+    escrituraSegura = await almacenamientoFiscalSeguro(sesion, rest);
+    if (flujoCaja && !escrituraSegura) return json(res, 409, { error: "ARCA_SECURE_STORAGE_REQUIRED" });
+    // Only this additive fiscal column is optional. Older databases keep working;
+    // they recover canonical fiscal fields via FECompConsultar without issuing again.
+    let snapshotSupported = false;
+    try {
+      await rest(sesion, "arca_comprobantes?select=impresion_snapshot&limit=0");
+      snapshotSupported = escrituraSegura;
+    } catch (error) { if (error?.status !== 400) throw error; }
+    if (flujoCaja && !snapshotSupported) return json(res, 409, { error: "ARCA_PRINT_SCHEMA_REQUIRED" });
+    // Only admin-approved server metadata can populate the fiscal header.
+    let printData = null;
+    try { printData = first(await rest(sesion, `arca_impresion_config?empresa_id=eq.${empresaId}&punto_venta=eq.${puntoVenta}&cuit_emisor=eq.${encodeURIComponent(config.cuit_emisor)}&select=*`)); }
+    catch (error) { if (esTimeoutFiscal(error)) throw error; if (flujoCaja) return json(res, 409, { error: "ARCA_PRINT_SCHEMA_REQUIRED" }); }
+    const { campos, faltantes } = validarImpresionEmisor(printData || {});
+    if (flujoCaja && !config.razon_social?.trim()) faltantes.push("razón social autorizada del emisor");
+    if (flujoCaja && faltantes.length) return json(res, 409, { error: "ARCA_PRINT_EMITTER_DATA_REQUIRED", faltantes });
+    if (flujoCaja && ((tipoCbte === 11 && campos.condicion_iva === "IVA RESPONSABLE INSCRITO") || ([1, 6].includes(tipoCbte) && campos.condicion_iva !== "IVA RESPONSABLE INSCRITO"))) return json(res, 409, { error: "ARCA_PRINT_TIPO_INCOMPATIBLE" });
+    const printableIds = [...new Set(items.map((item) => String(item.producto_id || "")).filter((id) => UUID.test(id)))];
+    const printableProducts = printableIds.length
+      ? await rest(sesion, `productos?empresa_id=eq.${encodeURIComponent(empresaId)}&id=in.(${printableIds.join(",")})&select=id,nombre`) : [];
+    const printableNames = new Map(printableProducts.map((item) => [String(item.id), String(item.nombre)]));
+    const fechaComprobante = fechaArca();
+    const printSnapshot = {
+      version: 1, empresaId, ventaId, ambiente: config.ambiente,
+      punto_venta: puntoVenta, tipo_cbte: tipoCbte, ventaNumero: Number(venta.numero),
+      fecha: fechaSql(fechaComprobante), total, moneda: "PES", cotizacion: 1,
+      emisorCuit: config.cuit_emisor, emisorRazonSocial: config.razon_social || "Emisor CUIT " + config.cuit_emisor,
+      ...(faltantes.length ? {} : camposSnapshotEmisor(campos)),
+      receptorDocTipo: receptor.docTipo, receptorDocumento: String(receptor.docNro),
+      condicionIvaReceptorId: receptor.condicionIvaReceptorId,
+      receptorRazonSocial: receptor.razonSocial || (receptor.docTipo === 99 ? "Consumidor Final" : "Documento fiscal"),
+      neto: fiscal.impNeto, iva: fiscal.impIva,
+      items: items.map((item) => ({ nombre: printableNames.get(String(item.producto_id)) || "Artículo", cantidad: Number(item.cantidad), unidad: item.unidad_medida || null, precio_unitario: Number(item.precio_unitario), subtotal: Number(item.subtotal) })),
+    };
+
     stage = "reserva";
     const requestId = `sigo:${empresaId}:${ventaId}:${puntoVenta}:${tipoCbte}`;
-    reserva = first(await rest(sesion, `arca_comprobantes?empresa_id=eq.${encodeURIComponent(empresaId)}&venta_id=eq.${encodeURIComponent(ventaId)}&select=id,venta_id,punto_venta,tipo_cbte,numero_cbte,cae,cae_vencimiento,resultado,request_id`));
+    reserva = first(await rest(sesion, `arca_comprobantes?empresa_id=eq.${encodeURIComponent(empresaId)}&venta_id=eq.${encodeURIComponent(ventaId)}&select=*`));
+    if (reserva?.resultado === "rechazado_definitivo" && !reserva.cae) return json(res, 409, { error: "ARCA_CAE_REJECTED_FINAL" });
     if (reserva?.cae) return json(res, 200, { ok: true, alreadyIssued: true, ambiente: config.ambiente, comprobante: reserva });
     if (reserva && (Number(reserva.punto_venta) !== puntoVenta || Number(reserva.tipo_cbte) !== tipoCbte || reserva.request_id !== requestId)) return json(res, 409, { error: "ARCA_SALE_RESERVED_WITH_OTHER_FISCAL_IDENTITY" });
+    if (reserva && !reserva.impresion_snapshot) return json(res, 409, { error: "ARCA_LEGACY_RECEIPT_IDENTITY_REQUIRED", retryable: false, consultaRequerida: true });
 
-    const ticket = await leerTicketWsaa(sesion, empresaId, config.ambiente, config.cuit_emisor);
-    if (!ticket) return json(res, 409, { error: "ARCA_TICKET_REFRESH_REQUIRED" });
+    let ticket = await leerTicketWsaa(sesion, empresaId, config.ambiente, config.cuit_emisor);
+    if (!ticket) {
+      stage = "wsaa_refresh";
+      const puedeRenovar = await permiso(sesion, empresaId, "arca.configure");
+      if (!puedeRenovar) {
+        return json(res, 409, {
+          error: "ARCA_TICKET_AUTO_REFRESH_REQUIRES_ADMIN",
+          message: "La autorización fiscal venció y este perfil no puede renovar credenciales fiscales. Un administrador debe abrir ARCA una vez para renovarla.",
+        });
+      }
+      if (!WSAA[config.ambiente]) return json(res, 409, { error: "ARCA_ENVIRONMENT_INVALID" });
+      const [certificatePem, privateKeyPem] = await Promise.all([
+        descargarSecreto(sesion, empresaId, "certificate.pem"),
+        descargarSecreto(sesion, empresaId, "private-key.pem"),
+      ]);
+      ticket = await autenticarWsaa(WSAA[config.ambiente], crearTraWsaa(), certificatePem, privateKeyPem, presupuesto);
+      await guardarTicketWsaa(sesion, empresaId, config.ambiente, config.cuit_emisor, ticket);
+    }
 
+    ticketEmision = ticket;
     stage = "conciliacion";
     if (reserva) {
+      const originalSnapshot = reserva.impresion_snapshot;
+      if (!originalSnapshot) return json(res, 409, { error: "ARCA_LEGACY_RECEIPT_IDENTITY_REQUIRED", retryable: false, consultaRequerida: true });
+      if (originalSnapshot.empresaId !== empresaId || originalSnapshot.ventaId !== ventaId
+        || originalSnapshot.emisorCuit !== config.cuit_emisor || originalSnapshot.ambiente !== config.ambiente
+        || originalSnapshot.numero_cbte !== Number(reserva.numero_cbte) || originalSnapshot.punto_venta !== puntoVenta || originalSnapshot.tipo_cbte !== tipoCbte) return json(res, 409, { error: "ARCA_RECEIPT_IDENTITY_MISMATCH" });
       const recovered = await consultarComprobante(sesion, config.ambiente, ticket, config.cuit_emisor, reserva.punto_venta, reserva.tipo_cbte, Number(reserva.numero_cbte));
       if (recovered) {
-        const persisted = first(await rest(sesion, `arca_comprobantes?id=eq.${encodeURIComponent(reserva.id)}`, {
-          method: "PATCH",
-          headers: { Prefer: "return=representation" },
-          body: JSON.stringify({ cae: recovered.cae, cae_vencimiento: recovered.caeVencimiento, resultado: recovered.resultado, observaciones: [], emitido_at: new Date().toISOString() }),
-        }));
+        if (!coincideComprobanteOriginal(originalSnapshot, recovered)) return json(res, 409, { error: "ARCA_RECEIPT_IDENTITY_MISMATCH" });
+        const persisted = await guardarComprobante(sesion, rest, escrituraSegura, empresaId, ventaId, reserva.id, { cae: recovered.cae, cae_vencimiento: recovered.caeVencimiento, resultado: recovered.resultado, observaciones: [], emitido_at: new Date().toISOString(), ...(snapshotSupported && reserva.impresion_snapshot ? { impresion_snapshot: { ...reserva.impresion_snapshot, ...recovered, cae_vencimiento: recovered.caeVencimiento } } : {}) });
         return json(res, 200, { ok: true, reconciled: true, ambiente: config.ambiente, comprobante: persisted });
       }
+      // A reservation may still be in flight or its transport outcome uncertain.
+      // Never send FECAESolicitar a second time just because consultation is empty.
+      return json(res, 409, { error: "ARCA_RECEIPT_PENDING", retryable: false });
     } else {
+      presupuesto.require(10_000, "before_reservation");
       const ultimo = await ultimoAutorizado(sesion, config.ambiente, ticket, config.cuit_emisor, puntoVenta, tipoCbte);
       const numeroCbte = ultimo + 1;
       try {
-        reserva = first(await rest(sesion, "arca_comprobantes", {
-          method: "POST",
-          headers: { Prefer: "return=representation" },
-          body: JSON.stringify({ empresa_id: empresaId, venta_id: ventaId, punto_venta: puntoVenta, tipo_cbte: tipoCbte, numero_cbte: numeroCbte, resultado: "reservado", observaciones: [], request_id: requestId }),
-        }));
+        presupuesto.require(10_000, "before_reservation");
+        reservaIntentada = true;
+        reserva = await guardarComprobante(sesion, rest, escrituraSegura, empresaId, ventaId, null, { empresa_id: empresaId, venta_id: ventaId, punto_venta: puntoVenta, tipo_cbte: tipoCbte, numero_cbte: numeroCbte, resultado: "reservado", observaciones: [], request_id: requestId, ...(snapshotSupported ? { impresion_snapshot: { ...printSnapshot, numero_cbte: numeroCbte } } : {}) });
       } catch (error) {
         if (error?.status === 409) return json(res, 409, { error: "ARCA_NUMBER_RESERVATION_CONFLICT", retryable: true });
         throw error;
       }
     }
 
+    presupuesto.require(8_500, "before_emission");
     stage = "emision";
     const issued = await solicitarCae(sesion, config.ambiente, ticket, config.cuit_emisor, {
       puntoVenta,
       tipoCbte,
       numeroCbte: Number(reserva.numero_cbte),
+      fecha: fechaComprobante,
       receptor,
       fiscal,
     });
-    const comprobante = first(await rest(sesion, `arca_comprobantes?id=eq.${encodeURIComponent(reserva.id)}`, {
-      method: "PATCH",
-      headers: { Prefer: "return=representation" },
-      body: JSON.stringify({ cae: issued.cae, cae_vencimiento: issued.caeVencimiento, resultado: issued.resultado, observaciones: issued.observaciones, emitido_at: new Date().toISOString() }),
-    }));
-    return json(res, 200, { ok: true, alreadyIssued: false, ambiente: config.ambiente, ventaNumero: venta.numero, comprobante });
+    const printable = { ...(reserva.impresion_snapshot || printSnapshot), numero_cbte: Number(reserva.numero_cbte), cae: issued.cae, cae_vencimiento: issued.caeVencimiento };
+    stage = "persistencia";
+    const comprobante = await guardarComprobante(sesion, rest, escrituraSegura, empresaId, ventaId, reserva.id, { cae: issued.cae, cae_vencimiento: issued.caeVencimiento, resultado: issued.resultado, observaciones: issued.observaciones, emitido_at: new Date().toISOString(), ...(snapshotSupported ? { impresion_snapshot: printable } : {}) });
+    return json(res, 200, { ok: true, alreadyIssued: false, ambiente: config.ambiente, ventaNumero: venta.numero, comprobante, comprobanteImprimible: printable });
   } catch (error) {
     const observations = safeErrors(error);
+    if (reserva && escrituraSegura && stage === "emision" && error?.rechazoDefinitivo === true && ticketEmision && configEmision) {
+      try {
+        const consultado = await consultarComprobante(sesion, configEmision.ambiente, ticketEmision, configEmision.cuit_emisor, puntoVenta, tipoCbte, Number(reserva.numero_cbte));
+        const ultimo = await ultimoAutorizado(sesion, configEmision.ambiente, ticketEmision, configEmision.cuit_emisor, puntoVenta, tipoCbte);
+        if (!consultado && ultimo === Number(reserva.numero_cbte) - 1) {
+          await guardarComprobante(sesion, rest, true, empresaId, ventaId, reserva.id, {
+            resultado: "rechazado_definitivo", numero_cbte: null, observaciones: observations,
+            intentos_emision: [...(reserva.intentos_emision || []), { numero_intentado: Number(reserva.numero_cbte), fecha: new Date().toISOString(), resultado: "R", observaciones: observations, consulta_sin_cae: true, ultimo_autorizado: ultimo }],
+          });
+          return json(res, 422, { error: "ARCA_CAE_REJECTED_FINAL", retryable: false });
+        }
+      } catch { /* Uncertain reconciliation never releases the reservation. */ }
+    }
     if (reserva && observations.length) {
       try {
-        await rest(sesion, `arca_comprobantes?id=eq.${encodeURIComponent(reserva.id)}`, {
-          method: "PATCH",
-          headers: { Prefer: "return=minimal" },
-          body: JSON.stringify({ resultado: "R", observaciones: observations }),
-        });
+        await guardarComprobante(sesion, rest, escrituraSegura, empresaId, ventaId, reserva.id, { resultado: "pendiente_revision", observaciones: observations });
       } catch {}
     }
+    if (error?.code === "ARCA_SECURE_STORAGE_REQUIRED") return json(res, 409, { error: "ARCA_SECURE_STORAGE_REQUIRED" });
     const safe = errorSeguro(error, stage);
-    console.error("SIGO ARCA CAE V2", safe.code, stage);
-    return json(res, safe.status, { error: safe.code, stage, retryable: Boolean(reserva), observaciones: observations });
+    console.error("SIGO ARCA CAE V2", safe.code, stage, { elapsedMs: presupuesto.elapsed(), operation: error?.budgetStage || null });
+    return json(res, safe.status, { error: safe.code, stage, retryable: false, consultaRequerida: Boolean(reserva || reservaIntentada), observaciones: observations });
   }
 }
+
+
+// Shared read-only recovery uses the same authenticated transport, never FECAESolicitar.
+export { json, UUID, rest, first, permiso, sesionUsuario, consultarComprobante };

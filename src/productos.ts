@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { cantidadEscaladaMedida, normalizarUnidadVenta, type UnidadVenta } from "./ventaPorMedidas";
 
 export type ProductoSigo = {
   id: string;
@@ -18,6 +19,7 @@ export type ProductoSigo = {
   stock_actual: number | null;
   stock_minimo: number | null;
   stock_maximo: number | null;
+  unidad_medida?: UnidadVenta | null;
 };
 
 export type GuardarProductoSigoInput = {
@@ -38,6 +40,7 @@ export type GuardarProductoSigoInput = {
   stockActual?: number | null;
   stockMinimo?: number | null;
   stockMaximo?: number | null;
+  unidadMedida?: UnidadVenta | null;
 };
 
 type ProductoGuardadoReadback = {
@@ -64,6 +67,16 @@ function validarNumeroNoNegativo(nombre: string, valor?: number | null) {
 }
 
 function validarProducto(input: GuardarProductoSigoInput) {
+  if (input.unidadMedida != null && normalizarUnidadVenta(input.unidadMedida) !== input.unidadMedida) {
+    throw new Error("Unidad de venta inválida.");
+  }
+  const unidadStockValidacion = input.productoId ? "kg" : input.unidadMedida ?? "unidad";
+  for (const stock of [input.stockActual, input.stockMinimo, input.stockMaximo]) {
+    if (stock != null) {
+      try { cantidadEscaladaMedida(stock, unidadStockValidacion, true); }
+      catch { throw new Error(input.productoId ? "El stock admite hasta tres decimales." : "El stock inicial debe respetar la precisión de la unidad elegida."); }
+    }
+  }
   validarNumeroNoNegativo("COSTO_ACTUAL", input.costoActual);
   validarNumeroNoNegativo("COSTO_ULTIMA_COMPRA", input.costoUltimaCompra);
   if (input.precioVenta != null && (!Number.isFinite(input.precioVenta) || input.precioVenta <= 0)) {
@@ -88,6 +101,12 @@ function mensajeErrorBackend(error: unknown, fallback: string) {
     ? String((error as { message?: unknown }).message ?? "")
     : error instanceof Error ? error.message : String(error ?? "");
 
+  if (original.includes("UNIT_CHANGE_REQUIRES_ZERO_STOCK")) return "No se puede cambiar la unidad mientras el producto tenga stock. No se guardaron los cambios.";
+  if (original.includes("UNIT_CHANGE_REQUIRES_HISTORY_REVIEW")) return "No se puede cambiar la unidad de un producto con movimientos. Revisá su historial; no se guardaron los cambios.";
+  if (original.includes("PRODUCT_STOCK_INVALID")) return "El stock o sus límites no respetan la precisión de la unidad. Los valores históricos sólo pueden conservarse sin cambiarlos; revisá la cantidad ingresada.";
+  if (original.includes("PRODUCT_VALUE_INVALID")) return "El precio, costo o margen debe ser un número válido y no negativo.";
+  if (original.includes("PRODUCT_UNIT_INVALID") || original.includes("UNIDAD_INVALIDA") || original.includes("UNIT_INVALID")) return "La unidad del producto no es válida. Revisala antes de vender.";
+  if (original.includes("guardar_producto_medida_sigo") && (original.includes("Could not find") || original.includes("does not exist"))) return "La base de datos todavía no tiene habilitado el guardado seguro por unidad. No se guardó el producto.";
   if (original.includes("PRODUCT_HAS_STOCK")) {
     return "No se puede dar de baja el producto mientras tenga stock. Dejá el stock en cero mediante el circuito operativo antes de desactivarlo.";
   }
@@ -183,15 +202,46 @@ async function verificarProductoGuardadoSigo(
   validarReadbackProducto(fallback as ProductoGuardadoReadback | null, input, productoId);
 }
 
+export class ProductoGuardadoSinVerificarError extends Error {
+  constructor(public readonly productoId: string | null, causa: string) {
+    super(`No se pudo certificar el resultado del guardado. No repitas el alta: cerrá el formulario y revisá el catálogo. ${causa}`);
+    this.name = "ProductoGuardadoSinVerificarError";
+  }
+}
+
+export async function listarUnidadesProductoSigo(empresaId: string): Promise<Record<string, UnidadVenta | null>> {
+  if (!empresaId) throw new Error("EMPRESA_REQUIRED");
+  const mapa: Record<string, UnidadVenta | null> = {};
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase.rpc("listar_unidades_producto_sigo", { p_empresa_id: empresaId })
+      .order("producto_id").range(from, from + pageSize - 1);
+    if (error) throw new Error("No se pudieron verificar las unidades de los productos. Actualizá el catálogo antes de vender.");
+    const filas = (data ?? []) as { producto_id: string; unidad_medida: unknown }[];
+    for (const fila of filas) mapa[fila.producto_id] = normalizarUnidadVenta(fila.unidad_medida);
+    if (filas.length < pageSize) break;
+  }
+  return mapa;
+}
+
 export async function listarProductosSigo(empresaId: string): Promise<ProductoSigo[]> {
   if (!empresaId) throw new Error("EMPRESA_REQUIRED");
-
-  const { data, error } = await supabase.rpc("listar_productos_sigo", {
-    p_empresa_id: empresaId,
-  });
-
-  if (error) throw new Error(mensajeErrorBackend(error, "No se pudieron cargar los productos."));
-  return (data ?? []) as ProductoSigo[];
+  // PostgREST/Supabase puede limitar una respuesta a 1000 filas. Conservamos paginación
+  // y orden estable, también para unidades; nunca completar faltantes como piezas.
+  const pageSize = 1000;
+  const productos: ProductoSigo[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase.rpc("listar_productos_sigo", { p_empresa_id: empresaId })
+      .order("nombre").order("id").range(from, from + pageSize - 1);
+    if (error) throw new Error(mensajeErrorBackend(error, "No se pudieron cargar los productos."));
+    const pagina = (data ?? []) as ProductoSigo[];
+    productos.push(...pagina);
+    if (pagina.length < pageSize) break;
+  }
+  // Un error de unidades no oculta el catálogo, pero jamás autoriza vender por pieza.
+  let unidades: Record<string, UnidadVenta | null> = {};
+  try { unidades = await listarUnidadesProductoSigo(empresaId); } catch { /* fail closed por producto */ }
+  return productos.map((producto) => ({ ...producto, unidad_medida: unidades[producto.id] ?? null }));
 }
 
 export async function guardarProductoSigo(input: GuardarProductoSigoInput): Promise<string> {
@@ -200,33 +250,54 @@ export async function guardarProductoSigo(input: GuardarProductoSigoInput): Prom
   validarProducto(input);
 
   const esNuevo = !input.productoId;
-  const { data, error } = await supabase.rpc("guardar_producto_sigo", {
-    p_empresa_id: input.empresaId,
-    p_producto_id: input.productoId ?? null,
-    p_codigo_interno: normalizarTexto(input.codigoInterno),
-    p_codigo_barras: normalizarTexto(input.codigoBarras),
-    p_nombre: input.nombre.trim(),
-    p_descripcion: normalizarTexto(input.descripcion),
-    p_categoria: normalizarTexto(input.categoria),
-    p_marca: normalizarTexto(input.marca),
-    p_proveedor: normalizarTexto(input.proveedor),
-    p_costo_actual: input.costoActual ?? (esNuevo ? 0 : null),
-    p_costo_ultima_compra: input.costoUltimaCompra ?? (esNuevo ? 0 : null),
-    p_precio_venta: input.precioVenta ?? (esNuevo ? 0 : null),
-    p_margen_ganancia: input.margenGanancia ?? (esNuevo ? 0 : null),
-    p_margen_porcentaje: input.margenPorcentaje ?? (esNuevo ? 0 : null),
-    p_stock_actual: input.stockActual ?? (esNuevo ? 0 : null),
-    p_stock_minimo: input.stockMinimo ?? null,
-    p_stock_maximo: input.stockMaximo ?? null,
-  });
+  let respuesta;
+  try {
+    respuesta = await supabase.rpc("guardar_producto_medida_sigo", {
+      p_empresa_id: input.empresaId,
+      p_producto_id: input.productoId ?? null,
+      p_codigo_interno: normalizarTexto(input.codigoInterno),
+      p_codigo_barras: normalizarTexto(input.codigoBarras),
+      p_nombre: input.nombre.trim(),
+      p_descripcion: normalizarTexto(input.descripcion),
+      p_categoria: normalizarTexto(input.categoria),
+      p_marca: normalizarTexto(input.marca),
+      p_proveedor: normalizarTexto(input.proveedor),
+      p_costo_actual: input.costoActual ?? (esNuevo ? 0 : null),
+      p_costo_ultima_compra: input.costoUltimaCompra ?? (esNuevo ? 0 : null),
+      p_precio_venta: input.precioVenta ?? (esNuevo ? 0 : null),
+      p_margen_ganancia: input.margenGanancia ?? (esNuevo ? 0 : null),
+      p_margen_porcentaje: input.margenPorcentaje ?? (esNuevo ? 0 : null),
+      p_stock_actual: input.stockActual ?? (esNuevo ? 0 : null),
+      p_stock_minimo: input.stockMinimo ?? null,
+      p_stock_maximo: input.stockMaximo ?? null,
+      p_unidad_medida: input.unidadMedida ?? null,
+    });
+  } catch {
+    throw new ProductoGuardadoSinVerificarError(input.productoId ?? null, "La conexión se interrumpió durante el guardado.");
+  }
+  const { data, error } = respuesta;
 
-  if (error) throw new Error(mensajeErrorBackend(error, "No se pudo guardar el producto."));
+  if (error) {
+    if (!error.code || /fetch|network|timeout/i.test(error.message ?? "")) {
+      throw new ProductoGuardadoSinVerificarError(input.productoId ?? null, "La conexión se interrumpió.");
+    }
+    throw new Error(mensajeErrorBackend(error, "No se pudo guardar el producto."));
+  }
   const productoId = String(data ?? "").trim();
-  if (!productoId) throw new Error("PRODUCT_SAVE_FAILED");
+  if (!productoId) throw new ProductoGuardadoSinVerificarError(input.productoId ?? null, "El servidor no devolvió el identificador.");
 
   // No mostramos éxito hasta releer el registro persistido y certificar costo/stock operativos.
   // Esto protege tanto el alta manual como los productos creados desde Factura IA.
-  await verificarProductoGuardadoSigo(input, productoId);
+  try {
+    await verificarProductoGuardadoSigo(input, productoId);
+    const unidades = await listarUnidadesProductoSigo(input.empresaId);
+    const unidadPersistida = unidades[productoId];
+    if (!unidadPersistida || (input.unidadMedida != null && unidadPersistida !== input.unidadMedida)) {
+      throw new Error("La unidad persistida no coincide con la configurada.");
+    }
+  } catch (err) {
+    throw new ProductoGuardadoSinVerificarError(productoId, err instanceof Error ? err.message : "Falló la lectura de control.");
+  }
   return productoId;
 }
 

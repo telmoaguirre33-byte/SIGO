@@ -1,3 +1,4 @@
+import { esTimeoutFiscal } from "./lib/request-budget.js";
 import { X509Certificate, createPrivateKey } from "node:crypto";
 import https from "node:https";
 import forge from "node-forge";
@@ -97,9 +98,10 @@ async function leerPuntosVenta(sesion, empresaId, ambiente) {
 }
 
 async function descargarSecreto(sesion, empresaId, fileName) {
+  if (sesion.presupuesto) return sesion.presupuesto.run("wsaa_storage_read", 6_000, signal => descargarSecreto({ ...sesion, presupuesto: null, fiscalSignal: signal }, empresaId, fileName));
   const response = await fetch(
     `${sesion.url}/storage/v1/object/authenticated/${BUCKET}/${encodeURIComponent(empresaId)}/${encodeURIComponent(fileName)}`,
-    { headers: { apikey: sesion.anonKey, Authorization: sesion.auth } },
+    { signal: sesion.fiscalSignal, headers: { apikey: sesion.anonKey, Authorization: sesion.auth } },
   );
   if (!response.ok) throw new Error(`SECRET_READ_FAILED:${fileName}:${response.status}`);
   const value = await response.text();
@@ -129,12 +131,14 @@ async function leerTicketWsaa(sesion, empresaId, ambiente, cuit) {
     const raw = await descargarSecreto(sesion, empresaId, ticketFileName(ambiente));
     if (raw.length > 50_000) return null;
     return normalizarTicketGuardado(JSON.parse(raw), ambiente, cuit);
-  } catch {
+  } catch (error) {
+    if (sesion.presupuesto && esTimeoutFiscal(error)) throw error;
     return null;
   }
 }
 
 async function guardarTicketWsaa(sesion, empresaId, ambiente, cuit, ticket) {
+  if (sesion.presupuesto) return sesion.presupuesto.run("wsaa_storage_write", 6_000, signal => guardarTicketWsaa({ ...sesion, presupuesto: null, fiscalSignal: signal }, empresaId, ambiente, cuit, ticket));
   const payload = JSON.stringify({
     version: 1,
     service: SERVICE,
@@ -155,6 +159,7 @@ async function guardarTicketWsaa(sesion, empresaId, ambiente, cuit, ticket) {
         "Content-Type": "application/json",
         "x-upsert": "true",
       },
+      signal: sesion.fiscalSignal,
       body: payload,
     },
   );
@@ -245,7 +250,8 @@ function validarTicket(ticket) {
   return ticket;
 }
 
-async function loginCms(endpoint, cms, soapAction) {
+async function loginCms(endpoint, cms, soapAction, presupuesto = null, fiscalSignal = null) {
+  if (presupuesto) return presupuesto.run("wsaa_login", 12_000, signal => loginCms(endpoint, cms, soapAction, null, signal));
   const soap = `<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:wsaa="http://wsaa.view.sua.dvadac.desein.afip.gov"><soapenv:Header/><soapenv:Body><wsaa:loginCms><wsaa:in0>${escapeXml(cms)}</wsaa:in0></wsaa:loginCms></soapenv:Body></soapenv:Envelope>`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
@@ -254,7 +260,7 @@ async function loginCms(endpoint, cms, soapAction) {
     try {
       response = await fetch(endpoint, {
         method: "POST",
-        signal: controller.signal,
+        signal: fiscalSignal ? AbortSignal.any([controller.signal, fiscalSignal]) : controller.signal,
         headers: {
           "Content-Type": "text/xml;charset=UTF-8",
           SOAPAction: soapAction,
@@ -292,13 +298,13 @@ function puedeReintentarTransporte(error) {
   return error?.code === "WSAA_REJECTED" || /fetch failed|ECONNRESET|EAI_AGAIN|ENOTFOUND|socket|network/i.test(raw);
 }
 
-async function autenticarWsaa(endpoint, traXml, certificatePem, privateKeyPem) {
+async function autenticarWsaa(endpoint, traXml, certificatePem, privateKeyPem, presupuesto = null) {
   const intentarCms = async (algoritmo) => {
     const cms = firmarTra(traXml, certificatePem, privateKeyPem, algoritmo);
     let ultimoError = null;
     for (const soapAction of ["urn:LoginCms", ""]) {
       try {
-        return await loginCms(endpoint, cms, soapAction);
+        return await loginCms(endpoint, cms, soapAction, presupuesto);
       } catch (error) {
         ultimoError = error;
         if (!puedeReintentarTransporte(error)) throw error;

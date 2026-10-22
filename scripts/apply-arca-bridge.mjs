@@ -117,7 +117,7 @@ function patchCae() {
     "cae handler transport const",
   );
 
-  s = replaceOnce(s, `      const recovered = await consultarComprobante(WSFE[config.ambiente], ticket, config.cuit_emisor, reserva.punto_venta, reserva.tipo_cbte, Number(reserva.numero_cbte));`, `      const recovered = await consultarComprobante(WSFE[config.ambiente], ticket, config.cuit_emisor, reserva.punto_venta, reserva.tipo_cbte, Number(reserva.numero_cbte), transport);`, "cae handler reconcile");
+  if (!s.includes("ARCA_LEGACY_RESERVATION_READ_ONLY")) s = replaceOnce(s, `      const recovered = await consultarComprobante(WSFE[config.ambiente], ticket, config.cuit_emisor, reserva.punto_venta, reserva.tipo_cbte, Number(reserva.numero_cbte));`, `      const recovered = await consultarComprobante(WSFE[config.ambiente], ticket, config.cuit_emisor, reserva.punto_venta, reserva.tipo_cbte, Number(reserva.numero_cbte), transport);`, "cae handler reconcile");
   s = replaceOnce(s, `      const ultimo = await ultimoAutorizado(WSFE[config.ambiente], ticket, config.cuit_emisor, puntoVenta, tipoCbte);`, `      const ultimo = await ultimoAutorizado(WSFE[config.ambiente], ticket, config.cuit_emisor, puntoVenta, tipoCbte, transport);`, "cae handler last");
   s = replaceOnce(
     s,
@@ -132,3 +132,4 @@ patchWsaa();
 patchPreflight();
 patchCae();
 console.log("SIGO_ARCA_BRIDGE_PATCH_OK");
+
