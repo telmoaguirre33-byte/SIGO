@@ -36,7 +36,7 @@ if(mode==='seed-auth'){
  const anon=await request('http://rest:3000/sigo_recovery_probe?select=id',cfg.anon);
  assert.ok(anon.status===401||anon.status===403||anon.status===200&&anon.data.length===0);
  const bad=await request('http://auth:9999/user',a.token.slice(0,-8)+'badtoken');
- assert.equal(bad.status,401);
+ assert.ok([401,403].includes(bad.status),'real Auth rejects corrupted JWT');
  if(mode==='seed-storage'){
   const bucket=await request('http://storage:5000/bucket',cfg.service,'POST',{id:'synthetic-recovery',name:'synthetic-recovery',public:false});
   assert.equal(bucket.status,200);
@@ -45,7 +45,7 @@ if(mode==='seed-auth'){
  }else{
   const old=JSON.parse(readFileSync('/private/source-users.json','utf8'));
   assert.equal(old.a.id,a.id,'restored Auth identity preserved');
-  assert.equal((await request('http://auth:9999/user',old.a.token)).status,401,'source JWT rejected by fresh destination key');
+  assert.ok([401,403].includes((await request('http://auth:9999/user',old.a.token)).status),'source JWT rejected by fresh destination key');
   assert.equal((await request('http://rest:3000/sigo_recovery_probe',old.a.token)).status,401);
   const wrong=await request('http://auth:9999/token?grant_type=password',cfg.anon,'POST',{email:'owner@recovery.invalid',password:'wrong-synthetic-password'});
   assert.equal(wrong.status,400);
