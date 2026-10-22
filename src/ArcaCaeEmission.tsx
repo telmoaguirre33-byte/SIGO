@@ -390,7 +390,7 @@ export default function ArcaCaeEmission({
       await cargarVentas();
     } catch (cause) {
       const code = cause instanceof Error ? cause.message : "ARCA_CAE_FAILED";
-      setError(code === "SESSION_REQUIRED" ? "La sesión venció. Volvé a ingresar a SIGO." : ERROR_MESSAGES[code] || "No se pudo completar la solicitud de CAE.");
+      setError(code === "SESSION_REQUIRED" ? "La sesión venció. Volvé a ingresar a SIGO." : ERROR_MESSAGES[code] || `No se pudo completar la solicitud de CAE (código: ${code}). No repitas la emisión hasta comprobar si la venta ya fue facturada.`);
     } finally {
       setEmitiendo(false);
     }
