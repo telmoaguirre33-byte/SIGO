@@ -108,6 +108,8 @@ export default function ArcaLauncher() {
 
   if (!empresa) return null;
   const esVendedor = empresa.rol === "seller";
+  // La venta confirmada debe abrir sólo emisión, nunca la administración fiscal.
+  const modoEmisionVenta = Boolean(ventaSolicitada);
 
   return (
     <>
@@ -139,7 +141,7 @@ export default function ArcaLauncher() {
             </label>
           </div>
           <main className="arca-overlay-content">
-            {esVendedor ? (
+            {esVendedor || modoEmisionVenta ? (
               <ArcaEmisionVendedor
                 key={empresa.empresa_id}
                 empresaId={empresa.empresa_id}

@@ -368,7 +368,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         && item.cantidad <= stock;
     });
 
-  async function confirmar(imprimirDespues = false) {
+  async function confirmar(imprimirDespues = false, emitirFiscalDespues = false) {
     if (!puedeConfirmar || confirmando) return;
     const empresaConfirmacion = empresaId;
     setConfirmando(true);
@@ -391,6 +391,9 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       setExito("Venta confirmada");
       window.setTimeout(() => setExito(""), 2200);
       setUltimaVentaTicket(resultado.ventaId);
+      if (emitirFiscalDespues) {
+        window.dispatchEvent(new CustomEvent("sigo:arca:venta", { detail: { empresaId: empresaConfirmacion, ventaId: resultado.ventaId } }));
+      }
       setAdvertencia("");
       void resultado.verificacion.then((verificado) => {
         if (empresaActivaRef.current !== empresaConfirmacion) return;
@@ -469,8 +472,9 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       if (event.key === "F10") void confirmar(true);
       if (event.key === "F11") {
         event.stopPropagation();
-        if (ultimaVentaTicket) window.dispatchEvent(new CustomEvent("sigo:arca:venta", { detail: { empresaId, ventaId: ultimaVentaTicket } }));
-        else setError("Primero confirmá la venta para emitir la factura fiscal.");
+        if (items.length > 0) void confirmar(false, true);
+        else if (ultimaVentaTicket) window.dispatchEvent(new CustomEvent("sigo:arca:venta", { detail: { empresaId, ventaId: ultimaVentaTicket } }));
+        else setError("No hay una venta para facturar.");
       }
       if (event.key === "F12") {
         event.stopPropagation();
@@ -510,7 +514,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
           <label><span>Cliente</span><select id="sigo-pos-cliente" value={clienteId} onChange={e=>setClienteId(e.target.value)}><option value="">Consumidor final / sin cliente</option>{clientes.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>
           <button className="sigo-pos-action cobrar" disabled={!puedeConfirmar||confirmando} onClick={()=>void confirmar()}>💳 COBRAR <kbd>F9</kbd></button>
           <button className="sigo-pos-action ticket" disabled={!puedeConfirmar||confirmando} onClick={()=>void confirmar(true)}>🖨 COBRAR + TICKET <kbd>F10</kbd></button>
-          <button className="sigo-pos-action fiscal" type="button" onClick={()=>{if(ultimaVentaTicket)window.dispatchEvent(new CustomEvent("sigo:arca:venta",{detail:{empresaId,ventaId:ultimaVentaTicket}}));else setError("Primero confirmá la venta para emitir la factura fiscal.");}}>▤ FACTURA FISCAL <kbd>F11</kbd></button>
+          <button className="sigo-pos-action fiscal" type="button" onClick={()=>{if(items.length>0)void confirmar(false,true);else if(ultimaVentaTicket)window.dispatchEvent(new CustomEvent("sigo:arca:venta",{detail:{empresaId,ventaId:ultimaVentaTicket}}));else setError("No hay una venta para facturar.");}}>▤ FACTURA FISCAL <kbd>F11</kbd></button>
           <button className="sigo-pos-action reprint" disabled={!ultimaVentaTicket||confirmando} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir el ticket."));}}>🖨 REIMPRIMIR <kbd>F12</kbd></button>
           <div className="sigo-pos-mini-actions"><button type="button" disabled={!ultimaVentaTicket} onClick={()=>{const m=encodeURIComponent("Ticket SIGO · Total $ "+total.toLocaleString("es-AR"));window.open("https://wa.me/?text="+m,"_blank","noopener,noreferrer")}}>WhatsApp</button><button type="button" disabled={!ultimaVentaTicket} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket,"a4").catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir A4."));}}>A4</button><button type="button" disabled={!ultimaVentaTicket} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir el ticket."));}}>Ticket 58/80</button><button type="button" onClick={()=>document.querySelector<HTMLElement>(".arca-launcher")?.click()}>ARCA</button></div>
         </aside>
