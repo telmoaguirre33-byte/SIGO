@@ -59,15 +59,23 @@ function mensaje(error: unknown) {
   return raw || "No se pudo procesar la devolución.";
 }
 
-export async function listarVentasDevolviblesSigo(empresaId: string, limite = 30): Promise<VentaDevolvibleSigo[]> {
+export async function listarVentasDevolviblesSigo(empresaId: string, limite = 30, opciones: { pagina?: number; busqueda?: string } = {}): Promise<VentaDevolvibleSigo[]> {
   const safeLimit = Math.min(Math.max(Math.trunc(limite), 1), 100);
-  const { data, error } = await supabase
+  const pagina = Math.max(0, Math.trunc(opciones.pagina ?? 0) || 0);
+  const busqueda = opciones.busqueda?.trim().replace(/^#/, "") ?? "";
+  let consulta = supabase
     .from("ventas_sigo")
     .select("id,numero,total,medio_pago,cliente_id,created_at")
     .eq("empresa_id", empresaId)
     .eq("estado", "confirmada")
     .order("created_at", { ascending: false })
-    .limit(safeLimit);
+    .order("id", { ascending: false });
+  if (busqueda) {
+    if (/^\d+$/.test(busqueda) && Number.isSafeInteger(Number(busqueda))) consulta = consulta.eq("numero", Number(busqueda));
+    else if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(busqueda)) consulta = consulta.eq("id", busqueda);
+    else throw new Error("Buscá por número de venta o identificador completo.");
+  }
+  const { data, error } = await consulta.range(pagina * safeLimit, (pagina + 1) * safeLimit - 1);
 
   if (error) throw new Error(mensaje(error));
   return (data ?? []).map((row: any) => ({
@@ -175,3 +183,4 @@ export async function listarDevolucionesRecientesSigo(empresaId: string, limite 
     createdAt: String(row.created_at),
   }));
 }
+

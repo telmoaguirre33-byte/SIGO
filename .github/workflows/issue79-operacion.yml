@@ -1,0 +1,29 @@
+name: Minorista issue 79 - operacion aislada
+on:
+  pull_request:
+    branches: [main]
+    paths: ['src/**', 'scripts/test-issue79-operacion.mjs', 'tests/issue79/**', '.github/workflows/issue79-operacion.yml']
+permissions:
+  contents: read
+jobs:
+  operation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: node --experimental-vm-modules scripts/test-issue79-operacion.mjs
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund @playwright/test@1.56.1
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --config tests/issue79/playwright.config.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: issue79-operacion-evidence
+          path: test-results/

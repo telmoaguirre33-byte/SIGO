@@ -26,6 +26,7 @@ const vacio: ClienteForm = {
 };
 
 export default function ClientesOperativos({ empresaId }: { empresaId: string }) {
+  const [paginaClientes, setPaginaClientes] = useState(0);
   const [clientes, setClientes] = useState<ClienteSigo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -116,6 +117,8 @@ export default function ClientesOperativos({ empresaId }: { empresaId: string })
     setError("");
   }
 
+  useEffect(() => { setPaginaClientes(0); }, [filtrados]);
+
   async function guardar(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const empresaOperacion = empresaId;
@@ -204,7 +207,7 @@ export default function ClientesOperativos({ empresaId }: { empresaId: string })
             <table className="products-table">
               <thead><tr><th>Cliente</th><th>Documento</th><th>Contacto</th><th>Límite</th><th>Saldo</th><th>Acciones</th></tr></thead>
               <tbody>
-                {filtrados.map((cliente) => (
+                {filtrados.slice(paginaClientes * 50, (paginaClientes + 1) * 50).map((cliente) => (
                   <tr key={cliente.id}>
                     <td><strong>{cliente.nombre}</strong></td>
                     <td>{cliente.documento ?? "-"}</td>
@@ -221,6 +224,7 @@ export default function ClientesOperativos({ empresaId }: { empresaId: string })
                 ))}
               </tbody>
             </table>
+            <nav aria-label="Páginas de clientes"><button disabled={paginaClientes === 0} onClick={() => setPaginaClientes(p => p - 1)}>Anterior</button><span>Página {paginaClientes + 1} · {filtrados.length} clientes</span><button disabled={(paginaClientes + 1) * 50 >= filtrados.length} onClick={() => setPaginaClientes(p => p + 1)}>Siguiente</button></nav>
             {filtrados.length === 0 && <div className="table-empty">No hay clientes para mostrar.</div>}
           </div>
         </div>
@@ -287,3 +291,4 @@ export default function ClientesOperativos({ empresaId }: { empresaId: string })
     </div>
   );
 }
+

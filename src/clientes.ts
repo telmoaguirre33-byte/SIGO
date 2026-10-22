@@ -67,15 +67,17 @@ function mensajeCobro(error: unknown): string {
 
 export async function listarClientesSigo(empresaId: string): Promise<ClienteSigo[]> {
   if (!empresaId) return [];
-  const { data, error } = await supabase
-    .from("clientes_sigo")
-    .select("id,empresa_id,nombre,documento,telefono,email,direccion,limite_credito,saldo_actual,activo,created_at,updated_at")
-    .eq("empresa_id", empresaId)
-    .eq("activo", true)
-    .order("nombre", { ascending: true });
-
-  if (error) throw error;
-  return (data ?? []) as ClienteSigo[];
+  const filas: ClienteSigo[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await supabase.from("clientes_sigo")
+      .select("id,empresa_id,nombre,documento,telefono,email,direccion,limite_credito,saldo_actual,activo,created_at,updated_at")
+      .eq("empresa_id", empresaId).eq("activo", true)
+      .order("nombre", { ascending: true }).order("id", { ascending: true }).range(offset, offset + 999);
+    if (error) throw error;
+    const lote = (data ?? []) as ClienteSigo[];
+    filas.push(...lote);
+    if (lote.length < 1000) return filas;
+  }
 }
 
 export async function guardarClienteSigo(input: ClienteInput): Promise<ClienteSigo> {
@@ -128,3 +130,4 @@ export async function registrarCobroClienteSigo(input: {
   if (!data) throw new Error("El cobro no devolvió comprobante. Verificá la cuenta antes de repetirlo.");
   return String(data);
 }
+

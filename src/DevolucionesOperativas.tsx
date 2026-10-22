@@ -19,6 +19,11 @@ function etiquetaVenta(venta: VentaDevolvibleSigo) {
 }
 
 export default function DevolucionesOperativas({ empresaId, onVolver }: { empresaId: string; onVolver?: () => void }) {
+  const [pagina, setPagina] = useState(0);
+  const [busqueda, setBusqueda] = useState("");
+  const [busquedaAplicada, setBusquedaAplicada] = useState("");
+  const cargaRef = useRef(0);
+  const detalleRef = useRef(0);
   const [ventas, setVentas] = useState<VentaDevolvibleSigo[]>([]);
   const [seleccionada, setSeleccionada] = useState<VentaDevolvibleSigo | null>(null);
   const [items, setItems] = useState<ItemVentaDevolvibleSigo[]>([]);
@@ -32,14 +37,15 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
   const empresaRef = useRef(empresaId);
 
   async function cargar(target = empresaId) {
+    const cargaId = ++cargaRef.current;
     setLoading(true);
     setError("");
     try {
       const [nuevasVentas, nuevasDevoluciones] = await Promise.all([
-        listarVentasDevolviblesSigo(target, 40),
+        listarVentasDevolviblesSigo(target, 40, { pagina, busqueda: busquedaAplicada }),
         listarDevolucionesRecientesSigo(target, 20),
       ]);
-      if (empresaRef.current !== target) return;
+      if (empresaRef.current !== target || cargaRef.current !== cargaId) return;
       setVentas(nuevasVentas);
       setHistorial(nuevasDevoluciones);
       if (seleccionada && !nuevasVentas.some((venta) => venta.id === seleccionada.id)) {
@@ -48,10 +54,10 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
         setCantidades({});
       }
     } catch (err) {
-      if (empresaRef.current !== target) return;
+      if (empresaRef.current !== target || cargaRef.current !== cargaId) return;
       setError(err instanceof Error ? err.message : "No se pudieron cargar las devoluciones.");
     } finally {
-      if (empresaRef.current === target) setLoading(false);
+      if (empresaRef.current === target && cargaRef.current === cargaId) setLoading(false);
     }
   }
 
@@ -64,9 +70,10 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
     setExito("");
     void cargar(empresaId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empresaId]);
+  }, [empresaId, pagina, busquedaAplicada]);
 
   async function elegir(venta: VentaDevolvibleSigo) {
+    const detalleId = ++detalleRef.current;
     setSeleccionada(venta);
     setItems([]);
     setCantidades({});
@@ -75,7 +82,7 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
     setExito("");
     try {
       const detalle = await cargarItemsDevolviblesSigo(empresaId, venta.id);
-      if (empresaRef.current !== empresaId) return;
+      if (empresaRef.current !== empresaId || detalleRef.current !== detalleId) return;
       setItems(detalle);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo cargar el detalle de la venta.");
@@ -210,6 +217,15 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
         <div className="page-header">
           <div><h3>Ventas disponibles</h3><p>Elegí una venta confirmada para devolver productos o anularla por completo.</p></div>
         </div>
+        <form onSubmit={(e) => { e.preventDefault(); setPagina(0); setBusquedaAplicada(busqueda); }}>
+          <label>Buscar venta histórica <input value={busqueda} placeholder="Número o identificador completo" onChange={(e) => setBusqueda(e.target.value)} /></label>
+          <button type="submit" disabled={loading || procesando}>Buscar</button>
+        </form>
+        <nav aria-label="Páginas de ventas para devolución">
+          <button disabled={pagina === 0 || loading || procesando} onClick={() => setPagina(p => p - 1)}>Anterior</button>
+          <span role="status">Página {pagina + 1}</span>
+          <button disabled={ventas.length < 40 || loading || procesando} onClick={() => setPagina(p => p + 1)}>Siguiente</button>
+        </nav>
         {loading ? <p>Cargando ventas…</p> : (
           <div className="sigo-return-sales-list">
             <div className="sigo-return-sales-head"><span>Venta</span><span>Fecha / hora</span><span>Total</span><span></span></div>
@@ -254,3 +270,4 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
     </div>
   );
 }
+

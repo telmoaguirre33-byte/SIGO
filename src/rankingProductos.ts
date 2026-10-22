@@ -13,7 +13,7 @@ export async function cargarRankingProductosSigo(empresaId: string, desde: strin
   const ventas: string[] = [];
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await supabase.from("ventas_sigo").select("id").eq("empresa_id", empresaId).eq("estado", "confirmada")
-      .gte("created_at", inicio.toISOString()).lte("created_at", fin.toISOString()).range(offset, offset + 999);
+      .gte("created_at", inicio.toISOString()).lte("created_at", fin.toISOString()).order("id", { ascending: true }).range(offset, offset + 999);
     if (error) throw error;
     const lote = (data ?? []) as VentaRow[];
     for (const v of lote) if (v.id) ventas.push(v.id);
@@ -23,8 +23,9 @@ export async function cargarRankingProductosSigo(empresaId: string, desde: strin
 
   const acumulado = new Map<string, RankingProductoSigo>();
   for (let i = 0; i < ventas.length; i += 200) {
+    for (let offset = 0; ; offset += 1000) {
     const { data, error } = await supabase.from("venta_items_sigo")
-      .select("producto_id,cantidad,subtotal,productos(nombre,codigo_interno,codigo_barras,categoria,marca,stock_actual)").eq("empresa_id", empresaId).in("venta_id", ventas.slice(i, i + 200));
+      .select("producto_id,cantidad,subtotal,productos(nombre,codigo_interno,codigo_barras,categoria,marca,stock_actual)").eq("empresa_id", empresaId).in("venta_id", ventas.slice(i, i + 200)).order("id", { ascending: true }).range(offset, offset + 999);
     if (error) throw error;
     for (const item of (data ?? []) as ItemRow[]) {
       const id = String(item.producto_id ?? "");
@@ -35,6 +36,9 @@ export async function cargarRankingProductosSigo(empresaId: string, desde: strin
       actual.importe += Number(item.subtotal ?? 0) || 0;
       acumulado.set(id, actual);
     }
+    if ((data ?? []).length < 1000) break;
+    }
   }
   return Array.from(acumulado.values());
 }
+
