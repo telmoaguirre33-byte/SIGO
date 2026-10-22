@@ -459,6 +459,27 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     }
   }
 
+  async function reimprimirUltimaVenta() {
+    if (!ultimaVentaTicket || confirmando) return;
+    setError("");
+    try {
+      const { data, error: fiscalError } = await supabase.from("arca_comprobantes")
+        .select("cae")
+        .eq("empresa_id", empresaId)
+        .eq("venta_id", ultimaVentaTicket)
+        .not("cae", "is", null)
+        .limit(1);
+      if (fiscalError) throw fiscalError;
+      if (data?.length) {
+        window.dispatchEvent(new CustomEvent("sigo:arca:venta", { detail: { empresaId, ventaId: ultimaVentaTicket } }));
+        return;
+      }
+      await imprimirTicketVenta(empresaId, ultimaVentaTicket, "80", true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo recuperar el comprobante para reimprimir.");
+    }
+  }
+
   const unidades = items.reduce((n,item)=>n+item.cantidad,0);
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
@@ -478,8 +499,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       }
       if (event.key === "F12") {
         event.stopPropagation();
-        if (ultimaVentaTicket) void imprimirTicketVenta(empresaId, ultimaVentaTicket, "80", true)
-          .catch((err) => setError(err instanceof Error ? err.message : "No se pudo reimprimir el ticket."));
+        void reimprimirUltimaVenta();
       }
     };
     window.addEventListener("keydown", key);
@@ -515,7 +535,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
           <button className="sigo-pos-action cobrar" disabled={!puedeConfirmar||confirmando} onClick={()=>void confirmar()}>💳 COBRAR <kbd>F9</kbd></button>
           <button className="sigo-pos-action ticket" disabled={!puedeConfirmar||confirmando} onClick={()=>void confirmar(true)}>🖨 COBRAR + TICKET <kbd>F10</kbd></button>
           <button className="sigo-pos-action fiscal" type="button" onClick={()=>{if(items.length>0)void confirmar(false,true);else if(ultimaVentaTicket)window.dispatchEvent(new CustomEvent("sigo:arca:venta",{detail:{empresaId,ventaId:ultimaVentaTicket}}));else setError("No hay una venta para facturar.");}}>▤ FACTURA FISCAL <kbd>F11</kbd></button>
-          <button className="sigo-pos-action reprint" disabled={!ultimaVentaTicket||confirmando} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir el ticket."));}}>🖨 REIMPRIMIR <kbd>F12</kbd></button>
+          <button className="sigo-pos-action reprint" disabled={!ultimaVentaTicket||confirmando} onClick={()=>{void reimprimirUltimaVenta();}}>🖨 REIMPRIMIR <kbd>F12</kbd></button>
           <div className="sigo-pos-mini-actions"><button type="button" disabled={!ultimaVentaTicket} onClick={()=>{const m=encodeURIComponent("Ticket SIGO · Total $ "+total.toLocaleString("es-AR"));window.open("https://wa.me/?text="+m,"_blank","noopener,noreferrer")}}>WhatsApp</button><button type="button" disabled={!ultimaVentaTicket} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket,"a4").catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir A4."));}}>A4</button><button type="button" disabled={!ultimaVentaTicket} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir el ticket."));}}>Ticket 58/80</button><button type="button" onClick={()=>document.querySelector<HTMLElement>(".arca-launcher")?.click()}>ARCA</button></div>
         </aside>
       </div>
