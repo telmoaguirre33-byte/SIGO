@@ -30,6 +30,25 @@ const base = {
   moneda: "PES", cotizacion: 1, neto: 10000, iva: 2100,
   items: [{ nombre: "Producto sintético <QA> & prueba", cantidad: 2, precio_unitario: 6050, subtotal: 12100 }],
 };
+function assertPdfFiscalIdentity(text, ticket) {
+  // PDF extraction inserts line breaks at visual wraps. Normalize whitespace only,
+  // never remove it inside the CAE or discard words from the homologation warning.
+  assert.match(text, new RegExp(`(?:^|\\s)CAE:\\s*${ticket.cae}(?=\\s|$)`), "PDF must preserve the exact, unbroken CAE");
+  if (ticket.ambiente === "homologacion") {
+    assert.ok(text.replace(/\s+/gu, " ").includes("HOMOLOGACIÓN · SIN VALIDEZ FISCAL"), "PDF must preserve the complete homologation warning, allowing visual line wraps only");
+  }
+}
+const extractedIdentity = `HOMOLOGACIÓN · SIN VALIDEZ FISCAL\nCAE: ${base.cae}\nVencimiento CAE: ${base.cae_vencimiento}`;
+assertPdfFiscalIdentity(extractedIdentity, base);
+assertPdfFiscalIdentity(extractedIdentity.replace("VALIDEZ FISCAL", "VALIDEZ\nFISCAL").replace("CAE: ", "CAE:\n"), base);
+for (const bad of [
+  extractedIdentity.replace(base.cae, "70417054367475"),
+  extractedIdentity.replace(base.cae, "70417054\n367476"),
+  extractedIdentity.replace(base.cae, ""),
+  extractedIdentity.replace("FISCAL", ""),
+  extractedIdentity.replace("HOMOLOGACIÓN · ", ""),
+  extractedIdentity.replace("VALIDEZ FISCAL", "VALIDEZFISCAL"),
+]) assert.throws(() => assertPdfFiscalIdentity(bad, base), undefined, "Missing or altered fiscal identity must fail");
 function decodedPayload(ticket) {
   const url = new URL(urlQrFiscal(ticket));
   assert.equal(url.origin + url.pathname, "https://www.arca.gob.ar/fe/qr/");
@@ -247,8 +266,15 @@ print(json.dumps(out))
       assert.ok(p.rightMm <= 51.5, "PDF text stays inside useful 48 mm plus 3 mm margin");
     }
     const allText = pdf.map(p => p.text).join("\n");
+    // Synthetic fixture only. Keep extracted line breaks visible in CI so a
+    // missing field cannot be mistaken for legitimate layout/text extraction.
+    console.log(JSON.stringify({ status: "PDF_TEXT_DIAGNOSTIC", items: count,
+      pages: pdf.map(({ text, ...metrics }) => metrics), allText,
+      exactCaePresent: allText.includes(ticket.cae),
+      warningOnOneLine: allText.includes("SIN VALIDEZ FISCAL"),
+      warningAcrossWhitespace: /SIN\s+VALIDEZ\s+FISCAL/u.test(allText) }));
     for (let i = 1; i <= count; i++) assert.ok(allText.includes(`ITEM-${String(i).padStart(3, "0")}`), `Missing item ${i}`);
-    assert.ok(allText.includes("70417054367476") && allText.includes("SIN VALIDEZ FISCAL"));
+    assertPdfFiscalIdentity(allText, ticket);
     assert.equal(decodePng(await fs.readFile(stem + "-pdf-203dpi.png"), true), urlQrFiscal(ticket), "QR decodes from actual PDF raster at 203 dpi");
     if (metrics.heightMm + 8 <= 500) assert.equal(pdf.length, 1, "Short receipt must be exactly one finite page");
     summary.push({ items: count, pages: pdf.length, widthMm: pdf[0].widthMm, pageHeightMm: pdf[0].heightMm, qrDecoded203dpi: true });
