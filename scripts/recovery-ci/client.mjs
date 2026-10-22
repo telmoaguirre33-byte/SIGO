@@ -50,6 +50,10 @@ if(mode==='seed-auth'){
   const wrong=await request('http://auth:9999/token?grant_type=password',cfg.anon,'POST',{email:'owner@recovery.invalid',password:'wrong-synthetic-password'});
   assert.equal(wrong.status,400);
  }
+ const gateway=await request('http://api-gw:8000/auth/v1/user',a.token,'GET',undefined,{apikey:cfg.anon});
+ assert.equal(gateway.status,200,'gateway Auth route with correct API key');
+ const gatewayRows=await request('http://api-gw:8000/rest/v1/sigo_recovery_probe?select=user_id',a.token,'GET',undefined,{apikey:cfg.anon});
+ assert.equal(gatewayRows.status,200);assert.equal(gatewayRows.data.length,1);
  const file=await request('http://storage:5000/object/authenticated/synthetic-recovery/demo.txt',a.token);
  assert.equal(file.status,200);assert.equal(sha(file.data),sha(payload),'restored Storage bytes SHA256');
  const other=await request('http://storage:5000/object/authenticated/synthetic-recovery/demo.txt',b.token);

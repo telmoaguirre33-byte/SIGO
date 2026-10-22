@@ -68,6 +68,9 @@ def prepare(stage):
         assert not spec.get("network_mode")
         for vol in spec.get("volumes",[]):
             assert "docker.sock" not in str(vol)
+        if service=="supavisor":
+            spec["environment"]["RLIMIT_NOFILE"]="65536"
+            spec["ulimits"]={"nofile":{"soft":65536,"hard":65536}}
         if service=="db":
             spec["command"] += ["-c","cron.launch_active_jobs=off"]
         if service in ["realtime","supavisor"]:
@@ -94,9 +97,9 @@ def network(stage):
         assert not d["HostConfig"].get("PortBindings")
         assert set(d["NetworkSettings"]["Networks"])=={name}
     # Positive control is performed by real Auth/Storage HTTP tests on this same network.
-    probe="""const net=require('node:net'); Promise.all(['1.1.1.1','8.8.8.8'].map(host=>new Promise((resolve,reject)=>{const s=net.connect({host,port:443});s.setTimeout(2000);s.on('connect',()=>{s.destroy();reject(Error('Unexpected external connectivity'))});s.on('error',()=>resolve());s.on('timeout',()=>{s.destroy();resolve()})}))).catch(e=>{console.error(e.message);process.exitCode=1});"""
+    probe="""const net=require('node:net');const probe=(host,port,positive)=>new Promise((resolve,reject)=>{const s=net.connect({host,port});s.setTimeout(2000);s.on('connect',()=>{s.destroy();positive?resolve():reject(Error('Unexpected external connectivity'))});s.on('error',e=>positive?reject(e):resolve());s.on('timeout',()=>{s.destroy();positive?reject(Error('Internal control timed out')):resolve()})});(async()=>{await probe('db',5432,true);await Promise.all(['1.1.1.1','8.8.8.8'].map(h=>probe(h,443,false)))})().catch(e=>{console.error(e.message);process.exitCode=1});"""
     command(["docker","run","--rm","--network",name,E["images"]["node:24-alpine"],"node","-e",probe])
-    E["checks"].append(stage+": internal network, all containers confined, zero published ports, two negative TCP egress probes")
+    E["checks"].append(stage+": internal network, all containers confined, zero published ports, positive internal DB TCP and two negative external TCP probes")
 def client(stage, mode):
     return command(["docker","run","--rm","--network","sigo-recovery-"+stage+"_default",
         "-v",str(WORK/(stage+"-client"))+":/private",
@@ -152,6 +155,13 @@ try:
     E["images"]["node:24-alpine"]=json.loads(command(["docker","image","inspect","node:24-alpine"]))[0]["RepoDigests"][0]
     source=prepare("source")
     target=prepare("target")
+    # Encryption material is part of the private synthetic backup; JWT signing keys remain independent.
+    source_env=dict(line.split("=",1) for line in (WORK/"source/.env").read_text().splitlines() if "=" in line and not line.startswith("#"))
+    target_lines=[]
+    for line in (WORK/"target/.env").read_text().splitlines():
+        name=line.split("=",1)[0]
+        target_lines.append(name+"="+source_env[name] if name in ("POSTGRES_PASSWORD","VAULT_ENC_KEY") else line)
+    (WORK/"target/.env").write_text("\n".join(target_lines)+"\n")
     # The same synthetic passwords are reused only for user login validation, never JWT signing.
     source_cfg=json.loads((source/"config.json").read_text())
     target_cfg=json.loads((target/"config.json").read_text())
@@ -170,6 +180,7 @@ try:
     sql("source",FIXTURE)
     time.sleep(2)
     client("source","seed-storage")
+    assert dc("source","exec","-T","db","psql","-X","-v","ON_ERROR_STOP=1","-h","supavisor","-p","5432","-U","postgres.your-tenant-id","-d","postgres","-At","-c","SELECT 'pooler-ready';").decode().strip()=="pooler-ready"
     E["checks"].append("source real GoTrue users/sessions + PostgREST/RLS/RPC + private Storage upload and readback")
     # Quiesce every service before capturing consistent synthetic database and Storage archives.
     dc("source","stop",*[s for s in json.loads((WORK/"source/isolated.json").read_text())["services"] if s!="db"])
@@ -232,6 +243,8 @@ try:
     dc("target","up","-d","--wait","--wait-timeout","180")
     network("target")
     client("target","verify-restored")
+    assert dc("target","exec","-T","db","psql","-X","-v","ON_ERROR_STOP=1","-h","supavisor","-p","5432","-U","postgres.your-tenant-id","-d","postgres","-At","-c","SELECT 'pooler-ready';").decode().strip()=="pooler-ready"
+    E["checks"].append("real session-pooler SQL succeeds before backup and after restore with preserved synthetic encryption material")
     E["checks"].append("restored real GoTrue password login; preserved users; source JWT and bad password rejected; RLS tenant separation; invoker RPC; Storage SHA256 and private denial; restored synthetic Edge file")
     E["services"]=list(json.loads((WORK/"target/isolated.json").read_text())["services"])
     E["status"]="PASS_SYNTHETIC_FULL_STACK_NOT_COMMERCIAL_ACCREDITATION"
