@@ -35,10 +35,6 @@ function numero(valor: unknown) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function claveOperacion() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
 
 function mensaje(error: unknown) {
   const raw = error instanceof Error
@@ -121,41 +117,90 @@ export async function cargarItemsDevolviblesSigo(empresaId: string, ventaId: str
   });
 }
 
-export async function registrarDevolucionSigo(input: {
+type SolicitudDevolucion = {
   empresaId: string;
   ventaId: string;
   motivo: string;
-  items: Array<{ ventaItemId: string; cantidad: number }>;
+  items?: Array<{ ventaItemId: string; cantidad: number }>;
   idempotencyKey?: string;
-}): Promise<string> {
-  const { data, error } = await supabase.rpc("registrar_devolucion_sigo", {
-    p_empresa_id: input.empresaId,
-    p_venta_id: input.ventaId,
-    p_items: input.items.map((item) => ({ venta_item_id: item.ventaItemId, cantidad: item.cantidad })),
-    p_motivo: input.motivo.trim(),
-    p_idempotency_key: input.idempotencyKey ?? claveOperacion(),
-    p_anular_total: false,
-  });
-  if (error) throw new Error(mensaje(error));
-  if (!data) throw new Error("La devolución no devolvió comprobante.");
-  return String(data);
+};
+type OperacionPendiente = { tipo: "parcial" | "total"; input: SolicitudDevolucion; clave: string };
+const enCurso = new Map<string, { identidad: string; promesa: Promise<string> }>();
+const storageKey = (empresaId: string) => `sigo:devolucion-pendiente:v1:${empresaId}`;
+
+export function devolucionPendienteSigo(empresaId: string): OperacionPendiente | null {
+  const raw = localStorage.getItem(storageKey(empresaId));
+  if (!raw) return null;
+  const op = JSON.parse(raw) as OperacionPendiente;
+  if (op.input?.empresaId !== empresaId || !op.input.ventaId || !op.clave || !["parcial", "total"].includes(op.tipo)) {
+    throw new Error("La operación pendiente requiere revisión antes de otra devolución.");
+  }
+  return op;
 }
 
-export async function anularVentaSigo(input: {
-  empresaId: string;
-  ventaId: string;
-  motivo: string;
-  idempotencyKey?: string;
-}): Promise<string> {
-  const { data, error } = await supabase.rpc("anular_venta_sigo", {
-    p_empresa_id: input.empresaId,
-    p_venta_id: input.ventaId,
-    p_motivo: input.motivo.trim(),
-    p_idempotency_key: input.idempotencyKey ?? claveOperacion(),
-  });
-  if (error) throw new Error(mensaje(error));
-  if (!data) throw new Error("La anulación no devolvió comprobante.");
-  return String(data);
+function identidadOperacion(tipo: OperacionPendiente["tipo"], input: SolicitudDevolucion) {
+  return JSON.stringify([tipo, input.empresaId, input.ventaId, input.motivo.trim(),
+    [...(input.items ?? [])].sort((a, b) => a.ventaItemId.localeCompare(b.ventaItemId))]);
+}
+
+function ejecutarDevolucion(tipo: OperacionPendiente["tipo"], input: SolicitudDevolucion): Promise<string> {
+  const identidad = identidadOperacion(tipo, input);
+  const actual = enCurso.get(input.empresaId);
+  if (actual) {
+    if (actual.identidad !== identidad) return Promise.reject(new Error("Primero conciliá la devolución pendiente."));
+    return actual.promesa;
+  }
+  const promesa = (async () => {
+    const pendiente = devolucionPendienteSigo(input.empresaId);
+    if (pendiente && identidadOperacion(pendiente.tipo, pendiente.input) !== identidad) {
+      throw new Error("Hay una devolución pendiente de confirmación. Reintentá la operación original antes de modificarla.");
+    }
+    const op: OperacionPendiente = pendiente ?? { tipo, input: { ...input, motivo: input.motivo.trim(), items: input.items?.map(i => ({ ...i })) }, clave: input.idempotencyKey ?? crypto.randomUUID() };
+    // Persistir ANTES de enviar: una recarga o timeout debe conservar la identidad original.
+    localStorage.setItem(storageKey(input.empresaId), JSON.stringify(op));
+    const params = {
+      p_empresa_id: op.input.empresaId, p_venta_id: op.input.ventaId,
+      p_motivo: op.input.motivo, p_idempotency_key: op.clave,
+      ...(tipo === "parcial" ? { p_items: op.input.items!.map(i => ({ venta_item_id: i.ventaItemId, cantidad: i.cantidad })), p_anular_total: false } : {}),
+    };
+    let id: string | null = null;
+    let fallo: unknown;
+    try {
+      const { data, error } = await supabase.rpc(tipo === "parcial" ? "registrar_devolucion_sigo" : "anular_venta_sigo", params);
+      if (error) throw error;
+      if (!data) throw new Error("La operación no devolvió comprobante.");
+      id = String(data);
+    } catch (error) {
+      fallo = error;
+      // Timeout tras commit y colisiones concurrentes se concilian leyendo la MISMA clave.
+      try {
+        const { data, error: lecturaError } = await supabase.from("devoluciones_sigo")
+          .select("id").eq("empresa_id", op.input.empresaId).eq("venta_id", op.input.ventaId)
+          .eq("idempotency_key", op.clave).maybeSingle();
+        if (!lecturaError && data?.id) id = String(data.id);
+      } catch { /* Conservar la solicitud para reintentar sin crear otra clave. */ }
+    }
+    if (!id) throw new Error(`${mensaje(fallo)} La operación queda pendiente de confirmación; reintentá la original.`);
+    localStorage.removeItem(storageKey(input.empresaId));
+    return id;
+  })();
+  enCurso.set(input.empresaId, { identidad, promesa });
+  void promesa.finally(() => enCurso.delete(input.empresaId)).catch(() => {});
+  return promesa;
+}
+
+export function registrarDevolucionSigo(input: SolicitudDevolucion & { items: Array<{ ventaItemId: string; cantidad: number }> }): Promise<string> {
+  return ejecutarDevolucion("parcial", input);
+}
+
+export function anularVentaSigo(input: SolicitudDevolucion): Promise<string> {
+  return ejecutarDevolucion("total", input);
+}
+
+export function reintentarDevolucionPendienteSigo(empresaId: string): Promise<string> {
+  const op = devolucionPendienteSigo(empresaId);
+  if (!op) return Promise.reject(new Error("No hay devolución pendiente."));
+  return ejecutarDevolucion(op.tipo, op.input);
 }
 
 export async function listarDevolucionesRecientesSigo(empresaId: string, limite = 20): Promise<DevolucionRecienteSigo[]> {
@@ -175,3 +220,4 @@ export async function listarDevolucionesRecientesSigo(empresaId: string, limite 
     createdAt: String(row.created_at),
   }));
 }
+

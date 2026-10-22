@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   anularVentaSigo,
+  reintentarDevolucionPendienteSigo,
   cargarItemsDevolviblesSigo,
   listarDevolucionesRecientesSigo,
   listarVentasDevolviblesSigo,
@@ -62,6 +63,7 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
     setCantidades({});
     setMotivo("");
     setExito("");
+    setProcesando(false);
     void cargar(empresaId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId]);
@@ -119,6 +121,7 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
         motivo,
         items: seleccionParcial,
       });
+      if (empresaRef.current !== empresaId) return;
       setExito(`Devolución registrada para la venta ${etiquetaVenta(seleccionada)}.`);
       setSeleccionada(null);
       setItems([]);
@@ -126,9 +129,10 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
       setMotivo("");
       await cargar(empresaId);
     } catch (err) {
+      if (empresaRef.current !== empresaId) return;
       setError(err instanceof Error ? err.message : "No se pudo registrar la devolución.");
     } finally {
-      setProcesando(false);
+      if (empresaRef.current === empresaId) setProcesando(false);
     }
   }
 
@@ -145,6 +149,7 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
     setExito("");
     try {
       await anularVentaSigo({ empresaId, ventaId: seleccionada.id, motivo });
+      if (empresaRef.current !== empresaId) return;
       setExito(`Venta ${etiquetaVenta(seleccionada)} anulada correctamente.`);
       setSeleccionada(null);
       setItems([]);
@@ -152,14 +157,36 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
       setMotivo("");
       await cargar(empresaId);
     } catch (err) {
+      if (empresaRef.current !== empresaId) return;
       setError(err instanceof Error ? err.message : "No se pudo anular la venta.");
     } finally {
-      setProcesando(false);
+      if (empresaRef.current === empresaId) setProcesando(false);
+    }
+  }
+
+  async function reintentarPendiente() {
+    if (procesando) return;
+    setProcesando(true);
+    setError("");
+    try {
+      const id = await reintentarDevolucionPendienteSigo(empresaId);
+      if (empresaRef.current !== empresaId) return;
+      setExito(`Operación confirmada: ${id}.`);
+      setSeleccionada(null);
+      setItems([]);
+      setCantidades({});
+      setMotivo("");
+      await cargar(empresaId);
+    } catch (err) {
+      if (empresaRef.current === empresaId) setError(err instanceof Error ? err.message : "No se pudo conciliar la operación.");
+    } finally {
+      if (empresaRef.current === empresaId) setProcesando(false);
     }
   }
 
   return (
     <div className="sigo-returns-page">
+      <button type="button" disabled={procesando} onClick={() => void reintentarPendiente()}>Reintentar operación pendiente</button>
       <div className="page-header">
         <div className="sigo-returns-header-actions">{onVolver ? <button className="admin-button" type="button" onClick={onVolver}>← Volver</button> : null}</div>
         <div>
@@ -254,3 +281,4 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
     </div>
   );
 }
+

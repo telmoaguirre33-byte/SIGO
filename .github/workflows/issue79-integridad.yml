@@ -1,0 +1,53 @@
+name: Minorista issue 79 - integridad aislada
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'api/arca/**'
+      - 'scripts/test-issue79-*.mjs'
+      - '.github/workflows/issue79-integridad.yml'
+permissions:
+  contents: read
+jobs:
+  integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: sigo_returns_qa
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: isolated_test_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Timeout, retries, concurrency, decimal import, fiscal IVA and incomplete reports
+        run: node --experimental-vm-modules scripts/test-issue79-integridad.mjs
+      - name: Incomplete reports block KPIs and export in actual React component
+        run: node scripts/test-issue79-informes-ui.mjs
+      - name: Existing Caja, Stock, ARCA and return guards
+        run: |
+          node scripts/verify-sale-returns-cart.mjs
+          node scripts/verify-stock-import-assistant.mjs
+          node scripts/test-arca-cae-protocol.mjs
+          node scripts/verify-scanner-queue-and-sale-readback.mjs
+      - name: Actual PostgreSQL returns, retries, concurrency and fixture restore
+        env:
+          SIGO_ISOLATED_TEST_DB: '1'
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGDATABASE: sigo_returns_qa
+          PGUSER: postgres
+          PGPASSWORD: isolated_test_only
+        run: node scripts/test-issue79-devoluciones-db.mjs

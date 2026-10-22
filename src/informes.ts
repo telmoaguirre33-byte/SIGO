@@ -291,6 +291,10 @@ export async function cargarResumenOperativoSigo(empresaId: string): Promise<Res
   if (ventasResult.status === "rejected") modulosNoDisponibles.push("Ventas");
   if (cajaResult.status === "rejected") modulosNoDisponibles.push("Caja");
 
+  if (modulosNoDisponibles.length > 0) {
+    throw new Error(`Informe incompleto. No se pudieron cargar: ${modulosNoDisponibles.join(", ")}. Reintentá antes de consultar o exportar totales.`);
+  }
+
   const visibles = productos.filter((producto) => producto.stock_actual != null);
   const productosSinStock = visibles.filter((producto) => numeroSeguro(producto.stock_actual) <= 0).length;
   const productosCriticos = visibles.filter((producto) =>
@@ -400,3 +404,4 @@ export async function cargarResumenOperativoSigo(empresaId: string): Promise<Res
     caja7DiasNeto,
   };
 }
+
