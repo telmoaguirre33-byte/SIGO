@@ -453,7 +453,7 @@ export async function analizarFacturaCompraSigo(empresaId: string, file: File | 
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error("La lectura de la factura tardó demasiado. Probá otra vez con una foto más nítida.");
+      throw new Error("La IA no respondió dentro del tiempo disponible. No significa que la foto sea mala. Intentá nuevamente en unos momentos.");
     }
     throw new Error("No se pudo conectar con el analizador de facturas. Revisá la conexión e intentá nuevamente.");
   } finally {
@@ -466,7 +466,7 @@ export async function analizarFacturaCompraSigo(empresaId: string, file: File | 
     if (code === "AI_NOT_CONFIGURED") throw new Error("La IA de facturas todavía no tiene configurada su clave en producción.");
     if (code === "FORBIDDEN") throw new Error("Tu usuario no tiene permiso para ingresar compras en esta empresa.");
     if (code === "INVALID_IMAGE" || code === "INVALID_DOCUMENT") throw new Error("El archivo no tiene un formato válido o supera el límite permitido.");
-    if (code === "AI_TIMEOUT") throw new Error("La lectura de la factura tardó demasiado. Probá nuevamente con una foto más nítida.");
+    if (code === "AI_TIMEOUT") throw new Error("La IA tardó demasiado en responder. No significa que la foto sea mala. Intentá nuevamente en unos momentos.");
     if (code === "AI_UNAVAILABLE") throw new Error("El servicio de lectura de facturas no está disponible en este momento. La compra manual sigue funcionando.");
     if (code === "AI_REVIEW_REQUIRED") throw new Error(String(payload?.message ?? "La factura necesita revisión manual antes de ingresar stock."));
     if (code === "AI_INVALID_OUTPUT") throw new Error("La IA no pudo interpretar la factura con seguridad. Probá con otra foto o cargá la compra manualmente.");
