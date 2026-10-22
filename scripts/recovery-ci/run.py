@@ -59,6 +59,8 @@ def prepare(stage):
        "--env-file",folder/".env","-f",folder/"docker-compose.yml","config","--format","json"]))
     config["name"]="sigo-recovery-"+stage
     config["networks"]={"default":{"internal":True}}
+    for name, volume in config.get("volumes",{}).items():
+        volume["name"]="sigo-recovery-"+stage+"-"+name
     for service, spec in config["services"].items():
         spec.pop("container_name",None)
         spec.pop("ports",None)
@@ -156,6 +158,10 @@ try:
     target_cfg["password"]=source_cfg["password"]
     (target/"config.json").write_text(json.dumps(target_cfg))
     stages.append("source")
+    print("Starting source database on internal network",flush=True)
+    dc("source","up","-d","--wait","--wait-timeout","180","db")
+    network("source")
+    print("Starting complete source Supabase stack",flush=True)
     dc("source","up","-d","--wait","--wait-timeout","180")
     network("source")
     assert int(sql("source","SHOW server_version_num;"))//10000==17
@@ -232,6 +238,18 @@ try:
 except Exception as error:
     E["status"]="FAIL"
     E["error"]=str(error)
+    diagnostics=[]
+    for stage in stages:
+        try:
+            text=dc(stage,"logs","--no-color","--tail","60","supavisor").decode(errors="replace")
+            for line in (WORK/stage/".env").read_text().splitlines():
+                if "=" in line and re.search(r"PASSWORD|SECRET|KEY|TOKEN",line.split("=",1)[0]):
+                    value=line.split("=",1)[1].strip('"')
+                    if value:
+                        text=text.replace(value,"[REDACTED_SYNTHETIC]")
+            diagnostics.append({"stage":stage,"supavisor":text[-12000:]})
+        except Exception: pass
+    E["diagnostics"]=diagnostics
     raise
 finally:
     (OUT/"result.json").write_text(json.dumps(E,indent=2)+"\n")
