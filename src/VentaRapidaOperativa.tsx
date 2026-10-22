@@ -1,3 +1,4 @@
+import { useFormatoFiscal } from "./formatoFiscal";
 import { useEffect, useMemo, useRef, useState } from "react";
 import BarcodeScanner from "./BarcodeScanner";
 import EditorCantidadMedida from "./EditorCantidadMedida";
@@ -44,6 +45,7 @@ function precioUnitarioVenta(item: ItemVenta, ofertas: OfertaProducto[], descuen
 }
 
 export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos = false }: { empresaId: string; puedeEditarProductos?: boolean }) {
+  const formatoFiscal = useFormatoFiscal(empresaId);
   const [items, setItems] = useState<ItemVenta[]>([]);
   const [unidadesProducto, setUnidadesProducto] = useState<Record<string, UnidadVenta | null>>({});
   const [unidadesCargadas, setUnidadesCargadas] = useState(false);
@@ -577,7 +579,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   function abrirFiscalCaja(accion: "emitir" | "reimprimir" | "historial", ventaId: string | null = ultimaVentaTicket, targetEmpresa = empresaId) {
     if (intentoPendiente || errorPersistenciaCobro || productoPorMedida || document.querySelector(".arca-overlay")) return;
     window.dispatchEvent(new CustomEvent("sigo:fiscal:caja", { detail: {
-      empresaId: targetEmpresa, ventaId, accion, requestId: nuevaClaveVenta(),
+      empresaId: targetEmpresa, ventaId, accion, requestId: nuevaClaveVenta(), formato: formatoFiscal.formato,
     } }));
   }
 
@@ -672,6 +674,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
           <label><span>Cliente</span><select disabled={cajaBloqueada} id="sigo-pos-cliente" value={clienteId} onChange={e=>setClienteId(e.target.value)}><option value="">Consumidor final / sin cliente</option>{clientes.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>
           <button className="sigo-pos-action cobrar" disabled={!puedeConfirmar||cajaBloqueada} onClick={()=>void confirmar()}>💳 COBRAR <kbd>F9</kbd></button>
           <button className="sigo-pos-action ticket" disabled={!puedeConfirmar||cajaBloqueada} onClick={()=>void confirmar(true)}>🖨 COBRAR + TICKET <kbd>F10</kbd></button>
+          <label>Formato fiscal<select aria-label="Formato fiscal" value={formatoFiscal.formato} disabled={cajaBloqueada || !formatoFiscal.listo} onChange={e => formatoFiscal.cambiar(e.target.value)}><option value="58">58 mm</option><option value="80">80 mm</option><option value="a4">A4</option></select></label>
           <button className="sigo-pos-action fiscal" disabled={cajaBloqueada || Boolean(productoPorMedida)} type="button" onClick={()=>{if(items.length>0)void confirmar(false,true);else if(ultimaVentaTicket)abrirFiscalCaja("emitir");else setError("No hay una venta para facturar.");}}>▤ TICKET FISCAL <kbd>F11</kbd></button>
           <button className="sigo-pos-action reprint" disabled={cajaBloqueada || Boolean(productoPorMedida)} onClick={()=>{void reimprimirUltimaVenta();}}>🖨 REIMPRIMIR <kbd>F12</kbd></button>
           <div className="sigo-pos-mini-actions"><button type="button" disabled={cajaBloqueada || Boolean(productoPorMedida)} onClick={()=>abrirFiscalCaja("historial",null)}>Historial / reimprimir</button><button type="button" disabled={cajaBloqueada || !ultimaVentaTicket} onClick={()=>{const m=encodeURIComponent("Ticket SIGO · Total $ "+total.toLocaleString("es-AR"));window.open("https://wa.me/?text="+m,"_blank","noopener,noreferrer")}}>WhatsApp</button><button type="button" disabled={cajaBloqueada || !ultimaVentaTicket} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket,"a4").catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir A4."));}}>A4</button><button type="button" disabled={cajaBloqueada || !ultimaVentaTicket} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir el ticket."));}}>Ticket 58/80</button><button type="button" disabled={cajaBloqueada} onClick={()=>document.querySelector<HTMLElement>(".arca-launcher")?.click()}>ARCA</button></div>

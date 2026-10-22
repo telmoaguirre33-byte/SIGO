@@ -69,7 +69,7 @@ async function rpc(name, payload) {
 }
 window.addEventListener('sigo:fiscal:caja', event => state.fiscal.push(event.detail));
 const mocks = {
-  './supabase': 'export const supabase={from:(t)=>globalThis.__cobro.query(t),rpc:(...a)=>globalThis.__cobro.rpc(...a)};',
+  './supabase': 'export const supabase={auth:{getSession:async()=>({data:{session:{user:{id:"synthetic-user"}}}}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})},from:(t)=>globalThis.__cobro.query(t),rpc:(...a)=>globalThis.__cobro.rpc(...a)};',
   './ticketVenta': 'export const imprimirTicketVenta=async(...a)=>globalThis.__cobro.print(...a);',
   './BarcodeScanner': 'import React from "react";export default function Scanner(p){return React.createElement("button",{id:"synthetic-add",onClick:()=>p.onProduct(globalThis.__cobro.products(p.empresaId)[0])},"Add synthetic");}',
   './clientes': 'export const listarClientesSigo=async()=>[];',

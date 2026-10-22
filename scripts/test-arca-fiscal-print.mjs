@@ -215,7 +215,7 @@ await context.route("**/*", route => route.abort());
 const page = await context.newPage();
 const summary = [];
 try {
-  for (const count of [1, 8, 25, 100]) {
+  for (const [format, count] of [["58",1],["58",8],["58",25],["58",100],["80",1],["a4",1]]) {
     const ticket = { ...base, items: Array.from({ length: count }, (_, i) => ({
       nombre: `ITEM-${String(i + 1).padStart(3, "0")} Producto de prueba con descripción y presentación extensa`,
       cantidad: 2.125, precio_unitario: 1000.5, subtotal: 2126.06,
@@ -234,10 +234,10 @@ try {
         return result;
       };
     });
-    const rejection = await page.evaluate(async ticket => {
-      try { await Fiscal.imprimirTicketFiscal(ticket, "58", () => window.__closed++); return null; }
+    const rejection = await page.evaluate(async ({ticket,format}) => {
+      try { await Fiscal.imprimirTicketFiscal(ticket, format, () => window.__closed++); return null; }
       catch(e) { return String(e); }
-    }, ticket);
+    }, {ticket,format});
     if (rejection) {
       assert.match(rejection, /supera los 50 cm/);
       assert.ok(count >= 25, "Short receipts should not hit the long-ticket safety limit");
@@ -257,9 +257,11 @@ try {
       const pageRule = [...document.styleSheets].flatMap(s => [...s.cssRules]).filter(r => r.type === CSSRule.PAGE_RULE).at(-1).cssText;
       return { widthMm: box.width * 25.4 / 96, heightMm: box.height * 25.4 / 96, overflow, pageRule, html: document.documentElement.outerHTML };
     });
-    assert.ok(Math.abs(metrics.widthMm - 48) < 0.1);
-    assert.deepEqual(metrics.overflow, [], "Nothing may escape the 48 mm content column");
-    assert.match(metrics.pageRule, /size: 58mm \d+mm/);
+    const contentWidth = format === "58" ? 48 : format === "80" ? 70 : 185;
+    assert.ok(Math.abs(metrics.widthMm - contentWidth) < 0.1);
+    assert.deepEqual(metrics.overflow, [], "Nothing may escape the selected content column");
+    if (format === "a4") assert.match(metrics.pageRule, /size: a4/i);
+    else assert.match(metrics.pageRule, new RegExp(`size: ${format}mm \\d+mm`));
     assert.equal(await page.evaluate(() => window.__prints), 1);
     // Dispatch from the parent context: the listener intentionally removes the iframe.
     await page.evaluate(() => document.querySelector("iframe").contentWindow.dispatchEvent(new Event("afterprint")));
@@ -267,7 +269,7 @@ try {
     assert.equal(await page.evaluate(() => window.__closed), 1);
     assert.equal(await page.evaluate(() => window.__prints), 1);
 
-    const stem = path.join(artifacts, `ticket-58mm-${count}-items`);
+    const stem = path.join(artifacts, `ticket-${format}-${count}-items`);
     await fs.writeFile(stem + ".html", "<!doctype html>" + metrics.html);
     await page.setContent(metrics.html);
     const qrPng = await page.locator(".qr svg").screenshot();
@@ -286,24 +288,26 @@ for i,p in enumerate(doc):
 print(json.dumps(out))
 `, stem + ".pdf", stem + "-pdf-203dpi.png"], { encoding: "utf8" }));
     for (const p of pdf) {
-      assert.ok(Math.abs(p.widthMm - 58) < 0.5, "PDF width must be 58 mm");
+      assert.ok(Math.abs(p.widthMm - (format === "a4" ? 210 : Number(format))) < 0.5, "PDF width matches selected paper");
+      if (format === "a4") assert.ok(Math.abs(p.heightMm - 297) < 0.5, "A4 height is 297 mm");
       assert.ok(p.heightMm >= 59.5 && p.heightMm <= 500.5, "PDF has finite bounded height");
       assert.ok(p.text.trim().length > 10, "No blank PDF pages");
-      assert.ok(p.rightMm <= 51.5, "PDF text stays inside useful 48 mm plus 3 mm margin");
+      assert.ok(p.rightMm <= contentWidth + (format === "a4" ? 10.5 : 3.5), "PDF text stays inside useful width and margin");
     }
     const allText = pdf.map(p => p.text).join("\n");
     // Synthetic fixture only. Keep extracted line breaks visible in CI so a
     // missing field cannot be mistaken for legitimate layout/text extraction.
-    console.log(JSON.stringify({ status: "PDF_TEXT_DIAGNOSTIC", items: count,
+    console.log(JSON.stringify({ status: "PDF_TEXT_DIAGNOSTIC", format, items: count,
       pages: pdf.map(({ text, ...metrics }) => metrics), allText,
       exactCaePresent: allText.includes(ticket.cae),
       warningOnOneLine: allText.includes("SIN VALIDEZ FISCAL"),
       warningAcrossWhitespace: /SIN\s+VALIDEZ\s+FISCAL/u.test(allText) }));
     for (let i = 1; i <= count; i++) assert.ok(allText.includes(`ITEM-${String(i).padStart(3, "0")}`), `Missing item ${i}`);
     assertPdfFiscalIdentity(allText, ticket);
+    assert.ok(allText.includes("12.100,00"), "Authoritative total remains intact in every format");
     assert.equal(decodePng(await fs.readFile(stem + "-pdf-203dpi.png"), true), urlQrFiscal(ticket), "QR decodes from actual PDF raster at 203 dpi");
     if (metrics.heightMm + 8 <= 500) assert.equal(pdf.length, 1, "Short receipt must be exactly one finite page");
-    summary.push({ items: count, pages: pdf.length, widthMm: pdf[0].widthMm, pageHeightMm: pdf[0].heightMm, qrDecoded203dpi: true });
+    summary.push({ format, items: count, pages: pdf.length, widthMm: pdf[0].widthMm, pageHeightMm: pdf[0].heightMm, qrDecoded203dpi: true });
   }
   // Empty detail is rejected before a frame or a print job can be created.
   await page.setContent("<html><body></body></html>");

@@ -14,7 +14,7 @@ const origin = "https://sigo-medidas-qa.invalid/";
 const artifacts = process.env.MEDIDAS_QA_DIR || await fs.mkdtemp(path.join(os.tmpdir(), "sigo-medidas-browser-"));
 await fs.mkdir(artifacts, { recursive: true });
 const mocks = {
-  "./supabase": `export const supabase = { rpc: async (name, args) => {
+  "./supabase": `export const supabase = { auth:{getSession:async()=>({data:{session:{user:{id:"synthetic-user"}}}}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})}, rpc: async (name, args) => {
     if (name !== 'buscar_producto_codigo_sigo') throw new Error('Unexpected synthetic RPC: '+name);
     if (args.p_empresa_id !== globalThis.__qa.empresaId) throw new Error('Unexpected tenant');
     return {data: globalThis.__qa.products.filter(p => p.codigo_barras === args.p_codigo || p.codigo_interno === args.p_codigo),error:null};

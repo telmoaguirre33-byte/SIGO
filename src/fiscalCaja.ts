@@ -1,10 +1,10 @@
 import { supabase } from "./supabase";
-import type { TicketFiscal } from "./ticketFiscal";
+import type { FormatoFiscal, TicketFiscal } from "./ticketFiscal";
 export type DatosEmisorImpresion = { domicilio: string; condicion_iva: string; ingresos_brutos: string; inicio_actividades: string | null; excepcion_inicio: string | null };
 export type ConfigImpresion = { config: DatosEmisorImpresion | null; puedeConfigurar: boolean; identidad: { cuit_emisor: string; razon_social: string }; faltantes?: string[] };
 export function leerImpresionFiscal(empresaId: string, puntoVenta: number): Promise<ConfigImpresion> { return fiscalFetch(`/api/arca/impresion?empresaId=${encodeURIComponent(empresaId)}&puntoVenta=${puntoVenta}`); }
 export function guardarImpresionFiscal(empresaId: string, puntoVenta: number, datos: DatosEmisorImpresion): Promise<ConfigImpresion> { return fiscalFetch('/api/arca/impresion', { empresaId, puntoVenta, datos }); }
-export type SolicitudFiscalCaja = { empresaId: string; ventaId: string | null; accion: "emitir" | "reimprimir" | "historial"; requestId: string };
+export type SolicitudFiscalCaja = { empresaId: string; ventaId: string | null; accion: "emitir" | "reimprimir" | "historial"; requestId: string; formato?: FormatoFiscal };
 export type PreparacionFiscal = {
   venta: { id: string; numero: number; total: number; cliente_id: string | null };
   config: { ambiente: "homologacion" | "produccion"; activo: boolean; ultima_prueba_ok: boolean } | null;

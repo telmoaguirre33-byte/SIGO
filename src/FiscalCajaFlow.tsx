@@ -1,3 +1,4 @@
+import { formatoFiscalValido, useFormatoFiscal } from "./formatoFiscal";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import { imprimirTicketVenta } from "./ticketVenta";
@@ -8,6 +9,8 @@ import { leerImpresionFiscal, type ConfigImpresion, prepararFiscalCaja, recupera
 type Inicio = { preparado: PreparacionFiscal; ticket?: TicketFiscal; requiereAccion?: string; comun?: boolean; configuracionImpresion?: ConfigImpresion };
 export default function FiscalCajaFlow({ solicitud, alCerrar }: { solicitud: SolicitudFiscalCaja; alCerrar: () => void }) {
   const { empresaId, ventaId, accion } = solicitud;
+  const preferenciaFormato = useFormatoFiscal(empresaId);
+  const [formato, setFormato] = useState(() => formatoFiscalValido(solicitud.formato));
   const [estado, setEstado] = useState(accion === "historial" ? "Historial de comprobantes" : "Recuperando venta…");
   const [error, setError] = useState("");
   const [ocupado, setOcupado] = useState(accion !== "historial");
@@ -30,8 +33,8 @@ export default function FiscalCajaFlow({ solicitud, alCerrar }: { solicitud: Sol
     alCerrar();
   }
   async function imprimir(c: TicketFiscal) {
-    setEstado("Ticket fiscal listo · abriendo impresión de 58 mm…");
-    await imprimirTicketFiscal(c, "58", () => cerrarConFactura(c));
+    setEstado(`Ticket fiscal listo · abriendo impresión ${formato === "a4" ? "A4" : formato + " mm"}…`);
+    await imprimirTicketFiscal(c, formato, () => cerrarConFactura(c));
   }
   useEffect(() => {
     if (!ventaId) return;
@@ -133,9 +136,9 @@ export default function FiscalCajaFlow({ solicitud, alCerrar }: { solicitud: Sol
       <label>Tipo de factura<select value={tipoCbte} onChange={e => setTipoCbte(e.target.value)} disabled={Boolean(preparado?.comprobante)}><option value="11">Factura C</option><option value="6">Factura B</option><option value="1">Factura A</option></select></label>
       <button disabled={!puntoVenta || Boolean(preparado?.comprobante?.cae) || Boolean(configImpresion && (!configImpresion.config || configImpresion.faltantes?.length))} onClick={() => void emitirExplicito()}>Continuar emisión de esta venta</button>
     </div> : null}
-    {ticket ? <>{ticket.advertencia ? <p role="alert">{ticket.advertencia}</p> : null}<p>CAE {ticket.cae} · Factura {String(ticket.punto_venta).padStart(5, "0")}-{String(ticket.numero_cbte).padStart(8, "0")}</p><button disabled={ocupado} onClick={() => { if (accionEnCurso.current) return; accionEnCurso.current = true; setOcupado(true); void imprimir(ticket).catch(e => setError(e.message)).finally(() => { accionEnCurso.current = false; setOcupado(false); }); }}>Reimprimir fiscal 58 mm</button><button disabled={ocupado} onClick={() => { if (accionEnCurso.current) return; accionEnCurso.current = true; setOcupado(true); void imprimirTicketFiscal(ticket, "a4", () => cerrarConFactura(ticket)).catch(e => setError(e.message)).finally(() => { accionEnCurso.current = false; setOcupado(false); }); }}>Imprimir factura A4</button></> : null}
+    {ticket ? <>{ticket.advertencia ? <p role="alert">{ticket.advertencia}</p> : null}<p>CAE {ticket.cae} · Factura {String(ticket.punto_venta).padStart(5, "0")}-{String(ticket.numero_cbte).padStart(8, "0")}</p><label>Formato fiscal<select aria-label="Formato fiscal del comprobante" value={formato} disabled={ocupado} onChange={e => { const value = formatoFiscalValido(e.target.value); setFormato(value); preferenciaFormato.cambiar(value); }}><option value="58">58 mm</option><option value="80">80 mm</option><option value="a4">A4</option></select></label><button disabled={ocupado} onClick={() => { if (accionEnCurso.current) return; accionEnCurso.current = true; setOcupado(true); void imprimir(ticket).catch(e => setError(e.message)).finally(() => { accionEnCurso.current = false; setOcupado(false); }); }}>Reimprimir fiscal {formato === "a4" ? "A4" : formato + " mm"}</button></> : null}
     <div className="form-actions"><button disabled={ocupado || !(seleccion || ventaId)} onClick={() => void consultar()}>Consultar resultado sin emitir</button><button onClick={() => ticket ? cerrarConFactura(ticket) : alCerrar()}>Volver a caja</button></div>
     {error ? <p className="form-error" role="alert">{error}</p> : null}
-    <small>Impresión de 58 mm. Elegí POS-58 (copy 1), escala 100% y desactivá encabezados/pies en el diálogo. SIGO no modifica Windows ni el controlador.</small>
+    <small>Elegí el papel y la impresora correspondientes en el diálogo del sistema, escala 100% y sin encabezados/pies. Para 58 mm: POS-58 (copy 1). SIGO no modifica Windows ni el controlador.</small>
   </section>;
 }
