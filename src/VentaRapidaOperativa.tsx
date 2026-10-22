@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import BarcodeScanner from "./BarcodeScanner";
+import { supabase } from "./supabase";
 import { imprimirTicketVenta } from "./ticketVenta";
 import { isLegacyDuplicateProduct, normalizeBarcode, type BarcodeProduct } from "./barcode";
 import { listarClientesSigo, type ClienteSigo } from "./clientes";
