@@ -12,17 +12,20 @@ let state;
 function reset(extra = {}) { state = { snapshot: true, row: null, issued: 0, last: 0, consult: 0, writes: [], reads: [], timeout: false, name: 'Empresa original', producto: 'Queso original', unidad: 'kg', fiscalDate: '20261021', printConfig: datosImpresion, canConfigure: true, storageSecure: true, saleId: V, ...extra }; }
 const response = (x, status = 200) => new Response(JSON.stringify(x), { status });
 const oldFetch = globalThis.fetch;
+const realNow = performance.now.bind(performance);
+let clockOffset = 0;
+Object.defineProperty(performance, "now", { configurable: true, value: () => realNow() + clockOffset });
 globalThis.fetch = async (url, init = {}) => {
   const u = new URL(url), method = init.method || 'GET'; const body = init.body ? JSON.parse(init.body) : null;
   if (u.pathname === '/rest/v1/rpc/arca_escritura_fiscal_segura') return response(state.storageSecure);
-  if (u.pathname === '/auth/v1/user') return response({ id: 'synthetic-user' });
-  if (u.pathname === '/rest/v1/rpc/tiene_permiso_empresa') return response(body.p_permiso === 'arca.configure' ? state.canConfigure : true);
+  if (u.pathname === '/auth/v1/user') { if(state.expireAuth) clockOffset += 27000; return response({ id: 'synthetic-user' }); }
+  if (u.pathname === '/rest/v1/rpc/tiene_permiso_empresa') { if(state.slowPermissions) clockOffset += 5800; return response(body.p_permiso === 'arca.configure' ? state.canConfigure : true); }
   if (u.pathname.includes('/storage/v1/object/authenticated/')) return response({ version: 1, service: 'wsfe', ambiente: 'produccion', cuit: '30000000007', token: 'synthetic-token', sign: 'synthetic-sign', generationTime: new Date(Date.now() - 60_000).toISOString(), expirationTime: new Date(Date.now() + 3600_000).toISOString() });
   if (u.pathname.endsWith('/wsfe')) {
     assert.equal(method, 'POST');
     if (body.action === 'FECompUltimoAutorizado') { state.last++; return response({ ok: true, body: state.invalidLast ? '<Unexpected />' : '<CbteNro>41</CbteNro>' }); }
     if (body.action === 'FECAESolicitar') {
-      state.issued++; state.fiscalDate = body.soap.match(/<ar:CbteFch>(\d{8})<\/ar:CbteFch>/)[1]; if(state.delayIssue) await new Promise(r=>setTimeout(r,state.delayIssue)); state.authorized = true; assert.match(body.soap, /<ar:CbteDesde>42<\/ar:CbteDesde>/); assert.match(body.soap, /<ar:ImpTotal>10.00<\/ar:ImpTotal>/);
+      state.issued++; state.issueSignal=init.signal; if(state.issueDeferred) await state.issueDeferred; state.fiscalDate = body.soap.match(/<ar:CbteFch>(\d{8})<\/ar:CbteFch>/)[1]; if(state.delayIssue) await new Promise(r=>setTimeout(r,state.delayIssue)); state.authorized = true; if(state.expireIssue) clockOffset += 25000; assert.match(body.soap, /<ar:CbteDesde>42<\/ar:CbteDesde>/); assert.match(body.soap, /<ar:ImpTotal>10.00<\/ar:ImpTotal>/);
       if (state.rejectConfirmed) {
         state.authorized=false; state.missingArca=!state.rejectConflict;
         return response({ok:true,body:`<FeCabResp><PtoVta>1</PtoVta><CbteTipo>11</CbteTipo><Resultado>R</Resultado></FeCabResp><FECAEDetResponse><DocTipo>99</DocTipo><DocNro>0</DocNro><CbteDesde>42</CbteDesde><CbteHasta>42</CbteHasta><CbteFch>${state.fiscalDate}</CbteFch><Resultado>R</Resultado><Observaciones><Obs><Code>10008</Code><Msg>Rechazo sintético</Msg></Obs></Observaciones></FECAEDetResponse>`});
@@ -43,7 +46,7 @@ globalThis.fetch = async (url, init = {}) => {
   if (!u.pathname.startsWith('/rest/v1/')) throw new Error('Unexpected synthetic URL ' + url);
   if (method === 'GET') state.reads.push(u.pathname + u.search); else state.writes.push({ table: u.pathname, method, body });
   const table = u.pathname.split('/').pop();
-  if (table === 'arca_impresion_config') { if(method === 'POST') { state.printConfig = body; return response([body]); } return response(state.printConfig ? [state.printConfig] : []); }
+  if (table === 'arca_impresion_config') { if(state.expirePrintConfig) clockOffset += 27000; if(method === 'POST') { state.printConfig = body; return response([body]); } return response(state.printConfig ? [state.printConfig] : []); }
   if (table === 'arca_config') return response([{ ambiente: 'produccion', cuit_emisor: '30000000007', razon_social: state.name, certificado_ref: 'synthetic', certificado_vence: '2028-12-31', wsaa_service: 'wsfe', wsfe_version: 'WSFEv1', activo: true, ultima_prueba_ok: true }]);
   if (table === 'ventas_sigo') return response([{ id: state.saleId, numero: 99, estado: 'confirmada', total: 10, cliente_id: null, anulada_at: null }]);
   if (table === 'venta_items_sigo') return response([{ producto_id: P, cantidad: .5, unidad_medida: state.unidad, precio_unitario: 20, subtotal: 10 }]);
@@ -53,8 +56,8 @@ globalThis.fetch = async (url, init = {}) => {
     if(method !== 'GET') assert.equal(init.headers.Authorization,'Bearer synthetic-test-server-key','receipt mutations must use server transport');
     if (u.searchParams.get('select') === 'impresion_snapshot') return state.snapshot ? response([]) : response({ code: '42703' }, 400);
     if (method === 'GET') { assert.equal(u.searchParams.get('empresa_id'), 'eq.' + E); assert.equal(u.searchParams.get('venta_id'), 'eq.' + state.saleId); return response(state.row && (!state.row.venta_id || state.row.venta_id===state.saleId) ? [state.row] : []); }
-    if (method === 'POST') { if(state.row && state.row.numero_cbte != null) return response({code:'23505'},409); state.row = { id: '44444444-4444-4444-8444-444444444444', ...body }; return response([state.row]); }
-    if (method === 'PATCH') { if(state.failPatch) return response({code:'synthetic'},500); Object.assign(state.row, body); return response([state.row]); }
+    if (method === 'POST') { if(state.row && state.row.numero_cbte != null) return response({code:'23505'},409); state.row = { id: '44444444-4444-4444-8444-444444444444', ...body }; if(state.expireReserve) clockOffset += 27000; return response([state.row]); }
+    if (method === 'PATCH') { if(state.failPatch) return response({code:'synthetic'},500); Object.assign(state.row, body); if(state.expirePersist) clockOffset += 27000; return response([state.row]); }
   }
   throw new Error('Unexpected synthetic request ' + method + ' ' + url);
 };
@@ -116,7 +119,7 @@ try {
   console.log('PASS: missing legal header blocks before ARCA; only admin configures print metadata, identity server-bound, explicit date exception');
   reset({storageSecure:false});r=await call(emitir,'POST',input);assert.equal(r.status,409);assert.equal(r.body.error,'ARCA_SECURE_STORAGE_REQUIRED');assert.equal(state.issued,0);assert.equal(state.writes.length,0);
   reset();delete process.env.SUPABASE_SERVICE_ROLE_KEY;r=await call(emitir,'POST',input);assert.equal(r.status,409);assert.equal(state.issued,0);process.env.SUPABASE_SERVICE_ROLE_KEY='synthetic-test-server-key';
-  reset({row:{ id:'44444444-4444-4444-8444-444444444444',empresa_id:E,venta_id:V,punto_venta:1,tipo_cbte:11,numero_cbte:42,request_id:`sigo:${E}:${V}:1:11` }});r=await call(legacyEmitir,'POST',input);assert.equal(r.status,409,JSON.stringify(r));assert.equal(r.body.error,'ARCA_RECEIPT_IDENTITY_MISMATCH');assert.equal(state.issued,0);assert.equal(state.consult,0);
+  reset({row:{ id:'44444444-4444-4444-8444-444444444444',empresa_id:E,venta_id:V,punto_venta:1,tipo_cbte:11,numero_cbte:42,request_id:`sigo:${E}:${V}:1:11` }});r=await call(legacyEmitir,'POST',input);assert.equal(r.status,409,JSON.stringify(r));assert.equal(r.body.error,'ARCA_LEGACY_RECEIPT_IDENTITY_REQUIRED');assert.equal(r.body.retryable,false);assert.equal(state.issued,0);assert.equal(state.consult,0);
   state.storageSecure=false;r=await call(legacyEmitir,'POST',{...input,flujoCaja:undefined});assert.equal(r.status,409);assert.equal(r.body.error,'ARCA_SECURE_STORAGE_REQUIRED');
   console.log('PASS: missing secure writer/DB hardening blocks before ARCA; legacy uncertain reservation never reissues');
   const V2='55555555-5555-4555-8555-555555555555';
@@ -144,4 +147,39 @@ try {
   }
   console.log(`PASS: ${protocolCases.length} incomplete/mismatched SOAP identities, ranges, currency and CAEA responses rejected without writes or another CAE; mismatched approval preserves reservation`);
 
-} finally { globalThis.fetch = oldFetch; }
+  reset({expireAuth:true}); r=await call(emitir,'POST',input);
+  assert.equal(r.status,504); assert.equal(r.body.error,'ARCA_TIMEOUT'); assert.equal(r.body.retryable,false); assert.equal(r.body.consultaRequerida,false); assert.equal(state.writes.length,0); assert.equal(state.issued,0);
+  reset({expirePrintConfig:true}); r=await call(emitir,'POST',input); assert.equal(r.status,504); assert.equal(r.body.error,'ARCA_TIMEOUT'); assert.equal(state.issued,0); assert.equal(state.writes.length,0);
+  reset({slowPermissions:true}); r=await call(emitir,'POST',input);
+  assert.equal(r.status,504); assert.equal(state.issued,0); assert.equal(state.writes.length,0); assert.equal(state.last,0);
+  console.log('PASS: authentication and cumulative preparation consume one deadline; no reserve or CAE when remaining time is insufficient');
+  reset({expireReserve:true,missingArca:true}); r=await call(emitir,'POST',input);
+  assert.equal(r.status,504); assert.equal(r.body.consultaRequerida,true); assert.equal(r.body.retryable,false); assert.ok(state.row.impresion_snapshot); assert.equal(state.issued,0);
+  state.expireReserve=false; r=await call(emitir,'POST',input);
+  assert.equal(r.status,409); assert.equal(r.body.error,'ARCA_RECEIPT_PENDING'); assert.equal(state.issued,0); assert.equal(state.consult,1);
+  console.log('PASS: response lost after reservation commit remains reserved; next request consults only and never emits');
+  reset({expireIssue:true}); r=await call(emitir,'POST',input);
+  assert.equal(r.status,504); assert.equal(r.body.retryable,false); assert.equal(r.body.consultaRequerida,true); assert.equal(state.issued,1); assert.equal(state.row.cae,undefined);
+  state.expireIssue=false; r=await call(recuperar,'GET'); assert.equal(r.status,200,JSON.stringify(r)); assert.equal(state.issued,1); assert.equal(state.consult,1);
+  console.log('PASS: deadline after upstream authorization preserves uncertain reservation; GET recovers canonical original without a second CAE');
+  const realSetTimeout = globalThis.setTimeout;
+  let releaseLate;
+  reset({issueDeferred:new Promise(resolve=>{releaseLate=resolve;})});
+  try {
+    globalThis.setTimeout = (callback, ms, ...args) => realSetTimeout(callback, ms >= 5000 && ms <= 16000 ? 20 : ms, ...args);
+    r=await call(emitir,'POST',input);
+    assert.equal(r.status,504); assert.equal(r.body.consultaRequerida,true); assert.equal(r.body.retryable,false); assert.equal(state.issued,1); assert.equal(state.issueSignal.aborted,true);
+    const writesBeforeLate=state.writes.length;
+    releaseLate(); await new Promise(resolve=>realSetTimeout(resolve,30));
+    assert.equal(state.authorized,true); assert.equal(state.row.cae,undefined); assert.equal(state.writes.length,writesBeforeLate); assert.equal(state.issued,1);
+  } finally { globalThis.setTimeout = realSetTimeout; releaseLate(); }
+  state.issueDeferred=null; r=await call(recuperar,'GET'); assert.equal(r.status,200); assert.equal(state.issued,1); assert.equal(state.consult,1);
+  console.log('PASS: upstream authorization after ignored abort causes no late PATCH or second emission; explicit GET alone recovers it');
+  reset({expirePersist:true}); r=await call(emitir,'POST',input);
+  assert.equal(r.status,504); assert.equal(r.body.stage,'persistencia'); assert.equal(r.body.retryable,false); assert.equal(state.issued,1); assert.ok(state.row.cae);
+  state.expirePersist=false; r=await call(recuperar,'GET'); assert.equal(r.status,200); assert.equal(r.body.fuente,'snapshot'); assert.equal(state.issued,1);
+  console.log('PASS: response lost after authorized receipt commit is recovered by snapshot without another emission');
+  reset({row:{id:'44444444-4444-4444-8444-444444444444',empresa_id:E,venta_id:V,punto_venta:1,tipo_cbte:11,numero_cbte:42,request_id:`sigo:${E}:${V}:1:11`}});
+  r=await call(recuperar,'GET'); assert.equal(r.status,409); assert.equal(r.body.error,'ARCA_LEGACY_RECEIPT_IDENTITY_REQUIRED'); assert.equal(r.body.retryable,false); assert.equal(state.consult,0); assert.equal(state.issued,0); assert.equal(state.writes.length,0);
+  console.log('PASS: legacy uncertain reservation lacking immutable issuer/environment is explicitly blocked, not reconstructed from current configuration');
+} finally { globalThis.fetch = oldFetch; Object.defineProperty(performance, 'now', { configurable:true, value:realNow }); }

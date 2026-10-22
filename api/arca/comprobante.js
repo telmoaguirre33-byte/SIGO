@@ -1,3 +1,4 @@
+import { crearPresupuestoFiscal } from "./lib/request-budget.js";
 import { snapshotConfiable } from "./lib/receipt-store.js";
 import { coincideComprobanteOriginal, leerItemsImpresion } from "./lib/print-config.js";
 import { json, UUID, rest, first, sesionUsuario, consultarComprobante } from "./cae-v2.js";
@@ -9,9 +10,10 @@ export default async function handler(req, res) {
   const empresaId = String(req.query?.empresaId || "");
   const ventaId = String(req.query?.ventaId || "");
   if (!UUID.test(empresaId) || !UUID.test(ventaId)) return json(res, 400, { error: "ARCA_CAE_INPUT_INVALID" });
-  const sesion = await sesionUsuario(req, empresaId);
-  if (!sesion) return json(res, 403, { error: "ARCA_ISSUE_FORBIDDEN" });
+  const presupuesto = crearPresupuestoFiscal();
   try {
+    const sesion = await sesionUsuario(req, empresaId, presupuesto);
+    if (!sesion) return json(res, 403, { error: "ARCA_ISSUE_FORBIDDEN" });
     const cbte = first(await rest(sesion, `arca_comprobantes?empresa_id=eq.${encodeURIComponent(empresaId)}&venta_id=eq.${encodeURIComponent(ventaId)}&select=*`));
     if (!cbte) return json(res, 404, { error: "ARCA_NOT_ISSUED" });
     if (cbte.resultado === "rechazado_definitivo" && !cbte.cae) return json(res, 409, { error: "ARCA_CAE_REJECTED_FINAL" });
@@ -24,7 +26,7 @@ export default async function handler(req, res) {
     if (cbte.cae && snapshotIdentificado && snapshot.cae === cbte.cae) {
       return json(res, 200, { ok: true, fuente: "snapshot", comprobante: snapshot });
     }
-    if (!cbte.cae && !snapshotIdentificado) return json(res, 409, { error: "ARCA_RECEIPT_IDENTITY_MISMATCH" });
+    if (!cbte.cae && !snapshotIdentificado) return json(res, 409, { error: "ARCA_LEGACY_RECEIPT_IDENTITY_REQUIRED", retryable: false, consultaRequerida: true });
     const [config, venta, items] = await Promise.all([
       rest(sesion, `arca_config?empresa_id=eq.${encodeURIComponent(empresaId)}&select=ambiente,cuit_emisor,razon_social`).then(first),
       rest(sesion, `ventas_sigo?empresa_id=eq.${encodeURIComponent(empresaId)}&id=eq.${encodeURIComponent(ventaId)}&select=id,numero,total,estado,anulada_at`).then(first),
@@ -62,6 +64,6 @@ export default async function handler(req, res) {
     } });
   } catch (error) {
     const timeout = /timeout|abort/i.test(String(error?.message || error));
-    return json(res, timeout ? 504 : 502, { error: timeout ? "ARCA_TIMEOUT" : "ARCA_RECEIPT_RECOVERY_FAILED" });
+    return json(res, timeout ? 504 : 502, { error: timeout ? "ARCA_TIMEOUT" : "ARCA_RECEIPT_RECOVERY_FAILED", retryable: false, consultaRequerida: true });
   }
 }

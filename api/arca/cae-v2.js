@@ -1,3 +1,4 @@
+import { crearPresupuestoFiscal, fetchFiscal, esTimeoutFiscal } from "./lib/request-budget.js";
 import { almacenamientoFiscalSeguro, guardarComprobante } from "./lib/receipt-store.js";
 import { leerItemsImpresion, validarImpresionEmisor, camposSnapshotEmisor, coincideComprobanteOriginal } from "./lib/print-config.js";
 import {
@@ -63,7 +64,7 @@ function fechaSql(value) {
 }
 
 async function rest(sesion, path, init = {}) {
-  const response = await fetch(`${sesion.url}/rest/v1/${path}`, {
+  const { response, payload } = await fetchFiscal(sesion, "database", `${sesion.url}/rest/v1/${path}`, {
     ...init,
     headers: {
       apikey: sesion.anonKey,
@@ -73,7 +74,6 @@ async function rest(sesion, path, init = {}) {
       ...(init.headers || {}),
     },
   });
-  const payload = await response.json().catch(() => null);
   if (!response.ok) {
     const error = new Error(`REST_${response.status}`);
     error.status = response.status;
@@ -84,21 +84,21 @@ async function rest(sesion, path, init = {}) {
 }
 
 async function permiso(sesion, empresaId, nombre) {
-  const response = await fetch(`${sesion.url}/rest/v1/rpc/tiene_permiso_empresa`, {
+  const { response, payload } = await fetchFiscal(sesion, "permission", `${sesion.url}/rest/v1/rpc/tiene_permiso_empresa`, {
     method: "POST",
     headers: { apikey: sesion.anonKey, Authorization: sesion.auth, "Content-Type": "application/json" },
     body: JSON.stringify({ p_empresa_id: empresaId, p_permiso: nombre }),
   });
-  return response.ok && (await response.json().catch(() => false)) === true;
+  return response.ok && payload === true;
 }
 
-async function sesionUsuario(req, empresaId) {
+async function sesionUsuario(req, empresaId, presupuesto = null) {
   const { url, anonKey } = env();
   const auth = String(req.headers.authorization || "");
   if (!url || !anonKey || !auth.startsWith("Bearer ")) return null;
-  const user = await fetch(`${url}/auth/v1/user`, { headers: { apikey: anonKey, Authorization: auth } });
+  const sesion = { url, anonKey, auth, presupuesto };
+  const { response: user } = await fetchFiscal(sesion, "authentication", `${url}/auth/v1/user`, { headers: { apikey: anonKey, Authorization: auth } });
   if (!user.ok) return null;
-  const sesion = { url, anonKey, auth };
   for (const nombre of ["invoices.issue", "sales.read", "products.read"]) {
     if (!(await permiso(sesion, empresaId, nombre))) return null;
   }
@@ -119,16 +119,12 @@ function crearTraWsaa() {
 
 async function soapBridge(sesion, ambiente, action, innerXml) {
   const soap = `<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ar="http://ar.gov.afip.dif.FEV1/"><soapenv:Header/><soapenv:Body><ar:${action}>${innerXml}</ar:${action}></soapenv:Body></soapenv:Envelope>`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 25_000);
   try {
-    const response = await fetch(BRIDGE_URL, {
+    const { response, payload } = await fetchFiscal(sesion, action, BRIDGE_URL, {
       method: "POST",
-      signal: controller.signal,
       headers: { Authorization: sesion.auth, "Content-Type": "application/json" },
       body: JSON.stringify({ ambiente, action, soap }),
-    });
-    const payload = await response.json().catch(() => null);
+    }, 16_000, action === "FECAESolicitar" ? 2_500 : 0);
     if (!response.ok || !payload || typeof payload.body !== "string") {
       const error = new Error(payload?.error || `ARCA_BRIDGE_${response.status}`);
       error.code = "WSFE_BRIDGE_FAILED";
@@ -151,8 +147,6 @@ async function soapBridge(sesion, ambiente, action, innerXml) {
       throw timeoutError;
     }
     throw error;
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -326,15 +320,18 @@ export default async function handler(req, res) {
     return json(res, 400, { error: "ARCA_CAE_INPUT_INVALID" });
   }
 
-  const sesion = await sesionUsuario(req, empresaId);
-  if (!sesion) return json(res, 403, { error: "ARCA_ISSUE_FORBIDDEN" });
-
+  const presupuesto = crearPresupuestoFiscal();
+  let sesion;
+  let reservaIntentada = false;
   let reserva = null;
   let escrituraSegura = false;
   let ticketEmision = null;
   let configEmision = null;
-  let stage = "config";
+  let stage = "authentication";
   try {
+    sesion = await sesionUsuario(req, empresaId, presupuesto);
+    if (!sesion) return json(res, 403, { error: "ARCA_ISSUE_FORBIDDEN" });
+    stage = "config";
     const config = first(await rest(sesion, `arca_config?empresa_id=eq.${encodeURIComponent(empresaId)}&select=empresa_id,ambiente,cuit_emisor,razon_social,certificado_ref,certificado_vence,wsaa_service,wsfe_version,activo,ultima_prueba_ok`));
     if (!config?.activo || config.ultima_prueba_ok !== true) return json(res, 409, { error: "ARCA_AUTH_NOT_VALIDATED" });
     if (!WSFE[config.ambiente]) return json(res, 409, { error: "ARCA_ENVIRONMENT_INVALID" });
@@ -407,7 +404,7 @@ export default async function handler(req, res) {
     // Only admin-approved server metadata can populate the fiscal header.
     let printData = null;
     try { printData = first(await rest(sesion, `arca_impresion_config?empresa_id=eq.${empresaId}&punto_venta=eq.${puntoVenta}&cuit_emisor=eq.${encodeURIComponent(config.cuit_emisor)}&select=*`)); }
-    catch (error) { if (flujoCaja) return json(res, 409, { error: "ARCA_PRINT_SCHEMA_REQUIRED" }); }
+    catch (error) { if (esTimeoutFiscal(error)) throw error; if (flujoCaja) return json(res, 409, { error: "ARCA_PRINT_SCHEMA_REQUIRED" }); }
     const { campos, faltantes } = validarImpresionEmisor(printData || {});
     if (flujoCaja && !config.razon_social?.trim()) faltantes.push("razón social autorizada del emisor");
     if (flujoCaja && faltantes.length) return json(res, 409, { error: "ARCA_PRINT_EMITTER_DATA_REQUIRED", faltantes });
@@ -436,6 +433,7 @@ export default async function handler(req, res) {
     if (reserva?.resultado === "rechazado_definitivo" && !reserva.cae) return json(res, 409, { error: "ARCA_CAE_REJECTED_FINAL" });
     if (reserva?.cae) return json(res, 200, { ok: true, alreadyIssued: true, ambiente: config.ambiente, comprobante: reserva });
     if (reserva && (Number(reserva.punto_venta) !== puntoVenta || Number(reserva.tipo_cbte) !== tipoCbte || reserva.request_id !== requestId)) return json(res, 409, { error: "ARCA_SALE_RESERVED_WITH_OTHER_FISCAL_IDENTITY" });
+    if (reserva && !reserva.impresion_snapshot) return json(res, 409, { error: "ARCA_LEGACY_RECEIPT_IDENTITY_REQUIRED", retryable: false, consultaRequerida: true });
 
     let ticket = await leerTicketWsaa(sesion, empresaId, config.ambiente, config.cuit_emisor);
     if (!ticket) {
@@ -452,7 +450,7 @@ export default async function handler(req, res) {
         descargarSecreto(sesion, empresaId, "certificate.pem"),
         descargarSecreto(sesion, empresaId, "private-key.pem"),
       ]);
-      ticket = await autenticarWsaa(WSAA[config.ambiente], crearTraWsaa(), certificatePem, privateKeyPem);
+      ticket = await autenticarWsaa(WSAA[config.ambiente], crearTraWsaa(), certificatePem, privateKeyPem, presupuesto);
       await guardarTicketWsaa(sesion, empresaId, config.ambiente, config.cuit_emisor, ticket);
     }
 
@@ -460,7 +458,8 @@ export default async function handler(req, res) {
     stage = "conciliacion";
     if (reserva) {
       const originalSnapshot = reserva.impresion_snapshot;
-      if (!originalSnapshot || originalSnapshot.empresaId !== empresaId || originalSnapshot.ventaId !== ventaId
+      if (!originalSnapshot) return json(res, 409, { error: "ARCA_LEGACY_RECEIPT_IDENTITY_REQUIRED", retryable: false, consultaRequerida: true });
+      if (originalSnapshot.empresaId !== empresaId || originalSnapshot.ventaId !== ventaId
         || originalSnapshot.emisorCuit !== config.cuit_emisor || originalSnapshot.ambiente !== config.ambiente
         || originalSnapshot.numero_cbte !== Number(reserva.numero_cbte) || originalSnapshot.punto_venta !== puntoVenta || originalSnapshot.tipo_cbte !== tipoCbte) return json(res, 409, { error: "ARCA_RECEIPT_IDENTITY_MISMATCH" });
       const recovered = await consultarComprobante(sesion, config.ambiente, ticket, config.cuit_emisor, reserva.punto_venta, reserva.tipo_cbte, Number(reserva.numero_cbte));
@@ -473,9 +472,12 @@ export default async function handler(req, res) {
       // Never send FECAESolicitar a second time just because consultation is empty.
       return json(res, 409, { error: "ARCA_RECEIPT_PENDING", retryable: false });
     } else {
+      presupuesto.require(10_000, "before_reservation");
       const ultimo = await ultimoAutorizado(sesion, config.ambiente, ticket, config.cuit_emisor, puntoVenta, tipoCbte);
       const numeroCbte = ultimo + 1;
       try {
+        presupuesto.require(10_000, "before_reservation");
+        reservaIntentada = true;
         reserva = await guardarComprobante(sesion, rest, escrituraSegura, empresaId, ventaId, null, { empresa_id: empresaId, venta_id: ventaId, punto_venta: puntoVenta, tipo_cbte: tipoCbte, numero_cbte: numeroCbte, resultado: "reservado", observaciones: [], request_id: requestId, ...(snapshotSupported ? { impresion_snapshot: { ...printSnapshot, numero_cbte: numeroCbte } } : {}) });
       } catch (error) {
         if (error?.status === 409) return json(res, 409, { error: "ARCA_NUMBER_RESERVATION_CONFLICT", retryable: true });
@@ -483,6 +485,7 @@ export default async function handler(req, res) {
       }
     }
 
+    presupuesto.require(8_500, "before_emission");
     stage = "emision";
     const issued = await solicitarCae(sesion, config.ambiente, ticket, config.cuit_emisor, {
       puntoVenta,
@@ -493,6 +496,7 @@ export default async function handler(req, res) {
       fiscal,
     });
     const printable = { ...(reserva.impresion_snapshot || printSnapshot), numero_cbte: Number(reserva.numero_cbte), cae: issued.cae, cae_vencimiento: issued.caeVencimiento };
+    stage = "persistencia";
     const comprobante = await guardarComprobante(sesion, rest, escrituraSegura, empresaId, ventaId, reserva.id, { cae: issued.cae, cae_vencimiento: issued.caeVencimiento, resultado: issued.resultado, observaciones: issued.observaciones, emitido_at: new Date().toISOString(), ...(snapshotSupported ? { impresion_snapshot: printable } : {}) });
     return json(res, 200, { ok: true, alreadyIssued: false, ambiente: config.ambiente, ventaNumero: venta.numero, comprobante, comprobanteImprimible: printable });
   } catch (error) {
@@ -517,8 +521,8 @@ export default async function handler(req, res) {
     }
     if (error?.code === "ARCA_SECURE_STORAGE_REQUIRED") return json(res, 409, { error: "ARCA_SECURE_STORAGE_REQUIRED" });
     const safe = errorSeguro(error, stage);
-    console.error("SIGO ARCA CAE V2", safe.code, stage);
-    return json(res, safe.status, { error: safe.code, stage, retryable: Boolean(reserva), observaciones: observations });
+    console.error("SIGO ARCA CAE V2", safe.code, stage, { elapsedMs: presupuesto.elapsed(), operation: error?.budgetStage || null });
+    return json(res, safe.status, { error: safe.code, stage, retryable: false, consultaRequerida: Boolean(reserva || reservaIntentada), observaciones: observations });
   }
 }
 
