@@ -1,7 +1,9 @@
+import { formatoCantidadMedida, pasoCantidadMedida } from "./ventaPorMedidas";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   anularVentaSigo,
   cargarItemsDevolviblesSigo,
+  estimarImporteDevolucion,
   listarDevolucionesRecientesSigo,
   listarVentasDevolviblesSigo,
   registrarDevolucionSigo,
@@ -30,6 +32,7 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
   const [error, setError] = useState("");
   const [exito, setExito] = useState("");
   const empresaRef = useRef(empresaId);
+  const procesandoRef = useRef(false);
 
   async function cargar(target = empresaId) {
     setLoading(true);
@@ -67,6 +70,7 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
   }, [empresaId]);
 
   async function elegir(venta: VentaDevolvibleSigo) {
+    if (procesandoRef.current) return;
     setSeleccionada(venta);
     setItems([]);
     setCantidades({});
@@ -83,22 +87,37 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
   }
 
   const seleccionParcial = useMemo(() => items.flatMap((item) => {
-    const cantidad = Number(cantidades[item.ventaItemId] ?? 0);
+    const cantidad = Number((cantidades[item.ventaItemId] ?? "0").replace(",", "."));
     if (!Number.isFinite(cantidad) || cantidad <= 0) return [];
     return [{ ventaItemId: item.ventaItemId, cantidad }];
   }), [items, cantidades]);
 
-  const totalParcial = useMemo(() => seleccionParcial.reduce((total, elegido) => {
-    const item = items.find((fila) => fila.ventaItemId === elegido.ventaItemId);
-    return total + (item ? item.precioUnitario * elegido.cantidad : 0);
-  }, 0), [items, seleccionParcial]);
+  const estimacion = useMemo(() => {
+    try {
+      for (const texto of Object.values(cantidades)) {
+        const n = Number(texto.replace(",", "."));
+        if (!Number.isFinite(n) || n < 0) throw new Error("Ingresá cantidades válidas para devolver.");
+      }
+      const centavos = seleccionParcial.reduce((total, elegido) => {
+        const item = items.find((fila) => fila.ventaItemId === elegido.ventaItemId);
+        if (!item) throw new Error("El renglón ya no está disponible.");
+        return total + Math.round(estimarImporteDevolucion(item, elegido.cantidad) * 100);
+      }, 0);
+      return { total: centavos / 100, error: "" };
+    } catch (err) {
+      return { total: 0, error: err instanceof Error ? err.message : "Revisá las cantidades." };
+    }
+  }, [items, seleccionParcial, cantidades]);
+  const totalParcial = estimacion.total;
+  const totalRemanente = items.reduce((total, item) => total + Math.round(item.subtotalDisponible * 100), 0) / 100;
 
   async function devolverParcial() {
-    if (!seleccionada || seleccionParcial.length === 0 || procesando) return;
+    if (!seleccionada || seleccionParcial.length === 0 || procesandoRef.current) return;
     if (motivo.trim().length < 3) {
       setError("Ingresá el motivo de la devolución.");
       return;
     }
+    if (estimacion.error) { setError(estimacion.error); return; }
     const invalida = seleccionParcial.some((elegido) => {
       const item = items.find((fila) => fila.ventaItemId === elegido.ventaItemId);
       return !item || elegido.cantidad > item.cantidadDisponible;
@@ -107,19 +126,22 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
       setError("Revisá las cantidades: no pueden superar lo disponible de la venta.");
       return;
     }
-    if (!window.confirm(`¿Confirmar devolución por ${dinero(totalParcial)}? El stock volverá a ingresar y se registrará la contrapartida correspondiente.`)) return;
+    if (!window.confirm(`¿Confirmar devolución por un importe estimado de ${dinero(totalParcial)}? El stock volverá a ingresar y se registrará la contrapartida correspondiente.`)) return;
 
+    procesandoRef.current = true;
     setProcesando(true);
     setError("");
     setExito("");
     try {
-      await registrarDevolucionSigo({
+      const resultado = await registrarDevolucionSigo({
         empresaId,
         ventaId: seleccionada.id,
         motivo,
         items: seleccionParcial,
       });
-      setExito(`Devolución registrada para la venta ${etiquetaVenta(seleccionada)}.`);
+      setExito(resultado.total == null
+        ? `Devolución registrada para la venta ${etiquetaVenta(seleccionada)}. No se pudo verificar el importe persistido; revisá el historial y no repitas la operación.`
+        : `Devolución registrada para la venta ${etiquetaVenta(seleccionada)}. Importe registrado: ${dinero(resultado.total)}.`);
       setSeleccionada(null);
       setItems([]);
       setCantidades({});
@@ -128,24 +150,28 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo registrar la devolución.");
     } finally {
+      procesandoRef.current = false;
       setProcesando(false);
     }
   }
 
   async function anularCompleta() {
-    if (!seleccionada || procesando) return;
+    if (!seleccionada || procesandoRef.current) return;
     if (motivo.trim().length < 3) {
       setError("Ingresá el motivo de la anulación.");
       return;
     }
-    if (!window.confirm(`¿ANULAR completamente la venta ${etiquetaVenta(seleccionada)} por ${dinero(seleccionada.total)}? Se restituirá el stock restante y se generará la reversa de caja o cuenta corriente.`)) return;
+    if (!window.confirm(`¿ANULAR completamente el remanente de la venta ${etiquetaVenta(seleccionada)} por un importe estimado de ${dinero(totalRemanente)}? Se restituirá el stock restante y se generará la reversa de caja o cuenta corriente.`)) return;
 
+    procesandoRef.current = true;
     setProcesando(true);
     setError("");
     setExito("");
     try {
-      await anularVentaSigo({ empresaId, ventaId: seleccionada.id, motivo });
-      setExito(`Venta ${etiquetaVenta(seleccionada)} anulada correctamente.`);
+      const resultado = await anularVentaSigo({ empresaId, ventaId: seleccionada.id, motivo });
+      setExito(resultado.total == null
+        ? `Venta ${etiquetaVenta(seleccionada)} anulada. No se pudo verificar el importe persistido; revisá el historial y no repitas la operación.`
+        : `Venta ${etiquetaVenta(seleccionada)} anulada. Importe registrado: ${dinero(resultado.total)}.`);
       setSeleccionada(null);
       setItems([]);
       setCantidades({});
@@ -154,6 +180,7 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo anular la venta.");
     } finally {
+      procesandoRef.current = false;
       setProcesando(false);
     }
   }
@@ -190,8 +217,8 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
             <div className="sigo-return-compact-items">
               {items.map((item) => (
                 <label key={item.ventaItemId} className="sigo-return-compact-item">
-                  <span><strong>{item.producto}</strong><small>Disponible: {item.cantidadDisponible}</small></span>
-                  <input className="sigo-return-qty" type="number" min="0" max={item.cantidadDisponible} step="1" disabled={procesando || item.cantidadDisponible <= 0} value={cantidades[item.ventaItemId] ?? ""} placeholder="Cant." onChange={(event) => setCantidades((actual) => ({ ...actual, [item.ventaItemId]: event.target.value }))} />
+                  <span><strong>{item.producto}</strong><small>Disponible: {formatoCantidadMedida(item.cantidadDisponible, item.unidadMedida)}{item.unidadMedida == null ? " · sin unidad histórica" : ""} · Saldo {dinero(item.subtotalDisponible)}</small></span>
+                  <input className="sigo-return-qty" type="number" min="0" max={item.cantidadDisponible} step={item.unidadMedida == null ? 0.001 : pasoCantidadMedida(item.unidadMedida)} aria-label={`Cantidad a devolver de ${item.producto}${item.unidadMedida ? ` en ${item.unidadMedida}` : ""}`} disabled={procesando || item.cantidadDisponible <= 0} value={cantidades[item.ventaItemId] ?? ""} placeholder="Cant." onChange={(event) => setCantidades((actual) => ({ ...actual, [item.ventaItemId]: event.target.value }))} />
                 </label>
               ))}
             </div>
@@ -199,9 +226,10 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
               <span>Motivo</span>
               <input value={motivo} disabled={procesando} placeholder="Motivo de devolución / anulación" onChange={(event) => setMotivo(event.target.value)} />
             </label>
-            <div className="sigo-return-compact-total"><span>Devolución</span><strong>{dinero(totalParcial)}</strong></div>
-            <button className="admin-button" type="button" disabled={procesando || seleccionParcial.length === 0} onClick={() => void devolverParcial()}>{procesando ? "Procesando…" : "Devolver"}</button>
-            <button className="danger-button" type="button" disabled={procesando} onClick={() => void anularCompleta()}>{procesando ? "Procesando…" : "Anular venta"}</button>
+            <div className="sigo-return-compact-total"><span>Importe estimado</span><strong>{estimacion.error ? "Revisá cantidades" : dinero(totalParcial)}</strong></div>
+            {estimacion.error && <p className="form-error" role="alert">{estimacion.error}</p>}
+            <button className="admin-button" type="button" disabled={procesando || seleccionParcial.length === 0 || Boolean(estimacion.error)} onClick={() => void devolverParcial()}>{procesando ? "Procesando…" : "Devolver"}</button>
+            <button className="danger-button" type="button" disabled={procesando || !items.some((item) => item.cantidadDisponible > 0)} onClick={() => void anularCompleta()}>{procesando ? "Procesando…" : "Anular venta"}</button>
           </div>
         </section>
       )}
@@ -218,6 +246,7 @@ export default function DevolucionesOperativas({ empresaId, onVolver }: { empres
                 type="button"
                 key={venta.id}
                 className={`sigo-return-sale-row${seleccionada?.id === venta.id ? " active" : ""}`}
+                disabled={procesando}
                 onClick={() => void elegir(venta)}
               >
                 <strong>{etiquetaVenta(venta)}</strong>

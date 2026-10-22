@@ -1,0 +1,161 @@
+{
+  "localCount": 99,
+  "liveCount": 107,
+  "pending": [
+    {
+      "version": "20260919110000",
+      "name": "modulo_lector_celular_remoto"
+    },
+    {
+      "version": "20260919113000",
+      "name": "lector_celular_sesiones"
+    },
+    {
+      "version": "20260922233000",
+      "name": "compras_precio_automatico"
+    },
+    {
+      "version": "20260925120000",
+      "name": "compra_ia_guardado_atomico"
+    },
+    {
+      "version": "20260925121500",
+      "name": "configuracion_ticket_sigo"
+    },
+    {
+      "version": "20260925124500",
+      "name": "compra_ia_precio_admin"
+    },
+    {
+      "version": "20260925135500",
+      "name": "compra_ia_precio_existente"
+    },
+    {
+      "version": "20260925141000",
+      "name": "editar_anular_compras"
+    },
+    {
+      "version": "20260925143000",
+      "name": "borradores_compra_historial"
+    },
+    {
+      "version": "20260925212000",
+      "name": "redondeo_precio_venta"
+    },
+    {
+      "version": "20260926163000",
+      "name": "productos_oferta"
+    },
+    {
+      "version": "20260926183000",
+      "name": "ofertas_permisos_administrador"
+    },
+    {
+      "version": "20261011190000",
+      "name": "admin_push_notifications"
+    },
+    {
+      "version": "20261013090000",
+      "name": "mayorista_modulo_matriz"
+    },
+    {
+      "version": "20261022024847",
+      "name": "manual_medidas_atomicas"
+    }
+  ],
+  "remoteOnly": [
+    {
+      "version": "20260919134945",
+      "name": "fix_matriz_ean_status_readback"
+    },
+    {
+      "version": "20260919135223",
+      "name": "modulo_lector_celular_remoto"
+    },
+    {
+      "version": "20260919135320",
+      "name": "lector_celular_sesiones"
+    },
+    {
+      "version": "20260919145909",
+      "name": "matriz_lector_celular_status"
+    },
+    {
+      "version": "20260919151655",
+      "name": "lector_celular_pairing_rpc_realtime"
+    },
+    {
+      "version": "20260919151940",
+      "name": "fix_lector_celular_rls_insert"
+    },
+    {
+      "version": "20260919153502",
+      "name": "lector_celular_create_session_rpc"
+    },
+    {
+      "version": "20260919155219",
+      "name": "lector_celular_pc_estado"
+    },
+    {
+      "version": "20260919164124",
+      "name": "matriz_clientes_comerciales"
+    },
+    {
+      "version": "20260919232654",
+      "name": "padron_clientes_matriz_seguimiento_v2"
+    },
+    {
+      "version": "20260923094943",
+      "name": "compras_precio_automatico"
+    },
+    {
+      "version": "20260925120924",
+      "name": "compra_ia_guardado_atomico"
+    },
+    {
+      "version": "20260925120933",
+      "name": "configuracion_ticket_sigo"
+    },
+    {
+      "version": "20260925124330",
+      "name": "compra_ia_precio_admin"
+    },
+    {
+      "version": "20260925124916",
+      "name": "compra_ia_precio_existente"
+    },
+    {
+      "version": "20260925132010",
+      "name": "editar_anular_compras"
+    },
+    {
+      "version": "20260925133233",
+      "name": "borradores_compra_historial"
+    },
+    {
+      "version": "20260925211022",
+      "name": "redondeo_precio_venta"
+    },
+    {
+      "version": "20260926175422",
+      "name": "productos_oferta"
+    },
+    {
+      "version": "20260926181111",
+      "name": "ofertas_permisos_administrador"
+    },
+    {
+      "version": "20261006100123",
+      "name": "matriz_trial_contacto"
+    },
+    {
+      "version": "20261011222726",
+      "name": "admin_push_notifications"
+    },
+    {
+      "version": "20261013011806",
+      "name": "mayorista_modulo_matriz"
+    }
+  ],
+  "nameMismatch": []
+}

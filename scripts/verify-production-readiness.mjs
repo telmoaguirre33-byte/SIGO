@@ -14,58 +14,38 @@ const workflow = fs.readFileSync(workflowPath, "utf8");
 const readiness = fs.readFileSync(readinessPath, "utf8");
 const tenantLintFix = fs.readFileSync(tenantLintFixPath, "utf8");
 
+// The production workflow is now a read-only preflight, never an application path.
 for (const required of [
-  "SUPABASE_DB_PASSWORD",
-  "SUPABASE_PROJECT_REF",
-  "SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}",
-  "SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}",
-  "SIGO_DB_URL",
-  "SIGO_DB_URL_SOURCE=configured",
-  "SIGO_DB_URL_SOURCE=configured-pooler",
-  "SIGO_DB_URL_SOURCE=direct",
-  "SIGO_DB_URL_SOURCE=auto-pooler:",
-  "SIGO_DB_MODE=direct",
-  "pooler.supabase.com",
-  "postgres.${SUPABASE_PROJECT_REF}",
-  "supabase migration list --db-url",
-  "supabase db push --db-url",
-  "supabase migration repair --db-url",
-  "Database migrations can continue independently",
-  "sigo-db-lint.json",
-  '"level"[[:space:]]*:[[:space:]]*"error"',
-  "Production database lint completed without error-level findings",
+  "permissions:\n  contents: read", "SUPABASE_DB_PASSWORD", "SUPABASE_PROJECT_REF",
+  "SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}", "SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}",
+  "SIGO_DB_URL_SOURCE=configured", "SIGO_DB_URL_SOURCE=configured-pooler", "SIGO_DB_URL_SOURCE=direct",
+  "SIGO_DB_URL_SOURCE=auto-pooler:", "pooler.supabase.com", "postgres.${SUPABASE_PROJECT_REF}",
+  "PGOPTIONS: -c default_transaction_read_only=on", "BEGIN READ ONLY;", "ROLLBACK;",
+  "FROM supabase_migrations.schema_migrations", "psql -X --no-password -A -t -q -v ON_ERROR_STOP=1",
+  "node scripts/check-production-migrations.mjs", "sigo-db-lint.json",
+  '"level"[[:space:]]*:[[:space:]]*"error"', "Production database lint completed without error-level findings",
+  "if: ${{ always() && steps.connection.outcome == 'success' }}",
 ]) {
-  if (!workflow.includes(required)) throw new Error(`Production database fallback safeguard missing: ${required}`);
+  if (!workflow.includes(required)) throw new Error(`Production read-only safeguard missing: ${required}`);
 }
-
-// Un token de Management vencido no puede volver a bloquear migraciones de negocio.
-if (/for key in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_PROJECT_REF/.test(workflow)) {
-  throw new Error("SUPABASE_ACCESS_TOKEN must not be mandatory for production database migrations");
+for (const forbidden of [
+  /supabase\s+(?:db\s+(?:push|reset|pull)|migration\s+(?:repair|up|down)|config\s+push|link)\b/,
+  /--include-all/, /SUPABASE_ACCESS_TOKEN/, /curl\b/, /continue-on-error\s*:\s*true/,
+  /(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM|TRUNCATE|ALTER|CREATE|DROP)\s+supabase_migrations/i,
+]) {
+  if (forbidden.test(workflow)) throw new Error(`Production preflight must not mutate or hide failure: ${forbidden}`);
 }
-
-// El URL directo de Supabase puede requerir IPv6. CI alojado debe preferir un
-// pooler configurado y, como último recurso seguro, probar únicamente endpoints
-// oficiales *.pooler.supabase.com con credenciales enmascaradas.
-if (!workflow.includes('echo "::add-mask::$SUPABASE_DB_URL"')) {
-  throw new Error("Configured SUPABASE_DB_URL must be masked before use");
+// Preserve configured/pooler/direct precedence, credential masking and bounded
+// read-only Supabase-owned pooler discovery. A Management token is not needed.
+for (const secret of ['SUPABASE_DB_URL', 'SUPABASE_POOLER_URL']) {
+  if (!workflow.includes(`echo "::add-mask::$${secret}"`)) throw new Error(`${secret} must be masked`);
+  if (!workflow.includes(`if [ -n "\${${secret}:-}" ]; then`)) throw new Error(`${secret} precedence missing`);
 }
-if (!workflow.includes('echo "::add-mask::$SUPABASE_POOLER_URL"')) {
-  throw new Error("Configured SUPABASE_POOLER_URL must be masked before use");
-}
-if (!workflow.includes('if [ -n "${SUPABASE_DB_URL:-}" ]; then')) {
-  throw new Error("Configured SUPABASE_DB_URL must take precedence over direct IPv6 fallback");
-}
-if (!workflow.includes('if [ -n "${SUPABASE_POOLER_URL:-}" ]; then')) {
-  throw new Error("Configured SUPABASE_POOLER_URL must take precedence over direct IPv6 fallback");
-}
-if (!workflow.includes('for pooler_generation in aws-0 aws-1; do')) {
-  throw new Error("Automatic pooler discovery must cover supported Supabase pooler generations");
-}
-if (!workflow.includes('timeout 7s supabase migration list --db-url "$candidate"')) {
-  throw new Error("Automatic pooler discovery must be bounded and read-only before migration apply");
+if (!workflow.includes('for pooler_generation in aws-0 aws-1; do') || !workflow.includes('timeout 7s psql')) {
+  throw new Error("Supabase pooler discovery must stay bounded and read-only");
 }
 if (workflow.includes('echo "$candidate"') || workflow.includes('printf \'%s\\n\' "$candidate"')) {
-  throw new Error("Pooler connection candidates must never be printed to logs");
+  throw new Error("Connection candidates must never be printed to logs");
 }
 
 for (const required of [
@@ -106,4 +86,4 @@ if (/\b(delete|truncate|drop\s+table|update\s+public\.)\b/i.test(tenantLintFix))
   throw new Error("Tenant diagnostic lint fix must remain non-destructive and read-only");
 }
 
-console.log("Production readiness verified: 1400-row single-tenant certification, null-cost guard, pooler fallbacks and error-level DB lint gating are protected by CI.");
+console.log("Production readiness verified: 1400-row single-tenant certification, null-cost guard, read-only history preflight, pooler fallbacks and error-level DB lint gating are protected by CI. No production application is authorized.");

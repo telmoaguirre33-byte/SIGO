@@ -40,15 +40,22 @@ for (const required of [
   "const precio = Number(producto.precio_venta)",
   "!Number.isFinite(precio) || precio <= 0",
   "resultado.verificacion.then",
-  "Math.abs(verificado.totalVerificado - total) > DINERO_TOLERANCIA",
+  "const totalEsperado = intento.totalEsperado",
+  "Math.abs(verificado.totalVerificado - totalEsperado) > DINERO_TOLERANCIA",
   "SIGO registró el total vigente del backend",
   "Venta confirmada",
 ]) {
   if (!sale.includes(required)) throw new Error(`Sale verified-total safeguard missing: ${required}`);
 }
 
-if (!sale.includes("La venta ya fue confirmada de forma transaccional por el servidor.")) {
-  throw new Error("Caja must display confirmation after the transactional RPC without awaiting secondary readbacks");
+const rpcConfirmation = sale.indexOf("const resultado = await confirmarVentaSigo(intento.payload)");
+const persistConfirmedId = sale.indexOf("registrarCobroConfirmado(intento, resultado.ventaId)", rpcConfirmation);
+const showConfirmation = sale.indexOf("setExito(recuperar ?", persistConfirmedId);
+const secondaryReadback = sale.indexOf("void resultado.verificacion.then", showConfirmation);
+if (rpcConfirmation < 0 || persistConfirmedId <= rpcConfirmation
+  || showConfirmation <= persistConfirmedId || secondaryReadback <= showConfirmation
+  || /await\s+resultado\.verificacion/.test(sale)) {
+  throw new Error("Caja must persist the confirmed UUID and display confirmation before scheduling non-blocking secondary readbacks");
 }
 
 console.log("Scanner/sale verified: rapid manual/wedge reads are queued, tenant/action context is protected, and the sale receipt shows the backend-verified total.");

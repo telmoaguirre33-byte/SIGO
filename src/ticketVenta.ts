@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { formatoCantidadMedida } from "./ventaPorMedidas";
 
 export type ConfigTicket = { empresa_id: string; nombre_negocio: string; direccion: string; logo_data_url: string | null };
 
@@ -17,7 +18,7 @@ export async function guardarConfigTicket(config: ConfigTicket): Promise<void> {
 export async function imprimirTicketVenta(empresaId: string, ventaId: string, formato: "58" | "80" | "a4" = "80", imprimirDirecto = false): Promise<void> {
   const [{ data: venta, error: ventaError }, { data: items, error: itemsError }, config] = await Promise.all([
     supabase.from("ventas_sigo").select("id,numero,created_at,total,estado").eq("empresa_id",empresaId).eq("id",ventaId).single(),
-    supabase.from("venta_items_sigo").select("cantidad,precio_unitario,subtotal,productos(nombre)").eq("empresa_id",empresaId).eq("venta_id",ventaId),
+    supabase.from("venta_items_sigo").select("cantidad,unidad_medida,precio_unitario,subtotal,productos(nombre)").eq("empresa_id",empresaId).eq("venta_id",ventaId),
     leerConfigTicket(empresaId),
   ]);
   if (ventaError || itemsError || !venta || venta.estado !== "confirmada") throw new Error("Sólo se puede imprimir una venta confirmada.");
@@ -55,7 +56,7 @@ export async function imprimirTicketVenta(empresaId: string, ventaId: string, fo
   add("hr",""); add("p",`Ticket de venta Nº ${venta.numero ?? venta.id.slice(0, 8).toUpperCase()}`);
   add("p",new Date(venta.created_at).toLocaleString("es-AR"));
   const tabla=doc.createElement("table"); doc.body.appendChild(tabla);
-  for(const item of items??[]) {const fila=doc.createElement("tr");const producto=Array.isArray(item.productos)?item.productos[0]:item.productos;add("td",`${item.cantidad} × ${producto?.nombre??"Artículo"}`,fila);add("td",`$ ${Number(item.subtotal).toLocaleString("es-AR",{minimumFractionDigits:2})}`,fila);tabla.appendChild(fila);}
+  for(const item of items??[]) {const fila=doc.createElement("tr");const producto=Array.isArray(item.productos)?item.productos[0]:item.productos;add("td",`${formatoCantidadMedida(Number(item.cantidad), item.unidad_medida)} × ${producto?.nombre??"Artículo"}`,fila);add("td",`$ ${Number(item.subtotal).toLocaleString("es-AR",{minimumFractionDigits:2})}`,fila);tabla.appendChild(fila);}
   add("hr",""); add("h2",`Total $ ${Number(venta.total).toLocaleString("es-AR",{minimumFractionDigits:2})}`);
   add("p","COMPROBANTE NO FISCAL · No válido como factura.");
   if (!imprimirDirecto) { const boton=add("button","Imprimir"); boton.onclick=()=>printWindow?.print(); }
