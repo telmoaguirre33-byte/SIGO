@@ -56,7 +56,7 @@ def prepare(stage):
     (folder/"volumes/functions/main/index.ts").write_text(
         'Deno.serve({port:9000}, () => new Response("synthetic-edge-ok"));\n')
     config=json.loads(command(["docker","compose","--project-directory",folder,
-       "--env-file",folder/".env","-f",folder/"docker-compose.yml","config","--format","json"]))
+       "--env-file",folder/".env","-f",folder/"docker-compose.yml","config","--no-interpolate","--format","json"]))
     config["name"]="sigo-recovery-"+stage
     config["networks"]={"default":{"internal":True}}
     for name, volume in config.get("volumes",{}).items():
@@ -253,7 +253,7 @@ except Exception as error:
     raise
 finally:
     (OUT/"result.json").write_text(json.dumps(E,indent=2)+"\n")
-    print(json.dumps({"status":E["status"],"checks":E["checks"],"error":E.get("error")},indent=2))
+    print(json.dumps({"status":E["status"],"checks":E["checks"],"error":E.get("error"),"diagnostics":E.get("diagnostics")},indent=2))
     for stage in stages:
         try: dc(stage,"down","--volumes","--remove-orphans")
         except Exception: pass
