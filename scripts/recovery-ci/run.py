@@ -142,7 +142,11 @@ SELECT jsonb_build_object(
 'roles',(SELECT jsonb_agg(jsonb_build_array(rolname,rolsuper,rolbypassrls,rolcanlogin) ORDER BY rolname) FROM pg_roles),
 'memberships',(SELECT jsonb_agg(jsonb_build_array(r.rolname,m.rolname,a.admin_option) ORDER BY r.rolname,m.rolname) FROM pg_auth_members a JOIN pg_roles r ON r.oid=a.roleid JOIN pg_roles m ON m.oid=a.member),
 'policies',(SELECT jsonb_agg(jsonb_build_array(schemaname,tablename,policyname,roles,qual,with_check) ORDER BY schemaname,tablename,policyname) FROM pg_policies),
-'functions',(SELECT jsonb_agg(jsonb_build_array(n.nspname,p.proname,pg_get_function_identity_arguments(p.oid),p.prosecdef,p.proconfig,p.proacl) ORDER BY n.nspname,p.proname,pg_get_function_identity_arguments(p.oid)) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN ('public','auth','storage')),
+'functions',(SELECT jsonb_agg(jsonb_build_array(n.nspname,p.proname,pg_get_function_identity_arguments(p.oid),p.prosecdef,p.proconfig,
+ (SELECT jsonb_agg(jsonb_build_array(pg_get_userbyid(a.grantor),CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,a.privilege_type,a.is_grantable)
+ ORDER BY a.grantor::regrole::text,a.grantee::regrole::text,a.privilege_type,a.is_grantable)
+ FROM aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) a),
+ pg_get_userbyid(p.proowner)) ORDER BY n.nspname,p.proname,pg_get_function_identity_arguments(p.oid)) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN ('public','auth','storage')),
 'users',(SELECT jsonb_agg(jsonb_build_array(id,email,encrypted_password) ORDER BY id) FROM auth.users),
 'probe',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM public.sigo_recovery_probe t),
 'objects',(SELECT jsonb_agg(jsonb_build_array(bucket_id,name,owner_id,metadata) ORDER BY bucket_id,name) FROM storage.objects),
@@ -233,7 +237,29 @@ try:
         sql("target",'CREATE DATABASE "'+db+'" OWNER postgres TEMPLATE template0;',db="template1")
         dc("target","exec","-T","db","pg_restore","--exit-on-error","--single-transaction",
            "-U","supabase_admin","-d",db,data=path.read_bytes())
-    assert sql("target",SNAPSHOT)==before, "full database security/catalog/data snapshot differs after restore"
+    original=json.loads(before)
+    restored=json.loads(sql("target",SNAPSHOT))
+    # ACL arrays and policy role arrays are sets; OID/insertion order is not a privilege.
+    for snapshot in (original,restored):
+        for row in snapshot["functions"]:
+            if row[4] is not None: row[4].sort()
+            if row[5] is not None: row[5].sort(key=lambda item:json.dumps(item))
+        for row in snapshot["policies"]: row[3].sort()
+    differences={}
+    for name in original:
+        if original[name]!=restored[name]:
+            a,b=original[name],restored[name]
+            sample=None
+            if name not in ("users","objects","probe"):
+                if isinstance(a,list) and isinstance(b,list):
+                    left=[x for x in a if x not in b]
+                    right=[x for x in b if x not in a]
+                    sample={"sourceOnly":left[:3],"targetOnly":right[:3]}
+                else: sample={"source":a,"target":b}
+            differences[name]={"sourceCount":len(a) if isinstance(a,list) else None,
+                               "targetCount":len(b) if isinstance(b,list) else None,"sample":sample}
+    E["snapshotDifferences"]=differences
+    assert not differences, "database security/catalog/data differs after restore: "+json.dumps(differences)
     assert sql("target","SELECT decrypted_secret='synthetic-vault-value' FROM vault.decrypted_secrets WHERE name='sigo_recovery_secret';")=="t"
     command(["sudo","mkdir","-p",WORK/"target/volumes/storage"])
     command(["sudo","tar","-xpf",storage_backup,"-C",WORK/"target/volumes/storage"])
@@ -266,7 +292,7 @@ except Exception as error:
     raise
 finally:
     (OUT/"result.json").write_text(json.dumps(E,indent=2)+"\n")
-    print(json.dumps({"status":E["status"],"checks":E["checks"],"error":E.get("error"),"diagnostics":E.get("diagnostics")},indent=2))
+    print(json.dumps({"status":E["status"],"checks":E["checks"],"error":E.get("error"),"diagnostics":E.get("diagnostics"),"snapshotDifferences":E.get("snapshotDifferences")},indent=2))
     for stage in stages:
         try: dc(stage,"down","--volumes","--remove-orphans")
         except Exception: pass
