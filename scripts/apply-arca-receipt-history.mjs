@@ -85,7 +85,7 @@ const newSaleField = [
 replaceRequired(oldSaleField, newSaleField, "sale-picker");
 
 const oldButton = `      <button className="primary-button" type="button" onClick={() => void emitir()} disabled={!habilitado || !ventaId || !puntoVenta || emitiendo}>\n        {emitiendo ? "Solicitando y conciliando…" : ambiente === "produccion" ? "Emitir CAE real" : "Probar CAE en homologación"}\n      </button>`;
-const newButton = `      <button className="primary-button" type="button" onClick={() => void emitir()} disabled={!habilitado || !ventaId || !puntoVenta || emitiendo || Boolean(comprobanteVenta?.cae)}>\n        {comprobanteVenta?.cae\n          ? "Factura ya emitida — usar Reimprimir / Compartir"\n          : emitiendo\n            ? "Emitiendo factura…"\n            : ambiente === "produccion"\n              ? "Emitir factura"\n              : "Probar factura en homologación"}\n      </button>`;
+const newButton = `      <button className="primary-button" type="button" onClick={() => comprobanteVenta?.cae ? imprimir("58") : void emitir()} disabled={!habilitado || !ventaId || !puntoVenta || emitiendo || (Boolean(comprobanteVenta?.cae) && !ultimoComprobante)}>\n        {comprobanteVenta?.cae\n          ? "Reimprimir factura fiscal (58 mm)"\n          : emitiendo\n            ? "Emitiendo factura…"\n            : ambiente === "produccion"\n              ? "Emitir factura"\n              : "Probar factura en homologación"}\n      </button>`;
 replaceRequired(oldButton, newButton, "emit-button");
 
 replaceRequired(
