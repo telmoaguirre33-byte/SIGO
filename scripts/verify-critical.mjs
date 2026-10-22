@@ -42,12 +42,12 @@ const checks = [
   },
   {
     file: 'src/productos.ts',
-    required: ['validarNumeroNoNegativo', 'STOCK_RANGE_INVALID', 'guardar_producto_sigo', 'PRODUCT_HAS_STOCK', 'BARCODE_DUPLICATE_IN_COMPANY'],
+    required: ['validarNumeroNoNegativo', 'STOCK_RANGE_INVALID', 'guardar_producto_medida_sigo', 'PRODUCT_HAS_STOCK', 'BARCODE_DUPLICATE_IN_COMPANY'],
     label: 'safe product lifecycle',
   },
   {
     file: 'src/SigoApp.tsx',
-    required: ['can(empresa.rol, "products.write")', 'Precio de venta', 'El stock de productos existentes se modifica mediante movimientos operativos.', 'Dar de baja', 'No se borrarán ventas, compras ni históricos'],
+    required: ['can(empresa.rol, "products.write")', 'Precio por', 'El stock de productos existentes se modifica mediante movimientos operativos.', 'Dar de baja', 'No se borrarán ventas, compras ni históricos'],
     label: 'product master does not overwrite operational stock/history',
   },
   {
@@ -63,7 +63,9 @@ const checks = [
       'Mercado Pago',
       'BarcodeScanner',
       'const resultado = await confirmarVentaSigo(',
-      'disabled={!puedeConfirmar||confirmando}',
+      'disabled={!puedeConfirmar||cajaBloqueada}',
+      'const cajaBloqueada = confirmando || Boolean(intentoPendiente) || Boolean(errorPersistenciaCobro)',
+      'guardarIntentoCobro(intento)',
     ],
     label: 'quick sale with barcode and Mercado Pago',
   },

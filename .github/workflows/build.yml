@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,10 +23,22 @@ jobs:
           node-version: 24
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Build SIGO
         run: npm run build
+
+      - name: Verify manual measured sales and fiscal keyboard flows
+        run: |
+          npm run test:manual-medidas
+          npm run test:fiscal-caja
+
+      - name: Verify fiscal print output without printers or fiscal requests
+        run: |
+          npx playwright install --with-deps chromium
+          python -m pip install PyMuPDF==1.26.6
+          node scripts/test-venta-medidas-browser.mjs
+          node scripts/test-arca-fiscal-print.mjs
 
       - name: Verify administrator notification security
         run: npm run test:admin-notifications

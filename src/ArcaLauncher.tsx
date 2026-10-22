@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import FiscalCajaFlow from "./FiscalCajaFlow";
+import type { SolicitudFiscalCaja } from "./fiscalCaja";
 import ArcaEmisionVendedor from "./ArcaEmisionVendedor";
 import ArcaFacturacion from "./ArcaFacturacion";
 import { cargarMisEmpresas, leerEmpresaActivaGuardada, type EmpresaOperativa } from "./tenant";
@@ -10,6 +12,7 @@ export default function ArcaLauncher() {
   const [productosPorEmpresa, setProductosPorEmpresa] = useState<Record<string, number | null>>({});
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [solicitudCaja, setSolicitudCaja] = useState<SolicitudFiscalCaja | null>(null);
   const [ventaSolicitada, setVentaSolicitada] = useState<string | null>(null);
 
   const resolverEmpresa = useCallback(async () => {
@@ -93,6 +96,21 @@ export default function ArcaLauncher() {
   }, [resolverEmpresa]);
 
   useEffect(() => {
+    const abrirCaja = (event: Event) => {
+      const solicitud = (event as CustomEvent<SolicitudFiscalCaja>).detail;
+      if (!solicitud?.empresaId || !solicitud.requestId || !["emitir", "reimprimir", "historial"].includes(solicitud.accion)) return;
+      if (solicitud.accion !== "historial" && !solicitud.ventaId) return;
+      void resolverEmpresa().then(activa => {
+        if (activa?.empresa_id !== solicitud.empresaId) return;
+        setSolicitudCaja(actual => actual || solicitud);
+        setOpen(true);
+      });
+    };
+    window.addEventListener("sigo:fiscal:caja", abrirCaja);
+    return () => window.removeEventListener("sigo:fiscal:caja", abrirCaja);
+  }, [resolverEmpresa]);
+
+  useEffect(() => {
     if (!open || !ventaSolicitada) return;
     const enfocarEmision = () => {
       const card = document.querySelector<HTMLElement>(".arca-overlay .arca-emit-card");
@@ -118,14 +136,15 @@ export default function ArcaLauncher() {
       {open && empresa ? (
         <div className="arca-overlay" role="dialog" aria-modal="true" aria-label="Facturación ARCA">
           <div className="arca-overlay-topbar">
-            <button type="button" className="admin-button" onClick={() => setOpen(false)}>← Volver</button>
+            <button type="button" className="admin-button" onClick={() => { setOpen(false); setSolicitudCaja(null); }}>← Volver</button>
             <div>
-              <strong>Facturación ARCA</strong>
+              <strong>{solicitudCaja ? "Comprobantes de caja" : "Facturación ARCA"}</strong>
               <small>{esVendedor ? "Perfil Vendedor: sólo emisión de comprobantes." : "Elegí la misma empresa donde están los productos y las ventas."}</small>
             </div>
             <label className="form-group arca-company-picker">
               <span>Empresa que va a facturar</span>
               <select
+                disabled={Boolean(solicitudCaja)}
                 value={empresa.empresa_id}
                 onChange={(event) => {
                   const siguiente = empresas.find((item) => item.empresa_id === event.target.value) ?? null;
@@ -141,7 +160,9 @@ export default function ArcaLauncher() {
             </label>
           </div>
           <main className="arca-overlay-content">
-            {esVendedor || modoEmisionVenta ? (
+            {solicitudCaja ? (
+              <FiscalCajaFlow key={solicitudCaja.requestId} solicitud={solicitudCaja} alCerrar={() => { setOpen(false); setSolicitudCaja(null); document.querySelector<HTMLInputElement>(".sigo-pos input")?.focus(); }} />
+            ) : esVendedor || modoEmisionVenta ? (
               <ArcaEmisionVendedor
                 key={empresa.empresa_id}
                 empresaId={empresa.empresa_id}
@@ -164,3 +185,4 @@ export default function ArcaLauncher() {
     </>
   );
 }
+

@@ -19,7 +19,7 @@ for (const token of [
   'request_id: requestId',
   'ARCA_NUMBER_RESERVATION_CONFLICT',
   'alreadyIssued: true',
-  'reconciled: true',
+  'ARCA_LEGACY_RESERVATION_READ_ONLY',
   'cae_vencimiento',
   'resultado: "R"',
   'ARCA_PRODUCT_PRICE_TAX_MODE_UNSUPPORTED',
@@ -47,7 +47,7 @@ for (const token of [
   'ARCA_PRODUCT_FISCAL_DATA_REQUIRED',
   'ARCA_INVOICE_A_CLIENT_REQUIRED',
   'ARCA_CAE_TRANSPORT_FAILED',
-  'resultado: "R"',
+  'resultado: "rechazado_definitivo"',
   'Cache-Control',
 ]) {
   if (!apiV2.includes(token)) throw new Error(`ARCA CAE v2 safeguard missing: ${token}`);
@@ -97,3 +97,4 @@ if (!autoTicketUi.includes('ARCA_TICKET_AUTO_REFRESH_REQUIRES_ADMIN')) {
 }
 
 console.log("SIGO_ARCA_CAE_EXECUTION_GUARDS_OK");
+
