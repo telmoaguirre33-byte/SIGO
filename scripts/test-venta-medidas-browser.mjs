@@ -190,6 +190,47 @@ try {
   await check("payload conserva unidad esperada para no reinterpretar cambios concurrentes",async()=>{
     for(const confirmation of (await state()).confirms) assert.equal(confirmation.items[0].unidadMedida,"kg");
   });
+  await check("F11 entrega venta por peso al flujo fiscal sin volver a cobrar", async () => {
+    const before = await state();
+    await add("Queso", 250);
+    await page.keyboard.press("F11");
+    await page.waitForFunction(() => window.__qa.confirms.length === 4 && window.__qa.fiscalEvents.length === 1);
+    await rows().waitFor({state:"hidden"});
+    const s = await state();
+    assert.equal(s.confirms[3].items[0].cantidad, .25);
+    assert.equal(s.confirms[3].items[0].unidadMedida, "kg");
+    const first = s.fiscalEvents[0];
+    assert.equal(first.eventName, "sigo:fiscal:caja");
+    assert.equal(first.detail.empresaId, "11111111-1111-4111-8111-111111111111");
+    assert.equal(first.detail.ventaId, "22222222-2222-4222-8222-222222222222");
+    assert.equal(first.detail.accion, "emitir");
+    assert.ok(first.detail.requestId);
+    assert.equal(s.commonPrints.length, before.commonPrints.length);
+    await page.keyboard.press("F11");
+    await page.waitForFunction(() => window.__qa.fiscalEvents.length === 2);
+    const latest = await state();
+    assert.equal(latest.confirms.length, 4, "F11 sin carrito no debe volver a cobrar");
+    assert.equal(latest.fiscalEvents[1].detail.ventaId, first.detail.ventaId);
+    assert.equal(latest.fiscalEvents[1].detail.accion, "emitir");
+    assert.notEqual(latest.fiscalEvents[1].detail.requestId, first.detail.requestId);
+  });
+  await check("F12 solicita original al flujo fiscal sin cobrar ni imprimir ticket común", async () => {
+    const before = await state();
+    await page.keyboard.press("F12");
+    await page.waitForFunction(n => window.__qa.fiscalEvents.length === n + 1, before.fiscalEvents.length);
+    const s = await state();
+    assert.equal(s.fiscalEvents.at(-1).eventName, "sigo:fiscal:caja");
+    assert.equal(s.fiscalEvents.at(-1).detail.accion, "reimprimir");
+    assert.equal(s.fiscalEvents.at(-1).detail.ventaId, "22222222-2222-4222-8222-222222222222");
+    assert.equal(s.commonPrints.length, before.commonPrints.length);
+    assert.equal(s.confirms.length, before.confirms.length);
+    await page.locator(".sigo-pos-action.reprint").click();
+    const clicked = await state();
+    assert.equal(clicked.fiscalEvents.length, before.fiscalEvents.length + 2);
+    assert.equal(clicked.fiscalEvents.at(-1).detail.accion, "reimprimir");
+    assert.equal(clicked.commonPrints.length, before.commonPrints.length);
+    assert.equal(clicked.confirms.length, before.confirms.length);
+  });
   assert.deepEqual(unexpectedNetwork,[]);
   assert.deepEqual((await state()).blockedAccess,[]);
   assert.deepEqual(browserErrors,[]);

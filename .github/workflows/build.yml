@@ -43,5 +43,8 @@ jobs:
       - name: Verify administrator notification security
         run: npm run test:admin-notifications
 
+      - name: Verify read-only production migration gate (synthetic fixtures)
+        run: node --test scripts/test-production-migration-gate.mjs
+
       - name: Verify critical SIGO flow
         run: npm run verify:critical

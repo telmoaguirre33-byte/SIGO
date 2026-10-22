@@ -595,7 +595,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         return;
       }
       if (event.repeat || document.querySelector(".arca-overlay")) return;
-      if (cajaBloqueada && ["F1", "F6", "F9", "F10", "F11", "F12"].includes(event.key)) {
+      if ((cajaBloqueada || confirmacionEnCursoRef.current) && ["F1", "F6", "F9", "F10", "F11", "F12"].includes(event.key)) {
         event.preventDefault();
         event.stopImmediatePropagation();
         return;
