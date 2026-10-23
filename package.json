@@ -10,7 +10,8 @@
     "verify:informes": "node scripts/verify-informes-navigation.mjs",
     "preview": "vite preview",
     "test:admin-notifications": "node scripts/test-admin-notifications.mjs",
-    "test:manual-medidas": "node --experimental-strip-types --test tests/ventaPorMedidas.test.mjs tests/persistenciaMedidas.test.mjs tests/editorCantidadMedida.test.mjs tests/editorCantidadMedida.dom.test.mjs tests/devolucionesMedidas.test.mjs tests/etiquetasPesoVariable.test.mjs tests/resolverEtiquetaVenta.test.mjs && node scripts/test-cobro-recuperacion-flow.mjs"
+    "test:manual-medidas": "node --experimental-strip-types --test tests/ventaPorMedidas.test.mjs tests/persistenciaMedidas.test.mjs tests/editorCantidadMedida.test.mjs tests/editorCantidadMedida.dom.test.mjs tests/devolucionesMedidas.test.mjs tests/etiquetasPesoVariable.test.mjs tests/resolverEtiquetaVenta.test.mjs && node scripts/test-cobro-recuperacion-flow.mjs",
+    "test:contencion-medidas": "node --test tests/contencion.dom.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
