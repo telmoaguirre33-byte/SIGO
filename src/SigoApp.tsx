@@ -653,7 +653,8 @@ function Stock({ empresaId }: { empresaId: string }) {
     setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
   const normalizarBusqueda = (valor: string) => valor.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es-AR").trim();
-  const termino = normalizarBusqueda(busqueda);
+  // Una lectura confirmada filtra por el producto encontrado aunque el lector vacíe su campo.
+  const termino = normalizarBusqueda(scanResult ? (scanResult.codigo_barras || scanResult.codigo_interno || scanResult.nombre) : busqueda);
   const filas = (soloCriticos ? criticosCatalogo : visibles).filter((p) =>
     !termino || [p.nombre, p.codigo_interno, p.codigo_barras, p.marca]
       .some((valor) => valor && normalizarBusqueda(valor).includes(termino))
@@ -696,18 +697,20 @@ function Stock({ empresaId }: { empresaId: string }) {
         <BarcodeScanner
           empresaId={empresaId}
           action="consultar"
-          onQueryChange={(query) => { setBusqueda(query); setScanResult(null); }}
+          onQueryChange={(query) => { setBusqueda(query); if (query) setScanResult(null); }}
           onManualQuery={(query) => {
             const valor = normalizarBusqueda(query);
             if (!valor) return false;
-            // Los códigos exactos siguen consultándose en el servidor; los nombres
-            // filtran el stock ya cargado, también al pulsar Buscar o Enter.
+            // Los códigos exactos se resuelven por el servicio seguro; los nombres,
+            // marcas y coincidencias parciales se filtran localmente sin borrar el filtro.
             if (productos.some((p) =>
               normalizarBusqueda(p.codigo_barras || "") === valor || normalizarBusqueda(p.codigo_interno || "") === valor
             )) return false;
-            return productos.some((p) => normalizarBusqueda(p.nombre).includes(valor));
+            setScanResult(null);
+            setBusqueda(query.trim());
+            return true;
           }}
-          onProduct={(producto) => { setScanResult(producto); setBusqueda(producto.codigo_barras || producto.codigo_interno || producto.nombre); }}
+          onProduct={(producto) => { setScanResult(producto); setBusqueda(""); }}
         />
         {scanResult && <p><strong>{scanResult.nombre}</strong> · Stock actual: {scanResult.stock_actual ?? "restringido"} · Mínimo: {scanResult.stock_minimo ?? "sin definir"}</p>}
       </div>
