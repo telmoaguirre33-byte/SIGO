@@ -2,7 +2,7 @@
 
 ## Alcance
 
-Candidato separado desde main `69f5ab52315df2c5d27e5b37d62066c201acaa29`. Reutiliza V4 y las pruebas aprobadas de venta manual, sin las reparaciones fiscales del PR96. No modifica PR88/PR96 ni otros productos o módulos de negocio.
+Entrega preparada desde main `69f5ab52315df2c5d27e5b37d62066c201acaa29` e integrada mediante PR97 en main `bcadd782ca9ceca0b37dfe8bbbc75f236560a068`. Reutiliza V4 y las pruebas aprobadas de venta manual, sin las reparaciones fiscales del PR96. No modifica PR88/PR96 ni otros productos o módulos de negocio.
 
 - Productos: unidad canónica y precisión explícita; creación/edición atómica. Un producto nuevo por kg puede tener stock inicial válido. Un cambio semántico de unidad con stock o historial se bloquea, sin conversiones ni backfills.
 - Caja: seleccionar un medible abre captura vacía; kg admite entrada visible g/kg, total y equivalente en vivo. Enter confirma, Esc cancela sin añadir; editar conserva la misma línea. No se añade 1 kg por defecto.
@@ -16,17 +16,21 @@ Los módulos puros de etiquetas permanecen sin activación: no se configura ning
 
 ## Única migración funcional nueva
 
-`supabase/migrations/20261022024847_manual_medidas_atomicas.sql`
+`supabase/migrations/20261023144934_manual_medidas_atomicas_guarded.sql`
 
 SHA-256: `d525682cf0ac327221a389f4668748b40d6fd81e0a31b70c79e5b05a59312c21`
+
+El archivo conserva exactamente los bytes de `20261022024847_manual_medidas_atomicas.sql`; solo cambia su identidad local al ID/nombre realmente registrado por la API. La fuente anterior no debe coexistir en migrations. Véase [registro y huella del wrapper aplicado](MIGRACIONES_PREFLIGHT_SOLO_LECTURA.md#solo-v4-identidad-registrada-y-sql-canónico-preservado).
 
 Sustituye, para esta entrega independiente, la propuesta no aplicada del PR88 `20261021_venta_medidas_rpc.sql`. No se incluye aquella versión ni se borra ninguna migración histórica de main. El snapshot de unidad de ventas nuevas es nullable para compatibilidad: no se inventan unidades ni huellas de devoluciones históricas ausentes.
 
 No ejecutar `supabase db push --include-all`. El workflow productivo pasa a preflight **solo lectura**, sin aplicar, reparar historial ni cambiar Auth. Véase [procedimiento y bloqueos](MIGRACIONES_PREFLIGHT_SOLO_LECTURA.md). Las discrepancias históricas siguen siendo un bloqueo visible, no un fallo ocultado ni un permiso para reejecutar SQL histórico.
 
-## Seguridad y activación pendientes
+## Estado de activación y límites
 
-Publicar un PR, compilar o aprobar tests no habilita producción. Se requieren autorización concreta, backup/recuperación verificable, revisión del desacuerdo del historial, mecanismo selectivo revisado y aplicación explícita de V4. No desplegar la interfaz nueva contra una base sin sus RPC.
+V4 se aplicó selectivamente el 23/10/2026 con autorización expresa para la ruta sin respaldo integral de COMERCIAL. La lectura posterior de catálogo confirmó el registro `20261023144934` / `manual_medidas_atomicas_guarded`, tres columnas anulables sin default y siete funciones con cuerpos/permisos esperados. Esta evidencia no acredita respaldo recuperable, pruebas comerciales reales ni cierre del desacuerdo histórico. No volver a aplicar V4 ni reparar historia para obtener un gate verde.
+
+Publicar un PR, compilar o aprobar tests no habilita otra intervención productiva. El cambio actual solo reconcilia el archivo local con el nuevo registro; no ejecuta SQL, cambia permisos ni habilita despliegue automático de migraciones. En cualquier otro entorno se requiere verificar sus RPC y autorización de aplicación antes de activar la interfaz.
 
 El acceso directo legado a productos requiere el cambio separado de [RLS de productos](productos-rls/LEEME_OPERACION_NO_AUTORIZADA.md), fuera de migrations y nunca autoaplicado por CI. Su candidato probado limita empresa/permiso y evita escrituras directas; no implementa masking completo de costo/stock dentro de la empresa. Conserva lecturas activas existentes. Otros accesos legados, incluido compras, no están resueltos por esta entrega. El rollback RLS reabre permisos amplios y exige autorización expresa.
 
@@ -49,8 +53,8 @@ node scripts/test-venta-medidas-browser.mjs
 
 Las pruebas de interfaz y cobro usan servicios simulados, origen `.invalid` y bloqueo de red ajena al fixture. No utilizan COMERCIAL, impresora ni ARCA real. El browser cubre selección/cancelación, 750 g, equivalencia kg, Enter repetido, edición, guard F9–F12, F9/F10 después del editor y los contratos F11/F12 main. Los 14 casos React/JSDOM de recuperación cubren por separado respuesta perdida, recarga y reintento seguro. La corrida real del candidato independiente debe verificarse en CI; un éxito del PR96 no la sustituye.
 
-El SQL V4 inalterado ya pasó PostgreSQL 17.6 sintético: 196 pasos/781 aserciones, seis escenarios de concurrencia real, y pruebas de RLS separado. No se vuelven a declarar aplicadas en producción. Las huellas de build y las mutaciones deterministas se registran en la entrega técnica; no publicar automáticamente archivos transformados ajenos al alcance.
+El SQL V4 inalterado ya pasó PostgreSQL 17.6 sintético: 196 pasos/781 aserciones, seis escenarios de concurrencia real, y pruebas de RLS separado. Estas suites no se repiten para el renombrado y no prueban que el RLS separado se haya aplicado en producción. Las huellas de build y las mutaciones deterministas se registran en la entrega técnica; no publicar automáticamente archivos transformados ajenos al alcance.
 
 ## Reversión
 
-Antes de activar, conservar commit frontend anterior, definiciones/grants de funciones reemplazadas y plan de recuperación autorizado. Si hay que retirar la interfaz, revertir el commit frontend no debe borrar ventas, snapshots ni columnas nuevas. No existe un down SQL automático seguro que deshaga datos comerciales; la reversión de funciones y permisos requiere una intervención revisada y coordinada con ventas concurrentes. Nunca borrar o reescribir historial de migraciones para simular rollback.
+La aplicación de V4 es forward-only tras commit: las capturas de definiciones/grants no son respaldo de datos. No volver a main anterior como rollback de interfaz transparente; los intentos pendientes necesitan conservar la clave, el payload y la recuperación V4. Cualquier contención debe revisarse por separado y no debe borrar ventas, snapshots ni columnas nuevas. No existe un down SQL automático seguro que deshaga datos comerciales; la reversión de funciones y permisos requiere una intervención revisada y coordinada con ventas concurrentes. Nunca borrar o reescribir historial de migraciones para simular rollback.
