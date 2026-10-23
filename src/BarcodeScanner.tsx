@@ -55,7 +55,6 @@ const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
     facingMode: { ideal: "environment" },
     width: { ideal: 1280 },
     height: { ideal: 720 },
-    frameRate: { ideal: 30, min: 20 },
   },
   audio: false,
 };
@@ -320,40 +319,61 @@ export default function BarcodeScanner({
     const video = videoRef.current;
     let cancelled = false;
     let nativeTimer: number | undefined;
-    let nativeWatchdog: number | undefined;
-    let nativeSawCode = false;
     scanningRef.current = true;
 
-    async function mejorarCamara(stream: MediaStream) {
-      const track = stream.getVideoTracks()[0];
-      if (!track) return;
-      try {
-        const caps = track.getCapabilities() as MediaTrackCapabilities & { focusMode?: string[] };
-        if (Array.isArray(caps.focusMode) && caps.focusMode.includes("continuous")) {
-          await track.applyConstraints({ advanced: [{ focusMode: "continuous" } as any] } as MediaTrackConstraints);
+    async function startNativeFallback() {
+      if (!detectorCtor || cancelled) {
+        if (!cancelled) {
+          setError("El lector de cámara de este navegador no pudo inicializarse. Podés usar pistola o ingreso manual.");
+          stopCamera();
         }
-      } catch (focusError) {
-        console.debug("Enfoque continuo no disponible", focusError);
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS);
+        if (cancelled || empresaActivaRef.current !== empresaId) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        streamRef.current = stream;
+        video.srcObject = stream;
+        const detector = new detectorCtor();
+        await video.play();
+        setCameraStatus("Cámara activa. Centrá el código dentro del recuadro.");
+
+        const scanNative = async () => {
+          if (!scanningRef.current || cancelled) return;
+          try {
+            if (!inFlightRef.current && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+              const results = await detector.detect(video);
+              const found = results.map((r) => normalizeBarcode(r.rawValue || "")).find(Boolean);
+              if (found) await resolveCode(found, "camera");
+            }
+          } catch (e) {
+            console.debug("BarcodeDetector scan skipped", e);
+          }
+          nativeTimer = window.setTimeout(scanNative, 220);
+        };
+        void scanNative();
+      } catch (e) {
+        console.error("No se pudo iniciar BarcodeDetector", e);
+        if (!cancelled) {
+          setError("No se pudo abrir la cámara. Revisá el permiso del navegador y volvé a intentar.");
+          stopCamera();
+        }
       }
     }
 
-    function detenerStreamActual() {
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-      video.srcObject = null;
-    }
-
-    async function startZxingFast() {
-      if (cancelled) return;
+    async function startRobustScanner() {
       try {
-        const zxing = await import("@zxing/browser") as any;
+        const { BrowserMultiFormatReader } = await import("@zxing/browser");
         if (cancelled) return;
-        const Reader = zxing.BrowserMultiFormatOneDReader || zxing.BrowserMultiFormatReader;
-        const reader = new Reader();
+        const reader = new BrowserMultiFormatReader();
         const controls = await reader.decodeFromConstraints(
           CAMERA_CONSTRAINTS,
           video,
-          (result: any, _scanError: unknown, callbackControls: ScannerControlsLike) => {
+          (result, _scanError, callbackControls) => {
             if (callbackControls) zxingControlsRef.current = callbackControls;
             if (!result || inFlightRef.current || cancelled) return;
             const found = normalizeBarcode(result.getText());
@@ -365,98 +385,25 @@ export default function BarcodeScanner({
           return;
         }
         zxingControlsRef.current = controls;
-        const zxingStream = video.srcObject instanceof MediaStream ? video.srcObject : null;
-        if (zxingStream) {
-          streamRef.current = zxingStream;
-          void mejorarCamara(zxingStream);
-        }
-        setCameraStatus("Lector rápido activo. Apuntá al código de barras.");
+        setCameraStatus("Cámara activa. Centrá el código dentro del recuadro.");
       } catch (e) {
-        console.error("No se pudo iniciar el lector de cámara", e);
-        if (!cancelled) {
-          setError("No se pudo iniciar el lector. Cerrá y abrí la cámara nuevamente.");
-          stopCamera();
-        }
+        console.warn("ZXing no pudo iniciar; se prueba lector nativo", e);
+        if (!cancelled) void startNativeFallback();
       }
     }
 
-    async function startNativeFast(): Promise<boolean> {
-      if (!detectorCtor || cancelled) return false;
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS);
-        if (cancelled || empresaActivaRef.current !== empresaId) {
-          stream.getTracks().forEach((track) => track.stop());
-          return false;
-        }
-        streamRef.current = stream;
-        await mejorarCamara(stream);
-        video.srcObject = stream;
-        await video.play();
-
-        let detector: BarcodeDetectorLike;
-        try {
-          detector = new detectorCtor({
-            formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "code_93", "itf", "codabar"],
-          });
-        } catch {
-          detector = new detectorCtor();
-        }
-
-        setCameraStatus("Lector rápido activo. Mantené el código nítido dentro del recuadro.");
-
-        const scanNative = async () => {
-          if (!scanningRef.current || cancelled) return;
-          const startedAt = performance.now();
-          try {
-            if (!inFlightRef.current && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-              const results = await detector.detect(video);
-              const found = results.map((r) => normalizeBarcode(r.rawValue || "")).find(Boolean);
-              if (found) {
-                nativeSawCode = true;
-                await resolveCode(found, "camera");
-              }
-            }
-          } catch (e) {
-            console.debug("BarcodeDetector scan skipped", e);
-          }
-          const elapsed = performance.now() - startedAt;
-          nativeTimer = window.setTimeout(scanNative, Math.max(45, 110 - elapsed));
-        };
-        void scanNative();
-
-        // Algunos WebView anuncian BarcodeDetector pero no decodifican bien códigos 1D.
-        // Si en 2,5 s no leyó nada, cambiamos automáticamente a ZXing 1D sin pedirle nada al usuario.
-        nativeWatchdog = window.setTimeout(() => {
-          if (cancelled || nativeSawCode || inFlightRef.current) return;
-          if (nativeTimer) window.clearTimeout(nativeTimer);
-          detenerStreamActual();
-          void startZxingFast();
-        }, 2500);
-        return true;
-      } catch (e) {
-        console.warn("BarcodeDetector nativo no pudo iniciar; se usa ZXing", e);
-        detenerStreamActual();
-        return false;
-      }
-    }
-
-    async function startFastScanner() {
-      const nativeStarted = await startNativeFast();
-      if (!nativeStarted && !cancelled) await startZxingFast();
-    }
-
-    void startFastScanner();
+    void startRobustScanner();
 
     return () => {
       cancelled = true;
       scanningRef.current = false;
       if (nativeTimer) window.clearTimeout(nativeTimer);
-      if (nativeWatchdog) window.clearTimeout(nativeWatchdog);
       zxingControlsRef.current?.stop();
       zxingControlsRef.current = null;
-      detenerStreamActual();
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
     };
-    // SIGO_CAMERA_FAST_SCANNER_V2
+    // El scanner se reinicia deliberadamente sólo al abrir/cerrar cámara o cambiar empresa.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraOpen, detectorCtor, empresaId]);
 
