@@ -1,18 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import BarcodeScanner from "./BarcodeScanner";
+import EditorCantidadMedida from "./EditorCantidadMedida";
+import { cantidadEscaladaMedida, consolidarCantidadMedida, formatoCantidadMedida, formatoStockMedida, pasoCantidadMedida, precioUnitarioConDescuentosMedida, stockRestanteMedida, subtotalMedida, type UnidadVenta } from "./ventaPorMedidas";
+import { crearIntentoCobro, guardarIntentoCobro, leerIntentoCobro, registrarCobroConfirmado, registrarCobroRechazado, type IntentoCobro } from "./intentoCobro";
 import { imprimirTicketVenta } from "./ticketVenta";
 import { isLegacyDuplicateProduct, normalizeBarcode, type BarcodeProduct } from "./barcode";
 import { listarClientesSigo, type ClienteSigo } from "./clientes";
-import { guardarProductoSigo, listarProductosSigo, type ProductoSigo } from "./productos";
-import { listarOfertasProductos, ofertaVigente, precioConOferta, type OfertaProducto } from "./ofertasProductos";
+import { guardarProductoSigo, listarProductosSigo, listarUnidadesProductoSigo, type ProductoSigo } from "./productos";
+import { listarOfertasProductos, ofertaVigente, type OfertaProducto } from "./ofertasProductos";
 import {
   confirmarVentaSigo,
+  VentaRechazadaSinCambiosError,
   listarVentasRecientesSigo,
   type MedioPagoSigo,
   type VentaRecienteSigo,
 } from "./ventas";
 
-type ItemVenta = { producto: BarcodeProduct; cantidad: number };
+type ItemVenta = { producto: BarcodeProduct; cantidad: number; unidad: UnidadVenta };
 
 const DINERO_TOLERANCIA = 0.01;
 
@@ -36,14 +40,15 @@ function etiquetaMedio(medio: MedioPagoSigo) {
 
 function precioUnitarioVenta(item: ItemVenta, ofertas: OfertaProducto[], descuentoPct: number) {
   const oferta = ofertaVigente(ofertas, item.producto.id);
-  const base = oferta
-    ? precioConOferta(Number(item.producto.precio_venta ?? 0), Number(oferta.descuento_porcentaje))
-    : Number(item.producto.precio_venta ?? 0);
-  return descuentoPct > 0 ? precioConOferta(base, descuentoPct) : base;
+  return precioUnitarioConDescuentosMedida(Number(item.producto.precio_venta ?? 0), oferta ? Number(oferta.descuento_porcentaje) : 0, descuentoPct);
 }
 
 export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos = false }: { empresaId: string; puedeEditarProductos?: boolean }) {
   const [items, setItems] = useState<ItemVenta[]>([]);
+  const [unidadesProducto, setUnidadesProducto] = useState<Record<string, UnidadVenta | null>>({});
+  const [unidadesCargadas, setUnidadesCargadas] = useState(false);
+  const [productoPorMedida, setProductoPorMedida] = useState<BarcodeProduct | null>(null);
+  const [reemplazandoCantidad, setReemplazandoCantidad] = useState(false);
   const [catalogo, setCatalogo] = useState<ProductoSigo[]>([]);
   const [ofertas, setOfertas] = useState<OfertaProducto[]>([]);
   const [ofertasError, setOfertasError] = useState("");
@@ -67,9 +72,22 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   const [productoSeleccionadoId,setProductoSeleccionadoId]=useState<string|null>(null);
   const [scannerInstanceKey,setScannerInstanceKey]=useState(0);
   const [descuentoAbierto,setDescuentoAbierto]=useState(false);
-  const [idempotencyKey, setIdempotencyKey] = useState(nuevaClaveVenta);
+  const [intentoPendiente, setIntentoPendiente] = useState<IntentoCobro | null>(null);
+  const [errorPersistenciaCobro, setErrorPersistenciaCobro] = useState("");
+  const cajaBloqueada = confirmando || Boolean(intentoPendiente) || Boolean(errorPersistenciaCobro);
+  const confirmacionEnCursoRef = useRef(false);
+  const montadoRef = useRef(false);
+  useEffect(() => {
+    montadoRef.current = true;
+    return () => { montadoRef.current = false; };
+  }, []);
   const empresaActivaRef = useRef(empresaId);
   const buscarRef = useRef<HTMLInputElement | null>(null);
+  const cajaRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    buscarRef.current = cajaRef.current?.querySelector<HTMLInputElement>(".barcode-entry-row input") ?? null;
+    return () => { buscarRef.current = null; };
+  }, [scannerInstanceKey, productoPorMedida]);
   const productosEncontradosRef = useRef<ProductoSigo[]>([]);
   const productoSeleccionadoIdRef = useRef<string|null>(null);
 
@@ -89,6 +107,9 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     let cancelled = false;
     empresaActivaRef.current = empresaId;
     setItems([]);
+    setUnidadesProducto({});
+    setUnidadesCargadas(false);
+    setProductoPorMedida(null);
     setCatalogo([]);
     setOfertas([]);
     setOfertasError("");
@@ -104,9 +125,18 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     setVentasError("");
     setError("");
     setExito("");
-    setUltimaVentaTicket(null);
+    try { setUltimaVentaTicket(sessionStorage.getItem(`sigo:ultima-venta:${empresaId}`)); }
+    catch { setUltimaVentaTicket(null); }
     setAdvertencia("");
-    setIdempotencyKey(nuevaClaveVenta());
+    setIntentoPendiente(null);
+    setErrorPersistenciaCobro("");
+    try {
+      const intento = leerIntentoCobro(empresaId);
+      if (intento?.estado === "pendiente") setIntentoPendiente(intento);
+      if (intento?.estado === "confirmado") setUltimaVentaTicket(intento.ventaId!);
+    } catch (err) {
+      setErrorPersistenciaCobro(err instanceof Error ? err.message : "No se pudo verificar el último intento de cobro.");
+    }
 
     async function cargar() {
       const [clientesResultado, catalogoResultado, ofertasResultado] = await Promise.allSettled([
@@ -134,6 +164,17 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       if (!cancelled && empresaActivaRef.current === empresaId) await cargarVentasRecientes(empresaId);
     }
     void cargar();
+    // Unidad ausente o fallo de lectura: nunca degradar a venta por pieza.
+    void listarUnidadesProductoSigo(empresaId).then((mapa) => {
+      if (cancelled || empresaActivaRef.current !== empresaId) return;
+      setUnidadesProducto(mapa);
+      setUnidadesCargadas(true);
+    }).catch((err) => {
+      if (cancelled || empresaActivaRef.current !== empresaId) return;
+      setUnidadesProducto({});
+      setUnidadesCargadas(false);
+      setError(err instanceof Error ? err.message : "No se pudieron verificar las unidades. Actualizá antes de vender.");
+    });
     return () => { cancelled = true; };
     // cargarVentasRecientes depende únicamente del mismo empresaId del efecto.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -169,6 +210,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   }
 
   function seleccionarProductoManual(producto: ProductoSigo) {
+    if (cajaBloqueada || confirmacionEnCursoRef.current || productoPorMedida) return;
     setError("");
     setExito("");
     setAdvertencia("");
@@ -229,7 +271,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   }
 
   async function guardarPrecioRapido() {
-    if (!productoBloqueado || productoBloqueado.razon !== "precio" || !puedeEditarProductos || guardandoPrecio) return;
+    if (cajaBloqueada || confirmacionEnCursoRef.current || !productoBloqueado || productoBloqueado.razon !== "precio" || !puedeEditarProductos || guardandoPrecio) return;
     const precio = Number(precioRapido.replace(",", "."));
     if (!Number.isFinite(precio) || precio <= 0) {
       setError("Ingresá un precio de venta mayor a cero.");
@@ -267,7 +309,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       setPrecioRapido("");
       setBusquedaProducto("");
       agregar(actualizado);
-      setExito(`Precio guardado y ${original.nombre} agregado al carrito.`);
+      setExito(`Precio guardado para ${original.nombre}. Revisá la cantidad antes de cobrar.`);
     } catch (err) {
       if (empresaActivaRef.current === empresaOperacion) {
         setError(err instanceof Error ? err.message : "No se pudo guardar el precio del producto.");
@@ -278,53 +320,89 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   }
 
   function agregar(producto: BarcodeProduct) {
-    if (confirmando) return;
-    setError("");
-    setExito("");
-    setAdvertencia("");
-    setProductoBloqueado(null);
-    const precio = Number(producto.precio_venta);
-    if (!Number.isFinite(precio) || precio <= 0) {
-      setError(`${producto.nombre}: definí un precio de venta mayor a cero antes de vender.`);
+    if (cajaBloqueada || confirmacionEnCursoRef.current) return;
+    if (productoPorMedida) { setError("Terminá o cancelá la cantidad en edición antes de agregar otro producto."); return; }
+    const unidad = unidadesProducto[producto.id];
+    if (producto.empresa_id !== empresaId || isLegacyDuplicateProduct(producto)) { setError("No se pudo verificar el producto en la empresa activa."); return; }
+    if (!unidadesCargadas || !unidad) {
+      setError(`${producto.nombre}: unidad de venta sin verificar. Revisá el producto y actualizá el catálogo; no se agregó al carrito.`);
       return;
     }
-    const stock = Number(producto.stock_actual);
-    if (!Number.isFinite(stock) || stock <= 0) {
-      setError(`${producto.nombre}: sin stock disponible.`);
+    if (unidad !== "unidad") {
+      setReemplazandoCantidad(false);
+      setProductoPorMedida(producto);
       return;
     }
+    agregarCantidad(producto, 1);
+  }
 
+  function agregarCantidad(producto: BarcodeProduct, cantidadAgregar: number, reemplazar = false) {
+    if (cajaBloqueada || confirmacionEnCursoRef.current) return;
+    setError(""); setExito(""); setAdvertencia(""); setProductoBloqueado(null);
+    const unidad = unidadesProducto[producto.id];
+    if (producto.empresa_id !== empresaId || isLegacyDuplicateProduct(producto) || !unidadesCargadas || !unidad) {
+      setError(`${producto.nombre}: no se pudo verificar el producto y su unidad en esta empresa.`);
+      return;
+    }
+    const precio = Number(producto.precio_venta);
+    if (!Number.isFinite(precio) || precio <= 0) { setError(`${producto.nombre}: definí un precio de venta mayor a cero antes de vender.`); return; }
+    const stock = Number(producto.stock_actual);
+    if (producto.stock_actual == null || !Number.isFinite(stock) || stock <= 0) { setError(`${producto.nombre}: sin stock disponible.`); return; }
     setItems((actual) => {
-      const existente = actual.find((item) => item.producto.id === producto.id);
-      const cantidadActual = existente?.cantidad ?? 0;
-      if (cantidadActual + 1 > stock) {
-        setError(`${producto.nombre}: no hay stock para agregar otra unidad.`);
+      const existentes = actual.filter((item) => item.producto.id === producto.id);
+      if (existentes.some((item) => item.unidad !== unidad)) {
+        setError(`${producto.nombre}: cambió la unidad. Retirá el renglón y revisá el producto.`);
         return actual;
       }
-      if (existente) {
-        return actual.map((item) => item.producto.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item);
+      let cantidad: number;
+      try {
+        cantidad = consolidarCantidadMedida([...(reemplazar ? [] : existentes.map((item) => item.cantidad)), cantidadAgregar], unidad, stock);
+      } catch (err) {
+        setError(`${producto.nombre}: ${err instanceof Error && err.message === "STOCK_INSUFICIENTE" ? "la cantidad total supera el stock disponible" : "cantidad o stock inválido para su unidad"}.`);
+        return actual;
       }
-      return [...actual, { producto, cantidad: 1 }];
+      const nuevo = { producto, cantidad, unidad };
+      if (!existentes.length) return [...actual, nuevo];
+      let reemplazado = false;
+      return actual.flatMap((item) => {
+        if (item.producto.id !== producto.id) return [item];
+        if (reemplazado) return [];
+        reemplazado = true;
+        return [nuevo];
+      });
     });
+    window.setTimeout(() => buscarRef.current?.focus(), 0);
   }
 
   function cambiarCantidad(productoId: string, delta: number) {
+    if (cajaBloqueada || confirmacionEnCursoRef.current || productoPorMedida) return;
     setError("");
     setItems((actual) => actual.flatMap((item) => {
       if (item.producto.id !== productoId) return [item];
-      const siguiente = item.cantidad + delta;
-      if (siguiente <= 0) return [];
-      if (item.producto.stock_actual != null && siguiente > Number(item.producto.stock_actual)) {
-        setError(`${item.producto.nombre}: stock máximo disponible ${item.producto.stock_actual}.`);
+      try {
+        const paso = pasoCantidadMedida(item.unidad);
+        const siguienteEscalado = cantidadEscaladaMedida(item.cantidad, item.unidad) + Math.round(delta / paso);
+        if (siguienteEscalado <= 0) return [];
+        const siguiente = consolidarCantidadMedida([siguienteEscalado * paso], item.unidad, Number(item.producto.stock_actual));
+        return [{ ...item, cantidad: siguiente }];
+      } catch {
+        setError(`${item.producto.nombre}: cantidad inválida o stock máximo disponible ${formatoStockMedida(Number(item.producto.stock_actual), item.unidad)}.`);
         return [item];
       }
-      return [{ ...item, cantidad: siguiente }];
     }));
   }
 
+  function editarCantidad(item: ItemVenta) {
+    if (cajaBloqueada || confirmacionEnCursoRef.current || productoPorMedida) return;
+    setReemplazandoCantidad(true);
+    setProductoPorMedida(item.producto);
+    setError("");
+  }
+
   function vaciar() {
-    if (confirmando) return;
+    if (cajaBloqueada || confirmacionEnCursoRef.current) return;
     setItems([]);
+    setProductoPorMedida(null);
     setError("");
     setExito("");
     setAdvertencia("");
@@ -336,133 +414,171 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     setProductoSeleccionadoId(null);
     setScannerInstanceKey((key)=>key+1);
     setDescuentoPct(0); setDescuentoAbierto(false);
-    setIdempotencyKey(nuevaClaveVenta());
+
     window.setTimeout(()=>buscarRef.current?.focus(),0);
   }
 
   const subtotal = useMemo(() => items.reduce((suma,item)=>{
     const unitario=precioUnitarioVenta(item,ofertas,0);
-    return suma+Math.round((unitario*item.cantidad+Number.EPSILON)*100)/100;
+    return suma+subtotalMedida(item.cantidad, unitario);
   },0),[items,ofertas]);
   const total = useMemo(()=>Math.max(0,items.reduce((suma,item)=>{
     const precioFinal=precioUnitarioVenta(item,ofertas,descuentoPct);
-    return suma+Math.round((precioFinal*item.cantidad+Number.EPSILON)*100)/100;
+    return suma+subtotalMedida(item.cantidad, precioFinal);
   },0)),[items,ofertas,descuentoPct]);
 
   const superaLimite = medioPago === "cuenta_corriente"
     && clienteSeleccionado?.limite_credito != null
     && Number(clienteSeleccionado.saldo_actual || 0) + total > Number(clienteSeleccionado.limite_credito);
 
-  const puedeConfirmar = items.length > 0
+  const puedeConfirmar = !cajaBloqueada && items.length > 0
+    && unidadesCargadas
+    && !productoPorMedida
+    && total > 0
     && !ofertasError
     && (medioPago !== "cuenta_corriente" || Boolean(clienteId))
     && !superaLimite
     && items.every((item) => {
       const precio = Number(item.producto.precio_venta);
       const stock = Number(item.producto.stock_actual);
-      return Number.isFinite(precio)
+      try {
+        consolidarCantidadMedida([item.cantidad], item.unidad, stock);
+        if (subtotalMedida(item.cantidad, precioUnitarioVenta(item, ofertas, descuentoPct)) <= 0) return false;
+      } catch { return false; }
+      return unidadesProducto[item.producto.id] === item.unidad
+        && Number.isFinite(precio)
         && precio > 0
         && Number.isFinite(stock)
         && stock > 0
-        && item.cantidad > 0
-        && item.cantidad <= stock;
+        && item.cantidad > 0;
     });
 
-  async function confirmar(imprimirDespues = false, emitirFiscalDespues = false) {
-    if (!puedeConfirmar || confirmando) return;
+  async function confirmar(imprimirDespues = false, emitirFiscalDespues = false, recuperar = false) {
+    if (confirmando || confirmacionEnCursoRef.current || errorPersistenciaCobro
+      || (recuperar ? !intentoPendiente : !puedeConfirmar)) return;
+    confirmacionEnCursoRef.current = true;
     const empresaConfirmacion = empresaId;
+    let intento: IntentoCobro | null = null;
+    let enviado = false;
     setConfirmando(true);
     setError("");
     setExito("");
     setAdvertencia("");
     try {
-      const resultado = await confirmarVentaSigo({
-        empresaId: empresaConfirmacion,
-        medioPago,
-        clienteId: clienteId || null,
-        descuentoPct,
-        idempotencyKey,
-        items: items.map((item) => ({ productoId: item.producto.id, cantidad: item.cantidad })),
-      });
-      if (empresaActivaRef.current !== empresaConfirmacion) return;
-
-      // La venta ya fue confirmada de forma transaccional por el servidor.
-      // Mostrar el resultado sin esperar las lecturas secundarias de conciliación.
-      setExito("Venta confirmada");
-      window.setTimeout(() => setExito(""), 2200);
-      setUltimaVentaTicket(resultado.ventaId);
-      if (emitirFiscalDespues) {
-        window.dispatchEvent(new CustomEvent("sigo:arca:venta", { detail: { empresaId: empresaConfirmacion, ventaId: resultado.ventaId } }));
+      if (recuperar) {
+        // Leer otra vez detecta cambios de sesión antes de enviar. No tomar nada del carrito.
+        intento = leerIntentoCobro(empresaConfirmacion);
+        if (!intento || intento.estado !== "pendiente" || intento.huella !== intentoPendiente?.huella) {
+          throw new Error("El intento guardado cambió. Recargá la caja para revisar su estado antes de cobrar.");
+        }
+      } else {
+        intento = crearIntentoCobro({
+          empresaId: empresaConfirmacion, medioPago, clienteId: clienteId || null, descuentoPct,
+          idempotencyKey: nuevaClaveVenta(),
+          items: items.map((item) => ({ productoId: item.producto.id, cantidad: item.cantidad, unidadMedida: item.unidad })),
+        }, total);
       }
+      guardarIntentoCobro(intento);
+      setIntentoPendiente(intento);
+      enviado = true;
+      const resultado = await confirmarVentaSigo(intento.payload);
+      // Tener UUID confirma la escritura aunque falle la conciliación posterior.
+      // Persistir también si el operador cambió de empresa mientras esperaba.
+      let guardado = true;
+      try { registrarCobroConfirmado(intento, resultado.ventaId); }
+      catch { guardado = false; }
+      try { sessionStorage.setItem(`sigo:ultima-venta:${empresaConfirmacion}`, resultado.ventaId); } catch { /* el registro confirmado también guarda el UUID */ }
+      if (!montadoRef.current || empresaActivaRef.current !== empresaConfirmacion) {
+        void resultado.verificacion.catch(() => undefined);
+        return;
+      }
+      if (guardado) setIntentoPendiente(null);
+      else setError("La venta quedó confirmada, pero no se pudo guardar su estado en este navegador. No hagas otro cobro: usá Recuperar el mismo cobro para guardar el resultado.");
+      setExito(recuperar ? "Cobro recuperado. No se creó una venta adicional. Podés facturar o reimprimir esta venta con F11/F12." : "Venta confirmada");
+      window.setTimeout(() => { if (montadoRef.current && empresaActivaRef.current === empresaConfirmacion) setExito(""); }, recuperar ? 9000 : 2200);
+      setUltimaVentaTicket(resultado.ventaId);
+      // La recuperación nunca reanuda autorizaciones de impresión o emisión fiscal.
+      if (!recuperar && emitirFiscalDespues) window.dispatchEvent(new CustomEvent("sigo:arca:venta", { detail: { empresaId: empresaConfirmacion, ventaId: resultado.ventaId } }));
       setAdvertencia("");
+      const totalEsperado = intento.totalEsperado;
       void resultado.verificacion.then((verificado) => {
-        if (empresaActivaRef.current !== empresaConfirmacion) return;
+        if (!montadoRef.current || empresaActivaRef.current !== empresaConfirmacion) return;
         const advertencias: string[] = [];
-        if (
-          verificado.totalVerificado != null
-          && Math.abs(verificado.totalVerificado - total) > DINERO_TOLERANCIA
-        ) {
-          advertencias.push(
-            `El precio cambió mientras confirmabas. SIGO registró el total vigente del backend: $ ${verificado.totalVerificado.toLocaleString("es-AR")}.`,
-          );
+        if (verificado.totalVerificado != null && Math.abs(verificado.totalVerificado - totalEsperado) > DINERO_TOLERANCIA) {
+          advertencias.push(`El precio cambió mientras confirmabas. SIGO registró el total vigente del backend: $ ${verificado.totalVerificado.toLocaleString("es-AR")}.`);
         }
         if (verificado.integridad !== "ok") {
-          advertencias.push(
-            verificado.integridad === "revisar"
-              ? "La venta quedó registrada, pero no se pudo conciliar su movimiento de Caja/Cuenta Corriente o stock. NO repitas la venta: revisá el estado operativo o Informes."
-              : "La venta quedó registrada, pero la conciliación automática no pudo verificarse. NO repitas la venta hasta revisar Ventas/Informes.",
-          );
+          advertencias.push(verificado.integridad === "revisar"
+            ? "La venta quedó registrada, pero no se pudo conciliar su movimiento de Caja/Cuenta Corriente o stock. NO repitas la venta: revisá el estado operativo o Informes."
+            : "La venta quedó registrada, pero la conciliación automática no pudo verificarse. NO repitas la venta hasta revisar Ventas/Informes.");
         }
         setAdvertencia(advertencias.join(" "));
       }).catch(() => {
-        if (empresaActivaRef.current === empresaConfirmacion) {
-          setAdvertencia("La venta quedó confirmada, pero no se pudo verificar la conciliación posterior. No repitas la venta hasta revisar Ventas/Informes.");
-        }
+        if (montadoRef.current && empresaActivaRef.current === empresaConfirmacion) setAdvertencia("La venta quedó confirmada, pero no se pudo verificar la conciliación posterior. No repitas la venta hasta revisar Ventas/Informes.");
       });
-      if (imprimirDespues) {
-        void imprimirTicketVenta(empresaConfirmacion, resultado.ventaId, "80", true)
-          .catch((printErr) => {
-            if (empresaActivaRef.current === empresaConfirmacion) {
-              setError(printErr instanceof Error ? printErr.message : "La venta se confirmó, pero no se pudo abrir la impresión del ticket.");
-            }
-          });
+      if (!recuperar && imprimirDespues) {
+        void imprimirTicketVenta(empresaConfirmacion, resultado.ventaId, "80", true).catch((printErr) => {
+          if (montadoRef.current && empresaActivaRef.current === empresaConfirmacion) setError(printErr instanceof Error ? printErr.message : "La venta se confirmó, pero no se pudo abrir la impresión del ticket.");
+        });
       }
-      const cantidadesVendidas = new Map(items.map((item) => [item.producto.id, item.cantidad]));
-      setCatalogo((actual) => actual.map((producto) => {
-        const cantidad = cantidadesVendidas.get(producto.id);
-        if (!cantidad) return producto;
-        return { ...producto, stock_actual: Math.max(0, Number(producto.stock_actual ?? 0) - cantidad) };
-      }));
+      // En recuperación el catálogo puede contener ya el stock descontado: releer, no restarlo otra vez.
+      if (!recuperar) {
+        const cantidadesVendidas = new Map(intento.payload.items.map((item) => [item.productoId, item.cantidad]));
+        setCatalogo((actual) => actual.map((producto) => {
+          const cantidad = cantidadesVendidas.get(producto.id);
+          return cantidad ? { ...producto, stock_actual: Math.max(0, Number(producto.stock_actual ?? 0) - cantidad) } : producto;
+        }));
+      } else {
+        void listarProductosSigo(empresaConfirmacion).then((data) => {
+          if (montadoRef.current && empresaActivaRef.current === empresaConfirmacion) setCatalogo(data);
+        }).catch(() => {
+          if (montadoRef.current && empresaActivaRef.current === empresaConfirmacion) setCatalogoError("El cobro fue recuperado, pero no se pudo actualizar el catálogo. Recargá antes de otra venta.");
+        });
+      }
       setItems([]);
       setBusquedaProducto("");
       setProductoSeleccionadoId(null);
-      setScannerInstanceKey((key)=>key+1);
+      setScannerInstanceKey((key) => key + 1);
       setClienteId("");
       setMedioPago("efectivo");
-      setIdempotencyKey(nuevaClaveVenta());
-      void listarClientesSigo(empresaConfirmacion)
-        .then((data) => {
-          if (empresaActivaRef.current === empresaConfirmacion) setClientes(data);
-        })
-        .catch((refreshErr) => {
-          if (empresaActivaRef.current === empresaConfirmacion) {
-            setClientesError(refreshErr instanceof Error ? refreshErr.message : "No se pudieron actualizar los clientes.");
-          }
-        });
+      void listarClientesSigo(empresaConfirmacion).then((data) => {
+        if (montadoRef.current && empresaActivaRef.current === empresaConfirmacion) setClientes(data);
+      }).catch((refreshErr) => {
+        if (montadoRef.current && empresaActivaRef.current === empresaConfirmacion) setClientesError(refreshErr instanceof Error ? refreshErr.message : "No se pudieron actualizar los clientes.");
+      });
       void cargarVentasRecientes(empresaConfirmacion);
     } catch (err) {
-      if (empresaActivaRef.current === empresaConfirmacion) {
+      // Solo un rechazo definitivo de la primera llamada prueba que este intento no cobró.
+      // En una recuperación, el rollback actual NO descarta un commit anterior.
+      let rechazoGuardado = false;
+      if (enviado && !recuperar && intento && err instanceof VentaRechazadaSinCambiosError) {
+        try { registrarCobroRechazado(intento); rechazoGuardado = true; } catch { /* conservar pendiente */ }
+      }
+      if (montadoRef.current && empresaActivaRef.current === empresaConfirmacion) {
+        if (rechazoGuardado) setIntentoPendiente(null);
         setError(err instanceof Error ? err.message : "No se pudo confirmar la venta.");
+        if (enviado && !rechazoGuardado) setAdvertencia("El resultado del cobro no está verificado. No vuelvas a armar ni cobrar esta venta: recuperá el mismo intento con el botón de recuperación.");
       }
     } finally {
-      if (empresaActivaRef.current === empresaConfirmacion) setConfirmando(false);
+      confirmacionEnCursoRef.current = false;
+      if (montadoRef.current) setConfirmando(false);
     }
   }
 
-  const unidades = items.reduce((n,item)=>n+item.cantidad,0);
+  const resumenCantidades = [...new Set(items.map((item) => item.unidad))].map((unidad) => formatoCantidadMedida(items.filter((item) => item.unidad === unidad).reduce((total, item) => total + item.cantidad, 0), unidad)).join(" · ");
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
+      if (productoPorMedida && ["F9", "F10", "F11", "F12"].includes(event.key)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
       if (event.repeat) return;
+      if ((cajaBloqueada || confirmacionEnCursoRef.current) && ["F1", "F6", "F9", "F10", "F11", "F12"].includes(event.key)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
       if (!["F1", "F2", "F6", "F9", "F10", "F11", "F12"].includes(event.key)) return;
       event.preventDefault();
       if (event.key === "F1") vaciar();
@@ -487,36 +603,58 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   });
 
   return (
-    <div className="sigo-pos">
-      <header className="sigo-pos-title"><div><strong>🛒 CAJA - VENTA</strong><span>Escaneá, buscá o agregá productos. Todo en una sola pantalla.</span></div><button className="admin-button" disabled={!items.length||confirmando} onClick={vaciar}>Vaciar</button></header>
+    <div className="sigo-pos" ref={cajaRef}>
+      <header className="sigo-pos-title"><div><strong>🛒 CAJA - VENTA</strong><span>Escaneá, buscá o agregá productos. Todo en una sola pantalla.</span></div><button className="admin-button" disabled={!items.length||cajaBloqueada} onClick={vaciar}>Vaciar</button></header>
       <div className="sigo-pos-toolbar">
-        <button type="button" onClick={vaciar}>▣ <strong>NUEVA VENTA</strong><small>F1</small></button>
+        <button type="button" disabled={cajaBloqueada} onClick={vaciar}>▣ <strong>NUEVA VENTA</strong><small>F1</small></button>
         <button type="button" onClick={()=>buscarRef.current?.focus()}>⌕ <strong>BUSCAR PRODUCTO</strong><small>F2</small></button>
         <button type="button" onClick={()=>document.querySelector<HTMLElement>(".barcode-camera-button")?.click()}>📷 <strong>CÁMARA</strong><small>F3</small></button>
         <button type="button" onClick={()=>document.getElementById("sigo-pos-cliente")?.focus()}>👤 <strong>CLIENTE</strong><small>F8</small></button>
-        <button type="button" onClick={()=>setDescuentoAbierto(v=>!v)}>◇ <strong>DESCUENTO</strong><small>F6 · {descuentoPct}%</small></button>
+        <button type="button" disabled={cajaBloqueada} onClick={()=>setDescuentoAbierto(v=>!v)}>◇ <strong>DESCUENTO</strong><small>F6 · {descuentoPct}%</small></button>
       </div>
-      {descuentoAbierto&&<div className="sigo-pos-discount"><strong>Descuento</strong>{[0,5,10,15,20].map(n=><button type="button" className={descuentoPct===n?"active":""} onClick={()=>{setDescuentoPct(n);setDescuentoAbierto(false)}} key={n}>{n}%</button>)}<label>Otro % <input type="number" min="0" max="99.99" step="0.01" value={descuentoPct} onChange={e=>setDescuentoPct(Math.max(0,Math.min(99.99,Number(e.target.value)||0)))}/></label></div>}
+      {descuentoAbierto&&!cajaBloqueada&&<div className="sigo-pos-discount"><strong>Descuento</strong>{[0,5,10,15,20].map(n=><button type="button" className={descuentoPct===n?"active":""} onClick={()=>{setDescuentoPct(n);setDescuentoAbierto(false)}} key={n}>{n}%</button>)}<label>Otro % <input type="number" min="0" max="99.99" step="0.01" value={descuentoPct} onChange={e=>setDescuentoPct(Math.max(0,Math.min(99.99,Number(e.target.value)||0)))}/></label></div>}
+      {productoPorMedida && unidadesCargadas && unidadesProducto[productoPorMedida.id] && <EditorCantidadMedida
+        key={`${productoPorMedida.id}-${reemplazandoCantidad ? "editar" : "agregar"}`}
+        nombre={productoPorMedida.nombre}
+        unidad={unidadesProducto[productoPorMedida.id]!}
+        precio={precioUnitarioVenta({ producto: productoPorMedida, cantidad: 1, unidad: unidadesProducto[productoPorMedida.id]! }, ofertas, descuentoPct)}
+        cantidadInicial={reemplazandoCantidad ? items.find((item) => item.producto.id === productoPorMedida.id)?.cantidad : undefined}
+        reemplazar={reemplazandoCantidad}
+        stockDisponible={(() => {
+          try { return stockRestanteMedida(Number(productoPorMedida.stock_actual), reemplazandoCantidad ? [] : items.filter((item) => item.producto.id === productoPorMedida.id).map((item) => item.cantidad), unidadesProducto[productoPorMedida.id]!); }
+          catch { return null; }
+        })()}
+        onConfirmar={(cantidad) => { agregarCantidad(productoPorMedida, cantidad, reemplazandoCantidad); setProductoPorMedida(null); }}
+        onCancelar={() => { setProductoPorMedida(null); window.setTimeout(() => buscarRef.current?.focus(), 0); }}
+      />}
+      {(intentoPendiente || errorPersistenciaCobro) && <div className="form-error" role="alert" data-cobro-pendiente="">
+        {intentoPendiente ? <>
+          <strong>Hay un cobro pendiente de verificar.</strong>
+          <p>No armes ni cobres otra venta. Recuperar completa o reconcilia el mismo cobro con su clave original, sin crear un segundo cobro. No imprime ni emite una factura automáticamente.</p>
+          <p>{intentoPendiente.payload.items.length} renglón(es) · {etiquetaMedio(intentoPendiente.payload.medioPago)} · Total esperado $ {intentoPendiente.totalEsperado.toLocaleString("es-AR")}.</p>
+          <button type="button" data-recuperar-cobro="" disabled={confirmando || Boolean(errorPersistenciaCobro)} onClick={() => void confirmar(false, false, true)}>{confirmando ? "Verificando el mismo cobro…" : "Recuperar el mismo cobro"}</button>
+        </> : errorPersistenciaCobro}
+      </div>}
       <div className="sigo-pos-scan">
-        <BarcodeScanner key={scannerInstanceKey} empresaId={empresaId} action="vender" onCachedCode={(code)=>{const encontrados=catalogo.filter((p)=>p.empresa_id===empresaId&&(normalizeBarcode(p.codigo_barras??"")===code||normalizeBarcode(p.codigo_interno??"")===code));return encontrados.length?encontrados:null}} onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null)}} onManualQuery={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null);return !/^\\d{6,}$/.test(query.trim())}} onProductSearchKeyDown={manejarTeclaBusquedaProducto}/>
-        
-        {busquedaProducto.trim()&&productosEncontrados.length>0&&<div className="sigo-pos-results">{productosEncontrados.map((p)=><button type="button" data-pos-suggestion="" data-product-id={p.id} aria-selected={p.id===productoSeleccionadoVisibleId} className={p.id===productoSeleccionadoVisibleId?"active":""} key={p.id} onMouseEnter={()=>{productoSeleccionadoIdRef.current=p.id;setProductoSeleccionadoId(p.id)}} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}{Number(p.stock_actual??0)<=0?" · SIN STOCK":""}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} · Stock {p.stock_actual??0}</span></button>)}</div>}{busquedaProducto.trim()&&productosEncontrados.length===0&&!catalogoError&&<div className="sigo-pos-results"><div className="table-empty">No encontré productos. Probá con nombre, marca, código interno o EAN.</div></div>}
+        {!cajaBloqueada && !productoPorMedida && <BarcodeScanner key={scannerInstanceKey} empresaId={empresaId} action="vender" onCachedCode={(code)=>{const encontrados=catalogo.filter((p)=>p.empresa_id===empresaId&&(normalizeBarcode(p.codigo_barras??"")===code||normalizeBarcode(p.codigo_interno??"")===code));return encontrados.length?encontrados:null}} onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null)}} onManualQuery={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null);return !/^\\d{6,}$/.test(query.trim())}} onProductSearchKeyDown={manejarTeclaBusquedaProducto}/>}
+
+        {busquedaProducto.trim()&&productosEncontrados.length>0&&<div className="sigo-pos-results">{productosEncontrados.map((p)=><button type="button" data-pos-suggestion="" data-product-id={p.id} aria-selected={p.id===productoSeleccionadoVisibleId} className={p.id===productoSeleccionadoVisibleId?"active":""} key={p.id} onMouseEnter={()=>{productoSeleccionadoIdRef.current=p.id;setProductoSeleccionadoId(p.id)}} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}{Number(p.stock_actual??0)<=0?" · SIN STOCK":""}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} / {p.unidad_medida ?? "unidad sin verificar"} · Stock {formatoStockMedida(Number(p.stock_actual ?? 0), p.unidad_medida)}</span></button>)}</div>}{busquedaProducto.trim()&&productosEncontrados.length===0&&!catalogoError&&<div className="sigo-pos-results"><div className="table-empty">No encontré productos. Probá con nombre, marca, código interno o EAN.</div></div>}
       </div>
       {productoBloqueado&&<div className="form-error"><strong>{productoBloqueado.producto.nombre}</strong> · {productoBloqueado.razon==="stock"?"Sin stock disponible.":"Sin precio válido."}</div>}
       {error&&<p className="form-error" role="alert">{error}</p>}{ofertasError&&<p className="form-error" role="alert">No se puede cobrar hasta comprobar los precios de oferta: {ofertasError}</p>}{exito&&<span className="sigo-pos-success-inline" role="status">{exito}</span>}{advertencia&&<p className="form-error">{advertencia}</p>}
       <div className="sigo-pos-grid">
         <section className="sigo-pos-cart">
-          <div className="table-wrapper"><table className="products-table"><thead><tr><th>#</th><th>Producto</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th></th></tr></thead><tbody>{items.map((item,i)=>{const precio=precioUnitarioVenta(item,ofertas,descuentoPct);return <tr key={item.producto.id}><td>{i+1}</td><td><strong>{item.producto.nombre}</strong><small>{item.producto.codigo_interno||item.producto.codigo_barras||""}</small></td><td><div className="sigo-pos-qty"><button onClick={()=>cambiarCantidad(item.producto.id,-1)}>−</button><strong>{item.cantidad}</strong><button onClick={()=>cambiarCantidad(item.producto.id,1)}>+</button></div></td><td>$ {precio.toLocaleString("es-AR")}</td><td><strong>$ {(Math.round((precio*item.cantidad+Number.EPSILON)*100)/100).toLocaleString("es-AR")}</strong></td><td><button className="sigo-pos-remove" onClick={()=>setItems(a=>a.filter(x=>x.producto.id!==item.producto.id))}>🗑</button></td></tr>})}</tbody></table>{!items.length&&<div className="table-empty">Escaneá o buscá un producto para iniciar la venta.</div>}</div>
-          <div className="sigo-pos-payments">{(["efectivo","debito","credito","transferencia","mercado_pago","cuenta_corriente"] as MedioPagoSigo[]).map(m=><button type="button" className={medioPago===m?"active":""} onClick={()=>setMedioPago(m)} key={m}>{etiquetaMedio(m)}</button>)}</div>
+          <div className="table-wrapper"><table className="products-table"><thead><tr><th>#</th><th>Producto</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th></th></tr></thead><tbody>{items.map((item,i)=>{const precio=precioUnitarioVenta(item,ofertas,descuentoPct);return <tr key={item.producto.id}><td>{i+1}</td><td><strong>{item.producto.nombre}</strong><small>{item.producto.codigo_interno||item.producto.codigo_barras||""}</small></td><td><div className="sigo-pos-qty"><button disabled={cajaBloqueada || Boolean(productoPorMedida)} onClick={()=>cambiarCantidad(item.producto.id,-pasoCantidadMedida(item.unidad))}>−</button><button type="button" style={{ width: "auto", minWidth: "5rem", padding: "0 0.4rem" }} disabled={cajaBloqueada || Boolean(productoPorMedida)} aria-label={`Editar cantidad de ${item.producto.nombre}`} onClick={()=>editarCantidad(item)}><strong>{formatoCantidadMedida(item.cantidad, item.unidad)}</strong></button><button disabled={cajaBloqueada || Boolean(productoPorMedida)} onClick={()=>cambiarCantidad(item.producto.id,pasoCantidadMedida(item.unidad))}>+</button></div></td><td>$ {precio.toLocaleString("es-AR")} / {item.unidad}</td><td><strong>$ {subtotalMedida(item.cantidad, precio).toLocaleString("es-AR")}</strong></td><td><button className="sigo-pos-remove" disabled={cajaBloqueada || Boolean(productoPorMedida)} onClick={()=>setItems(a=>a.filter(x=>x.producto.id!==item.producto.id))}>🗑</button></td></tr>})}</tbody></table>{!items.length&&<div className="table-empty">Escaneá o buscá un producto para iniciar la venta.</div>}</div>
+          <div className="sigo-pos-payments">{(["efectivo","debito","credito","transferencia","mercado_pago","cuenta_corriente"] as MedioPagoSigo[]).map(m=><button type="button" disabled={cajaBloqueada} className={medioPago===m?"active":""} onClick={()=>setMedioPago(m)} key={m}>{etiquetaMedio(m)}</button>)}</div>
         </section>
         <aside className="sigo-pos-summary">
-          <div className="sigo-pos-total"><span>TOTAL</span><strong>$ {total.toLocaleString("es-AR")}</strong>{descuentoPct>0&&<small>Subtotal $ {subtotal.toLocaleString("es-AR")} · Descuento {descuentoPct}%</small>}<p>Productos <b>{items.length}</b> · Unidades <b>{unidades}</b></p></div>
-          <label><span>Cliente</span><select id="sigo-pos-cliente" value={clienteId} onChange={e=>setClienteId(e.target.value)}><option value="">Consumidor final / sin cliente</option>{clientes.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>
-          <button className="sigo-pos-action cobrar" disabled={!puedeConfirmar||confirmando} onClick={()=>void confirmar()}>💳 COBRAR <kbd>F9</kbd></button>
-          <button className="sigo-pos-action ticket" disabled={!puedeConfirmar||confirmando} onClick={()=>void confirmar(true)}>🖨 COBRAR + TICKET <kbd>F10</kbd></button>
-          <button className="sigo-pos-action fiscal" type="button" onClick={()=>{if(items.length>0)void confirmar(false,true);else if(ultimaVentaTicket)window.dispatchEvent(new CustomEvent("sigo:arca:venta",{detail:{empresaId,ventaId:ultimaVentaTicket}}));else setError("No hay una venta para facturar.");}}>▤ FACTURA FISCAL <kbd>F11</kbd></button>
-          <button className="sigo-pos-action reprint" disabled={!ultimaVentaTicket||confirmando} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir el ticket."));}}>🖨 REIMPRIMIR <kbd>F12</kbd></button>
-          <div className="sigo-pos-mini-actions"><button type="button" disabled={!ultimaVentaTicket} onClick={()=>{const m=encodeURIComponent("Ticket SIGO · Total $ "+total.toLocaleString("es-AR"));window.open("https://wa.me/?text="+m,"_blank","noopener,noreferrer")}}>WhatsApp</button><button type="button" disabled={!ultimaVentaTicket} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket,"a4").catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir A4."));}}>A4</button><button type="button" disabled={!ultimaVentaTicket} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir el ticket."));}}>Ticket 58/80</button><button type="button" onClick={()=>document.querySelector<HTMLElement>(".arca-launcher")?.click()}>ARCA</button></div>
+          <div className="sigo-pos-total"><span>TOTAL</span><strong>$ {total.toLocaleString("es-AR")}</strong>{descuentoPct>0&&<small>Subtotal $ {subtotal.toLocaleString("es-AR")} · Descuento {descuentoPct}%</small>}<p>Productos <b>{items.length}</b> · Cantidades <b>{resumenCantidades || "0"}</b></p></div>
+          <label><span>Cliente</span><select disabled={cajaBloqueada} id="sigo-pos-cliente" value={clienteId} onChange={e=>setClienteId(e.target.value)}><option value="">Consumidor final / sin cliente</option>{clientes.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>
+          <button className="sigo-pos-action cobrar" disabled={!puedeConfirmar||cajaBloqueada} onClick={()=>void confirmar()}>💳 COBRAR <kbd>F9</kbd></button>
+          <button className="sigo-pos-action ticket" disabled={!puedeConfirmar||cajaBloqueada} onClick={()=>void confirmar(true)}>🖨 COBRAR + TICKET <kbd>F10</kbd></button>
+          <button className="sigo-pos-action fiscal" disabled={cajaBloqueada || Boolean(productoPorMedida)} type="button" onClick={()=>{if(items.length>0)void confirmar(false,true);else if(ultimaVentaTicket)window.dispatchEvent(new CustomEvent("sigo:arca:venta",{detail:{empresaId,ventaId:ultimaVentaTicket}}));else setError("No hay una venta para facturar.");}}>▤ FACTURA FISCAL <kbd>F11</kbd></button>
+          <button className="sigo-pos-action reprint" disabled={!ultimaVentaTicket || cajaBloqueada || Boolean(productoPorMedida)} onClick={()=>{if(!confirmacionEnCursoRef.current&&ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir el ticket."));}}>🖨 REIMPRIMIR <kbd>F12</kbd></button>
+          <div className="sigo-pos-mini-actions"><button type="button" disabled={cajaBloqueada || !ultimaVentaTicket} onClick={()=>{const m=encodeURIComponent("Ticket SIGO · Total $ "+total.toLocaleString("es-AR"));window.open("https://wa.me/?text="+m,"_blank","noopener,noreferrer")}}>WhatsApp</button><button type="button" disabled={cajaBloqueada || !ultimaVentaTicket} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket,"a4").catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir A4."));}}>A4</button><button type="button" disabled={cajaBloqueada || !ultimaVentaTicket} onClick={()=>{if(ultimaVentaTicket)void imprimirTicketVenta(empresaId,ultimaVentaTicket).catch(err=>setError(err instanceof Error?err.message:"No se pudo imprimir el ticket."));}}>Ticket 58/80</button><button type="button" disabled={cajaBloqueada} onClick={()=>document.querySelector<HTMLElement>(".arca-launcher")?.click()}>ARCA</button></div>
         </aside>
       </div>
     </div>

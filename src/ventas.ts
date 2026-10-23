@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { listarProductosSigo } from "./productos";
+import { cantidadEscaladaMedida, normalizarUnidadVenta, subtotalMedida, type UnidadVenta } from "./ventaPorMedidas";
 
 export type MedioPagoSigo =
   | "efectivo"
@@ -13,6 +14,7 @@ export type MedioPagoSigo =
 export type VentaItemSigoInput = {
   productoId: string;
   cantidad: number;
+  unidadMedida?: UnidadVenta;
 };
 
 export type IntegridadVentaSigo = "ok" | "revisar" | "no_verificada";
@@ -72,19 +74,34 @@ function casiIgualDinero(a: number, b: number) {
 
 function consolidarItemsVenta(items: VentaItemSigoInput[]): VentaItemSigoInput[] {
   const cantidades = new Map<string, number>();
+  const unidades = new Map<string, UnidadVenta | undefined>();
   for (const item of items) {
     const productoId = normalizarIdentificador(item.productoId);
     if (!productoId || !Number.isFinite(item.cantidad) || item.cantidad <= 0) {
       throw new Error("Hay un producto con cantidad inválida en el carrito.");
     }
-    const cantidadAcumulada = (cantidades.get(productoId) ?? 0) + item.cantidad;
-    if (!Number.isFinite(cantidadAcumulada) || cantidadAcumulada <= 0) {
+    if (item.unidadMedida !== undefined && normalizarUnidadVenta(item.unidadMedida) !== item.unidadMedida) {
+      throw new Error("La unidad de un producto no es válida. Revisá el carrito.");
+    }
+    if (unidades.has(productoId) && unidades.get(productoId) !== item.unidadMedida) {
+      throw new Error("Un producto tiene unidades diferentes en el carrito. Retiralo y volvé a seleccionarlo.");
+    }
+    unidades.set(productoId, item.unidadMedida);
+    if (item.unidadMedida !== undefined) {
+      try { cantidadEscaladaMedida(item.cantidad, item.unidadMedida); }
+      catch { throw new Error("La cantidad no respeta la precisión de la unidad del producto."); }
+    }
+    let cantidadEscalada: number;
+    try { cantidadEscalada = cantidadEscaladaMedida(item.cantidad, "kg"); }
+    catch { throw new Error("Hay un producto con cantidad inválida: se permiten hasta tres decimales."); }
+    const cantidadAcumulada = (cantidades.get(productoId) ?? 0) + cantidadEscalada;
+    if (!Number.isSafeInteger(cantidadAcumulada) || cantidadAcumulada <= 0) {
       throw new Error("La cantidad consolidada de un producto es inválida.");
     }
     cantidades.set(productoId, cantidadAcumulada);
   }
 
-  return Array.from(cantidades, ([productoId, cantidad]) => ({ productoId, cantidad }));
+  return Array.from(cantidades, ([productoId, cantidad]) => ({ productoId, cantidad: cantidad / 1000, ...(unidades.get(productoId) ? { unidadMedida: unidades.get(productoId)! } : {}) }));
 }
 
 function combinarIntegridad(...estados: IntegridadVentaSigo[]): IntegridadVentaSigo {
@@ -100,11 +117,13 @@ function mensajeVenta(error: unknown): string {
       ? String((error as { message?: unknown }).message ?? "")
       : String(error ?? "");
 
+  if (raw.includes("SALE_UNIT_MISMATCH")) return "Cambió la unidad de un producto mientras estaba en el carrito. No se confirmó la venta. Actualizá el catálogo y volvé a armar ese renglón.";
   if (raw.includes("IDEMPOTENCY_CONFLICT")) return "La misma operación ya fue usada con datos distintos. Actualizá las ventas recientes antes de intentar otra confirmación.";
   if (raw.includes("IDEMPOTENCY_KEY_INVALID")) return "No se pudo generar una clave segura para confirmar la venta. Volvé a iniciar el carrito.";
   if (raw.includes("SALE_TOO_MANY_ITEMS")) return "La venta tiene demasiados renglones para una sola operación. Dividila en más de una venta.";
   if (raw.includes("SALE_ITEM_INVALID") || raw.includes("SALE_QUANTITY_INVALID")) return "Hay un producto o una cantidad inválida en el carrito. Revisá la venta antes de confirmar.";
-  if (raw.includes("SALE_DISCOUNT_INVALID")) return "El descuento debe estar entre 0% y 99,99%.";
+  if (raw.includes("PRODUCT_UNIT_INVALID") || raw.includes("UNIT_INVALID")) return "La unidad de un producto no está configurada correctamente. Revisala antes de vender.";
+  if (raw.includes("SALE_DISCOUNT_INVALID")) return "El descuento debe estar entre 0% y 99,99%, con hasta dos decimales.";
   if (raw.includes("PAYMENT_METHOD_INVALID")) return "Seleccioná un medio de pago válido.";
   if (raw.includes("ACCOUNT_CURRENT_REQUIRES_CLIENT")) return "Cuenta corriente requiere seleccionar un cliente.";
   if (raw.includes("CLIENT_NOT_FOUND")) return "El cliente seleccionado ya no está disponible en esta empresa.";
@@ -302,7 +321,7 @@ async function verificarIntegridadStockVenta(
       if (!productoId || !Number.isFinite(cantidad) || cantidad <= 0) return "revisar";
       if (!Number.isFinite(precioUnitario) || precioUnitario <= 0) return "revisar";
       if (!Number.isFinite(subtotal) || subtotal < 0) return "revisar";
-      const subtotalCalculado = Math.round(precioUnitario * cantidad * 100) / 100;
+      const subtotalCalculado = subtotalMedida(cantidad, precioUnitario);
       if (!casiIgualDinero(subtotal, subtotalCalculado)) return "revisar";
       totalDetalle += subtotal;
       registrado.set(productoId, (registrado.get(productoId) ?? 0) + cantidad);
@@ -383,6 +402,20 @@ export async function listarVentasRecientesSigo(empresaId: string, limite = 10):
   });
 }
 
+/** Señala sólo que ESTA llamada no escribió; no reconcilia un intento previo incierto. */
+export class VentaRechazadaSinCambiosError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "VentaRechazadaSinCambiosError";
+  }
+}
+
+function rechazoRpcSinCambios(error: { code?: string; message?: string }): boolean {
+  if (error.code !== "P0001") return false;
+  // Un conflicto idempotente puede señalar una venta anterior: jamás liberar esa key.
+  return /^(ACCOUNT_CURRENT_REQUIRES_CLIENT|AUTH_REQUIRED|CLIENTS_READ_FORBIDDEN|CLIENT_NOT_FOUND|CREDIT_LIMIT_EXCEEDED|IDEMPOTENCY_KEY_INVALID|IDEMPOTENCY_KEY_REQUIRED|INSUFFICIENT_STOCK|PAYMENT_METHOD_INVALID|PRODUCT_NOT_FOUND|PRODUCT_PRICE_REQUIRED|PRODUCT_STOCK_REQUIRED|PRODUCT_UNIT_INVALID|SALES_WRITE_FORBIDDEN|SALE_DISCOUNT_INVALID|SALE_ITEMS_REQUIRED|SALE_ITEM_INVALID|SALE_QUANTITY_INVALID|SALE_TOO_MANY_ITEMS|SALE_UNIT_MISMATCH)(:|$)/.test(error.message ?? "");
+}
+
 export async function confirmarVentaSigo(input: {
   empresaId: string;
   items: VentaItemSigoInput[];
@@ -408,16 +441,24 @@ export async function confirmarVentaSigo(input: {
 }> {
   const empresaId = normalizarIdentificador(input.empresaId);
   const clienteId = normalizarIdentificador(input.clienteId) || null;
-  if (!empresaId) throw new Error("Seleccioná una empresa activa antes de vender.");
-  if (input.items.length === 0) throw new Error("Agregá al menos un producto antes de confirmar.");
-  if (!MEDIOS_PAGO_VALIDOS.includes(input.medioPago)) throw new Error("Seleccioná un medio de pago válido.");
+  if (!empresaId) throw new VentaRechazadaSinCambiosError("Seleccioná una empresa activa antes de vender.");
+  if (input.items.length === 0) throw new VentaRechazadaSinCambiosError("Agregá al menos un producto antes de confirmar.");
+  if (!MEDIOS_PAGO_VALIDOS.includes(input.medioPago)) throw new VentaRechazadaSinCambiosError("Seleccioná un medio de pago válido.");
   if (input.medioPago === "cuenta_corriente" && !clienteId) {
-    throw new Error("Cuenta corriente requiere seleccionar un cliente.");
+    throw new VentaRechazadaSinCambiosError("Cuenta corriente requiere seleccionar un cliente.");
   }
 
-  const itemsConsolidados = consolidarItemsVenta(input.items);
+  const descuentoPct = input.descuentoPct ?? 0;
+  if (!Number.isFinite(descuentoPct) || descuentoPct < 0 || descuentoPct >= 100
+    || Math.round(descuentoPct * 100) / 100 !== descuentoPct) {
+    throw new VentaRechazadaSinCambiosError(mensajeVenta(new Error("SALE_DISCOUNT_INVALID")));
+  }
+
+  let itemsConsolidados: VentaItemSigoInput[];
+  try { itemsConsolidados = consolidarItemsVenta(input.items); }
+  catch (error) { throw new VentaRechazadaSinCambiosError(error instanceof Error ? error.message : "Revisá los productos del carrito."); }
   const idempotencyKey = normalizarIdentificador(input.idempotencyKey ?? crearIdempotencyKey());
-  if (!idempotencyKey) throw new Error("No se pudo generar una clave segura para confirmar la venta.");
+  if (!idempotencyKey) throw new VentaRechazadaSinCambiosError("No se pudo generar una clave segura para confirmar la venta.");
 
   const estadoReintento = await detectarEstadoReintento(empresaId, idempotencyKey);
   const stockAntes = await capturarStockAntes(empresaId, itemsConsolidados, estadoReintento);
@@ -427,14 +468,18 @@ export async function confirmarVentaSigo(input: {
     p_items: itemsConsolidados.map((item) => ({
       producto_id: item.productoId,
       cantidad: item.cantidad,
+      ...(item.unidadMedida ? { unidad_medida: item.unidadMedida } : {}),
     })),
     p_medio_pago: input.medioPago,
     p_idempotency_key: idempotencyKey,
     p_cliente_id: clienteId,
-    p_descuento_pct: input.descuentoPct ?? 0,
+    p_descuento_pct: descuentoPct,
   });
 
-  if (error) throw new Error(mensajeVenta(error));
+  if (error) {
+    if (rechazoRpcSinCambios(error)) throw new VentaRechazadaSinCambiosError(mensajeVenta(error));
+    throw new Error(mensajeVenta(error));
+  }
   const ventaId = normalizarIdentificador(typeof data === "string" ? data : String(data ?? ""));
   if (!ventaId) throw new Error("La venta no devolvió comprobante. No la repitas hasta verificar su estado.");
 

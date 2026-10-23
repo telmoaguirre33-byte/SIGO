@@ -1,4 +1,5 @@
 import Contabilidad from "./Contabilidad";
+import { cantidadEscaladaMedida, formatoStockMedida, pasoCantidadMedida, UNIDADES_VENTA, type UnidadVenta } from "./ventaPorMedidas";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { EmpresaOperativa } from "./tenant";
 import { supabase } from "./supabase";
@@ -20,6 +21,8 @@ import {
   eliminarProductoSigo,
   guardarProductoSigo,
   listarProductosSigo,
+  listarUnidadesProductoSigo,
+  ProductoGuardadoSinVerificarError,
   type ProductoSigo,
 } from "./productos";
 
@@ -38,6 +41,7 @@ type ProductoForm = {
   stockMaximo: string;
   stockInicial: string;
   costoReferencia: string;
+  unidadMedida: UnidadVenta | "";
 };
 
 const productoVacio: ProductoForm = {
@@ -51,6 +55,7 @@ const productoVacio: ProductoForm = {
   stockMaximo: "",
   stockInicial: "",
   costoReferencia: "",
+  unidadMedida: "unidad",
 };
 
 function numeroOpcional(valor: string, etiqueta: string): number | null {
@@ -206,9 +211,12 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<ProductoSigo | null>(null);
   const [form, setForm] = useState<ProductoForm>(productoVacio);
+  const [unidadesProducto, setUnidadesProducto] = useState<Record<string, UnidadVenta | null>>({});
+  const [unidadesDisponibles, setUnidadesDisponibles] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [guardadoSinVerificar, setGuardadoSinVerificar] = useState(false);
   const [ajusteStock, setAjusteStock] = useState(false);
   const [scanAction, setScanAction] = useState<BarcodeAction>("consultar");
   const [scanResult, setScanResult] = useState<BarcodeProduct | null>(null);
@@ -223,6 +231,13 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
     setError("");
     try {
       setProductos(await listarProductosSigo(empresaId));
+      try {
+        setUnidadesProducto(await listarUnidadesProductoSigo(empresaId));
+        setUnidadesDisponibles(true);
+      } catch {
+        setUnidadesDisponibles(false);
+        setUnidadesProducto({});
+      }
     } catch (err) {
       setProductos([]);
       setError(err instanceof Error ? err.message : "No se pudieron cargar los productos");
@@ -256,12 +271,14 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
     setEditing(null);
     setForm(productoVacio);
     setFormError("");
+    setGuardadoSinVerificar(false);
     setFormOpen(true);
   }
 
   function abrirEdicion(producto: ProductoSigo) {
     if (!puedeEditar) return;
     setEditing(producto);
+    setGuardadoSinVerificar(false);
     setForm({
       nombre: producto.nombre,
       codigoInterno: producto.codigo_interno ?? "",
@@ -273,6 +290,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
       stockMaximo: producto.stock_maximo == null ? "" : String(producto.stock_maximo),
       stockInicial: "",
       costoReferencia: "",
+      unidadMedida: unidadesProducto[producto.id] ?? "",
     });
     setFormError("");
     setAjusteStock(false);
@@ -299,6 +317,11 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
 
   async function guardar(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving || guardadoSinVerificar) return;
+    if (!unidadesDisponibles || !form.unidadMedida) {
+      setFormError("Elegí una unidad válida y verificá la conexión antes de guardar. No se guardó el producto.");
+      return;
+    }
     if (!puedeEditar) {
       setFormError("Tu perfil tiene acceso de consulta, pero no puede modificar productos.");
       return;
@@ -319,6 +342,12 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
       stockMaximo = numeroOpcional(form.stockMaximo, "El stock máximo");
       stockInicial = numeroOpcional(form.stockInicial, "El stock inicial");
       costoReferencia = numeroOpcional(form.costoReferencia, "El costo de referencia");
+      for (const stock of [stockMinimo, stockMaximo, stockInicial]) {
+        if (stock != null) {
+          try { cantidadEscaladaMedida(stock, editing ? "kg" : form.unidadMedida, true); }
+          catch { throw new Error(editing ? "El stock admite hasta tres decimales. Sólo se puede conservar una fracción anterior; las cantidades nuevas respetan la unidad." : "El stock inicial debe respetar la precisión de la unidad elegida."); }
+        }
+      }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Revisá los valores numéricos del producto.");
       return;
@@ -354,15 +383,19 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
         costoActual: !editing && costoReferencia != null ? costoReferencia : null,
         costoUltimaCompra: !editing && costoReferencia != null ? costoReferencia : null,
         precioVenta,
+        unidadMedida: form.unidadMedida,
         margenGanancia: null,
         margenPorcentaje: null,
         stockActual: (!editing || ajusteStock) && stockInicial != null ? stockInicial : null,
         stockMinimo,
         stockMaximo,
       });
-      cerrarForm();
+      setFormOpen(false);
+      setEditing(null);
+      setForm(productoVacio);
       await cargar();
     } catch (err) {
+      if (err instanceof ProductoGuardadoSinVerificarError) setGuardadoSinVerificar(true);
       setFormError(err instanceof Error ? err.message : "No se pudo guardar el producto");
     } finally {
       setSaving(false);
@@ -470,7 +503,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
                     <td>{p.codigo_interno ?? "-"}</td>
                     <td>{p.codigo_barras ?? "-"}</td>
                     <td>{p.precio_venta == null ? "Restringido" : `$ ${Number(p.precio_venta).toLocaleString("es-AR")}`}</td>
-                    <td>{p.stock_actual == null ? "Restringido" : p.stock_actual}</td>
+                    <td>{p.stock_actual == null ? "Restringido" : formatoStockMedida(Number(p.stock_actual), p.unidad_medida)}{!p.unidad_medida && <small>Unidad pendiente</small>}</td>
                     <td>
                       {puedeEditar ? (
                         <div className="row-actions">
@@ -501,6 +534,14 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
             </div>
             <form onSubmit={(e) => void guardar(e)}>
               <div className="form-grid">
+                <div className="form-group">
+                  <label htmlFor="producto-unidad-medida">Unidad de venta</label>
+                  <select id="producto-unidad-medida" disabled={!unidadesDisponibles || saving || guardadoSinVerificar} value={form.unidadMedida} onChange={e => setForm(actual => ({ ...actual, unidadMedida: e.target.value as UnidadVenta }))}>
+                    <option value="" disabled>Unidad pendiente de verificar</option>
+                    {Object.entries(UNIDADES_VENTA).map(([clave, unidad]) => <option key={clave} value={clave}>{unidad.nombre}</option>)}
+                  </select>
+                  <small>{unidadesDisponibles ? "Una sola unidad para precio, stock y venta. No se puede cambiar si hay stock o movimientos." : "Venta por medidas pendiente de habilitación segura en Supabase. No se puede configurar todavía."}</small>
+                </div>
                 <div className="form-group form-span-2">
                   <label htmlFor="producto-nombre">Nombre *</label>
                   <input id="producto-nombre" value={form.nombre} onChange={(e) => setForm((actual) => ({ ...actual, nombre: e.target.value }))} autoFocus required />
@@ -522,14 +563,14 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
                   <input id="producto-marca" value={form.marca} onChange={(e) => setForm((actual) => ({ ...actual, marca: e.target.value }))} />
                 </div>
                 <div className="form-group">
-                  <label htmlFor="producto-precio">Precio de venta {editing ? "" : "*"}</label>
+                  <label htmlFor="producto-precio">Precio por {form.unidadMedida || "unidad a verificar"} {editing ? "" : "*"}</label>
                   <input id="producto-precio" type="number" min="0" step="0.01" inputMode="decimal" value={form.precioVenta} onChange={(e) => setForm((actual) => ({ ...actual, precioVenta: e.target.value }))} required={!editing} />
                 </div>
                 {(!editing || ajusteStock) && (
                   <>
                     <div className="form-group">
                       <label htmlFor="producto-stock-inicial">{editing ? "Cantidad real que tengo" : "Cantidad que ya tengo"}</label>
-                      <input id="producto-stock-inicial" type="number" min="0" step="0.001" inputMode="decimal" value={form.stockInicial} onChange={(e) => setForm((actual) => ({ ...actual, stockInicial: e.target.value }))} placeholder="Opcional · stock inicial" />
+                      <input id="producto-stock-inicial" type="number" min="0" step={editing ? 0.001 : form.unidadMedida ? pasoCantidadMedida(form.unidadMedida) : 1} inputMode="decimal" value={form.stockInicial} onChange={(e) => setForm((actual) => ({ ...actual, stockInicial: e.target.value }))} placeholder="Opcional · stock inicial" />
                       <small>{editing ? "Ingresá el total contado físicamente. No requiere proveedor ni factura." : "Usalo para mercadería que ya estaba en el negocio. No requiere proveedor ni factura."}</small>
                     </div>
                     <div className="form-group" style={{ display: editing ? "none" : undefined }}>
@@ -541,7 +582,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
                 )}
                 <div className="form-group">
                   <label htmlFor="producto-stock-min">Stock mínimo</label>
-                  <input id="producto-stock-min" type="number" min="0" step="0.001" inputMode="decimal" value={form.stockMinimo} onChange={(e) => setForm((actual) => ({ ...actual, stockMinimo: e.target.value }))} />
+                  <input id="producto-stock-min" type="number" min="0" step={editing ? 0.001 : form.unidadMedida ? pasoCantidadMedida(form.unidadMedida) : 1} inputMode="decimal" value={form.stockMinimo} onChange={(e) => setForm((actual) => ({ ...actual, stockMinimo: e.target.value }))} />
                 </div>
                 <div className="form-group form-span-2">
                   <small>{editing ? "El stock de productos existentes se modifica mediante movimientos operativos." : "Si ya tenés mercadería, podés cargarla como stock inicial sin inventar una compra ni un proveedor."}</small>
@@ -550,7 +591,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
               {formError && <p className="form-error" role="alert">{formError}</p>}
               <div className="form-actions">
                 <button type="button" className="admin-button" onClick={cerrarForm} disabled={saving}>Cancelar</button>
-                <button type="submit" className="primary-button" disabled={saving}>{saving ? "Guardando…" : editing ? "Guardar cambios" : "Crear producto"}</button>
+                <button type="submit" className="primary-button" disabled={saving || guardadoSinVerificar || !unidadesDisponibles || !form.unidadMedida}>{saving ? "Guardando…" : editing ? "Guardar cambios" : "Crear producto"}</button>
               </div>
             </form>
           </div>
