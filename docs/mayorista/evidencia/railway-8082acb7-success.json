@@ -1,0 +1,32 @@
+{
+  "verifiedDate": "2026-10-17",
+  "project": "MAYORISTA-QA",
+  "environment": "qa",
+  "service": "mayorista-api-qa",
+  "deployment": "c4f6b8ac-f6ef-4d20-b523-589d60c3f4ee",
+  "status": "SUCCESS",
+  "head": "8082acb7fad2e4a73fac7c23434d014e6bb42694",
+  "statusUpdatedAt": "2026-10-17T20:55:43.861Z",
+  "replicas": {"running": 1, "crashed": 0},
+  "postgres": "online",
+  "pendingWork": [],
+  "predeployLog": {
+    "event": "MAYORISTA_P0_EVIDENCE_REUSED",
+    "readOnly": true,
+    "evidenceRevision": "0bf497e46a595838456c3010f0cf7556809bacfa",
+    "run": "p0-live-70c2783-v1",
+    "namespace": "mayorista_acceptance_e1031f20aff5",
+    "upgrade": "launch-v1",
+    "verified": true,
+    "seeded": false,
+    "existingOrdersChanged": false
+  },
+  "directHttpVerification": {
+    "health": "not_verified",
+    "readiness": "not_verified",
+    "reason": "Executor curl fails connecting to configured proxy:8080 before contacting Railway; exit 7. Not an application HTTP failure."
+  },
+  "physicalAcceptance": "postponed_by_user",
+  "androidOrdersAccessed": false,
+  "p0Closed": false
+}

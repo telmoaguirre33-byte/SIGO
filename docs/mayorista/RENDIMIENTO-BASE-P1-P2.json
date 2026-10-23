@@ -1,0 +1,270 @@
+{
+  "capturedAt": "2026-10-17",
+  "railway": [
+    {
+      "service": {
+        "id": "9053689a-0e32-4f3c-b5da-3c01e480a9c6",
+        "name": "mayorista-api-qa"
+      },
+      "environment": {
+        "id": "2addc3e9-f088-42df-a72c-c233fd4308cb",
+        "name": "qa"
+      },
+      "metrics": [
+        {
+          "measurement": "CPU_USAGE",
+          "current": 0.000007973333333333334,
+          "average": 0.0002739269319492504,
+          "min": 0.0000025499999999999997,
+          "max": 0.02467248,
+          "sampleCount": 289
+        },
+        {
+          "measurement": "MEMORY_USAGE_GB",
+          "current": 0.074620928,
+          "average": 0.07161478846070192,
+          "min": 0.022972928,
+          "max": 0.3593964982857143,
+          "sampleCount": 289
+        }
+      ]
+    },
+    {
+      "service": {
+        "id": "9053689a-0e32-4f3c-b5da-3c01e480a9c6",
+        "name": "mayorista-api-qa"
+      },
+      "environment": {
+        "id": "2addc3e9-f088-42df-a72c-c233fd4308cb",
+        "name": "qa"
+      },
+      "window": {
+        "hoursBack": 24,
+        "bucketCount": 2
+      },
+      "slowestBucket": {
+        "ts": 1792195200,
+        "p50": 2660,
+        "p90": 5084,
+        "p95": 5223,
+        "p99": 5619
+      },
+      "samples": [
+        {
+          "ts": 1792195200,
+          "p50": 2660,
+          "p90": 5084,
+          "p95": 5223,
+          "p99": 5619
+        },
+        {
+          "ts": 1792224000,
+          "p50": 1057,
+          "p90": 1057,
+          "p95": 1057,
+          "p99": 1057
+        }
+      ]
+    },
+    {
+      "service": {
+        "id": "9053689a-0e32-4f3c-b5da-3c01e480a9c6",
+        "name": "mayorista-api-qa"
+      },
+      "environment": {
+        "id": "2addc3e9-f088-42df-a72c-c233fd4308cb",
+        "name": "qa"
+      },
+      "window": {
+        "hoursBack": 24,
+        "bucketCount": 1
+      },
+      "slowestBucket": {
+        "ts": 1792195200,
+        "p50": 175,
+        "p90": 3547,
+        "p95": 4262,
+        "p99": 5197
+      },
+      "samples": [
+        {
+          "ts": 1792195200,
+          "p50": 175,
+          "p90": 3547,
+          "p95": 4262,
+          "p99": 5197
+        }
+      ]
+    },
+    {
+      "service": {
+        "id": "9053689a-0e32-4f3c-b5da-3c01e480a9c6",
+        "name": "mayorista-api-qa"
+      },
+      "environment": {
+        "id": "2addc3e9-f088-42df-a72c-c233fd4308cb",
+        "name": "qa"
+      },
+      "window": {
+        "hoursBack": 24,
+        "bucketCount": 5
+      },
+      "overall": {
+        "errorRate": 0,
+        "totalRequests": 1741,
+        "errorCount": 0,
+        "clientErrorCount": 52
+      },
+      "worstBucket": {
+        "ts": 1792166400,
+        "errorRate": 0,
+        "totalRequests": 60,
+        "errorCount": 0,
+        "clientErrorCount": 2
+      },
+      "samples": [
+        {
+          "ts": 1792166400,
+          "errorRate": 0,
+          "totalRequests": 60,
+          "errorCount": 0,
+          "clientErrorCount": 2
+        },
+        {
+          "ts": 1792180800,
+          "errorRate": 0,
+          "totalRequests": 104,
+          "errorCount": 0,
+          "clientErrorCount": 2
+        },
+        {
+          "ts": 1792195200,
+          "errorRate": 0,
+          "totalRequests": 1556,
+          "errorCount": 0,
+          "clientErrorCount": 47
+        },
+        {
+          "ts": 1792224000,
+          "errorRate": 0,
+          "totalRequests": 13,
+          "errorCount": 0,
+          "clientErrorCount": 0
+        },
+        {
+          "ts": 1792238400,
+          "errorRate": 0,
+          "totalRequests": 8,
+          "errorCount": 0,
+          "clientErrorCount": 1
+        }
+      ]
+    }
+  ],
+  "byMethod": [
+    {
+      "service": {
+        "id": "9053689a-0e32-4f3c-b5da-3c01e480a9c6",
+        "name": "mayorista-api-qa"
+      },
+      "environment": {
+        "id": "2addc3e9-f088-42df-a72c-c233fd4308cb",
+        "name": "qa"
+      },
+      "window": {
+        "hoursBack": 24,
+        "bucketCount": 1
+      },
+      "slowestBucket": {
+        "ts": 1792195200,
+        "p50": 375,
+        "p90": 3764,
+        "p95": 4576,
+        "p99": 5197
+      },
+      "samples": [
+        {
+          "ts": 1792195200,
+          "p50": 375,
+          "p90": 3764,
+          "p95": 4576,
+          "p99": 5197
+        }
+      ]
+    },
+    {
+      "service": {
+        "id": "9053689a-0e32-4f3c-b5da-3c01e480a9c6",
+        "name": "mayorista-api-qa"
+      },
+      "environment": {
+        "id": "2addc3e9-f088-42df-a72c-c233fd4308cb",
+        "name": "qa"
+      },
+      "window": {
+        "hoursBack": 24,
+        "bucketCount": 1
+      },
+      "totals": {
+        "2xx": 55,
+        "3xx": 0,
+        "4xx": 3,
+        "5xx": 0,
+        "total": 58
+      },
+      "samples": [
+        {
+          "ts": 1792195200,
+          "2xx": 55,
+          "3xx": 0,
+          "4xx": 3,
+          "5xx": 0,
+          "total": 58
+        }
+      ]
+    },
+    {
+      "service": {
+        "id": "9053689a-0e32-4f3c-b5da-3c01e480a9c6",
+        "name": "mayorista-api-qa"
+      },
+      "environment": {
+        "id": "2addc3e9-f088-42df-a72c-c233fd4308cb",
+        "name": "qa"
+      },
+      "window": {
+        "hoursBack": 24,
+        "bucketCount": 2
+      },
+      "slowestBucket": {
+        "ts": 1792195200,
+        "p50": 2871,
+        "p90": 5084,
+        "p95": 5223,
+        "p99": 5619
+      },
+      "samples": [
+        {
+          "ts": 1792195200,
+          "p50": 2871,
+          "p90": 5084,
+          "p95": 5223,
+          "p99": 5619
+        },
+        {
+          "ts": 1792224000,
+          "p50": 1057,
+          "p90": 1057,
+          "p95": 1057,
+          "p99": 1057
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Existing QA traffic from the preceding 24 hours; multiple deployments may be included.",
+    "Worst bucket p95 is not the global window p95.",
+    "These observations precede P1/P2 deployment and are not measurements of this patch.",
+    "POST /orders: 58 requests, 55 2xx, 3 4xx, 0 5xx."
+  ]
+}
