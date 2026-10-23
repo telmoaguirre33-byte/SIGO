@@ -1,0 +1,37 @@
+.sigo-mayorista-workspace{width:100%;min-width:0;font-size:14px}
+.sigo-mayorista-workspace .card{padding:12px;border:1px solid #e5e7eb;border-radius:8px;margin:10px 0;min-width:0}
+.sigo-mayorista-workspace h1{font-size:22px}.sigo-mayorista-workspace h2{font-size:18px}.sigo-mayorista-workspace h3{font-size:16px}
+.sigo-mayorista-workspace nav{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+.sigo-mayorista-workspace button{padding:7px 12px;font-size:13px;min-height:34px;width:auto;max-width:100%;margin:3px;border:1px solid #d1d5db;border-radius:6px;cursor:pointer}
+.sigo-mayorista-workspace label{display:grid;gap:4px;min-width:0;margin:6px 0}
+.sigo-mayorista-workspace input,.sigo-mayorista-workspace select{padding:7px;width:100%;box-sizing:border-box;min-width:0}
+.sigo-mayorista-workspace .management-filters{display:flex;flex-wrap:wrap;gap:10px;align-items:end}.sigo-mayorista-workspace .management-filters label{flex:1 1 140px}
+.sigo-mayorista-workspace .management-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+.sigo-mayorista-workspace .management-kpis .card{display:grid;gap:8px}.sigo-mayorista-workspace .management-kpis strong{font-size:18px;overflow-wrap:anywhere}
+.sigo-mayorista-workspace .management-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:10px}
+.sigo-mayorista-workspace .management-table{overflow-x:auto}.sigo-mayorista-workspace table{width:100%;border-collapse:collapse;font-size:13px}.sigo-mayorista-workspace th,.sigo-mayorista-workspace td{padding:8px;text-align:left;border-bottom:1px solid #e5e7eb}
+.sigo-mayorista-workspace .management-bar{display:grid;grid-template-columns:minmax(80px,1fr) 1fr auto;gap:8px;font-size:12px;margin:10px 0}.sigo-mayorista-workspace meter{width:100%}
+.sigo-mayorista-workspace .management-caption{font-size:12px;color:#4b5563}
+
+.sigo-mayorista-workspace nav{position:static;left:auto;bottom:auto;transform:none;width:100%}
+
+.mayorista-menu-section{width:100%;margin-top:10px;border-top:1px solid #e5e7eb;padding-top:8px}.mayorista-menu-section summary{font-size:12px;font-weight:700;cursor:pointer;padding:8px}.mayorista-menu-section nav{display:grid;gap:2px}.mayorista-menu-section .menu-item{font-size:13px;min-height:34px;padding:7px 10px}
+.mayorista-access-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:6px}
+.mayorista-mobile-section h3{font-size:12px;margin:10px 16px;color:#526176}.mayorista-mobile-section button{width:100%;text-align:left}
+.mayorista-page-overlay{position:fixed;inset:0;z-index:1500;background:#f8fafc;overflow:auto;color:#172b35}.mayorista-page-header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 20px;background:white;border-bottom:1px solid #e5e7eb}.mayorista-page-content{max-width:1200px;margin:auto;padding:16px}
+.sigo-mayorista-workspace article{overflow-wrap:anywhere}.sigo-mayorista-workspace [aria-current=page]{background:#e6f4ef;border-color:#147d66}.sigo-mayorista-workspace form.card{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:8px}.sigo-mayorista-workspace form.card h2{grid-column:1/-1}.sigo-mayorista-workspace form.card>button{align-self:end}.sigo-mayorista-workspace summary{cursor:pointer;padding:7px}.sigo-mayorista-workspace .shared-links{display:flex;flex-wrap:wrap;gap:5px}
+@media(max-width:600px){.mayorista-page-content{padding:10px}.mayorista-page-header{padding:10px}.sigo-mayorista-workspace nav button{flex:1 1 140px}.sigo-mayorista-workspace .management-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Mayorista únicamente: objetivos, importación y padrón legibles en PC y Android. */
+.sigo-mayorista-workspace{font-size:15px;line-height:1.45;color:#172b35}
+.sigo-mayorista-workspace input,.sigo-mayorista-workspace select,.sigo-mayorista-workspace button{font:inherit;min-height:42px;max-width:100%}
+.sigo-mayorista-workspace label{font-size:14px;font-weight:600;color:#263f49}
+.sigo-mayorista-workspace small{display:block;color:#405865;font-size:13px}
+.sigo-mayorista-workspace .management-table{max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain}
+.sigo-mayorista-workspace table{font-size:14px}.sigo-mayorista-workspace th{background:#eaf2f5;color:#183e4b;white-space:nowrap}
+.sigo-mayorista-workspace td,.sigo-mayorista-workspace th{padding:9px}
+.sigo-mayorista-workspace .launch-steps{display:flex;gap:5px;overflow-x:auto;flex-wrap:nowrap;margin-block:12px}
+.sigo-mayorista-workspace .launch-steps button{flex:0 0 auto;white-space:nowrap;font-size:14px}
+.sigo-mayorista-workspace [aria-current=step]{background:#e1f2ed;border-color:#147d66;color:#124d3d}
+.sigo-mayorista-workspace #launch-panel{min-width:0;max-width:100%}
+@media(max-width:600px){.sigo-mayorista-workspace .management-table table{min-width:640px}.sigo-mayorista-workspace form.card{grid-template-columns:1fr}.sigo-mayorista-workspace header h1{font-size:21px}.sigo-mayorista-workspace header p{font-size:13px}.sigo-mayorista-workspace nav[aria-label="Secciones Mayorista"]{display:flex;flex-wrap:nowrap;overflow-x:auto;padding-block:5px}.sigo-mayorista-workspace nav[aria-label="Secciones Mayorista"] button{flex:0 0 auto;white-space:nowrap;font-size:14px}}

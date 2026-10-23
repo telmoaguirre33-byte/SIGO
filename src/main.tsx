@@ -1,3 +1,4 @@
+import MayoristaLauncher from "./modules/mayorista/integration/MayoristaLauncher";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import ArcaLauncher from "./ArcaLauncher";
@@ -38,6 +39,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <DevolucionesLauncher />
         <IngresosLauncher />
         <MobileOperationsMenu />
+        <MayoristaLauncher />
       </>
     </SigoAuthGate>}
   </React.StrictMode>,

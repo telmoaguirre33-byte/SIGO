@@ -1,0 +1,180 @@
+{
+  "head": "a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b",
+  "productionApproved": false,
+  "executedSql": false,
+  "productionRuntimeRole": null,
+  "referenceRoleForHashComparisonOnly": "sigo_qa_mayorista_backend",
+  "sourceCount": 20,
+  "versionCount": 21,
+  "manifestSha256": "0753b8f1e699a18df45118a7ee0f4bf6bcfa2dffbf0a9090332568150989e2c7",
+  "versions": [
+    {
+      "version": 1,
+      "source": "docs/mayorista/sql/002_seguridad_preparada_NO_APLICAR.sql",
+      "sourceFileHash": "9b1f714f891dcb44aabc95c82e742a47642c484e9840c3a743dff822ae6c8c0c",
+      "compiledSha256": "6de868fbd7ca6ae5725150137316c93db8106c63232935402569500428a5136b",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": false
+    },
+    {
+      "version": 2,
+      "source": "docs/mayorista/sql/003_flujo_administrativo_NO_APLICAR.sql",
+      "sourceFileHash": "6510499e27852ee086bfe1e37b630a92d06b21ba072847765b001de707e32185",
+      "compiledSha256": "cd7476a704c5a6b3fe7b5c8b273763026586242ef619912e7e17342b1708c586",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": false
+    },
+    {
+      "version": 3,
+      "source": "docs/mayorista/sql/004_administracion_NO_APLICAR.sql",
+      "sourceFileHash": "3ca83ff15bcb3f61fe7148eba3cc3998977c6fb6b04908851878725774363ba6",
+      "compiledSha256": "d3bf226fe25d23426211f6d8e339d4181dd26b4618486a44e116b64add833e8a",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": false
+    },
+    {
+      "version": 4,
+      "source": "src/modules/mayorista/cargas/schema-qa.sql",
+      "sourceFileHash": "5e48ffe034b33b269679e4236206ae8bc46a142a6004d0828dddc52de32d46bc",
+      "compiledSha256": "83e0edc6349c67dc1d5017dcb366ef91ca5b183ba53c0d6c0624cee7bc20f8fd",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": false
+    },
+    {
+      "version": 5,
+      "source": "src/modules/mayorista/commercial/visits-schema-qa.sql",
+      "sourceFileHash": "bdf4078972c0a1fd281d291f05e1d85cc35bf510994a331e67b79ea94f1c1124",
+      "compiledSha256": "d21c72323feb9c87acf6d0e7b14f13620f3be8bb97674a9739b2263ed1783783",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": false
+    },
+    {
+      "version": 6,
+      "source": "src/modules/mayorista/commercial/inventory-schema-qa.sql",
+      "sourceFileHash": "f7a164446353a0865804cf016c84d010fd4510a2c558aee8731eeb6b8fadc097",
+      "compiledSha256": "c0c3b4122b0ecef1cfb4de85a2b6aab47eaaab2e71a0f0d02933bdc2d857ad5b",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": false
+    },
+    {
+      "version": 7,
+      "source": "src/modules/mayorista/commercial/accounts-schema-qa.sql",
+      "sourceFileHash": "0c584d00d379f6fe86349d27e657c7707d8339dfb2097b84dcad2e6895ad5003",
+      "compiledSha256": "91630bd5eb486b996027f64cb61c6aaafb4c127157cffe1eaae76505525669f3",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": false
+    },
+    {
+      "version": 8,
+      "source": "src/modules/mayorista/railway/private-auth-schema.sql",
+      "sourceFileHash": "02894f4a19512a2c16e6d7298aa0518c0fe668acc4e2417ab73119d5209ced13",
+      "compiledSha256": "ac71716cb83b6cb1d338a1be052dcb1318e4bcb532a18921183eb0afb9bbc87e",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": false
+    },
+    {
+      "version": 9,
+      "source": "src/modules/mayorista/commercial/roles-schema-qa.sql",
+      "sourceFileHash": "b0cfaf645d274027f84da32ac75eb552d5605f7085e43ee6483d141c36061b94",
+      "compiledSha256": "5d5ff607a488877a12b03cc6beb7078090a275a566407caed469998c6b5a3fc7",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": false
+    },
+    {
+      "version": 10,
+      "source": "src/modules/mayorista/commercial/master-schema-qa.sql",
+      "sourceFileHash": "da0d1218e06b0c83405a6a38565c19a6b321a6714fd84b2894205cf2958deb1f",
+      "compiledSha256": "5499e622d920028273f109fde0d97e037985ff76275ab6137fe89d294570bddf",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": false
+    },
+    {
+      "version": 11,
+      "source": "src/modules/mayorista/commercial/collections-schema-qa.sql",
+      "sourceFileHash": "2c2fb0df1ba4c053eee261fa661a4581c69dbe4d59503558e80f753493463f15",
+      "compiledSha256": "efb51d284da19451ee8c3f6ab31c5ccbb6b2dac9ac3fda6cb37f84ee760b718f",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": false
+    },
+    {
+      "version": 12,
+      "source": "src/modules/mayorista/commercial/goals-schema-qa.sql",
+      "sourceFileHash": "f50c3aedf652f2bfb7ffe2b4aaf7f15d6cae845ccf8b73dc584f71e92811c4d9",
+      "compiledSha256": "834dd8125d2c4ef8d3c33eeecaf02c64304bc2ba2099580211137227c077aeb8",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": false
+    },
+    {
+      "version": 13,
+      "source": "docs/mayorista/sql/005_integracion_empresa_NO_APLICAR.sql",
+      "sourceFileHash": "86af1d9c734efde00bb63050547e2ba90dddae3fe61628979d90538d0001ffb6",
+      "compiledSha256": "1f4648bdd705719fde4861057828b2ab3e99a7d314aa1456162336e2a76f782d",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": false
+    },
+    {
+      "version": 14,
+      "source": "docs/mayorista/sql/006_comercio_compartido_NO_APLICAR.sql",
+      "sourceFileHash": "69897ea8ec1322fda511be033e495dcac83e42c920417c75ab1271ff98c3857a",
+      "compiledSha256": "150712e69eadc4a8ef9925c88379b9e3721a2f379e200cda8d7b63ab17cc0205",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": false
+    },
+    {
+      "version": 15,
+      "source": "docs/mayorista/sql/007_lectura_compartida_NO_APLICAR.sql",
+      "sourceFileHash": "7bfbd70819db7c3a22a897936684aec9da45e38184982acead62ac6ba90b4e93",
+      "compiledSha256": "3923f2e639be9d6443d1dceabd873f455dccfe714eb621cf250bd445cbd3bb9b",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": false
+    },
+    {
+      "version": 16,
+      "source": "docs/mayorista/sql/008_operacion_comercial_NO_APLICAR.sql",
+      "sourceFileHash": "f08c407421a5752627ccbe398a2b2e194f7f62a7898354a6d0403487b3c8514e",
+      "compiledSha256": "3d8c2a5dadba5cdcc51c2a5414d49b2b8da263e35c160ec32e7685bc659ae652",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": false
+    },
+    {
+      "version": 17,
+      "source": "docs/mayorista/sql/009_precios_compartidos_NO_APLICAR.sql",
+      "sourceFileHash": "2ca32c82f8c2550d66c2c519091fc9cddae41462cd0778e3913610be4ade720a",
+      "compiledSha256": "65b9d4c420ee2d8e89b650b0eaec79170b467b9b02186c6b363b772c848120f6",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": false
+    },
+    {
+      "version": 18,
+      "source": "docs/mayorista/sql/010_nota_credito_compartida_NO_APLICAR.sql",
+      "sourceFileHash": "0d9b792c2348e88ba90f2e3b643ad113d44025f7b487c4bf1dc9833e918a34a7",
+      "compiledSha256": "23b0c0f2b79f337eb5904c5e8b05d5695f46cb2257e48101d87dcfca31077711",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": false
+    },
+    {
+      "version": 19,
+      "source": "docs/mayorista/sql/011_destino_predeterminado_NO_APLICAR.sql",
+      "sourceFileHash": "67644afef35ce01b7620cdf24cb8811802903248689b65c13661534a9d453f25",
+      "compiledSha256": "318b5a79fe645e932e5756b16578249d38503dfc62213a5dc4be697f656e86e4",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": false
+    },
+    {
+      "version": 20,
+      "source": "src/modules/mayorista/commercial/launch-schema-qa.sql",
+      "sourceFileHash": "4d433753a1cdff0ed6c1b5dd91389d3d8d95dcd935c9d7a2d3f797fdb8d4a21f",
+      "compiledSha256": "4d433753a1cdff0ed6c1b5dd91389d3d8d95dcd935c9d7a2d3f797fdb8d4a21f",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": false
+    },
+    {
+      "version": 21,
+      "source": "generated:commercialGrants(runtimeRole)",
+      "sourceFileHash": null,
+      "compiledSha256": "3f63b1fd67e97111214b09799ae319d1b8d4f80db4333226fe94a31aef8ebb9a",
+      "matchesHistoricalQaPackage": true,
+      "roleSensitive": true
+    }
+  ]
+}
