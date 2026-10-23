@@ -1,0 +1,26 @@
+name: Contingencia medidas (NO activar)
+on:
+  pull_request:
+    branches: [feat/minorista-peso-manual-cierre-20261022]
+    paths:
+      - src/contencionMedidas.ts
+      - src/VentaRapidaOperativa.tsx
+      - tests/contencion.dom.test.mjs
+      - package.json
+      - .github/workflows/contencion-medidas.yml
+permissions:
+  contents: read
+jobs:
+  containment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npm run test:contencion-medidas
+      - run: node --experimental-strip-types --test tests/persistenciaMedidas.test.mjs tests/devolucionesMedidas.test.mjs
+      - run: npm run verify:critical

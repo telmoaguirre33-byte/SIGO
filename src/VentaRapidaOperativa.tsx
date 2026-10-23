@@ -1,3 +1,4 @@
+import { CONTENER_NUEVAS_VENTAS_MEDIDAS, bloqueaNuevaVentaMedida } from "./contencionMedidas";
 import { useEffect, useMemo, useRef, useState } from "react";
 import BarcodeScanner from "./BarcodeScanner";
 import EditorCantidadMedida from "./EditorCantidadMedida";
@@ -431,7 +432,8 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     && clienteSeleccionado?.limite_credito != null
     && Number(clienteSeleccionado.saldo_actual || 0) + total > Number(clienteSeleccionado.limite_credito);
 
-  const puedeConfirmar = !cajaBloqueada && items.length > 0
+  const medidaContenida = bloqueaNuevaVentaMedida(CONTENER_NUEVAS_VENTAS_MEDIDAS, items);
+  const puedeConfirmar = !medidaContenida && !cajaBloqueada && items.length > 0
     && unidadesCargadas
     && !productoPorMedida
     && total > 0
@@ -454,6 +456,10 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     });
 
   async function confirmar(imprimirDespues = false, emitirFiscalDespues = false, recuperar = false) {
+    if (!recuperar && medidaContenida) {
+      setError("Las nuevas ventas por medidas están pausadas. Los cobros pendientes se recuperan con su botón original.");
+      return;
+    }
     if (confirmando || confirmacionEnCursoRef.current || errorPersistenciaCobro
       || (recuperar ? !intentoPendiente : !puedeConfirmar)) return;
     confirmacionEnCursoRef.current = true;
@@ -627,6 +633,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         onConfirmar={(cantidad) => { agregarCantidad(productoPorMedida, cantidad, reemplazandoCantidad); setProductoPorMedida(null); }}
         onCancelar={() => { setProductoPorMedida(null); window.setTimeout(() => buscarRef.current?.focus(), 0); }}
       />}
+      {CONTENER_NUEVAS_VENTAS_MEDIDAS && <div role="status" data-contencion-medidas="">Nuevas ventas por medidas pausadas. Podés vender por unidad y recuperar manualmente el mismo cobro pendiente. No vuelvas a armarlo.</div>}
       {(intentoPendiente || errorPersistenciaCobro) && <div className="form-error" role="alert" data-cobro-pendiente="">
         {intentoPendiente ? <>
           <strong>Hay un cobro pendiente de verificar.</strong>
@@ -660,3 +667,4 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     </div>
   );
 }
+
