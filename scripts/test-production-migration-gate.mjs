@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { REVIEWED_MIGRATIONS, readLocalMigrations, assessMigrationHistory } from './check-production-migrations.mjs';
+import { V4_RECONCILIATION, REVIEWED_MIGRATIONS, readLocalMigrations, assessMigrationHistory } from './check-production-migrations.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const local = readLocalMigrations(root);
@@ -15,7 +15,11 @@ const reviewedVersions = new Set(REVIEWED_MIGRATIONS.map(row => row.version));
 const prior = rows(local.filter(row => !reviewedVersions.has(row.version)));
 const drift = JSON.parse(fs.readFileSync(path.join(root, 'tests/fixtures/production-migration-drift.json'), 'utf8'));
 const pending = new Set(drift.pending.map(row => row.version));
-const observedRemote = [...rows(local.filter(row => !pending.has(row.version))), ...drift.remoteOnly];
+// Preserve the pre-activation 99/107 fixture unchanged, including the old candidate ID.
+const observedRemote = [...rows(local.filter(row => !pending.has(row.version) && !reviewedVersions.has(row.version))), ...drift.remoteOnly];
+// Actual API result, independently pinned rather than synthesized from the local candidate.
+const appliedV4 = { version: '20261023144934', name: 'manual_medidas_atomicas_guarded' };
+const observedAfterActivation = [...observedRemote, appliedV4];
 const cli = path.join(root, 'scripts/check-production-migrations.mjs');
 const workflow = fs.readFileSync(path.join(root, '.github/workflows/supabase-production.yml'), 'utf8');
 const verifier = path.join(root, 'scripts/verify-production-readiness.mjs');
@@ -72,12 +76,58 @@ test('observed 99 local /107 remote metadata fails closed with 14 historical pen
   assert.equal(result.reviewedPending.length, 1);
 });
 
-test('recording the new V4 ID cannot hide the remaining historical discrepancies', () => {
-  const result = assessMigrationHistory(local, envelope([...observedRemote, ...rows(REVIEWED_MIGRATIONS)]));
+test('actual API record reconciles only V4: 99 local /108 remote remains blocked with historical drift', () => {
+  const result = assessMigrationHistory(local, envelope(observedAfterActivation));
+  assert.equal(result.localCount, 99);
+  assert.equal(result.remoteCount, 108);
+  assert.equal(result.status, 'BLOCKED_HISTORY_DRIFT');
+  assert.equal(result.productionAuthorized, false);
+  assert.deepEqual(result.nameMismatch, []);
   assert.equal(result.exitCode, 2);
   assert.equal(result.reviewedPending.length, 0);
   assert.equal(result.unexpectedPending.length, 14);
   assert.equal(result.remoteOnly.length, 23);
+  assert.deepEqual(result.unexpectedPending, drift.pending.filter(row => row.version !== V4_RECONCILIATION.sourceVersion));
+  assert.deepEqual(result.remoteOnly, drift.remoteOnly);
+});
+
+test('only one canonical V4 file remains, with the actual API identity and unchanged installable SQL', () => {
+  assert.deepEqual(rows(REVIEWED_MIGRATIONS), [appliedV4]);
+  assert.equal(V4_RECONCILIATION.sourceVersion, '20261022024847');
+  assert.equal(V4_RECONCILIATION.sourceName, 'manual_medidas_atomicas');
+  assert.equal(V4_RECONCILIATION.sha256, 'd525682cf0ac327221a389f4668748b40d6fd81e0a31b70c79e5b05a59312c21');
+  assert.equal(V4_RECONCILIATION.appliedStatementSha256, 'c572b9e11d4326192ac0e1878a3e7b66f61fb24513727df857a4e5190a0065f6');
+  assert.equal(local.filter(row => row.sha256 === V4_RECONCILIATION.sha256).length, 1);
+  assert.equal(local.some(row => row.version === V4_RECONCILIATION.sourceVersion), false);
+  const sql = fs.readFileSync(path.join(root, `supabase/migrations/${appliedV4.version}_${appliedV4.name}.sql`), 'utf8');
+  assert.match(sql, /\nbegin;\n/);
+  assert.match(sql, /commit;\s*$/);
+  assert.doesNotMatch(sql, /V4_FUNCTION_DRIFT|V4_ALREADY_PRESENT_OR_DRIFT|\$atomic_v4\$/);
+});
+
+test('restoring the superseded local ID or copying V4 under another timestamp fails closed', () => {
+  const old = { ...REVIEWED_MIGRATIONS[0], version: V4_RECONCILIATION.sourceVersion, name: V4_RECONCILIATION.sourceName };
+  for (const sha256 of [old.sha256, '0'.repeat(64)]) {
+    const altered = [...local, { ...old, sha256 }];
+    assert.throws(() => assessMigrationHistory(altered, envelope(rows(altered))), /SUPERSEDED_V4_VERSION_PRESENT/);
+  }
+  const duplicate = { ...REVIEWED_MIGRATIONS[0], version: '20261023150000' };
+  assert.throws(() => assessMigrationHistory([...local, duplicate], envelope(rows(local))), /REVIEWED_CANDIDATE_DUPLICATE_BYTES/);
+});
+
+test('old proposed ID or same-name replacement cannot stand in for the actual API record', () => {
+  for (const record of [
+    { version: V4_RECONCILIATION.sourceVersion, name: V4_RECONCILIATION.sourceName },
+    { ...appliedV4, version: '20261023150000' },
+  ]) {
+    const result = assessMigrationHistory(local, envelope([...prior, record]));
+    assert.equal(result.exitCode, 2);
+    assert.deepEqual(result.reviewedPending, [appliedV4]);
+    assert.deepEqual(result.remoteOnly, [record]);
+  }
+  const wrongName = assessMigrationHistory(local, envelope([...prior, { ...appliedV4, name: V4_RECONCILIATION.sourceName }]));
+  assert.equal(wrongName.exitCode, 2);
+  assert.deepEqual(wrongName.nameMismatch, [{ version: appliedV4.version, localName: appliedV4.name, remoteName: V4_RECONCILIATION.sourceName }]);
 });
 
 test('same migration name with a different timestamp is not proof of equivalence', () => {
@@ -139,7 +189,7 @@ test('unrecognized filenames, subdirectories and symlinks cannot silently disapp
 });
 
 test('actual CLI exits 0/2/3 and reports no production authorization', t => {
-  for (const [remote, expected] of [[rows(local), 0], [observedRemote, 2], [prior, 3]]) {
+  for (const [remote, expected] of [[rows(local), 0], [observedRemote, 2], [observedAfterActivation, 2], [prior, 3]]) {
     const result = runCLI(t, envelope(remote));
     assert.equal(result.status, expected, result.stderr);
     assert.equal(JSON.parse(result.stdout).productionAuthorized, false);
