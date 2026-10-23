@@ -1,0 +1,21 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { build } from 'esbuild';
+const out = await build({entryPoints:['src/perfilBalanza.ts'],bundle:true,write:false,format:'esm',platform:'node',plugins:[{name:'no-network',setup(b){b.onLoad({filter:/\/supabase\.ts$/},()=>({contents:'export const supabase = {};',loader:'ts'}));}}]});
+const { resolverLecturaBalanza: resolver, validarPerfilBalanza: validar } = await import(`data:text/javascript;base64,${Buffer.from(out.outputFiles[0].text).toString('base64')}`);
+function ean(value, plu='00002'){const s='20'+plu+String(value).padStart(5,'0');return s+((10-[...s].reduce((a,x,i)=>a+Number(x)*(i%2?3:1),0)%10)%10);}
+const p={id:'p1',empresa_id:'e1',nombre:'Carne',precio_venta:12000,stock_actual:5};
+const perfil={version:1,empresaId:'e1',habilitado:true,formato:{prefijo:'20',longitudPlu:5,tipo:'peso',divisor:1000},productos:[{plu:'00002',productoId:'p1'}]};
+const run=(code=ean(750),pr=perfil,products=[p],units={p1:'kg'})=>resolver(code,pr,'e1',products,units);
+for(const n of [750,1250,1500]) test(`${n} gramos`,()=>assert.equal(run(ean(n)).cantidad,n/1000));
+test('unidades codificadas 2 y 5 no se convierten a uno',()=>{for(const n of [2,5])assert.equal(run(ean(n),{...perfil,formato:{...perfil.formato,tipo:'unidad',divisor:1}},[p],{p1:'unidad'}).cantidad,n);});
+test('apagado y prefijo distinto no interceptan',()=>{assert.equal(run(ean(750),null),null);assert.equal(run(ean(750),{...perfil,habilitado:false}),null);assert.equal(run('1234567890123'),null);});
+test('checksum y cero rechazados',()=>{assert.throws(()=>run(ean(750).slice(0,12)+'9'),/CHECKSUM/);assert.throws(()=>run(ean(0)),/VALOR/);});
+test('PLU desconocido y mapping obsoleto',()=>{assert.throws(()=>run(ean(750,'00003')),/PLU/);assert.throws(()=>run(ean(750),perfil,[]),/PLU/);});
+test('empresa aislada en perfil y producto',()=>{assert.throws(()=>run(ean(750),{...perfil,empresaId:'e2'}),/empresa/);assert.throws(()=>run(ean(750),perfil,[{...p,empresa_id:'e2'}]),/PLU/);});
+test('unidad incompatible nunca convertida',()=>assert.throws(()=>run(ean(750),perfil,[p],{p1:'unidad'}),/unidad/));
+test('importe nunca inferido',()=>assert.throws(()=>run(ean(750),{...perfil,formato:{...perfil.formato,tipo:'importe',divisor:100}}),/importe/));
+test('stock y precio deben ser finitos positivos',()=>{for(const stock_actual of [null,NaN,Infinity,0,-1,0.5])assert.throws(()=>run(ean(750),perfil,[{...p,stock_actual}]),/Stock/);for(const precio_venta of [null,NaN,Infinity,0,-1])assert.throws(()=>run(ean(750),perfil,[{...p,precio_venta}]),/precio/);});
+test('perfil duplicado/escala incorrecta/tipo extraño no aceptados',()=>{assert.throws(()=>validar({...perfil,productos:[...perfil.productos,...perfil.productos]},'e1'),/repetido/);for(const divisor of [0,3,10000,Infinity])assert.throws(()=>run(ean(750),{...perfil,formato:{...perfil.formato,divisor}}),/Formato/);assert.throws(()=>run(ean(750),{...perfil,formato:{...perfil.formato,tipo:'x'}}),/Formato/);});
+test('identidad no única bloqueada',()=>assert.throws(()=>run(ean(750),perfil,[p,p]),/único/));
+test('dos etiquetas iguales son dos paquetes',()=>assert.equal(run(ean(750)).cantidad+run(ean(750)).cantidad,1.5));

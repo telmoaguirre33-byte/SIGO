@@ -18,6 +18,9 @@ type Props = {
   onManualQuery?: (query: string) => boolean;
   onProductSearchKeyDown?: (key: string) => boolean;
   onCachedCode?: (code: string) => BarcodeProduct[] | null;
+  onUnknownCode?: (code: string) => { handled: boolean; error?: string };
+  onMatchedCode?: (code: string) => string | null;
+  resolutionContextKey?: number;
   queryResetKey?: number;
 };
 
@@ -67,6 +70,9 @@ export default function BarcodeScanner({
   onProductSearchKeyDown,
   onCachedCode,
   queryResetKey,
+  onUnknownCode,
+  resolutionContextKey,
+  onMatchedCode,
 }: Props) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -88,6 +94,13 @@ export default function BarcodeScanner({
   const empresaActivaRef = useRef(empresaId);
   const actionActivaRef = useRef(action);
   const requestRef = useRef(0);
+  const mountedRef = useRef(true);
+  const currentCallbacks = useRef({ onUnknownCode, onCachedCode, onProduct, onBlockedProduct, onMatchedCode });
+  currentCallbacks.current = { onUnknownCode, onCachedCode, onProduct, onBlockedProduct, onMatchedCode };
+  const contextRef = useRef(resolutionContextKey);
+  contextRef.current = resolutionContextKey;
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; requestRef.current++; queuedScansRef.current = []; }; }, []);
+  useEffect(() => { requestRef.current++; clearQueuedScans(); }, [resolutionContextKey]);
 
   const detectorCtor = useMemo(() => {
     const w = window as typeof window & { BarcodeDetector?: BarcodeDetectorCtor };
@@ -123,7 +136,7 @@ export default function BarcodeScanner({
   }
 
   async function drainQueuedScans() {
-    if (inFlightRef.current) return;
+    if (!mountedRef.current || inFlightRef.current) return;
     const next = takeNextQueuedScan();
     if (!next) {
       setBusy(false);
@@ -140,17 +153,27 @@ export default function BarcodeScanner({
     actionOperacion: BarcodeAction,
   ) {
     const requestId = ++requestRef.current;
+    const context = contextRef.current;
     inFlightRef.current = true;
     setBusy(true);
     setError("");
     try {
       // En Caja–Venta, los códigos principales conocidos se resuelven desde el catálogo ya cargado.
       // Códigos alternativos o no reconocidos conservan la consulta segura al servidor.
-      const matches = onCachedCode?.(normalized) ?? await buscarProductoPorCodigo(empresaOperacion, normalized);
-      const contextoVigente = empresaActivaRef.current === empresaOperacion
+      const matches = currentCallbacks.current.onCachedCode?.(normalized) ?? await buscarProductoPorCodigo(empresaOperacion, normalized);
+      const contextoVigente = mountedRef.current && contextRef.current === context && empresaActivaRef.current === empresaOperacion
         && actionActivaRef.current === actionOperacion
         && requestRef.current === requestId;
       if (!contextoVigente) return;
+      if (matches.length === 0 && currentCallbacks.current.onUnknownCode && actionOperacion === "vender") {
+        const etiqueta = currentCallbacks.current.onUnknownCode(normalized);
+        if (etiqueta.handled) {
+          setError(etiqueta.error ?? "");
+          if (source === "camera") setCameraStatus(etiqueta.error ?? "Etiqueta procesada. Revisá la cantidad en Caja.");
+          else { setCode(""); onQueryChange?.(""); focusScanner(); }
+          return;
+        }
+      }
       if (matches.length === 0) {
         setError(`No se encontró un producto con el código ${normalized}.`);
         if (source === "camera") setCameraStatus("Código leído, pero no existe en esta empresa.");
@@ -162,6 +185,8 @@ export default function BarcodeScanner({
         return;
       }
 
+      const conflict = currentCallbacks.current.onMatchedCode?.(normalized);
+      if (conflict) { setError(conflict); if (source === "camera") setCameraStatus(conflict); return; }
       const producto = matches[0];
       if ((actionOperacion === "vender" || actionOperacion === "ingresar") && isLegacyDuplicateProduct(producto)) {
         const operacion = actionOperacion === "vender" ? "vender" : "ingresar stock";
@@ -173,21 +198,21 @@ export default function BarcodeScanner({
       if (actionOperacion === "vender") {
         const precio = Number(producto.precio_venta ?? 0);
         if (!Number.isFinite(precio) || precio <= 0) {
-          onBlockedProduct?.(producto, "precio");
+          currentCallbacks.current.onBlockedProduct?.(producto, "precio");
           setError(`${producto.nombre}: definí un precio de venta mayor a cero antes de vender.`);
           if (source === "camera") setCameraStatus("Producto leído, pero todavía no tiene precio de venta válido.");
           return;
         }
         const stock = Number(producto.stock_actual ?? 0);
         if (!Number.isFinite(stock) || stock <= 0) {
-          onBlockedProduct?.(producto, "stock");
+          currentCallbacks.current.onBlockedProduct?.(producto, "stock");
           setError(`${producto.nombre}: sin stock disponible para vender.`);
           if (source === "camera") setCameraStatus("Producto leído, pero no tiene stock disponible.");
           return;
         }
       }
 
-      onProduct(producto, actionOperacion);
+      currentCallbacks.current.onProduct(producto, actionOperacion);
       // Tras una lectura válida, liberar únicamente el campo del lector.
       // No modifica carrito, búsqueda manual, flechas/Enter ni ninguna otra lógica.
       if (source !== "camera") {

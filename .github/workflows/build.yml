@@ -28,6 +28,9 @@ jobs:
       - name: Build SIGO
         run: npm run build
 
+      - name: Verify scale label profiles and scanner (synthetic)
+        run: npm run test:etiquetas-balanza
+
       - name: Verify manual measured sales and pending payment recovery
         run: npm run test:manual-medidas
 
@@ -44,3 +47,4 @@ jobs:
 
       - name: Verify critical SIGO flow
         run: npm run verify:critical
+

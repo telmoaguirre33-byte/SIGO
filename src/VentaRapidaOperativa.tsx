@@ -1,4 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { decodificarEtiquetaVariable } from "./etiquetasPesoVariable";
+import ConfiguracionBalanza from "./ConfiguracionBalanza";
+import { resolverLecturaBalanza, type PerfilBalanza } from "./perfilBalanza";
 import BarcodeScanner from "./BarcodeScanner";
 import EditorCantidadMedida from "./EditorCantidadMedida";
 import { cantidadEscaladaMedida, consolidarCantidadMedida, formatoCantidadMedida, formatoStockMedida, pasoCantidadMedida, precioUnitarioConDescuentosMedida, stockRestanteMedida, subtotalMedida, type UnidadVenta } from "./ventaPorMedidas";
@@ -44,6 +47,9 @@ function precioUnitarioVenta(item: ItemVenta, ofertas: OfertaProducto[], descuen
 }
 
 export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos = false }: { empresaId: string; puedeEditarProductos?: boolean }) {
+  const [balanzaRevision, setBalanzaRevision] = useState(0);
+  const cambiarPerfilBalanza = useCallback((p: PerfilBalanza | null) => { setPerfilBalanza(p); setBalanzaRevision(v => v + 1); }, []);
+  const [perfilBalanza, setPerfilBalanza] = useState<PerfilBalanza | null>(null);
   const [items, setItems] = useState<ItemVenta[]>([]);
   const [unidadesProducto, setUnidadesProducto] = useState<Record<string, UnidadVenta | null>>({});
   const [unidadesCargadas, setUnidadesCargadas] = useState(false);
@@ -262,6 +268,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       setProductoSeleccionadoId(null);
       return true;
     }
+    if (key === "Enter" && /^\d{13}$/.test(busquedaProducto.trim())) return false;
     if (key === "Enter" && consultaActiva) {
       const producto = resultados.find((fila) => fila.id === productoSeleccionadoIdRef.current);
       if (producto) seleccionarProductoManual(producto);
@@ -317,6 +324,26 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     } finally {
       if (empresaActivaRef.current === empresaOperacion) setGuardandoPrecio(false);
     }
+  }
+
+  function conflictoEtiquetaBalanza(codigo: string): string | null {
+    if (!perfilBalanza?.habilitado || perfilBalanza.empresaId !== empresaId) return null;
+    try {
+      const etiqueta = decodificarEtiquetaVariable(codigo, perfilBalanza.formato);
+      return perfilBalanza.productos.some(p => p.plu === etiqueta.plu)
+        ? "Este código coincide con un producto normal y una etiqueta configurada. Revisá el perfil; no se agregó." : null;
+    } catch { return null; }
+  }
+  function leerEtiquetaBalanza(codigo: string) {
+    if (!perfilBalanza || perfilBalanza.empresaId !== empresaId || !perfilBalanza.habilitado) return { handled: false };
+    if (!codigo.startsWith(perfilBalanza.formato.prefijo)) return { handled: false };
+    try {
+      if (cajaBloqueada || productoPorMedida || confirmacionEnCursoRef.current || !unidadesCargadas || catalogoError) throw new Error("La caja o el catálogo no están listos para leer etiquetas.");
+      const lectura = resolverLecturaBalanza(codigo, perfilBalanza, empresaId, catalogo, unidadesProducto);
+      if (!lectura) return { handled: false };
+      agregarCantidad(lectura.producto, lectura.cantidad);
+      return { handled: true };
+    } catch (e) { return { handled: true, error: e instanceof Error ? e.message : "Etiqueta inválida. No se agregó." }; }
   }
 
   function agregar(producto: BarcodeProduct) {
@@ -635,8 +662,9 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
           <button type="button" data-recuperar-cobro="" disabled={confirmando || Boolean(errorPersistenciaCobro)} onClick={() => void confirmar(false, false, true)}>{confirmando ? "Verificando el mismo cobro…" : "Recuperar el mismo cobro"}</button>
         </> : errorPersistenciaCobro}
       </div>}
+      <ConfiguracionBalanza key={empresaId} empresaId={empresaId} productos={catalogo} puedeEditar={puedeEditarProductos} bloqueada={cajaBloqueada || items.length > 0 || Boolean(productoPorMedida)} onChange={cambiarPerfilBalanza} />
       <div className="sigo-pos-scan">
-        {!cajaBloqueada && !productoPorMedida && <BarcodeScanner key={scannerInstanceKey} empresaId={empresaId} action="vender" onCachedCode={(code)=>{const encontrados=catalogo.filter((p)=>p.empresa_id===empresaId&&(normalizeBarcode(p.codigo_barras??"")===code||normalizeBarcode(p.codigo_interno??"")===code));return encontrados.length?encontrados:null}} onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null)}} onManualQuery={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null);return !/^\\d{6,}$/.test(query.trim())}} onProductSearchKeyDown={manejarTeclaBusquedaProducto}/>}
+        {!cajaBloqueada && !productoPorMedida && <BarcodeScanner key={scannerInstanceKey} empresaId={empresaId} action="vender" resolutionContextKey={balanzaRevision} onMatchedCode={conflictoEtiquetaBalanza} onUnknownCode={leerEtiquetaBalanza} onCachedCode={(code)=>{const encontrados=catalogo.filter((p)=>p.empresa_id===empresaId&&(normalizeBarcode(p.codigo_barras??"")===code||normalizeBarcode(p.codigo_interno??"")===code));return encontrados.length?encontrados:null}} onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null)}} onManualQuery={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null);return !/^\d{6,}$/.test(query.trim())}} onProductSearchKeyDown={manejarTeclaBusquedaProducto}/>}
 
         {busquedaProducto.trim()&&productosEncontrados.length>0&&<div className="sigo-pos-results">{productosEncontrados.map((p)=><button type="button" data-pos-suggestion="" data-product-id={p.id} aria-selected={p.id===productoSeleccionadoVisibleId} className={p.id===productoSeleccionadoVisibleId?"active":""} key={p.id} onMouseEnter={()=>{productoSeleccionadoIdRef.current=p.id;setProductoSeleccionadoId(p.id)}} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}{Number(p.stock_actual??0)<=0?" · SIN STOCK":""}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} / {p.unidad_medida ?? "unidad sin verificar"} · Stock {formatoStockMedida(Number(p.stock_actual ?? 0), p.unidad_medida)}</span></button>)}</div>}{busquedaProducto.trim()&&productosEncontrados.length===0&&!catalogoError&&<div className="sigo-pos-results"><div className="table-empty">No encontré productos. Probá con nombre, marca, código interno o EAN.</div></div>}
       </div>
@@ -660,3 +688,4 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     </div>
   );
 }
+

@@ -69,7 +69,7 @@ async function rpc(name, payload) {
 }
 for (const eventName of ['sigo:arca:venta', 'sigo:fiscal:caja']) window.addEventListener(eventName, event => state.fiscal.push({ eventName, detail: event.detail }));
 const mocks = {
-  './supabase': 'export const supabase={from:(t)=>globalThis.__cobro.query(t),rpc:(...a)=>globalThis.__cobro.rpc(...a)};',
+  './supabase': 'export const supabase={auth:{getUser:async()=>({data:{user:null},error:null}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})},from:(t)=>globalThis.__cobro.query(t),rpc:(...a)=>globalThis.__cobro.rpc(...a)};',
   './ticketVenta': 'export const imprimirTicketVenta=async(...a)=>globalThis.__cobro.print(...a);',
   './BarcodeScanner': 'import React from "react";export default function Scanner(p){return React.createElement("button",{id:"synthetic-add",onClick:()=>p.onProduct(globalThis.__cobro.products(p.empresaId)[0])},"Add synthetic");}',
   './clientes': 'export const listarClientesSigo=async()=>[];',
@@ -178,3 +178,4 @@ for (const shortcut of ['F10', 'F11']) {
 
 dom.window.close();
 console.log('All synthetic recovery checks passed. Browser/physical-printer QA is intentionally not claimed.');
+
