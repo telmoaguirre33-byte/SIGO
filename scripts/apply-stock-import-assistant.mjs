@@ -12,16 +12,26 @@ if (!app.includes(importLine)) {
 
 const renderOld = '          {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}';
 const renderNew = '          {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} puedeImportar={can(empresa.rol, "products.write") && can(empresa.rol, "stock.write") && (can(empresa.rol, "sales.write") || can(empresa.rol, "price_lists.read"))} />}';
-if (!app.includes(renderNew)) {
-  if (!app.includes(renderOld)) throw new Error("No se encontró el render de Productos para habilitar importación segura");
-  app = app.replace(renderOld, renderNew);
+// Corrección inicial agrega props que deben conservarse al integrar importación.
+const renderCorrection = '          {section === "Productos" && <Productos key={empresa.empresa_id} empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} puedeCorregirUnidad={puedeCorregirUnidad} onCorreccionAbierta={setCorreccionAbierta} />}';
+const importPermission = ' puedeImportar={can(empresa.rol, "products.write") && can(empresa.rol, "stock.write") && (can(empresa.rol, "sales.write") || can(empresa.rol, "price_lists.read"))}';
+const renderCorrectionNew = renderCorrection.replace(' />}', `${importPermission} />}`);
+if (!app.includes(renderNew) && !app.includes(renderCorrectionNew)) {
+  if (app.includes(renderCorrection)) app = app.replace(renderCorrection, renderCorrectionNew);
+  else if (app.includes(renderOld)) app = app.replace(renderOld, renderNew);
+  else throw new Error("No se encontró el render de Productos para habilitar importación segura");
 }
 
 const signatureOld = 'function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar: boolean }) {';
 const signatureNew = 'function Productos({ empresaId, puedeEditar, puedeImportar }: { empresaId: string; puedeEditar: boolean; puedeImportar: boolean }) {';
-if (!app.includes(signatureNew)) {
-  if (!app.includes(signatureOld)) throw new Error("No se encontró la firma de Productos para integrar importación segura");
-  app = app.replace(signatureOld, signatureNew);
+const signatureCorrection = 'function Productos({ empresaId, puedeEditar, puedeCorregirUnidad, onCorreccionAbierta }: { empresaId: string; puedeEditar: boolean; puedeCorregirUnidad: boolean; onCorreccionAbierta: (abierta: boolean) => void }) {';
+const signatureCorrectionNew = signatureCorrection
+  .replace('onCorreccionAbierta }:', 'onCorreccionAbierta, puedeImportar }:')
+  .replace('onCorreccionAbierta: (abierta: boolean) => void }', 'onCorreccionAbierta: (abierta: boolean) => void; puedeImportar: boolean }');
+if (!app.includes(signatureNew) && !app.includes(signatureCorrectionNew)) {
+  if (app.includes(signatureCorrection)) app = app.replace(signatureCorrection, signatureCorrectionNew);
+  else if (app.includes(signatureOld)) app = app.replace(signatureOld, signatureNew);
+  else throw new Error("No se encontró la firma de Productos para integrar importación segura");
 }
 
 const actionOld = '{puedeEditar ? <button className="primary-button" onClick={abrirNuevo}>Nuevo producto</button> : <span>Modo solo lectura</span>}';

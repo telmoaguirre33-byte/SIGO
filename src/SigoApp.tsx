@@ -1,4 +1,6 @@
 import Contabilidad from "./Contabilidad";
+import DialogoCorreccionUnidadInicial from "./DialogoCorreccionUnidadInicial";
+import { useCorreccionUnidadInicial } from "./useCorreccionUnidadInicial";
 import { cantidadEscaladaMedida, formatoStockMedida, pasoCantidadMedida, UNIDADES_VENTA, type UnidadVenta } from "./ventaPorMedidas";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { EmpresaOperativa } from "./tenant";
@@ -69,6 +71,10 @@ function numeroOpcional(valor: string, etiqueta: string): number | null {
 export default function SigoApp({ empresa, initialSection = "Inicio", purchasesOnly = false, onAbrirInformes }: { empresa: EmpresaOperativa; initialSection?: Section; purchasesOnly?: boolean; onAbrirInformes?: () => void }) {
   const [section, setSection] = useState<Section>(initialSection);
   const puedeEditarProductos = can(empresa.rol, "products.write");
+  const puedeCorregirUnidad = puedeEditarProductos && can(empresa.rol, "stock.write") && can(empresa.rol, "costs.read")
+    && (can(empresa.rol, "price_lists.read") || can(empresa.rol, "sales.write"));
+  const [correccionAbierta, setCorreccionAbierta] = useState(false);
+  useEffect(() => { setCorreccionAbierta(false); }, [empresa.empresa_id]);
 
   return (
     <div className={purchasesOnly ? "app purchases-hub-only" : "app"}>
@@ -83,14 +89,14 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
         <div className="sidebar-scroll">
         <nav className="menu">
           {sections.filter((item) => (item !== "Informes" || Boolean(onAbrirInformes)) && (item !== "Contabilidad" || empresa.rol === "owner" || empresa.rol === "admin")).map((item) => (
-            <button key={item} className={section === item ? "menu-item active" : "menu-item"} onClick={() => { if (item === "Informes") { onAbrirInformes?.(); return; } setSection(item); }}>
+            <button key={item} className={section === item ? "menu-item active" : "menu-item"} disabled={correccionAbierta} onClickCapture={(event) => { if (correccionAbierta) { event.preventDefault(); event.stopPropagation(); } }} onClick={() => { if (item === "Informes") { onAbrirInformes?.(); return; } setSection(item); }}>
               <span className="menu-icon">{item === "Ofertas y etiquetas" ? "🏷" : item === "Negocio seguro" ? "🛡" : item.slice(0, 2).toUpperCase()}</span>
               <span>{item === "Compras" ? "Compras / Proveedores" : item}</span>
             </button>
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <button className={section === "Stock vs Inventario" ? "menu-item active" : "menu-item"} onClick={() => setSection("Stock vs Inventario")} style={{width:"100%",marginBottom:12}}>
+          <button className={section === "Stock vs Inventario" ? "menu-item active" : "menu-item"} disabled={correccionAbierta} onClick={() => { if (!correccionAbierta) setSection("Stock vs Inventario"); }} style={{width:"100%",marginBottom:12}}>
             <span className="menu-icon">SI</span><span>Stock vs Inventario</span>
           </button>
           <div className="user-card">
@@ -107,7 +113,7 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
       <main className="main" style={purchasesOnly ? {width:"100%",maxWidth:"100%",margin:0} : undefined}>
         <section className="content">
           {section === "Inicio" && <Inicio empresa={empresa} onProductos={() => setSection("Productos")} onStock={() => setSection("Stock")} onCaja={() => setSection("Ventas")} />}
-          {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
+          {section === "Productos" && <Productos key={empresa.empresa_id} empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} puedeCorregirUnidad={puedeCorregirUnidad} onCorreccionAbierta={setCorreccionAbierta} />}
           {section === "Stock" && <Stock empresaId={empresa.empresa_id} />}
           {section === "Lista de precios" && <ListaPreciosSection empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
           {section === "Ofertas y etiquetas" && <OfertasEtiquetasSection empresaId={empresa.empresa_id} />}
@@ -203,7 +209,7 @@ function Inicio({ empresa, onProductos, onStock, onCaja }: { empresa: EmpresaOpe
   );
 }
 
-function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar: boolean }) {
+function Productos({ empresaId, puedeEditar, puedeCorregirUnidad, onCorreccionAbierta }: { empresaId: string; puedeEditar: boolean; puedeCorregirUnidad: boolean; onCorreccionAbierta: (abierta: boolean) => void }) {
   const [productos, setProductos] = useState<ProductoSigo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -225,6 +231,23 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
   const [eanCodigo, setEanCodigo] = useState("");
   const [productoSugerido,setProductoSugerido]=useState(0);
   const productSearchRef = useRef<HTMLDivElement | null>(null);
+  const [usuarioCorreccionId, setUsuarioCorreccionId] = useState("");
+  useEffect(() => {
+    let vigente = true;
+    let version = 0;
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      version++; if (vigente) setUsuarioCorreccionId(session?.user.id ?? "");
+    });
+    const initialVersion = version;
+    void supabase.auth.getUser().then(({ data, error }) => {
+      if (vigente && version === initialVersion) setUsuarioCorreccionId(error ? "" : data.user?.id ?? "");
+    }).catch(() => { if (vigente && version === initialVersion) setUsuarioCorreccionId(""); });
+    return () => { vigente = false; listener.subscription.unsubscribe(); };
+  }, []);
+  const correccion = useCorreccionUnidadInicial({
+    empresaId, usuarioId: usuarioCorreccionId, permitido: puedeCorregirUnidad, cliente: supabase,
+    storage: () => window.sessionStorage, onUpdated: () => { setScanResult(null); void cargar(); }, onBlocked: onCorreccionAbierta,
+  });
 
   async function cargar() {
     setLoading(true);
@@ -508,6 +531,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
                       {puedeEditar ? (
                         <div className="row-actions">
                           <button className="admin-button" onClick={() => abrirEdicion(p)}>Editar</button>
+                          {puedeCorregirUnidad && usuarioCorreccionId && (unidadesProducto[p.id] === "unidad" || correccion.pendiente(p.id)) && <button type="button" className="admin-button" disabled={Boolean(correccion.controller) || saving || formOpen} onClick={() => correccion.abrir(p.id)}>{correccion.pendiente(p.id) ? "Recuperar corrección pendiente" : "Corregir carga inicial a kg"}</button>}
                           <button className="admin-button" onClick={() => { abrirEdicion(p); setAjusteStock(true); setForm((actual) => ({ ...actual, stockInicial: String(p.stock_actual ?? 0) })); }}>Ajustar stock</button>
                           <button className="admin-button danger-button" disabled={deletingId === p.id} onClick={() => void eliminar(p)}>{deletingId === p.id ? "Dando de baja…" : "Dar de baja"}</button>
                         </div>
@@ -522,6 +546,8 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
         </div>
       )}
 
+      {correccion.error && <p role="alert">{correccion.error}</p>}
+      {correccion.controller && <DialogoCorreccionUnidadInicial controller={correccion.controller} onClose={correccion.cerrar} />}
       {formOpen && puedeEditar && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) cerrarForm(); }}>
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="producto-form-title">

@@ -101,6 +101,8 @@ function mensajeErrorBackend(error: unknown, fallback: string) {
     ? String((error as { message?: unknown }).message ?? "")
     : error instanceof Error ? error.message : String(error ?? "");
 
+  if (original.includes("CORRECTED_PRODUCT_UNIT_REVIEW_REQUIRED")) return "La unidad fue corregida. Actualizá el producto y revisá sus valores antes de guardar. No se guardaron los cambios.";
+  if (original.includes("CORRECTED_PRODUCT_HISTORY_PRESERVE")) return "La unidad corregida debe conservarse para proteger el historial. No se guardaron los cambios.";
   if (original.includes("UNIT_CHANGE_REQUIRES_ZERO_STOCK")) return "No se puede cambiar la unidad mientras el producto tenga stock. No se guardaron los cambios.";
   if (original.includes("UNIT_CHANGE_REQUIRES_HISTORY_REVIEW")) return "No se puede cambiar la unidad de un producto con movimientos. Revisá su historial; no se guardaron los cambios.";
   if (original.includes("PRODUCT_STOCK_INVALID")) return "El stock o sus límites no respetan la precisión de la unidad. Los valores históricos sólo pueden conservarse sin cambiarlos; revisá la cantidad ingresada.";
