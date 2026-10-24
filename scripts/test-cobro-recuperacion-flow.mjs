@@ -295,5 +295,35 @@ for (const unit of ['l', 'm', 'unidad']) {
 globalThis.setTimeout = realSetTimeout; globalThis.clearTimeout = realClearTimeout;
 assert.equal(deadlines.size, 0, 'all deadline timers cleaned up');
 
+// Reference disclosure is read-only, company-scoped and excludes sale/customer data.
+reset(); await mount(); await addWeight(); await keys('F9');
+const referenceAttempt = leerIntentoCobro(E);
+const beforeReference = { calls: state.calls.length, commits: state.commits, prints: state.prints.length, fiscal: state.fiscal.length, storage: sessionStorage.getItem('sigo:intento-cobro:' + E) };
+await click('[data-referencia-cobro] summary');
+const reference = document.querySelector('[data-referencia-cobro]');
+assert.equal(reference.open, true);
+assert.equal(reference.querySelector('[data-referencia-empresa]').textContent, E);
+assert.equal(reference.querySelector('[data-referencia-clave]').textContent, referenceAttempt.payload.idempotencyKey);
+assert.equal(reference.querySelector('[data-referencia-fase]').textContent, 'enviado');
+assert.ok(reference.textContent.includes(referenceAttempt.creadoEn));
+assert.match(reference.textContent, /Versión del registro1/);
+assert.doesNotMatch(reference.textContent, /Producto sintético|p-synthetic|efectivo|Total esperado|cliente_id|huella/);
+assert.deepEqual({ calls: state.calls.length, commits: state.commits, prints: state.prints.length, fiscal: state.fiscal.length, storage: sessionStorage.getItem('sigo:intento-cobro:' + E) }, beforeReference);
+await rerender(OTHER);
+assert.equal(document.querySelector('[data-referencia-cobro]'), null);
+assert.ok(!document.body.textContent.includes(referenceAttempt.payload.idempotencyKey));
+await rerender(E);
+assert.equal(document.querySelector('[data-referencia-cobro]').open, false);
+assert.equal(state.calls.length, beforeReference.calls);
+await unmount();
+const legacyReference = leerIntentoCobro(E); delete legacyReference.fase;
+sessionStorage.setItem('sigo:intento-cobro:' + E, JSON.stringify(legacyReference));
+await mount(); await click('[data-referencia-cobro] summary');
+assert.equal(document.querySelector('[data-referencia-fase]').textContent, 'desconocida');
+assert.equal(state.calls.length, beforeReference.calls);
+assert.equal(state.prints.length + state.fiscal.length, 0);
+await unmount();
+console.log('PASS: read-only payment reference exposes only allowed metadata, no RPC/print/fiscal/storage mutation; company switch hides it and legacy phase is unknown');
+
 dom.window.close();
 console.log('All synthetic recovery checks passed. Browser/physical-printer QA is intentionally not claimed.');

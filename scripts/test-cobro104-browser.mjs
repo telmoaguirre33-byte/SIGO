@@ -85,7 +85,20 @@ try {
       await start();await add();await page.locator('.sigo-pos-action.cobrar').evaluate(el=>{el.click();el.click();});await page.waitForFunction(()=>__qa.calls.length===1);await page.waitForFunction(()=>!document.querySelector('[data-recuperar-cobro]').disabled);
       for(const key of ['F9','F10','F11','F12'])await page.keyboard.press(key);
       const before=await snapshot();assert.equal(before.calls.length,1);assert.equal(before.rows.length,1);assert.equal(before.prints.length+before.fiscal.length,0);
-      assert.equal((await attempt()).estado,'pendiente');await page.screenshot({path:path.join(artifacts,`${mobile?'mobile':'desktop'}-pending.png`),fullPage:true});await recover();
+      const pending=await attempt();
+      assert.equal(pending.estado,'pendiente');
+      const reference=page.locator('details[data-referencia-cobro]');
+      await reference.locator('summary').click();
+      assert.equal(await reference.getAttribute('open'),'');
+      const referenceText=await reference.innerText();
+      assert.deepEqual(await reference.locator('dd').allTextContents(),[E,pending.payload.idempotencyKey,pending.fase,pending.creadoEn,String(pending.version)],'Reference exposes only company, original key, phase, creation time and record version');
+      assert.ok(referenceText.includes(E),'Reference must identify the original company');
+      assert.ok(referenceText.includes(pending.payload.idempotencyKey),'Reference must show the original idempotency key');
+      assert.doesNotMatch(referenceText,/Sintetico|p-kg|efectivo|medioPago|clienteId|precio|subtotal|totalEsperado|payload|huella/i,'Technical reference must not expose commercial fields or the full saved payload');
+      assert.equal(await reference.locator('input,textarea,button,a').count(),0,'Reference must be read-only, without mutation or external-sharing controls');
+      assert.deepEqual(await attempt(),pending,'Opening reference must not change persisted intent');
+      assert.deepEqual(await snapshot(),before,'Opening reference must not trigger RPC, writes, printing or fiscal output');
+      await page.screenshot({path:path.join(artifacts,`${mobile?'mobile':'desktop'}-pending.png`),fullPage:true});await recover();
       const after=await snapshot();assert.equal(after.rows.length,1);assert.deepEqual(after.calls[1],before.calls[0]);assert.equal(after.prints.length+after.fiscal.length,0);
       await page.keyboard.press('F12');await page.waitForFunction(()=>__qa.prints.length===1);await page.keyboard.press('F11');await page.waitForFunction(()=>__qa.fiscal.length===1);const explicit=await snapshot();assert.equal(explicit.calls.length,2);assert.equal(explicit.fiscal[0].name,'sigo:arca:venta');assert.equal(explicit.fiscal[0].detail.empresaId,E);assert.equal(explicit.fiscal[0].detail.ventaId,after.rows[0].id);
     });
@@ -110,10 +123,13 @@ try {
       await add();
       await page.keyboard.press('F10');
       await page.waitForFunction(()=>__qa.pending.length===1);
+      const previousKey=(await attempt()).payload.idempotencyKey;
       await page.evaluate(e=>__qa.render(e),OTHER);
       // The company effect clears the old cart and intent, but the shared busy
       // guard intentionally keeps the scanner hidden until the request settles.
       await page.waitForFunction(()=>document.querySelectorAll('.sigo-pos-cart tbody tr').length===0&&!document.querySelector('[data-recuperar-cobro]'));
+      assert.equal(await page.locator('details[data-referencia-cobro]').count(),0,'Reference from the previous company must disappear');
+      assert.ok(!(await page.locator('body').innerText()).includes(previousKey),'Old company key must not leak into the new company UI');
       assert.equal(await page.locator('.barcode-entry-row input').count(),0);
       assert.equal(await page.evaluate(e=>sessionStorage.getItem('sigo:intento-cobro:'+e),OTHER),null);
       await page.evaluate(()=>__qa.pending[0].resolve());

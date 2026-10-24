@@ -74,6 +74,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   const [descuentoAbierto,setDescuentoAbierto]=useState(false);
   const [intentoPendiente, setIntentoPendiente] = useState<IntentoCobro | null>(null);
   const [errorPersistenciaCobro, setErrorPersistenciaCobro] = useState("");
+  const intentoVisible = intentoPendiente?.payload.empresaId === empresaId ? intentoPendiente : null;
   const cajaBloqueada = confirmando || Boolean(intentoPendiente) || Boolean(errorPersistenciaCobro);
   const confirmacionEnCursoRef = useRef(false);
   const montadoRef = useRef(false);
@@ -486,6 +487,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
           const actualizado: IntentoCobro = { ...intento!, fase: "enviado" };
           guardarIntentoCobro(actualizado);
           intento = actualizado;
+          if (montadoRef.current && empresaActivaRef.current === empresaConfirmacion) setIntentoPendiente(actualizado);
         },
       });
       // Tener UUID confirma la escritura aunque falle la conciliación posterior.
@@ -635,11 +637,22 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         onConfirmar={(cantidad) => { agregarCantidad(productoPorMedida, cantidad, reemplazandoCantidad); setProductoPorMedida(null); }}
         onCancelar={() => { setProductoPorMedida(null); window.setTimeout(() => buscarRef.current?.focus(), 0); }}
       />}
-      {(intentoPendiente || errorPersistenciaCobro) && <div className="form-error" role="alert" data-cobro-pendiente="">
-        {intentoPendiente ? <>
+      {(intentoVisible || errorPersistenciaCobro) && <div className="form-error" role="alert" data-cobro-pendiente="">
+        {intentoVisible ? <>
           <strong>Hay un cobro pendiente de verificar.</strong>
           <p>No armes ni cobres otra venta. Recuperar completa o reconcilia el mismo cobro con su clave original, sin crear un segundo cobro. No imprime ni emite una factura automáticamente.</p>
-          <p>{intentoPendiente.payload.items.length} renglón(es) · {etiquetaMedio(intentoPendiente.payload.medioPago)} · Total esperado $ {intentoPendiente.totalEsperado.toLocaleString("es-AR")}.</p>
+          <p>{intentoVisible.payload.items.length} renglón(es) · {etiquetaMedio(intentoVisible.payload.medioPago)} · Total esperado $ {intentoVisible.totalEsperado.toLocaleString("es-AR")}.</p>
+          <details key={`${empresaId}:${intentoVisible.payload.idempotencyKey}`} data-referencia-cobro="">
+            <summary>Ver referencia del cobro</summary>
+            <dl style={{ overflowWrap: "anywhere" }}>
+              <dt>Empresa</dt><dd data-referencia-empresa="">{intentoVisible.payload.empresaId}</dd>
+              <dt>Clave del cobro</dt><dd data-referencia-clave="">{intentoVisible.payload.idempotencyKey}</dd>
+              <dt>Fase observada en este navegador</dt><dd data-referencia-fase="">{intentoVisible.fase ?? "desconocida"}</dd>
+              <dt>Creado</dt><dd>{intentoVisible.creadoEn}</dd>
+              <dt>Versión del registro</dt><dd>{intentoVisible.version}</dd>
+            </dl>
+            <p>Referencia de esta sesión y empresa. La fase registrada no confirma el resultado del cobro. Este registro no identifica al usuario que lo inició.</p>
+          </details>
           <button type="button" data-recuperar-cobro="" disabled={confirmando || Boolean(errorPersistenciaCobro)} onClick={() => void confirmar(false, false, true)}>{confirmando ? "Verificando el mismo cobro…" : "Recuperar el mismo cobro"}</button>
         </> : errorPersistenciaCobro}
       </div>}
