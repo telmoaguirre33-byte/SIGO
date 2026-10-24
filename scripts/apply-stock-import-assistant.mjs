@@ -10,8 +10,9 @@ if (!app.includes(importLine)) {
   app = app.replace(importAnchor, `${importAnchor}\n${importLine}`);
 }
 
-const renderOld = '          {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}';
-const renderNew = '          {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} puedeImportar={can(empresa.rol, "products.write") && can(empresa.rol, "stock.write") && (can(empresa.rol, "sales.write") || can(empresa.rol, "price_lists.read"))} />}';
+const productKey = app.includes("<Productos key={empresa.empresa_id}") ? " key={empresa.empresa_id}" : "";
+const renderOld = `          {section === "Productos" && <Productos${productKey} empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}`;
+const renderNew = `          {section === "Productos" && <Productos${productKey} empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} puedeImportar={can(empresa.rol, "products.write") && can(empresa.rol, "stock.write") && (can(empresa.rol, "sales.write") || can(empresa.rol, "price_lists.read"))} />}`;
 if (!app.includes(renderNew)) {
   if (!app.includes(renderOld)) throw new Error("No se encontró el render de Productos para habilitar importación segura");
   app = app.replace(renderOld, renderNew);

@@ -1,4 +1,5 @@
 import Contabilidad from "./Contabilidad";
+import { motivoBloqueoBaja } from "./bajaProducto";
 import { cantidadEscaladaMedida, formatoStockMedida, pasoCantidadMedida, UNIDADES_VENTA, type UnidadVenta } from "./ventaPorMedidas";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { EmpresaOperativa } from "./tenant";
@@ -107,7 +108,7 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
       <main className="main" style={purchasesOnly ? {width:"100%",maxWidth:"100%",margin:0} : undefined}>
         <section className="content">
           {section === "Inicio" && <Inicio empresa={empresa} onProductos={() => setSection("Productos")} onStock={() => setSection("Stock")} onCaja={() => setSection("Ventas")} />}
-          {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
+          {section === "Productos" && <Productos key={empresa.empresa_id} empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
           {section === "Stock" && <Stock empresaId={empresa.empresa_id} />}
           {section === "Lista de precios" && <ListaPreciosSection empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
           {section === "Ofertas y etiquetas" && <OfertasEtiquetasSection empresaId={empresa.empresa_id} />}
@@ -209,6 +210,9 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const bajaEnCursoRef = useRef(false);
+  const [bajaError, setBajaError] = useState("");
+  const [bajaExito, setBajaExito] = useState("");
   const [editing, setEditing] = useState<ProductoSigo | null>(null);
   const [form, setForm] = useState<ProductoForm>(productoVacio);
   const [unidadesProducto, setUnidadesProducto] = useState<Record<string, UnidadVenta | null>>({});
@@ -403,15 +407,24 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
   }
 
   async function eliminar(producto: ProductoSigo) {
-    if (!puedeEditar) return;
-    if (!window.confirm(`¿Dar de baja ${producto.nombre}? No se borrarán ventas, compras ni históricos y sólo se permitirá si el stock está en cero.`)) return;
+    if (!puedeEditar || bajaEnCursoRef.current) return;
+    setBajaError("");
+    setBajaExito("");
+    const bloqueo = motivoBloqueoBaja(producto);
+    if (bloqueo) { setBajaError(bloqueo); return; }
+    if (!window.confirm(`¿Dar de baja ${producto.nombre}? No se borrarán ventas, compras ni históricos. El servidor verificará nuevamente que su stock sea cero.`)) return;
+    bajaEnCursoRef.current = true;
     setDeletingId(producto.id);
     try {
       await eliminarProductoSigo(empresaId, producto.id);
+      // Sólo retirar del catálogo tras verificar la baja persistida. No tocar stock ni históricos.
+      setProductos((actual) => actual.filter((p) => p.id !== producto.id));
+      setBajaExito(`${producto.nombre}: baja verificada. Ya no está disponible para nuevas ventas; su historial se conserva.`);
       await cargar();
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "No se pudo dar de baja el producto");
+      setBajaError(`${producto.nombre}: ${err instanceof Error ? err.message : "No se pudo dar de baja el producto"}`);
     } finally {
+      bajaEnCursoRef.current = false;
       setDeletingId(null);
     }
   }
@@ -428,6 +441,9 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
           {puedeEditar ? <button className="primary-button" onClick={abrirNuevo}>Nuevo producto</button> : <span>Modo solo lectura</span>}
         </div>
       </div>
+
+      {bajaError && <div role="alert" className="error-message">{bajaError}</div>}
+      {bajaExito && <div role="status">{bajaExito}</div>}
 
       {eanHabilitado && (
         <div className="panel" style={{ border: "2px solid #2563eb" }}>
@@ -509,7 +525,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
                         <div className="row-actions">
                           <button className="admin-button" onClick={() => abrirEdicion(p)}>Editar</button>
                           <button className="admin-button" onClick={() => { abrirEdicion(p); setAjusteStock(true); setForm((actual) => ({ ...actual, stockInicial: String(p.stock_actual ?? 0) })); }}>Ajustar stock</button>
-                          <button className="admin-button danger-button" disabled={deletingId === p.id} onClick={() => void eliminar(p)}>{deletingId === p.id ? "Dando de baja…" : "Dar de baja"}</button>
+                          <button className="admin-button danger-button" disabled={deletingId !== null} onClick={() => void eliminar(p)}>{deletingId === p.id ? "Dando de baja…" : "Dar de baja"}</button>
                         </div>
                       ) : "Solo lectura"}
                     </td>

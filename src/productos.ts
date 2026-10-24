@@ -108,7 +108,7 @@ function mensajeErrorBackend(error: unknown, fallback: string) {
   if (original.includes("PRODUCT_UNIT_INVALID") || original.includes("UNIDAD_INVALIDA") || original.includes("UNIT_INVALID")) return "La unidad del producto no es válida. Revisala antes de vender.";
   if (original.includes("guardar_producto_medida_sigo") && (original.includes("Could not find") || original.includes("does not exist"))) return "La base de datos todavía no tiene habilitado el guardado seguro por unidad. No se guardó el producto.";
   if (original.includes("PRODUCT_HAS_STOCK")) {
-    return "No se puede dar de baja el producto mientras tenga stock. Dejá el stock en cero mediante el circuito operativo antes de desactivarlo.";
+    return "No se puede dar de baja el producto mientras tenga stock. El producto sigue activo. Si hubo un error de carga, revisá esa carga y su unidad antes de corregirla; no borres existencias sólo para ocultarlo.";
   }
   if (original.includes("BARCODE_DUPLICATE_IN_COMPANY")) {
     return "Ese código de barras ya está asignado a otro producto de esta empresa.";
@@ -305,11 +305,28 @@ export async function eliminarProductoSigo(empresaId: string, productoId: string
   if (!empresaId) throw new Error("EMPRESA_REQUIRED");
   if (!productoId) throw new Error("PRODUCT_REQUIRED");
 
-  const { data, error } = await supabase.rpc("eliminar_producto_sigo", {
-    p_empresa_id: empresaId,
-    p_producto_id: productoId,
-  });
-
+  let respuesta;
+  try {
+    respuesta = await supabase.rpc("eliminar_producto_sigo", {
+      p_empresa_id: empresaId,
+      p_producto_id: productoId,
+    });
+  } catch {
+    throw new Error("Se perdió la respuesta de la baja y no se pudo confirmar el resultado. Actualizá el catálogo antes de repetir la operación.");
+  }
+  const { data, error } = respuesta;
   if (error) throw new Error(mensajeErrorBackend(error, "No se pudo dar de baja el producto."));
-  if (data !== true) throw new Error("PRODUCT_DEACTIVATE_FAILED");
+  if (data !== true) throw new Error("La baja no fue confirmada por el servidor. Actualizá el catálogo antes de volver a intentarlo.");
+  // Un true no prueba por sí solo que el UPDATE haya afectado la fila correcta.
+  // La ausencia bajo RLS tampoco acredita una baja: se exige leer activo=false.
+  try {
+    const { data: producto, error: verificacionError } = await supabase
+      .from("productos").select("id,empresa_id,activo")
+      .eq("empresa_id", empresaId).eq("id", productoId).maybeSingle();
+    if (verificacionError || !producto || producto.id !== productoId || producto.empresa_id !== empresaId || producto.activo !== false) {
+      throw new Error("Estado no verificado");
+    }
+  } catch {
+    throw new Error("El servidor respondió, pero no se pudo verificar la baja. No se confirmó el resultado: actualizá el catálogo antes de repetir la operación.");
+  }
 }
