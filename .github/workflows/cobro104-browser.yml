@@ -16,6 +16,8 @@ jobs:
           node-version: 24
       - run: npm ci --no-audit --no-fund
       - run: npm run build
+      - name: Real SDK delayed session and response body with synthetic transport
+        run: node --experimental-strip-types scripts/test-cobro104-sdk.mjs
       - run: npx playwright install --with-deps chromium
       - name: Real Chromium desktop and emulated mobile, synthetic service boundaries only
         run: node scripts/test-cobro104-browser.mjs

@@ -106,7 +106,29 @@ try {
       await page.clock.fastForward(120_000);await page.clock.resume();assert.ok((await snapshot()).signals.some(x=>x.kind==='rpc'&&x.aborted));await recover();const saved=await attempt();await page.evaluate(l=>__qa.pending[0][l](),late);await page.waitForTimeout(100);const s=await snapshot();assert.equal(s.rows.length,1);assert.deepEqual(await attempt(),saved);assert.equal(s.fiscal.length+s.prints.length,0);assert.deepEqual(s.calls[0],s.calls[1]);
     });
     await check('switch company during unresolved charge never applies old result or output to new tenant',async()=>{
-      await start('hang');await add();await page.keyboard.press('F10');await page.waitForFunction(()=>__qa.pending.length===1);await page.evaluate(e=>__qa.render(e),OTHER);await page.locator('.barcode-entry-row input').waitFor();await page.evaluate(()=>__qa.pending[0].resolve());await page.waitForTimeout(100);const s=await snapshot();assert.equal(s.rows.length,1);assert.equal(s.prints.length+s.fiscal.length,0);assert.equal(await page.evaluate(e=>sessionStorage.getItem('sigo:intento-cobro:'+e),OTHER),null);await page.evaluate(e=>__qa.render(e),E);await page.waitForFunction(()=>!document.querySelector('[data-recuperar-cobro]'));await page.keyboard.press('F12');await page.waitForFunction(()=>__qa.prints.length===1);assert.equal((await snapshot()).prints[0][0],E);
+      await start('hang');
+      await add();
+      await page.keyboard.press('F10');
+      await page.waitForFunction(()=>__qa.pending.length===1);
+      await page.evaluate(e=>__qa.render(e),OTHER);
+      // The company effect clears the old cart and intent, but the shared busy
+      // guard intentionally keeps the scanner hidden until the request settles.
+      await page.waitForFunction(()=>document.querySelectorAll('.sigo-pos-cart tbody tr').length===0&&!document.querySelector('[data-recuperar-cobro]'));
+      assert.equal(await page.locator('.barcode-entry-row input').count(),0);
+      assert.equal(await page.evaluate(e=>sessionStorage.getItem('sigo:intento-cobro:'+e),OTHER),null);
+      await page.evaluate(()=>__qa.pending[0].resolve());
+      await page.locator('.barcode-entry-row input').waitFor();
+      const s=await snapshot();
+      assert.equal(s.rows.length,1);
+      assert.equal(s.prints.length+s.fiscal.length,0);
+      assert.equal(await page.evaluate(e=>sessionStorage.getItem('sigo:intento-cobro:'+e),OTHER),null);
+      assert.equal(await page.locator('.sigo-pos-action.reprint').isDisabled(),true);
+      await page.evaluate(e=>__qa.render(e),E);
+      // Wait for the original company's confirmed UUID to reach the rendered UI.
+      await page.waitForFunction(()=>!document.querySelector('.sigo-pos-action.reprint').disabled);
+      await page.keyboard.press('F12');
+      await page.waitForFunction(()=>__qa.prints.length===1);
+      assert.equal((await snapshot()).prints[0][0],E);
     });
     assert.deepEqual((await snapshot()).blocked,[]);await page.screenshot({path:path.join(artifacts,`${mobile?'mobile':'desktop'}-recovered.png`),fullPage:true});await context.close();
   }
