@@ -15,7 +15,7 @@ const E = '11111111-1111-4111-8111-111111111111';
 const OTHER = '33333333-3333-4333-8333-333333333333';
 const origin = 'https://sigo-cobro104-qa.invalid/';
 const mocks = {
-  './supabase': 'export const supabase={auth:{onAuthStateChange(cb){cb("INITIAL_SESSION",{user:{id:"browser-synthetic-user"}});return {data:{subscription:{unsubscribe(){}}}}},from:t=>window.__qa.query(t),rpc:(...a)=>{const p=window.__qa.rpc(...a);p.abortSignal=signal=>{window.__qa.signals.push({kind:"rpc",signal});return p};return p}};',
+  './supabase': 'export const supabase={auth:{onAuthStateChange(cb){cb("INITIAL_SESSION",{user:{id:"browser-synthetic-user"}});return {data:{subscription:{unsubscribe(){}}}};}},from:t=>window.__qa.query(t),rpc:(...a)=>{const p=window.__qa.rpc(...a);p.abortSignal=signal=>{window.__qa.signals.push({kind:"rpc",signal});return p};return p}};',
   './ticketVenta': 'export const imprimirTicketVenta=async(...a)=>window.__qa.prints.push(a);',
   './clientes': 'export const listarClientesSigo=async()=>[];',
   './productos': 'export const listarProductosSigo=async(e,signal)=>{if(signal){window.__qa.signals.push({kind:"stock",signal});if(window.__qa.mode==="stock"){window.__qa.mode="ok";return new Promise(resolve=>window.__qa.pending.push({resolve:()=>resolve(window.__qa.products(e))}));}}return window.__qa.products(e)};export const listarUnidadesProductoSigo=async(e)=>Object.fromEntries(window.__qa.products(e).map(p=>[p.id,p.unidad_medida]));export const guardarProductoSigo=async()=>{throw new Error("Product writes prohibited")};',
