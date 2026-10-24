@@ -17,7 +17,7 @@ const { createRoot } = await import('react-dom/client');
 const E = '11111111-1111-4111-8111-111111111111';
 const OTHER = '33333333-3333-4333-8333-333333333333';
 const V = '22222222-2222-4222-8222-222222222222';
-const product = empresa => ({ id: 'p-synthetic', empresa_id: empresa, nombre: 'Producto sintético', codigo_interno: 'SYNTHETIC', codigo_barras: 'SYNTHETIC', precio_venta: 20, stock_actual: 50, activo: true, unidad_medida: 'kg' });
+const product = empresa => ({ id: 'p-synthetic', empresa_id: empresa, nombre: 'Producto sintético', codigo_interno: 'SYNTHETIC', codigo_barras: 'SYNTHETIC', precio_venta: 20, stock_actual: 50, activo: true, unidad_medida: state?.unit ?? 'kg' });
 let state;
 const stateKey = (empresa, key) => `${empresa}:${key}`;
 function reset(extra = {}) {
@@ -25,15 +25,19 @@ function reset(extra = {}) {
   state = { calls: [], committed: new Map(), commits: 0, prints: [], fiscal: [], reject: null, loseResponse: true, verificationFail: false, beforeResponse: null, ...extra };
   globalThis.__cobro = {
     products: empresa => [{ ...product(empresa), stock_actual: 50 - [...state.committed.values()].filter(r => r.empresa_id === empresa).reduce((s, r) => s + r.items[0].cantidad, 0) }],
+    readProducts: async (empresa, signal) => { if (signal) state.signals?.push(signal); if (signal && state.stockWait) await state.stockWait; return structuredClone(globalThis.__cobro.products(empresa)); },
     query,
     rpc,
+    signal: s => state.signals?.push(s),
     print: (...a) => state.prints.push(a),
   };
 }
 function query(table) {
   const filters = {}; let single = false;
   const q = new Proxy({}, { get(_t, name) {
-    if (name === 'then') return (resolve, reject) => Promise.resolve().then(() => {
+    if (name === 'then') return (resolve, reject) => Promise.resolve().then(async () => {
+      if (filters.idempotency_key && state.preflightWait) await state.preflightWait;
+      if (single && state.readbackWait) await state.readbackWait;
       if (state.verificationFail && (single || table !== 'ventas_sigo')) throw new Error('Synthetic reconciliation read failed');
       const rows = [...state.committed.values()].filter(r => r.empresa_id === filters.empresa_id);
       let data = [];
@@ -41,9 +45,10 @@ function query(table) {
       else if (table === 'venta_items_sigo') data = rows.filter(r => r.id === filters.venta_id).flatMap(r => r.items);
       else if (table === 'caja_movimientos_sigo') data = rows.map(r => ({ venta_id: r.id, medio_pago: r.medio_pago, importe: r.total }));
       else if (table !== 'cliente_movimientos_sigo') throw new Error(`Unexpected mocked table: ${table}`);
+      if (state.hidePreflight && filters.idempotency_key) data = [];
       return { data: single ? data[0] ?? null : data, error: null };
     }).then(resolve, reject);
-    return (...a) => { if (name === 'eq') filters[a[0]] = a[1]; if (name === 'single' || name === 'maybeSingle') single = true; return q; };
+    return (...a) => { if (name === 'abortSignal') state.signals?.push(a[0]); if (name === 'eq') filters[a[0]] = a[1]; if (name === 'single' || name === 'maybeSingle') single = true; return q; };
   } });
   return q;
 }
@@ -69,11 +74,11 @@ async function rpc(name, payload) {
 }
 for (const eventName of ['sigo:arca:venta', 'sigo:fiscal:caja']) window.addEventListener(eventName, event => state.fiscal.push({ eventName, detail: event.detail }));
 const mocks = {
-  './supabase': 'export const supabase={from:(t)=>globalThis.__cobro.query(t),rpc:(...a)=>globalThis.__cobro.rpc(...a)};',
+  './supabase': 'export const supabase={from:(t)=>globalThis.__cobro.query(t),rpc:(...a)=>{const q={abortSignal:(s)=>{globalThis.__cobro.signal?.(s);return q},then:(r,j)=>Promise.resolve().then(()=>globalThis.__cobro.rpc(...a)).then(r,j)};return q}};',
   './ticketVenta': 'export const imprimirTicketVenta=async(...a)=>globalThis.__cobro.print(...a);',
   './BarcodeScanner': 'import React from "react";export default function Scanner(p){return React.createElement("button",{id:"synthetic-add",onClick:()=>p.onProduct(globalThis.__cobro.products(p.empresaId)[0])},"Add synthetic");}',
   './clientes': 'export const listarClientesSigo=async()=>[];',
-  './productos': 'export const listarProductosSigo=async(e)=>structuredClone(globalThis.__cobro.products(e));export const listarUnidadesProductoSigo=async(e)=>Object.fromEntries(globalThis.__cobro.products(e).map(p=>[p.id,p.unidad_medida]));export const guardarProductoSigo=async()=>{throw new Error("Product write forbidden")};',
+  './productos': 'export const listarProductosSigo=async(e,s)=>globalThis.__cobro.readProducts(e,s);export const listarUnidadesProductoSigo=async(e)=>Object.fromEntries(globalThis.__cobro.products(e).map(p=>[p.id,p.unidad_medida]));export const guardarProductoSigo=async()=>{throw new Error("Product write forbidden")};',
   './ofertasProductos': 'export const listarOfertasProductos=async()=>[];export const ofertaVigente=()=>null;',
 };
 await build({ stdin: { contents: 'export { default as POS } from "./src/VentaRapidaOperativa";export * from "./src/intentoCobro";', resolveDir: process.cwd(), loader: 'tsx' }, outfile: '.test-build/cobro-recuperacion-flow.mjs', bundle: true, platform: 'node', format: 'esm', jsx: 'automatic', external: ['react', 'react-dom', 'react/jsx-runtime'], plugins: [{ name: 'synthetic-services', setup(b) { b.onResolve({ filter: /^\.\// }, a => mocks[a.path] ? { path: a.path, namespace: 'synthetic' } : null); b.onLoad({ filter: /.*/, namespace: 'synthetic' }, a => ({ contents: mocks[a.path], resolveDir: process.cwd() })); } }] });
@@ -175,6 +180,150 @@ for (const shortcut of ['F10', 'F11']) {
   await keys('F12'); assert.deepEqual(state.prints, [[E, V, '80', true]]); assert.equal(state.fiscal.length, 0); await unmount();
   console.log(`PASS: late ${shortcut} result after navigation persists UUID but never emits/prints from an unmounted POS`);
 }
+
+// Control only operation deadlines; React/JSDOM timers and normal settling remain real.
+const realSetTimeout = globalThis.setTimeout;
+const realClearTimeout = globalThis.clearTimeout;
+const deadlines = new Map();
+let deadlineId = 1000000;
+globalThis.setTimeout = (fn, ms, ...args) => {
+  if (ms === 12000 || ms === 25000) { const id = ++deadlineId; deadlines.set(id, { fn, ms }); return id; }
+  return realSetTimeout(fn, ms, ...args);
+};
+globalThis.clearTimeout = id => { if (!deadlines.delete(id)) realClearTimeout(id); };
+async function expire(ms) {
+  const entry = [...deadlines].find(([, timer]) => timer.ms === ms);
+  assert.ok(entry, `An active ${ms}ms deadline must exist`);
+  deadlines.delete(entry[0]);
+  await act(async () => entry[1].fn());
+  await settle();
+}
+for (const field of ['preflightWait', 'stockWait']) {
+  reset({ loseResponse: false, signals: [] });
+  let release;
+  await mount(); await addWeight();
+  state[field] = new Promise(r => { release = r; });
+  await keys('F9', 'F9');
+  const original = leerIntentoCobro(E);
+  assert.equal(original.fase, 'preparacion'); assert.equal(state.calls.length, 0);
+  await expire(12000);
+  assert.ok(state.signals.some(s => s.aborted), 'preflight request signal aborted');
+  assert.equal(leerIntentoCobro(E).estado, 'pendiente');
+  assert.match(document.body.textContent, /La preparación del cobro no pudo completarse/);
+  assert.equal(document.querySelector('[data-recuperar-cobro]').disabled, false);
+  release(); await settle();
+  assert.equal(state.calls.length, 0, 'late preflight cannot start an invisible RPC');
+  assert.equal(leerIntentoCobro(E).fase, 'preparacion');
+  state[field] = null;
+  await unmount(); await mount(); await click('[data-recuperar-cobro]', 3);
+  assert.equal(state.calls.length, 1); assert.equal(state.commits, 1);
+  assert.equal(state.calls[0].p_idempotency_key, original.payload.idempotencyKey);
+  assert.equal(state.calls[0].p_items[0].cantidad, .75);
+  assert.equal(state.prints.length, 0); assert.equal(state.fiscal.length, 0);
+  await unmount();
+  console.log(`PASS: ${field} deadline aborts and releases UI; late completion cannot charge; reload recovers same key/snapshot`);
+}
+for (const shortcut of ['F9', 'F10', 'F11']) {
+  reset({ loseResponse: false, signals: [] }); let release;
+  state.beforeResponse = new Promise(r => { release = r; });
+  await mount(); await addWeight(); await keys(shortcut, shortcut);
+  assert.equal(state.commits, 1); assert.equal(leerIntentoCobro(E).fase, 'enviado');
+  const original = structuredClone(state.calls[0]);
+  await expire(25000);
+  assert.ok(state.signals.some(s => s.aborted), 'RPC signal aborted');
+  assert.equal(leerIntentoCobro(E).estado, 'pendiente');
+  assert.match(document.body.textContent, /resultado del cobro no está verificado/i);
+  assert.throws(() => guardarIntentoCobro({ ...leerIntentoCobro(E), fase: 'preparacion' }), /resultado previo/);
+  await keys('F9', 'F10', 'F11', 'F12'); assert.equal(state.calls.length, 1);
+  release(); await settle();
+  assert.equal(leerIntentoCobro(E).estado, 'pendiente', 'late UUID cannot mutate timed-out state');
+  assert.equal(state.prints.length, 0); assert.equal(state.fiscal.length, 0);
+  state.beforeResponse = null;
+  // Empty readback and a rollback of the retry do not disprove the prior commit.
+  state.hidePreflight = true;
+  state.reject = { code: 'P0001', message: 'INSUFFICIENT_STOCK' };
+  await click('[data-recuperar-cobro]');
+  assert.equal(leerIntentoCobro(E).estado, 'pendiente');
+  state.reject = null;
+  await click('[data-recuperar-cobro]', 2);
+  assert.equal(state.commits, 1); assert.deepEqual(state.calls.at(-1), original);
+  assert.equal(leerIntentoCobro(E).estado, 'confirmado');
+  assert.equal(state.prints.length, 0); assert.equal(state.fiscal.length, 0);
+  await unmount();
+  console.log(`PASS: ${shortcut} post-commit deadline keeps uncertainty; late response inert; rollback cannot clear prior attempt; same-key recovery commits once`);
+}
+// A previous client version may have sent a record still labelled preparacion.
+reset(); await mount(); await addWeight(); await keys('F9'); await unmount();
+const mixedVersion = leerIntentoCobro(E);
+mixedVersion.fase = 'preparacion';
+sessionStorage.setItem('sigo:intento-cobro:' + E, JSON.stringify(mixedVersion));
+let releaseMixed;
+state.preflightWait = new Promise(r => { releaseMixed = r; });
+await mount(); await click('[data-recuperar-cobro]'); await expire(12000);
+assert.match(document.body.textContent, /resultado del cobro no está verificado/i);
+assert.doesNotMatch(document.body.textContent, /No se llegó a enviar/);
+assert.equal(leerIntentoCobro(E).estado, 'pendiente');
+assert.equal(state.commits, 1);
+releaseMixed(); await settle(); state.preflightWait = null;
+await click('[data-recuperar-cobro]');
+assert.equal(state.commits, 1); assert.equal(leerIntentoCobro(E).estado, 'confirmado');
+await unmount();
+console.log('PASS: mixed-version preparacion record never asserts that an older uncertain attempt was not sent');
+
+reset({ loseResponse: false, signals: [] }); let releaseReadback;
+state.readbackWait = new Promise(r => { releaseReadback = r; });
+await mount(); await addWeight(); await keys('F9');
+assert.equal(leerIntentoCobro(E).estado, 'confirmado');
+await expire(12000); assert.match(document.body.textContent, /conciliación automática no pudo verificarse/);
+releaseReadback(); await settle(); assert.equal(leerIntentoCobro(E).estado, 'confirmado');
+await unmount();
+console.log('PASS: confirmed UUID is durable while readback hangs; reconciliation deadline does not undo the charge');
+for (const unit of ['l', 'm', 'unidad']) {
+  reset({ unit }); await mount();
+  if (unit === 'unidad') await click('#synthetic-add'); else await addWeight('0.75');
+  await keys('F9');
+  assert.equal(leerIntentoCobro(E).estado, 'pendiente');
+  const original = structuredClone(state.calls[0]);
+  await click('[data-recuperar-cobro]', 2);
+  assert.deepEqual(state.calls[1], original);
+  assert.equal(original.p_items[0].unidad_medida, unit);
+  assert.equal(original.p_items[0].cantidad, unit === 'unidad' ? 1 : .75);
+  assert.equal(state.commits, 1); assert.equal(state.prints.length + state.fiscal.length, 0);
+  await unmount();
+  console.log(`PASS: ${unit} exact base units and original key survive lost response and explicit recovery`);
+}
+globalThis.setTimeout = realSetTimeout; globalThis.clearTimeout = realClearTimeout;
+assert.equal(deadlines.size, 0, 'all deadline timers cleaned up');
+
+// Reference disclosure is read-only, company-scoped and excludes sale/customer data.
+reset(); await mount(); await addWeight(); await keys('F9');
+const referenceAttempt = leerIntentoCobro(E);
+const beforeReference = { calls: state.calls.length, commits: state.commits, prints: state.prints.length, fiscal: state.fiscal.length, storage: sessionStorage.getItem('sigo:intento-cobro:' + E) };
+await click('[data-referencia-cobro] summary');
+const reference = document.querySelector('[data-referencia-cobro]');
+assert.equal(reference.open, true);
+assert.equal(reference.querySelector('[data-referencia-empresa]').textContent, E);
+assert.equal(reference.querySelector('[data-referencia-clave]').textContent, referenceAttempt.payload.idempotencyKey);
+assert.equal(reference.querySelector('[data-referencia-fase]').textContent, 'enviado');
+assert.ok(reference.textContent.includes(referenceAttempt.creadoEn));
+assert.match(reference.textContent, /Versión del registro1/);
+assert.doesNotMatch(reference.textContent, /Producto sintético|p-synthetic|efectivo|Total esperado|cliente_id|huella/);
+assert.deepEqual({ calls: state.calls.length, commits: state.commits, prints: state.prints.length, fiscal: state.fiscal.length, storage: sessionStorage.getItem('sigo:intento-cobro:' + E) }, beforeReference);
+await rerender(OTHER);
+assert.equal(document.querySelector('[data-referencia-cobro]'), null);
+assert.ok(!document.body.textContent.includes(referenceAttempt.payload.idempotencyKey));
+await rerender(E);
+assert.equal(document.querySelector('[data-referencia-cobro]').open, false);
+assert.equal(state.calls.length, beforeReference.calls);
+await unmount();
+const legacyReference = leerIntentoCobro(E); delete legacyReference.fase;
+sessionStorage.setItem('sigo:intento-cobro:' + E, JSON.stringify(legacyReference));
+await mount(); await click('[data-referencia-cobro] summary');
+assert.equal(document.querySelector('[data-referencia-fase]').textContent, 'desconocida');
+assert.equal(state.calls.length, beforeReference.calls);
+assert.equal(state.prints.length + state.fiscal.length, 0);
+await unmount();
+console.log('PASS: read-only payment reference exposes only allowed metadata, no RPC/print/fiscal/storage mutation; company switch hides it and legacy phase is unknown');
 
 dom.window.close();
 console.log('All synthetic recovery checks passed. Browser/physical-printer QA is intentionally not claimed.');

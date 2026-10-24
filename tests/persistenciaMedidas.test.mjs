@@ -7,16 +7,18 @@ let sequence = 0;
 async function moduloConRpc(rpc, archivo = "productos", extras = "") {
   const key = `__medidas_test_${++sequence}`;
   globalThis[key] = { rpc(...args) {
-    let range;
+    let range, signal;
     const request = {
       order() { return request; },
+      abortSignal(value) { signal = value; return request; },
       range(from, to) { range = [from, to]; return request; },
-      then(resolve, reject) { return Promise.resolve().then(() => rpc(...args, range)).then(resolve, reject); },
+      then(resolve, reject) { return Promise.resolve().then(() => rpc(...args, range, signal)).then(resolve, reject); },
     };
     return request;
   }, from() { throw new Error("No se esperaba acceso directo a tablas"); } };
   let source = await readFile(new URL(`../src/${archivo}.ts`, import.meta.url), "utf8");
   source = source.replace('import { supabase } from "./supabase";', `const supabase = globalThis[${JSON.stringify(key)}];`)
+    .replaceAll('from "./esperaCobro"', `from ${JSON.stringify(new URL("../src/esperaCobro.ts", import.meta.url).href)}`)
     .replaceAll('from "./ventaPorMedidas"', `from ${JSON.stringify(new URL("../src/ventaPorMedidas.ts", import.meta.url).href)}`)
     .replace('import { listarProductosSigo } from "./productos";', 'const listarProductosSigo = async () => [];');
   const js = stripTypeScriptTypes(source + extras, { mode: "transform" });
@@ -180,4 +182,34 @@ test("rechazo transaccional se distingue de resultado incierto sin liberar confl
     const api = await moduloConRpc(async () => ({ data: null, error }), "ventas");
     await assert.rejects(api.confirmarVentaSigo({ empresaId: "empresa-1", items: [{ productoId: "p", cantidad: 1, unidadMedida: "unidad" }], medioPago: "efectivo", idempotencyKey: "retry-key" }), e => (e instanceof api.VentaRechazadaSinCambiosError) === definitivo);
   }
+});
+
+
+test("cancelación del catálogo llega al transporte y bloquea páginas/unidades tardías", async () => {
+  const controller = new AbortController();
+  const llamadas = [];
+  const api = await moduloConRpc(async (nombre, _params, _range, signal) => {
+    llamadas.push(nombre);
+    assert.equal(signal, controller.signal);
+    controller.abort(new Error("DEADLINE"));
+    return { data: Array.from({ length: 1000 }, (_, i) => ({ ...producto, id: String(i) })), error: null };
+  });
+  await assert.rejects(api.listarProductosSigo("empresa-1", controller.signal), /DEADLINE/);
+  assert.deepEqual(llamadas, ["listar_productos_sigo"]);
+  await assert.rejects(api.listarUnidadesProductoSigo("empresa-1", controller.signal), /DEADLINE/);
+  assert.equal(llamadas.length, 1, "an already expired signal never starts another request");
+});
+
+test("cancelación durante unidades no devuelve catálogo vendible ni continúa paginando", async () => {
+  const controller = new AbortController();
+  const llamadas = [];
+  const api = await moduloConRpc(async (nombre, _params, _range, signal) => {
+    llamadas.push(nombre);
+    assert.equal(signal, controller.signal);
+    if (nombre === "listar_productos_sigo") return { data: [producto], error: null };
+    controller.abort(new Error("UNITS_DEADLINE"));
+    return { data: Array.from({ length: 1000 }, () => ({ producto_id: producto.id, unidad_medida: "kg" })), error: null };
+  });
+  await assert.rejects(api.listarProductosSigo("empresa-1", controller.signal), /UNITS_DEADLINE/);
+  assert.deepEqual(llamadas, ["listar_productos_sigo", "listar_unidades_producto_sigo"]);
 });

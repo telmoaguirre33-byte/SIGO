@@ -1,3 +1,4 @@
+import { esperarCobro } from "./esperaCobro";
 import { supabase } from "./supabase";
 import { listarProductosSigo } from "./productos";
 import { cantidadEscaladaMedida, normalizarUnidadVenta, subtotalMedida, type UnidadVenta } from "./ventaPorMedidas";
@@ -142,6 +143,7 @@ function mensajeVenta(error: unknown): string {
 async function verificarIntegridadVentas(
   empresaId: string,
   ventas: VentaVerificableSigo[],
+  signal?: AbortSignal,
 ): Promise<Map<string, IntegridadVentaSigo>> {
   const resultado = new Map<string, IntegridadVentaSigo>();
   ventas.forEach((venta) => resultado.set(venta.id, "no_verificada"));
@@ -158,7 +160,7 @@ async function verificarIntegridadVentas(
             .select("venta_id,medio_pago,importe")
             .eq("empresa_id", empresaId)
             .eq("tipo", "ingreso")
-            .in("venta_id", idsCaja)
+            .in("venta_id", idsCaja).abortSignal(signal ?? new AbortController().signal)
         : Promise.resolve({ data: [], error: null }),
       idsCuenta.length
         ? supabase
@@ -166,7 +168,7 @@ async function verificarIntegridadVentas(
             .select("venta_id,importe")
             .eq("empresa_id", empresaId)
             .eq("tipo", "debe")
-            .in("venta_id", idsCuenta)
+            .in("venta_id", idsCuenta).abortSignal(signal ?? new AbortController().signal)
         : Promise.resolve({ data: [], error: null }),
     ]);
 
@@ -226,6 +228,7 @@ async function leerCabeceraVentaConfirmada(
   ventaId: string,
   medioPagoEsperado: MedioPagoSigo,
   clienteIdEsperado: string | null,
+  signal?: AbortSignal,
 ): Promise<CabeceraVentaVerificada> {
   try {
     const { data, error } = await supabase
@@ -233,7 +236,7 @@ async function leerCabeceraVentaConfirmada(
       .select("id,total,medio_pago,cliente_id,estado")
       .eq("empresa_id", empresaId)
       .eq("id", ventaId)
-      .maybeSingle();
+      .abortSignal(signal ?? new AbortController().signal).maybeSingle();
 
     if (error) return { total: null, integridad: "no_verificada" };
     if (!data) return { total: null, integridad: "revisar" };
@@ -256,6 +259,7 @@ async function leerCabeceraVentaConfirmada(
 async function detectarEstadoReintento(
   empresaId: string,
   idempotencyKey: string,
+  signal: AbortSignal,
 ): Promise<EstadoReintentoVenta> {
   try {
     const { data, error } = await supabase
@@ -263,7 +267,7 @@ async function detectarEstadoReintento(
       .select("id")
       .eq("empresa_id", empresaId)
       .eq("idempotency_key", idempotencyKey)
-      .limit(1);
+      .limit(1).abortSignal(signal);
     if (error) return "desconocido";
     return Array.isArray(data) && data.length > 0 ? "reintento" : "nueva";
   } catch {
@@ -275,10 +279,12 @@ async function capturarStockAntes(
   empresaId: string,
   items: VentaItemSigoInput[],
   estadoReintento: EstadoReintentoVenta,
+  signal: AbortSignal,
 ): Promise<SnapshotStockVenta | null> {
   if (estadoReintento !== "nueva") return null;
   try {
-    const productos = await listarProductosSigo(empresaId);
+    const productos = await listarProductosSigo(empresaId, signal);
+    signal.throwIfAborted();
     const porId = new Map(productos.map((producto) => [producto.id, producto]));
     const snapshot: SnapshotStockVenta = new Map();
     for (const item of items) {
@@ -299,13 +305,14 @@ async function verificarIntegridadStockVenta(
   stockAntes: SnapshotStockVenta | null,
   estadoReintento: EstadoReintentoVenta,
   totalVenta: number | null,
+  signal: AbortSignal,
 ): Promise<IntegridadVentaSigo> {
   try {
     const { data: detalle, error: detalleError } = await supabase
       .from("venta_items_sigo")
       .select("producto_id,cantidad,precio_unitario,subtotal")
       .eq("empresa_id", empresaId)
-      .eq("venta_id", ventaId);
+      .eq("venta_id", ventaId).abortSignal(signal);
 
     if (detalleError) return "no_verificada";
 
@@ -339,7 +346,9 @@ async function verificarIntegridadStockVenta(
     // atribuimos el stock actual exclusivamente a esta confirmación.
     if (estadoReintento !== "nueva" || !stockAntes) return "no_verificada";
 
-    const productosDespues = await listarProductosSigo(empresaId);
+    signal.throwIfAborted();
+    const productosDespues = await listarProductosSigo(empresaId, signal);
+    signal.throwIfAborted();
     const despuesPorId = new Map(productosDespues.map((producto) => [producto.id, producto]));
     let huboMovimientoConcurrente = false;
 
@@ -423,7 +432,7 @@ export async function confirmarVentaSigo(input: {
   clienteId?: string | null;
   descuentoPct?: number;
   idempotencyKey?: string;
-}): Promise<{
+}, opciones: { antesDeEnviar?: () => void } = {}): Promise<{
   ventaId: string;
   idempotencyKey: string;
   integridad: IntegridadVentaSigo;
@@ -460,10 +469,20 @@ export async function confirmarVentaSigo(input: {
   const idempotencyKey = normalizarIdentificador(input.idempotencyKey ?? crearIdempotencyKey());
   if (!idempotencyKey) throw new VentaRechazadaSinCambiosError("No se pudo generar una clave segura para confirmar la venta.");
 
-  const estadoReintento = await detectarEstadoReintento(empresaId, idempotencyKey);
-  const stockAntes = await capturarStockAntes(empresaId, itemsConsolidados, estadoReintento);
+  const { estadoReintento, stockAntes } = await esperarCobro("preparacion", 12000, async (signal) => {
+    const estadoReintento = await detectarEstadoReintento(empresaId, idempotencyKey, signal);
+    signal.throwIfAborted();
+    const stockAntes = await capturarStockAntes(empresaId, itemsConsolidados, estadoReintento, signal);
+    signal.throwIfAborted();
+    return { estadoReintento, stockAntes };
+  });
 
-  const { data, error } = await supabase.rpc("confirmar_venta_sigo_v2", {
+  // This synchronous durable barrier runs before the mutation is even constructed.
+  // An exception here prevents dispatch. Legacy callers need no new parameter.
+  opciones.antesDeEnviar?.();
+  const { data, error } = await esperarCobro("envio", 25000, async (signal) => {
+    signal.throwIfAborted();
+    return await supabase.rpc("confirmar_venta_sigo_v2", {
     p_empresa_id: empresaId,
     p_items: itemsConsolidados.map((item) => ({
       producto_id: item.productoId,
@@ -474,6 +493,7 @@ export async function confirmarVentaSigo(input: {
     p_idempotency_key: idempotencyKey,
     p_cliente_id: clienteId,
     p_descuento_pct: descuentoPct,
+    }).abortSignal(signal);
   });
 
   if (error) {
@@ -485,12 +505,13 @@ export async function confirmarVentaSigo(input: {
 
   // La RPC confirma el cobro y descuenta el stock en una sola transacción.
   // Las lecturas de conciliación siguen ejecutándose, pero ya no bloquean la caja.
-  const verificacion = (async () => {
-    const cabecera = await leerCabeceraVentaConfirmada(empresaId, ventaId, input.medioPago, clienteId);
+  const verificacion = esperarCobro("verificacion", 12000, async (signal) => {
+    const cabecera = await leerCabeceraVentaConfirmada(empresaId, ventaId, input.medioPago, clienteId, signal);
+    signal.throwIfAborted();
     const [integridadCaja, integridadStock] = await Promise.all([
       cabecera.total == null
         ? Promise.resolve(cabecera.integridad === "revisar" ? "revisar" as const : "no_verificada" as const)
-        : verificarIntegridadVentas(empresaId, [{ id: ventaId, medio_pago: input.medioPago, total: cabecera.total }])
+        : verificarIntegridadVentas(empresaId, [{ id: ventaId, medio_pago: input.medioPago, total: cabecera.total }], signal)
             .then((mapa) => mapa.get(ventaId) ?? "no_verificada")
             .catch(() => "no_verificada" as const),
       verificarIntegridadStockVenta(
@@ -500,6 +521,7 @@ export async function confirmarVentaSigo(input: {
         stockAntes,
         estadoReintento,
         cabecera.total,
+        signal,
       ),
     ]);
 
@@ -510,7 +532,10 @@ export async function confirmarVentaSigo(input: {
       integridadStock,
       totalVerificado: cabecera.total,
     };
-  })();
+  }).catch(() => ({
+    integridad: "no_verificada" as const, integridadCabecera: "no_verificada" as const,
+    integridadCaja: "no_verificada" as const, integridadStock: "no_verificada" as const, totalVerificado: null,
+  }));
 
   return {
     ventaId,
