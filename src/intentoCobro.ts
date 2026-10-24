@@ -23,6 +23,7 @@ export type IntentoCobro = {
 
 type AlmacenCobro = Pick<Storage, "getItem" | "setItem">;
 const MEDIOS = ["efectivo", "debito", "credito", "transferencia", "mercado_pago", "cuenta_corriente", "otro"];
+const UUID_VENTA = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ERROR_LECTURA = "No se pudo leer el intento de cobro guardado. No vuelvas a cobrar: revisá esta venta en Ventas/Informes antes de continuar.";
 const ERROR_ESCRITURA = "No se pudo guardar la protección del cobro en este navegador. No se envió un cobro nuevo. Habilitá el almacenamiento de la sesión y reintentá.";
 export const claveIntentoCobro = (empresaId: string) => `sigo:intento-cobro:${empresaId}`;
@@ -52,7 +53,7 @@ function validarIntento(value: unknown, empresaId: string): IntentoCobro {
     || !Array.isArray(p.items) || !p.items.length
     || !Number.isFinite(intento.totalEsperado) || intento.totalEsperado <= 0
     || typeof intento.creadoEn !== "string" || !Number.isFinite(Date.parse(intento.creadoEn))
-    || (intento.estado === "confirmado" && (typeof intento.ventaId !== "string" || !intento.ventaId.trim()))) {
+    || (intento.estado === "confirmado" && (typeof intento.ventaId !== "string" || intento.ventaId.length !== 36 || !UUID_VENTA.test(intento.ventaId)))) {
     throw new Error(ERROR_LECTURA);
   }
   for (const item of p.items) {

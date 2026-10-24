@@ -48,7 +48,7 @@ for (const required of [
   if (!sale.includes(required)) throw new Error(`Sale verified-total safeguard missing: ${required}`);
 }
 
-const rpcConfirmation = sale.search(/const resultado = await confirmarVentaSigo\(intento\.payload(?:,|\))/);
+const rpcConfirmation = sale.search(/await confirmarVentaSigo\(intento\.payload(?:,|\))/);
 const persistConfirmedId = sale.indexOf("registrarCobroConfirmado(intento, resultado.ventaId)", rpcConfirmation);
 const showConfirmation = sale.indexOf("setExito(recuperar ?", persistConfirmedId);
 const secondaryReadback = sale.indexOf("void resultado.verificacion.then", showConfirmation);

@@ -18,6 +18,11 @@ jobs:
       - run: npm run build
       - name: Real SDK delayed session and response body with synthetic transport
         run: node --experimental-strip-types scripts/test-cobro104-sdk.mjs
+      - name: Real SDK HTTP ACK, local persistence and remount regression
+        run: node scripts/test-cobro104-ack-ui.mjs
+        env:
+          COBRO104_ACK_QA_DIR: artifacts/cobro104-browser/ack
+          COBRO104_REAL_DEADLINE: "1"
       - run: npx playwright install --with-deps chromium
       - name: Real Chromium desktop and emulated mobile, synthetic service boundaries only
         run: node scripts/test-cobro104-browser.mjs
