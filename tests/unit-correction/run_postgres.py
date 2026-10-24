@@ -16,6 +16,9 @@ assert sql("SELECT count(*) FROM pg_tables WHERE schemaname='public'")=='0','Fre
 sql("CREATE ROLE authenticated;CREATE ROLE anon;CREATE ROLE service_role BYPASSRLS;")
 for f in ['00_schema.sql','01_security_and_head_rpc.sql','03_install_real_supplier_guards.sql','02_seed.sql']:sql((R/'fixture'/f).read_text())
 sql((repo/'supabase/migrations/20261022024847_manual_medidas_atomicas.sql').read_text())
+sql((R/'fixture/04_pricing_and_acl_baseline.sql').read_text())
+acl_query="SELECT jsonb_object_agg(proname,jsonb_build_array(has_function_privilege('anon',oid,'EXECUTE'),has_function_privilege('authenticated',oid,'EXECUTE'))) FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN ('aplicar_margen_masivo_sigo','cambiar_compra_sigo','confirmar_compra_sigo','confirmar_venta_sigo_v2','guardar_producto_medida_sigo','redondear_precios_venta_sigo','registrar_devolucion_sigo')"
+acl_before=sql(acl_query)
 sql((C/'correccion_inicial_CANDIDATO_NO_APLICAR.sql').read_text())
 manifest=json.loads((R/'cases.json').read_text())
 for phase in ['core','guards']:
@@ -64,4 +67,6 @@ w=subprocess.Popen(cmd,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subpr
 w.stdin.write(auth+f"SET ROLE authenticated;SELECT public.guardar_producto_sigo(p_empresa_id=>'{E}',p_producto_id=>'{i}',p_nombre=>'Synthetic stale edit',p_precio_venta=>222);");w.stdin.close();time.sleep(.25);assert w.poll() is None;release(p)
 assert w.wait(timeout=15)!=0 and 'CORRECTED_PRODUCT_UNIT_REVIEW_REQUIRED' in w.stderr.read();results.append({'case':'correction_first_rejects_waiting_legacy_product_update','pass':True})
 assert sql('SELECT count(*) FROM sigo_correccion_inicial.operaciones')=='0'
+assert sql(acl_query)==acl_before, 'Existing RPC ACL must not change'
+results.append({'case':'existing_rpc_acl_preserved','pass':True})
 (R/'postgres-results.json').write_text(json.dumps({'synthetic_only':True,'cases':results},indent=2));print('PASS total',len(results))

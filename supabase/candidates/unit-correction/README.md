@@ -16,7 +16,7 @@ Two existing derived-price RPCs retain their formulas and authorization checks. 
 
 - New private schema `sigo_correccion_inicial`, three private tables (configuration, audit, transient capabilities), RLS enabled with no client grants.
 - Two public RPCs: preview and dedicated correction. Candidate revokes client execution; enabling requires narrowly granting `authenticated`, with product/stock/cost/price permissions checked internally. No anonymous access.
-- Seven existing RPC bodies gain narrowly scoped checks: measured product save, sale V4, return, purchase confirmation/change, derived margin and rounding. Their normal role ACLs must be verified unchanged.
+- Seven existing RPC bodies gain narrowly scoped checks: measured product save, sale V4, return, purchase confirmation/change, derived margin and rounding. Exact live body hashes and existing anon/authenticated execute bits are pinned and must remain unchanged. Two preexisting anonymous execute grants are deliberately preserved; auth.uid checks still reject unauthenticated callers. This PR does not perform unrelated permission cleanup.
 - Row guards on products, five item/movement tables and two purchase audit/cache tables. Statement guards prevent wholesale truncation of protected data.
 - No credentials, Auth configuration, existing table RLS policies, exports, backfills or commercial-record correction during installation.
 
