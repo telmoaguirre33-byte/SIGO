@@ -1,0 +1,1 @@
+SET ROLE postgres;SELECT set_config('request.jwt.claim.sub','20000000-0000-0000-0000-000000000001',false);SET ROLE authenticated;SELECT public.previsualizar_correccion_unidad_inicial_sigo('10000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000004','kg');

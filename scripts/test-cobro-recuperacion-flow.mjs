@@ -17,14 +17,14 @@ const { createRoot } = await import('react-dom/client');
 const E = '11111111-1111-4111-8111-111111111111';
 const OTHER = '33333333-3333-4333-8333-333333333333';
 const V = '22222222-2222-4222-8222-222222222222';
-const product = empresa => ({ id: 'p-synthetic', empresa_id: empresa, nombre: 'Producto sintético', codigo_interno: 'SYNTHETIC', codigo_barras: 'SYNTHETIC', precio_venta: 20, stock_actual: 50, activo: true, unidad_medida: 'kg' });
+const product = empresa => ({ id: 'p-synthetic', empresa_id: empresa, nombre: 'Producto sintético', codigo_interno: 'SYNTHETIC', codigo_barras: 'SYNTHETIC', precio_venta: 20, stock_actual: 50, activo: true, unidad_medida: 'kg', unidad_revision: '7' });
 let state;
 const stateKey = (empresa, key) => `${empresa}:${key}`;
 function reset(extra = {}) {
   sessionStorage.clear();
-  state = { calls: [], committed: new Map(), commits: 0, prints: [], fiscal: [], reject: null, loseResponse: true, verificationFail: false, beforeResponse: null, ...extra };
+  state = { revision: '7', calls: [], committed: new Map(), commits: 0, prints: [], fiscal: [], reject: null, loseResponse: true, verificationFail: false, beforeResponse: null, ...extra };
   globalThis.__cobro = {
-    products: empresa => [{ ...product(empresa), stock_actual: 50 - [...state.committed.values()].filter(r => r.empresa_id === empresa).reduce((s, r) => s + r.items[0].cantidad, 0) }],
+    products: empresa => [{ ...product(empresa), unidad_revision: state.revision, stock_actual: 50 - [...state.committed.values()].filter(r => r.empresa_id === empresa).reduce((s, r) => s + r.items[0].cantidad, 0) }],
     query,
     rpc,
     print: (...a) => state.prints.push(a),
@@ -73,7 +73,7 @@ const mocks = {
   './ticketVenta': 'export const imprimirTicketVenta=async(...a)=>globalThis.__cobro.print(...a);',
   './BarcodeScanner': 'import React from "react";export default function Scanner(p){return React.createElement("button",{id:"synthetic-add",onClick:()=>p.onProduct(globalThis.__cobro.products(p.empresaId)[0])},"Add synthetic");}',
   './clientes': 'export const listarClientesSigo=async()=>[];',
-  './productos': 'export const listarProductosSigo=async(e)=>structuredClone(globalThis.__cobro.products(e));export const listarUnidadesProductoSigo=async(e)=>Object.fromEntries(globalThis.__cobro.products(e).map(p=>[p.id,p.unidad_medida]));export const guardarProductoSigo=async()=>{throw new Error("Product write forbidden")};',
+  './productos': 'export const listarProductosSigo=async(e)=>structuredClone(globalThis.__cobro.products(e));export const listarRevisionesUnidadProductoSigo=async(e)=>Object.fromEntries(globalThis.__cobro.products(e).map(p=>[p.id,{unidad_medida:p.unidad_medida,unidad_revision:p.unidad_revision}]));export const guardarProductoSigo=async()=>{throw new Error("Product write forbidden")};',
   './ofertasProductos': 'export const listarOfertasProductos=async()=>[];export const ofertaVigente=()=>null;',
 };
 await build({ stdin: { contents: 'export { default as POS } from "./src/VentaRapidaOperativa";export * from "./src/intentoCobro";', resolveDir: process.cwd(), loader: 'tsx' }, outfile: '.test-build/cobro-recuperacion-flow.mjs', bundle: true, platform: 'node', format: 'esm', jsx: 'automatic', external: ['react', 'react-dom', 'react/jsx-runtime'], plugins: [{ name: 'synthetic-services', setup(b) { b.onResolve({ filter: /^\.\// }, a => mocks[a.path] ? { path: a.path, namespace: 'synthetic' } : null); b.onLoad({ filter: /.*/, namespace: 'synthetic' }, a => ({ contents: mocks[a.path], resolveDir: process.cwd() })); } }] });
@@ -97,13 +97,14 @@ for (const shortcut of ['F9', 'F10', 'F11']) {
   reset(); await mount(); await addWeight(); await keys(shortcut, shortcut);
   assert.equal(state.commits, 1); assert.equal(state.calls.length, 1);
   const original = structuredClone(state.calls[0]);
-  assert.equal(original.p_items[0].cantidad, .75); assert.equal(original.p_items[0].unidad_medida, 'kg');
+  assert.equal(original.p_items[0].cantidad, .75); assert.equal(original.p_items[0].unidad_medida, 'kg'); assert.equal(original.p_items[0].unidad_revision, '7');
   assert.equal(leerIntentoCobro(E).estado, 'pendiente');
   assert.ok(document.querySelector('[data-recuperar-cobro]'));
   await keys('F1', 'F6', 'F9', 'F10', 'F11', 'F12');
   assert.equal(state.calls.length, 1); assert.equal(state.fiscal.length, 0); assert.equal(state.prints.length, 0);
   assert.equal(document.querySelector('.sigo-pos-payments button').disabled, true);
   assert.equal(document.querySelector('.sigo-pos-qty button').disabled, true);
+  state.revision = '8'; // Unit returns to kg, revision still changes. Recovery must retain the old snapshot.
   await unmount(); await mount();
   assert.equal(state.calls.length, 1, 'reload does not retry');
   assert.equal(document.querySelector('#synthetic-add'), null, 'new cart cannot replace uncertain attempt');
@@ -140,7 +141,7 @@ reset(); let release; state.beforeResponse = new Promise(r => { release = r; });
 await mount(); await addWeight(); await keys('F9'); await rerender(OTHER); release(); await settle(); assert.equal(leerIntentoCobro(E).estado, 'confirmado'); assert.equal(leerIntentoCobro(OTHER), null); assert.equal(document.querySelector('.sigo-pos-payments button').disabled, false); await rerender(E); await keys('F12'); assert.deepEqual(state.prints, [[E, V, '80', true]]); assert.equal(state.fiscal.length, 0); assert.equal(state.commits, 1); await unmount();
 console.log('PASS: in-flight company switch persists original result without leaving another company busy');
 
-reset(); const payload = { empresaId: E, medioPago: 'efectivo', clienteId: null, descuentoPct: 0, idempotencyKey: 'synthetic-immutable-key', items: [{ productoId: 'p-synthetic', cantidad: .75, unidadMedida: 'kg' }] };
+reset(); const payload = { empresaId: E, medioPago: 'efectivo', clienteId: null, descuentoPct: 0, idempotencyKey: 'synthetic-immutable-key', items: [{ productoId: 'p-synthetic', cantidad: .75, unidadMedida: 'kg', unidadRevision: '7' }] };
 const attempt = crearIntentoCobro(payload, 15); guardarIntentoCobro(attempt); payload.items[0].cantidad = 1; assert.equal(attempt.payload.items[0].cantidad, .75);
 const changed = crearIntentoCobro({ ...attempt.payload, items: [{ ...attempt.payload.items[0], cantidad: 1 }] }, 20); assert.throws(() => guardarIntentoCobro(changed), /no se puede reutilizar/); assert.equal(leerIntentoCobro(E).payload.items[0].cantidad, .75);
 sessionStorage.setItem('sigo:intento-cobro:' + E, JSON.stringify({ ...attempt, payload: { ...attempt.payload, medioPago: 'debito' } })); await mount(); await keys('F9', 'F11'); assert.equal(state.calls.length, 0); assert.match(document.body.textContent, /No se pudo leer el intento/); assert.equal(document.querySelector('#synthetic-add'), null); await unmount();
@@ -175,6 +176,32 @@ for (const shortcut of ['F10', 'F11']) {
   await keys('F12'); assert.deepEqual(state.prints, [[E, V, '80', true]]); assert.equal(state.fiscal.length, 0); await unmount();
   console.log(`PASS: late ${shortcut} result after navigation persists UUID but never emits/prints from an unmounted POS`);
 }
+
+reset({ loseResponse: false, reject: { code: 'P0001', message: 'CORRECTED_PRODUCT_REVISION_REVIEW_REQUIRED' } });
+await mount(); await addWeight(); state.revision = '9';
+await addWeight('250');
+assert.match(document.body.textContent, /cambió la unidad o su revisión/);
+await click('[aria-label="Editar cantidad de Producto sintético"]');
+assert.equal(document.querySelector('[role="dialog"]')?.textContent?.includes('kg') ?? document.body.textContent.includes('kg'), true);
+const editedQuantity = document.getElementById('sigo-cantidad-medida');
+await act(async () => { Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(editedQuantity, '500'); editedQuantity.dispatchEvent(new Event('input', { bubbles: true })); });
+await act(async () => document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+await keys('F9');
+assert.equal(state.calls[0].p_items[0].unidad_revision, '7'); assert.equal(state.calls[0].p_items[0].cantidad, .5);
+assert.equal(state.commits, 0); assert.equal(leerIntentoCobro(E).estado, 'rechazado');
+assert.match(document.body.textContent, /Cambió la unidad/); await unmount();
+console.log('PASS: same-unit revision change rejects with the originally captured revision, never refreshes at submit');
+
+reset(); const revisionAttempt = crearIntentoCobro({ ...payload, items: [{ productoId: 'p-synthetic', cantidad: .75, unidadMedida: 'kg', unidadRevision: '7' }] }, 15);
+guardarIntentoCobro(revisionAttempt);
+const changedRevision = crearIntentoCobro({ ...revisionAttempt.payload, items: [{ ...revisionAttempt.payload.items[0], unidadRevision: '8' }] }, 15);
+assert.throws(()=>guardarIntentoCobro(changedRevision), /no se puede reutilizar/);
+const tampered = structuredClone(revisionAttempt); tampered.payload.items[0].unidadRevision = '8';
+sessionStorage.setItem('sigo:intento-cobro:' + E, JSON.stringify(tampered));
+assert.throws(()=>leerIntentoCobro(E), /No se pudo leer el intento/);
+reset(); const legacy = crearIntentoCobro({ ...payload, items: [{ productoId: 'p-synthetic', cantidad: .75, unidadMedida: 'kg' }] }, 15);
+guardarIntentoCobro(legacy); assert.equal(Object.hasOwn(leerIntentoCobro(E).payload.items[0], 'unidadRevision'), false);
+console.log('PASS: revision is fingerprinted exactly and legacy recovery remains absent, never revision zero');
 
 dom.window.close();
 console.log('All synthetic recovery checks passed. Browser/physical-printer QA is intentionally not claimed.');

@@ -33,6 +33,14 @@ export function normalizarUnidadVenta(entrada: unknown): UnidadVenta | null {
   return Object.prototype.hasOwnProperty.call(UNIDADES_VENTA, unidad) ? unidad as UnidadVenta : null;
 }
 
+/** PostgreSQL bigint como texto canónico: nunca convertir a Number ni inferir cero. */
+export function normalizarRevisionUnidad(entrada: unknown): string | null {
+  if (typeof entrada !== "string" || !/^(0|[1-9][0-9]*)$/.test(entrada)) return null;
+  const maximo = "9223372036854775807";
+  if (entrada.length > maximo.length || (entrada.length === maximo.length && entrada > maximo)) return null;
+  return entrada;
+}
+
 function factorUnidad(unidad: UnidadVenta): number {
   if (!Object.prototype.hasOwnProperty.call(UNIDADES_VENTA, unidad)) throw new Error("UNIDAD_INVALIDA");
   return 10 ** UNIDADES_VENTA[unidad].decimales;

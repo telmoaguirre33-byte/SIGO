@@ -1,12 +1,13 @@
+import { observarCambiosCatalogo } from "./archivoProductos";
 import { useEffect, useMemo, useRef, useState } from "react";
 import BarcodeScanner from "./BarcodeScanner";
 import EditorCantidadMedida from "./EditorCantidadMedida";
-import { cantidadEscaladaMedida, consolidarCantidadMedida, formatoCantidadMedida, formatoStockMedida, pasoCantidadMedida, precioUnitarioConDescuentosMedida, stockRestanteMedida, subtotalMedida, type UnidadVenta } from "./ventaPorMedidas";
+import { cantidadEscaladaMedida, consolidarCantidadMedida, normalizarRevisionUnidad, formatoCantidadMedida, formatoStockMedida, pasoCantidadMedida, precioUnitarioConDescuentosMedida, stockRestanteMedida, subtotalMedida, type UnidadVenta } from "./ventaPorMedidas";
 import { crearIntentoCobro, guardarIntentoCobro, leerIntentoCobro, registrarCobroConfirmado, registrarCobroRechazado, type IntentoCobro } from "./intentoCobro";
 import { imprimirTicketVenta } from "./ticketVenta";
 import { isLegacyDuplicateProduct, normalizeBarcode, type BarcodeProduct } from "./barcode";
 import { listarClientesSigo, type ClienteSigo } from "./clientes";
-import { guardarProductoSigo, listarProductosSigo, listarUnidadesProductoSigo, type ProductoSigo } from "./productos";
+import { guardarProductoSigo, listarProductosSigo, listarRevisionesUnidadProductoSigo, type RevisionUnidadProductoSigo, type ProductoSigo } from "./productos";
 import { listarOfertasProductos, ofertaVigente, type OfertaProducto } from "./ofertasProductos";
 import {
   confirmarVentaSigo,
@@ -16,7 +17,8 @@ import {
   type VentaRecienteSigo,
 } from "./ventas";
 
-type ItemVenta = { producto: BarcodeProduct; cantidad: number; unidad: UnidadVenta };
+type ProductoVenta = BarcodeProduct & { unidad_medida?: UnidadVenta | null; unidad_revision?: string | null };
+type ItemVenta = { producto: ProductoVenta; cantidad: number; unidad: UnidadVenta; unidadRevision: string };
 
 const DINERO_TOLERANCIA = 0.01;
 
@@ -45,16 +47,16 @@ function precioUnitarioVenta(item: ItemVenta, ofertas: OfertaProducto[], descuen
 
 export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos = false }: { empresaId: string; puedeEditarProductos?: boolean }) {
   const [items, setItems] = useState<ItemVenta[]>([]);
-  const [unidadesProducto, setUnidadesProducto] = useState<Record<string, UnidadVenta | null>>({});
+  const [unidadesProducto, setUnidadesProducto] = useState<Record<string, RevisionUnidadProductoSigo>>({});
   const [unidadesCargadas, setUnidadesCargadas] = useState(false);
-  const [productoPorMedida, setProductoPorMedida] = useState<BarcodeProduct | null>(null);
+  const [productoPorMedida, setProductoPorMedida] = useState<ProductoVenta | null>(null);
   const [reemplazandoCantidad, setReemplazandoCantidad] = useState(false);
   const [catalogo, setCatalogo] = useState<ProductoSigo[]>([]);
   const [ofertas, setOfertas] = useState<OfertaProducto[]>([]);
   const [ofertasError, setOfertasError] = useState("");
   const [busquedaProducto, setBusquedaProducto] = useState("");
   const [catalogoError, setCatalogoError] = useState("");
-  const [productoBloqueado, setProductoBloqueado] = useState<{ producto: BarcodeProduct; razon: "precio" | "stock" } | null>(null);
+  const [productoBloqueado, setProductoBloqueado] = useState<{ producto: ProductoVenta; razon: "precio" | "stock" } | null>(null);
   const [precioRapido, setPrecioRapido] = useState("");
   const [guardandoPrecio, setGuardandoPrecio] = useState(false);
   const [medioPago, setMedioPago] = useState<MedioPagoSigo>("efectivo");
@@ -138,13 +140,15 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       setErrorPersistenciaCobro(err instanceof Error ? err.message : "No se pudo verificar el último intento de cobro.");
     }
 
+    let revisionCatalogo = 0;
     async function cargar() {
+      const revision = ++revisionCatalogo;
       const [clientesResultado, catalogoResultado, ofertasResultado] = await Promise.allSettled([
         listarClientesSigo(empresaId),
         listarProductosSigo(empresaId),
         listarOfertasProductos(empresaId),
       ]);
-      if (!cancelled && empresaActivaRef.current === empresaId) {
+      if (!cancelled && revision === revisionCatalogo && empresaActivaRef.current === empresaId) {
         if (clientesResultado.status === "fulfilled") setClientes(clientesResultado.value);
         else {
           setClientes([]);
@@ -164,8 +168,9 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       if (!cancelled && empresaActivaRef.current === empresaId) await cargarVentasRecientes(empresaId);
     }
     void cargar();
+    const dejarDeObservar = observarCambiosCatalogo(empresaId, () => { void cargar(); });
     // Unidad ausente o fallo de lectura: nunca degradar a venta por pieza.
-    void listarUnidadesProductoSigo(empresaId).then((mapa) => {
+    void listarRevisionesUnidadProductoSigo(empresaId).then((mapa) => {
       if (cancelled || empresaActivaRef.current !== empresaId) return;
       setUnidadesProducto(mapa);
       setUnidadesCargadas(true);
@@ -175,7 +180,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       setUnidadesCargadas(false);
       setError(err instanceof Error ? err.message : "No se pudieron verificar las unidades. Actualizá antes de vender.");
     });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; dejarDeObservar(); };
     // cargarVentasRecientes depende únicamente del mismo empresaId del efecto.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId]);
@@ -203,8 +208,15 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     : productosEncontrados[0]?.id ?? null;
   productoSeleccionadoIdRef.current = productoSeleccionadoVisibleId;
 
-  function marcarProductoBloqueado(producto: BarcodeProduct, razon: "precio" | "stock") {
-    setProductoBloqueado({ producto, razon });
+  function capturarUnidadProducto(producto: ProductoVenta): ProductoVenta {
+    // Capturar unidad y revisión juntas al seleccionar, no al confirmar cantidad/cobro.
+    const snapshot = Object.prototype.hasOwnProperty.call(producto, "unidad_revision")
+      ? producto : unidadesProducto[producto.id];
+    return { ...producto, unidad_medida: snapshot?.unidad_medida ?? null, unidad_revision: snapshot?.unidad_revision ?? null };
+  }
+
+  function marcarProductoBloqueado(producto: ProductoVenta, razon: "precio" | "stock") {
+    setProductoBloqueado({ producto: capturarUnidadProducto(producto), razon });
     setPrecioRapido(producto.precio_venta && Number(producto.precio_venta) > 0 ? String(producto.precio_venta) : "");
     setExito("");
   }
@@ -301,9 +313,11 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         stockActual: null,
         stockMinimo: original.stock_minimo,
         stockMaximo: original.stock_maximo,
+        unidadMedida: original.unidad_medida,
+        unidadRevision: original.unidad_revision,
       });
       if (empresaActivaRef.current !== empresaOperacion) return;
-      const actualizado: BarcodeProduct = { ...original, precio_venta: precio };
+      const actualizado: ProductoVenta = { ...original, precio_venta: precio };
       setCatalogo((actual) => actual.map((item) => item.id === original.id ? { ...item, precio_venta: precio } : item));
       setProductoBloqueado(null);
       setPrecioRapido("");
@@ -319,28 +333,30 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     }
   }
 
-  function agregar(producto: BarcodeProduct) {
+  function agregar(producto: ProductoVenta) {
     if (cajaBloqueada || confirmacionEnCursoRef.current) return;
     if (productoPorMedida) { setError("Terminá o cancelá la cantidad en edición antes de agregar otro producto."); return; }
-    const unidad = unidadesProducto[producto.id];
+    const capturado = capturarUnidadProducto(producto);
+    const unidad = capturado.unidad_medida;
     if (producto.empresa_id !== empresaId || isLegacyDuplicateProduct(producto)) { setError("No se pudo verificar el producto en la empresa activa."); return; }
-    if (!unidadesCargadas || !unidad) {
+    if (!unidadesCargadas || !unidad || normalizarRevisionUnidad(capturado.unidad_revision) === null) {
       setError(`${producto.nombre}: unidad de venta sin verificar. Revisá el producto y actualizá el catálogo; no se agregó al carrito.`);
       return;
     }
     if (unidad !== "unidad") {
       setReemplazandoCantidad(false);
-      setProductoPorMedida(producto);
+      setProductoPorMedida(capturado);
       return;
     }
-    agregarCantidad(producto, 1);
+    agregarCantidad(capturado, 1);
   }
 
-  function agregarCantidad(producto: BarcodeProduct, cantidadAgregar: number, reemplazar = false) {
+  function agregarCantidad(producto: ProductoVenta, cantidadAgregar: number, reemplazar = false) {
     if (cajaBloqueada || confirmacionEnCursoRef.current) return;
     setError(""); setExito(""); setAdvertencia(""); setProductoBloqueado(null);
-    const unidad = unidadesProducto[producto.id];
-    if (producto.empresa_id !== empresaId || isLegacyDuplicateProduct(producto) || !unidadesCargadas || !unidad) {
+    const unidad = producto.unidad_medida;
+    const unidadRevision = normalizarRevisionUnidad(producto.unidad_revision);
+    if (producto.empresa_id !== empresaId || isLegacyDuplicateProduct(producto) || !unidadesCargadas || !unidad || unidadRevision === null) {
       setError(`${producto.nombre}: no se pudo verificar el producto y su unidad en esta empresa.`);
       return;
     }
@@ -350,8 +366,8 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     if (producto.stock_actual == null || !Number.isFinite(stock) || stock <= 0) { setError(`${producto.nombre}: sin stock disponible.`); return; }
     setItems((actual) => {
       const existentes = actual.filter((item) => item.producto.id === producto.id);
-      if (existentes.some((item) => item.unidad !== unidad)) {
-        setError(`${producto.nombre}: cambió la unidad. Retirá el renglón y revisá el producto.`);
+      if (existentes.some((item) => item.unidad !== unidad || item.unidadRevision !== unidadRevision)) {
+        setError(`${producto.nombre}: cambió la unidad o su revisión. Retirá el renglón y revisá el producto.`);
         return actual;
       }
       let cantidad: number;
@@ -361,7 +377,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         setError(`${producto.nombre}: ${err instanceof Error && err.message === "STOCK_INSUFICIENTE" ? "la cantidad total supera el stock disponible" : "cantidad o stock inválido para su unidad"}.`);
         return actual;
       }
-      const nuevo = { producto, cantidad, unidad };
+      const nuevo = { producto, cantidad, unidad, unidadRevision };
       if (!existentes.length) return [...actual, nuevo];
       let reemplazado = false;
       return actual.flatMap((item) => {
@@ -395,7 +411,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   function editarCantidad(item: ItemVenta) {
     if (cajaBloqueada || confirmacionEnCursoRef.current || productoPorMedida) return;
     setReemplazandoCantidad(true);
-    setProductoPorMedida(item.producto);
+    setProductoPorMedida({ ...item.producto, unidad_medida: item.unidad, unidad_revision: item.unidadRevision });
     setError("");
   }
 
@@ -445,7 +461,8 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         consolidarCantidadMedida([item.cantidad], item.unidad, stock);
         if (subtotalMedida(item.cantidad, precioUnitarioVenta(item, ofertas, descuentoPct)) <= 0) return false;
       } catch { return false; }
-      return unidadesProducto[item.producto.id] === item.unidad
+      return unidadesProducto[item.producto.id]?.unidad_medida === item.unidad
+        && unidadesProducto[item.producto.id]?.unidad_revision === item.unidadRevision
         && Number.isFinite(precio)
         && precio > 0
         && Number.isFinite(stock)
@@ -475,7 +492,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         intento = crearIntentoCobro({
           empresaId: empresaConfirmacion, medioPago, clienteId: clienteId || null, descuentoPct,
           idempotencyKey: nuevaClaveVenta(),
-          items: items.map((item) => ({ productoId: item.producto.id, cantidad: item.cantidad, unidadMedida: item.unidad })),
+          items: items.map((item) => ({ productoId: item.producto.id, cantidad: item.cantidad, unidadMedida: item.unidad, unidadRevision: item.unidadRevision })),
         }, total);
       }
       guardarIntentoCobro(intento);
@@ -613,15 +630,15 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         <button type="button" disabled={cajaBloqueada} onClick={()=>setDescuentoAbierto(v=>!v)}>◇ <strong>DESCUENTO</strong><small>F6 · {descuentoPct}%</small></button>
       </div>
       {descuentoAbierto&&!cajaBloqueada&&<div className="sigo-pos-discount"><strong>Descuento</strong>{[0,5,10,15,20].map(n=><button type="button" className={descuentoPct===n?"active":""} onClick={()=>{setDescuentoPct(n);setDescuentoAbierto(false)}} key={n}>{n}%</button>)}<label>Otro % <input type="number" min="0" max="99.99" step="0.01" value={descuentoPct} onChange={e=>setDescuentoPct(Math.max(0,Math.min(99.99,Number(e.target.value)||0)))}/></label></div>}
-      {productoPorMedida && unidadesCargadas && unidadesProducto[productoPorMedida.id] && <EditorCantidadMedida
+      {productoPorMedida && unidadesCargadas && productoPorMedida.unidad_medida && productoPorMedida.unidad_revision != null && <EditorCantidadMedida
         key={`${productoPorMedida.id}-${reemplazandoCantidad ? "editar" : "agregar"}`}
         nombre={productoPorMedida.nombre}
-        unidad={unidadesProducto[productoPorMedida.id]!}
-        precio={precioUnitarioVenta({ producto: productoPorMedida, cantidad: 1, unidad: unidadesProducto[productoPorMedida.id]! }, ofertas, descuentoPct)}
+        unidad={productoPorMedida.unidad_medida}
+        precio={precioUnitarioVenta({ producto: productoPorMedida, cantidad: 1, unidad: productoPorMedida.unidad_medida, unidadRevision: productoPorMedida.unidad_revision }, ofertas, descuentoPct)}
         cantidadInicial={reemplazandoCantidad ? items.find((item) => item.producto.id === productoPorMedida.id)?.cantidad : undefined}
         reemplazar={reemplazandoCantidad}
         stockDisponible={(() => {
-          try { return stockRestanteMedida(Number(productoPorMedida.stock_actual), reemplazandoCantidad ? [] : items.filter((item) => item.producto.id === productoPorMedida.id).map((item) => item.cantidad), unidadesProducto[productoPorMedida.id]!); }
+          try { return stockRestanteMedida(Number(productoPorMedida.stock_actual), reemplazandoCantidad ? [] : items.filter((item) => item.producto.id === productoPorMedida.id).map((item) => item.cantidad), productoPorMedida.unidad_medida!); }
           catch { return null; }
         })()}
         onConfirmar={(cantidad) => { agregarCantidad(productoPorMedida, cantidad, reemplazandoCantidad); setProductoPorMedida(null); }}
@@ -660,3 +677,4 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     </div>
   );
 }
+

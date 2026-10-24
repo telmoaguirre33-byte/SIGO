@@ -312,9 +312,11 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
     { icono: "▥", titulo: "Gerencial", texto: "Resumen completo del negocio.", categoria: "gerencial" },
   ];
   const stockValorizadoCosto = productosValorizacion.reduce((t,p)=>t + Number(p.stock_actual ?? 0) * Number(p.costo_actual ?? p.costo_ultima_compra ?? 0),0);
-  const stockValorizadoVenta = productosValorizacion.reduce((t,p)=>t + Number(p.stock_actual ?? 0) * Number(p.precio_venta ?? 0),0);
-  const margenPotencialStock = stockValorizadoVenta - stockValorizadoCosto;
-  const cargarValorizacionStock = async () => { try { setProductosValorizacion(await listarProductosSigo(empresaId)); } catch { setProductosValorizacion([]); } };
+  const stockArchivadoCosto = productosValorizacion.filter(p=>p.archivado_comercial).reduce((t,p)=>t + Number(p.stock_actual ?? 0) * Number(p.costo_actual ?? p.costo_ultima_compra ?? 0),0);
+  const stockValorizadoVenta = productosValorizacion.filter(p=>!p.archivado_comercial && p.activo !== false && String(p.categoria ?? "").trim().toUpperCase() !== "NO_VENDIBLE").reduce((t,p)=>t + Number(p.stock_actual ?? 0) * Number(p.precio_venta ?? 0),0);
+  const costoStockOperativo = productosValorizacion.filter(p=>!p.archivado_comercial && p.activo !== false && String(p.categoria ?? "").trim().toUpperCase() !== "NO_VENDIBLE").reduce((t,p)=>t + Number(p.stock_actual ?? 0) * Number(p.costo_actual ?? p.costo_ultima_compra ?? 0),0);
+  const margenPotencialStock = stockValorizadoVenta - costoStockOperativo;
+  const cargarValorizacionStock = async () => { try { setProductosValorizacion(await listarProductosSigo(empresaId, { inventario: true })); } catch { setProductosValorizacion([]); } };
 
   const evolucionVentas = agruparEvolucionVentas(ventasPeriodo?.dias ?? [], ventasDesde, ventasHasta);
   const evolucionGerencial = agruparEvolucionVentas(ventasGerenciales?.dias ?? [], gerencialDesde, gerencialHasta);
@@ -459,9 +461,10 @@ export default function InformesOperativos({ empresaId, onVolver }: { empresaId:
             {vistaStock === "ranking" && <RankingProductosStock empresaId={empresaId} />}
             {(vistaStock === "actual" || vistaStock === "quiebre" || vistaStock === "rotacion") && <div className="stats-grid sigo-stock-stats-rows">
               <div className="stat-card"><span>Unidades en stock</span><strong>{resumen.unidadesStock}</strong><small>{resumen.productos} productos</small></div>
-              {vistaStock === "actual" && <div className="stat-card"><span>Stock valorizado a costo</span><strong>{dinero(stockValorizadoCosto)}</strong><small>Stock × costo actual/última compra</small></div>}
-              {vistaStock === "actual" && <div className="stat-card"><span>Stock valorizado a venta</span><strong>{dinero(stockValorizadoVenta)}</strong><small>Stock × precio de venta</small></div>}
-              {vistaStock === "actual" && <div className="stat-card"><span>Margen potencial</span><strong>{dinero(margenPotencialStock)}</strong><small>Venta potencial − costo</small></div>}
+              {vistaStock === "actual" && <div className="stat-card"><span>Stock valorizado a costo</span><strong>{dinero(stockValorizadoCosto)}</strong><small>Incluye stock físico archivado</small></div>}
+              {vistaStock === "actual" && <div className="stat-card"><span>Archivado a costo</span><strong>{dinero(stockArchivadoCosto)}</strong><small>Se conserva; no disponible para nuevas ventas</small></div>}
+              {vistaStock === "actual" && <div className="stat-card"><span>Stock operativo a venta</span><strong>{dinero(stockValorizadoVenta)}</strong><small>Sólo productos disponibles para venta</small></div>}
+              {vistaStock === "actual" && <div className="stat-card"><span>Margen potencial operativo</span><strong>{dinero(margenPotencialStock)}</strong><small>Venta potencial − costo</small></div>}
               <div className="stat-card"><span>Stock crítico</span><strong>{resumen.productosCriticos}</strong><small>{resumen.productosSinStock} sin stock</small></div>
               {riesgoStock && <div className="stat-card"><span>Quiebre urgente</span><strong>{riesgoStock.urgentes}</strong><small>≤ 7 días de cobertura</small></div>}
               {riesgoStock && <div className="stat-card"><span>Próximo quiebre</span><strong>{riesgoStock.proximos}</strong><small>8 a 15 días de cobertura</small></div>}

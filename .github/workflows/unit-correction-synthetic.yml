@@ -1,0 +1,49 @@
+name: Unit correction synthetic PG17
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: synthetic-only-not-a-secret
+          POSTGRES_DB: sigo_unit_correction_synthetic
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate synthetic PostgreSQL and races only
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: synthetic-only-not-a-secret
+          PGDATABASE: sigo_unit_correction_synthetic
+        run: python3 tests/unit-correction/run_postgres.py
+      - name: Verify atomic combined install and rollback in separate synthetic database
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: synthetic-only-not-a-secret
+          PGDATABASE: sigo_installer_synthetic
+        run: python3 tests/unit-correction/run_installer.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-correction-synthetic-results
+          path: |
+            tests/unit-correction/postgres-results.json
+            tests/unit-correction/installer-ci-results.json

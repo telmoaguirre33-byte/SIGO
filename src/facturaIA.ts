@@ -193,6 +193,7 @@ async function listarProductosMaestroFactura(empresaId: string): Promise<Product
       .select("id,nombre,codigo_interno,codigo_barras")
       .eq("empresa_id", empresaId)
       .eq("activo", true)
+      .eq("archivado_comercial", false)
       .order("id", { ascending: true })
       .range(desde, desde + PAGINA_MAESTROS_FACTURA - 1);
     if (error) throw new Error(`No se pudo validar el catálogo contra la factura: ${error.message}`);
@@ -211,6 +212,7 @@ async function listarProveedoresMaestroFactura(empresaId: string): Promise<Prove
       .select("id,razon_social,cuit")
       .eq("empresa_id", empresaId)
       .eq("activo", true)
+      .eq("archivado_comercial", false)
       .order("id", { ascending: true })
       .range(desde, desde + PAGINA_MAESTROS_FACTURA - 1);
     if (error) throw new Error(`No se pudo validar el proveedor contra la factura: ${error.message}`);

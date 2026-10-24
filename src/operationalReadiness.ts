@@ -22,6 +22,7 @@ type CatalogRow = {
   codigo_interno: string | null;
   codigo_barras: string | null;
   activo: boolean | null;
+  archivado_comercial?: boolean;
   precio_venta: number | null;
   stock_actual: number | null;
 };
@@ -107,7 +108,7 @@ async function leerCatalogoCompleto(empresaId: string): Promise<CatalogRow[]> {
   for (let desde = 0; ; desde += PAGE_SIZE) {
     const { data, error } = await supabase
       .from("productos")
-      .select("id,nombre,codigo_interno,codigo_barras,activo,precio_venta,stock_actual")
+      .select("id,nombre,codigo_interno,codigo_barras,activo,archivado_comercial,precio_venta,stock_actual")
       .eq("empresa_id", empresaId)
       .order("id", { ascending: true })
       .range(desde, desde + PAGE_SIZE - 1);
@@ -265,6 +266,7 @@ export async function validarReadinessSigoAdministracion(
   const stockNull = catalogo.filter((row) => row.stock_actual == null).length;
   const vendibles = catalogo.filter((row) =>
     row.activo !== false
+    && row.archivado_comercial !== true
     && Number(row.precio_venta ?? 0) > 0
     && Number(row.stock_actual ?? 0) > 0
     && Boolean(codigoPreferido(row))

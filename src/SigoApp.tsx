@@ -1,4 +1,8 @@
+import { configurarArchivoProducto, avisoArchivo, buscarProductoInventario } from "./archivoProductos";
+import ProductosArchivados from "./ProductosArchivados";
 import Contabilidad from "./Contabilidad";
+import DialogoCorreccionUnidadInicial from "./DialogoCorreccionUnidadInicial";
+import { useCorreccionUnidadInicial } from "./useCorreccionUnidadInicial";
 import { cantidadEscaladaMedida, formatoStockMedida, pasoCantidadMedida, UNIDADES_VENTA, type UnidadVenta } from "./ventaPorMedidas";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { EmpresaOperativa } from "./tenant";
@@ -18,10 +22,9 @@ import { cargarResumenOperativoSigo, type ResumenOperativoSigo } from "./informe
 import { can } from "./permissions";
 import { listarModulosEmpresa } from "./modulosEmpresa";
 import {
-  eliminarProductoSigo,
   guardarProductoSigo,
   listarProductosSigo,
-  listarUnidadesProductoSigo,
+  listarRevisionesUnidadProductoSigo,
   ProductoGuardadoSinVerificarError,
   type ProductoSigo,
 } from "./productos";
@@ -69,6 +72,10 @@ function numeroOpcional(valor: string, etiqueta: string): number | null {
 export default function SigoApp({ empresa, initialSection = "Inicio", purchasesOnly = false, onAbrirInformes }: { empresa: EmpresaOperativa; initialSection?: Section; purchasesOnly?: boolean; onAbrirInformes?: () => void }) {
   const [section, setSection] = useState<Section>(initialSection);
   const puedeEditarProductos = can(empresa.rol, "products.write");
+  const puedeCorregirUnidad = puedeEditarProductos && can(empresa.rol, "stock.write") && can(empresa.rol, "costs.read")
+    && (can(empresa.rol, "price_lists.read") || can(empresa.rol, "sales.write"));
+  const [correccionAbierta, setCorreccionAbierta] = useState(false);
+  useEffect(() => { setCorreccionAbierta(false); }, [empresa.empresa_id]);
 
   return (
     <div className={purchasesOnly ? "app purchases-hub-only" : "app"}>
@@ -83,14 +90,14 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
         <div className="sidebar-scroll">
         <nav className="menu">
           {sections.filter((item) => (item !== "Informes" || Boolean(onAbrirInformes)) && (item !== "Contabilidad" || empresa.rol === "owner" || empresa.rol === "admin")).map((item) => (
-            <button key={item} className={section === item ? "menu-item active" : "menu-item"} onClick={() => { if (item === "Informes") { onAbrirInformes?.(); return; } setSection(item); }}>
+            <button key={item} className={section === item ? "menu-item active" : "menu-item"} disabled={correccionAbierta} onClickCapture={(event) => { if (correccionAbierta) { event.preventDefault(); event.stopPropagation(); } }} onClick={() => { if (item === "Informes") { onAbrirInformes?.(); return; } setSection(item); }}>
               <span className="menu-icon">{item === "Ofertas y etiquetas" ? "🏷" : item === "Negocio seguro" ? "🛡" : item.slice(0, 2).toUpperCase()}</span>
               <span>{item === "Compras" ? "Compras / Proveedores" : item}</span>
             </button>
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <button className={section === "Stock vs Inventario" ? "menu-item active" : "menu-item"} onClick={() => setSection("Stock vs Inventario")} style={{width:"100%",marginBottom:12}}>
+          <button className={section === "Stock vs Inventario" ? "menu-item active" : "menu-item"} disabled={correccionAbierta} onClick={() => { if (!correccionAbierta) setSection("Stock vs Inventario"); }} style={{width:"100%",marginBottom:12}}>
             <span className="menu-icon">SI</span><span>Stock vs Inventario</span>
           </button>
           <div className="user-card">
@@ -107,7 +114,7 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
       <main className="main" style={purchasesOnly ? {width:"100%",maxWidth:"100%",margin:0} : undefined}>
         <section className="content">
           {section === "Inicio" && <Inicio empresa={empresa} onProductos={() => setSection("Productos")} onStock={() => setSection("Stock")} onCaja={() => setSection("Ventas")} />}
-          {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
+          {section === "Productos" && <Productos key={empresa.empresa_id} empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} puedeCorregirUnidad={puedeCorregirUnidad} onCorreccionAbierta={setCorreccionAbierta} />}
           {section === "Stock" && <Stock empresaId={empresa.empresa_id} />}
           {section === "Lista de precios" && <ListaPreciosSection empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
           {section === "Ofertas y etiquetas" && <OfertasEtiquetasSection empresaId={empresa.empresa_id} />}
@@ -203,15 +210,25 @@ function Inicio({ empresa, onProductos, onStock, onCaja }: { empresa: EmpresaOpe
   );
 }
 
-function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar: boolean }) {
+function Productos({ empresaId, puedeEditar, puedeCorregirUnidad, onCorreccionAbierta }: { empresaId: string; puedeEditar: boolean; puedeCorregirUnidad: boolean; onCorreccionAbierta: (abierta: boolean) => void }) {
   const [productos, setProductos] = useState<ProductoSigo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const bajaEnCurso = useRef(false);
+  const [estadoBaja, setEstadoBaja] = useState("");
+  const [reactivandoArchivo, setReactivandoArchivo] = useState(false);
+  const [correccionBloqueada, setCorreccionBloqueada] = useState(false);
+  useEffect(() => { onCorreccionAbierta(correccionBloqueada || deletingId !== null || reactivandoArchivo); }, [correccionBloqueada, deletingId, reactivandoArchivo, onCorreccionAbierta]);
+  const [errorBaja, setErrorBaja] = useState("");
+  const [verArchivados, setVerArchivados] = useState(false);
   const [editing, setEditing] = useState<ProductoSigo | null>(null);
   const [form, setForm] = useState<ProductoForm>(productoVacio);
   const [unidadesProducto, setUnidadesProducto] = useState<Record<string, UnidadVenta | null>>({});
+  const [revisionesProducto, setRevisionesProducto] = useState<Record<string, string | null>>({});
+  // Capturada junto a la unidad al abrir: nunca actualizar desde el catálogo al guardar.
+  const [unidadRevisionEdicion, setUnidadRevisionEdicion] = useState<string | null>(null);
   const [unidadesDisponibles, setUnidadesDisponibles] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -225,6 +242,23 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
   const [eanCodigo, setEanCodigo] = useState("");
   const [productoSugerido,setProductoSugerido]=useState(0);
   const productSearchRef = useRef<HTMLDivElement | null>(null);
+  const [usuarioCorreccionId, setUsuarioCorreccionId] = useState("");
+  useEffect(() => {
+    let vigente = true;
+    let version = 0;
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      version++; if (vigente) setUsuarioCorreccionId(session?.user.id ?? "");
+    });
+    const initialVersion = version;
+    void supabase.auth.getUser().then(({ data, error }) => {
+      if (vigente && version === initialVersion) setUsuarioCorreccionId(error ? "" : data.user?.id ?? "");
+    }).catch(() => { if (vigente && version === initialVersion) setUsuarioCorreccionId(""); });
+    return () => { vigente = false; listener.subscription.unsubscribe(); };
+  }, []);
+  const correccion = useCorreccionUnidadInicial({
+    empresaId, usuarioId: usuarioCorreccionId, permitido: puedeCorregirUnidad, cliente: supabase,
+    storage: () => window.sessionStorage, onUpdated: () => { setScanResult(null); void cargar(); }, onBlocked: setCorreccionBloqueada,
+  });
 
   async function cargar() {
     setLoading(true);
@@ -232,11 +266,14 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
     try {
       setProductos(await listarProductosSigo(empresaId));
       try {
-        setUnidadesProducto(await listarUnidadesProductoSigo(empresaId));
+        const catalogo = await listarRevisionesUnidadProductoSigo(empresaId);
+        setUnidadesProducto(Object.fromEntries(Object.entries(catalogo).map(([id, dato]) => [id, dato.unidad_medida])));
+        setRevisionesProducto(Object.fromEntries(Object.entries(catalogo).map(([id, dato]) => [id, dato.unidad_revision])));
         setUnidadesDisponibles(true);
       } catch {
         setUnidadesDisponibles(false);
         setUnidadesProducto({});
+        setRevisionesProducto({});
       }
     } catch (err) {
       setProductos([]);
@@ -267,8 +304,9 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
   }, [productos, search]);
 
   function abrirNuevo() {
-    if (!puedeEditar) return;
+    if (!puedeEditar || correccionBloqueada || deletingId !== null || reactivandoArchivo) return;
     setEditing(null);
+    setUnidadRevisionEdicion(null);
     setForm(productoVacio);
     setFormError("");
     setGuardadoSinVerificar(false);
@@ -276,8 +314,9 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
   }
 
   function abrirEdicion(producto: ProductoSigo) {
-    if (!puedeEditar) return;
+    if (!puedeEditar || correccionBloqueada || deletingId !== null || reactivandoArchivo) return;
     setEditing(producto);
+    setUnidadRevisionEdicion(revisionesProducto[producto.id] ?? null);
     setGuardadoSinVerificar(false);
     setForm({
       nombre: producto.nombre,
@@ -301,6 +340,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
     if (saving) return;
     setFormOpen(false);
     setEditing(null);
+    setUnidadRevisionEdicion(null);
     setForm(productoVacio);
     setFormError("");
     setAjusteStock(false);
@@ -384,6 +424,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
         costoUltimaCompra: !editing && costoReferencia != null ? costoReferencia : null,
         precioVenta,
         unidadMedida: form.unidadMedida,
+        unidadRevision: editing ? unidadRevisionEdicion : null,
         margenGanancia: null,
         margenPorcentaje: null,
         stockActual: (!editing || ajusteStock) && stockInicial != null ? stockInicial : null,
@@ -392,6 +433,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
       });
       setFormOpen(false);
       setEditing(null);
+      setUnidadRevisionEdicion(null);
       setForm(productoVacio);
       await cargar();
     } catch (err) {
@@ -403,17 +445,18 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
   }
 
   async function eliminar(producto: ProductoSigo) {
-    if (!puedeEditar) return;
-    if (!window.confirm(`¿Dar de baja ${producto.nombre}? No se borrarán ventas, compras ni históricos y sólo se permitirá si el stock está en cero.`)) return;
-    setDeletingId(producto.id);
+    if (!puedeEditar || bajaEnCurso.current || correccionBloqueada || saving || formOpen || reactivandoArchivo) return;
+    setEstadoBaja(""); setErrorBaja("");
+    if (!window.confirm(avisoArchivo(producto.nombre, true))) return;
+    bajaEnCurso.current = true; setDeletingId(producto.id);
     try {
-      await eliminarProductoSigo(empresaId, producto.id);
+      await configurarArchivoProducto(empresaId, producto.id, true);
+      setProductos((actual) => actual.filter((p) => p.id !== producto.id));
+      setEstadoBaja(`${producto.nombre}: baja comercial verificada. Su stock y su historial se conservan en Stock y Archivados.`);
       await cargar();
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "No se pudo dar de baja el producto");
-    } finally {
-      setDeletingId(null);
-    }
+      setErrorBaja(err instanceof Error ? err.message : "No se pudo verificar la baja comercial.");
+    } finally { bajaEnCurso.current = false; setDeletingId(null); }
   }
 
   return (
@@ -421,13 +464,18 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
       <div className="page-header">
         <div>
           <h2>Productos</h2>
-          <p>Administrá tus productos, precios y stock desde un solo lugar.</p>
+          <p>Administrá tus productos, precios y stock desde un solo lugar. La baja comercial conserva existencias. No se borrarán ventas, compras ni históricos.</p>
         </div>
         <div className="topbar-actions product-actions">
           <button className="admin-button" onClick={() => void cargar()}>Actualizar</button>
           {puedeEditar ? <button className="primary-button" onClick={abrirNuevo}>Nuevo producto</button> : <span>Modo solo lectura</span>}
         </div>
       </div>
+
+      {errorBaja && <p role="alert">{errorBaja}</p>}
+      {estadoBaja && <p role="status">{estadoBaja}</p>}
+      <button className="admin-button" disabled={correccionBloqueada || deletingId !== null || reactivandoArchivo} onClick={() => setVerArchivados((v) => !v)}>{verArchivados ? "Ocultar archivados" : "Ver archivados"}</button>
+      {verArchivados && <ProductosArchivados empresaId={empresaId} puedeEditar={puedeEditar && !correccionBloqueada && deletingId === null && !saving && !formOpen} onBusy={setReactivandoArchivo} onUpdated={() => void cargar()} />}
 
       {eanHabilitado && (
         <div className="panel" style={{ border: "2px solid #2563eb" }}>
@@ -508,8 +556,9 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
                       {puedeEditar ? (
                         <div className="row-actions">
                           <button className="admin-button" onClick={() => abrirEdicion(p)}>Editar</button>
+                          {puedeCorregirUnidad && usuarioCorreccionId && (Object.hasOwn(UNIDADES_VENTA, unidadesProducto[p.id] ?? "") || correccion.pendiente(p.id)) && <button type="button" className="admin-button" disabled={Boolean(correccion.controller) || saving || formOpen || deletingId !== null || reactivandoArchivo} onClick={() => correccion.abrir(p.id)}>{correccion.pendiente(p.id) ? "Recuperar corrección pendiente" : "Corregir unidad de carga inicial"}</button>}
                           <button className="admin-button" onClick={() => { abrirEdicion(p); setAjusteStock(true); setForm((actual) => ({ ...actual, stockInicial: String(p.stock_actual ?? 0) })); }}>Ajustar stock</button>
-                          <button className="admin-button danger-button" disabled={deletingId === p.id} onClick={() => void eliminar(p)}>{deletingId === p.id ? "Dando de baja…" : "Dar de baja"}</button>
+                          <button className="admin-button danger-button" disabled={deletingId !== null || correccionBloqueada || saving || formOpen || reactivandoArchivo} onClick={() => void eliminar(p)}>{deletingId === p.id ? "Archivando…" : "Dar de baja comercial"}</button>
                         </div>
                       ) : "Solo lectura"}
                     </td>
@@ -522,6 +571,8 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
         </div>
       )}
 
+      {correccion.error && <p role="alert">{correccion.error}</p>}
+      {correccion.controller && <DialogoCorreccionUnidadInicial controller={correccion.controller} onClose={correccion.cerrar} />}
       {formOpen && puedeEditar && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) cerrarForm(); }}>
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="producto-form-title">
@@ -614,7 +665,7 @@ function Stock({ empresaId }: { empresaId: string }) {
     setLoading(true);
     setError("");
     try {
-      setProductos(await listarProductosSigo(empresaId));
+      setProductos(await listarProductosSigo(empresaId, { inventario: true }));
     } catch (err) {
       setProductos([]);
       setError(err instanceof Error ? err.message : "No se pudo cargar el stock");
@@ -628,17 +679,17 @@ function Stock({ empresaId }: { empresaId: string }) {
   }, [empresaId]);
 
   const visibles = productos.filter((p) => p.stock_actual != null);
-  const criticosCatalogo = visibles.filter((p) => p.stock_minimo != null && Number(p.stock_actual) <= Number(p.stock_minimo));
+  const criticosCatalogo = visibles.filter((p) => !p.archivado_comercial && p.activo !== false && String(p.categoria ?? "").trim().toUpperCase() !== "NO_VENDIBLE" && p.stock_minimo != null && Number(p.stock_actual) <= Number(p.stock_minimo));
   const dineroStock = (valor:number) => valor.toLocaleString("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:2});
   function exportarStockExcel() {
     const esc = (v: unknown) => `"${String(v ?? "").replaceAll('"', '""')}"`;
     const lineas = [
-      ["Producto","Código","Stock","Precio compra","Precio venta","Valorizado compra","Valorizado venta","Margen potencial"],
+      ["Producto","Estado comercial","Código","Stock","Precio compra","Precio venta","Valorizado compra","Valorizado venta","Margen potencial"],
       ...filas.map((p) => {
         const stock = Number(p.stock_actual || 0);
         const costo = Number(p.costo_actual ?? p.costo_ultima_compra ?? 0);
         const venta = Number(p.precio_venta ?? 0);
-        return [p.nombre,p.codigo_barras || p.codigo_interno || "",stock,costo,venta,stock*costo,stock*venta,stock*(venta-costo)];
+        return [p.nombre,p.archivado_comercial ? "Archivado" : p.activo === false ? "Inactivo" : "Operativo",p.codigo_barras || p.codigo_interno || "",stock,costo,venta,stock*costo,stock*venta,stock*(venta-costo)];
       }),
     ];
     const csv = "\uFEFFsep=;\r\n" + lineas.map((fila) => fila.map(esc).join(";")).join("\r\n");
@@ -663,13 +714,15 @@ function Stock({ empresaId }: { empresaId: string }) {
     ? filas.filter((p) => seleccionValorizacion.has(p.id))
     : filas;
   const criticos = productosValorizar.filter((p) =>
-    p.stock_minimo != null && Number(p.stock_actual) <= Number(p.stock_minimo)
+    !p.archivado_comercial && p.activo !== false && String(p.categoria ?? "").trim().toUpperCase() !== "NO_VENDIBLE" && p.stock_minimo != null && Number(p.stock_actual) <= Number(p.stock_minimo)
   );
-  const sinStock = productosValorizar.filter((p) => Number(p.stock_actual) <= 0);
+  const sinStock = productosValorizar.filter((p) => !p.archivado_comercial && p.activo !== false && String(p.categoria ?? "").trim().toUpperCase() !== "NO_VENDIBLE" && Number(p.stock_actual) <= 0);
   const totalUnidades = productosValorizar.reduce((total, p) => total + Number(p.stock_actual || 0), 0);
   const stockValorCosto = productosValorizar.reduce((total,p)=>total + Number(p.stock_actual || 0) * Number(p.costo_actual ?? p.costo_ultima_compra ?? 0),0);
-  const stockValorVenta = productosValorizar.reduce((total,p)=>total + Number(p.stock_actual || 0) * Number(p.precio_venta ?? 0),0);
-  const margenPotencial = stockValorVenta - stockValorCosto;
+  const stockValorVenta = productosValorizar.filter((p) => !p.archivado_comercial && p.activo !== false && String(p.categoria ?? "").trim().toUpperCase() !== "NO_VENDIBLE").reduce((total,p)=>total + Number(p.stock_actual || 0) * Number(p.precio_venta ?? 0),0);
+  const costoOperativo = productosValorizar.filter((p) => !p.archivado_comercial && p.activo !== false && String(p.categoria ?? "").trim().toUpperCase() !== "NO_VENDIBLE").reduce((t,p)=>t + Number(p.stock_actual || 0) * Number(p.costo_actual ?? p.costo_ultima_compra ?? 0),0);
+  const costoArchivado = productosValorizar.filter((p) => p.archivado_comercial).reduce((t,p)=>t + Number(p.stock_actual || 0) * Number(p.costo_actual ?? p.costo_ultima_compra ?? 0),0);
+  const margenPotencial = stockValorVenta - costoOperativo;
 
   return (
     <div className="products-page stock-page-compact">
@@ -687,15 +740,17 @@ function Stock({ empresaId }: { empresaId: string }) {
         <div className="stat-card"><span>Stock crítico</span><strong>{criticos.length}</strong></div>
         <div className="stat-card"><span>Sin stock</span><strong>{sinStock.length}</strong></div>
         <div className="stat-card"><span>Valorizado a compra</span><strong>{dineroStock(stockValorCosto)}</strong></div>
-        <div className="stat-card"><span>Valorizado a venta</span><strong>{dineroStock(stockValorVenta)}</strong></div>
-        <div className="stat-card"><span>Margen potencial</span><strong>{dineroStock(margenPotencial)}</strong></div>
+        <div className="stat-card"><span>Valorizado a venta operativo</span><strong>{dineroStock(stockValorVenta)}</strong></div>
+        <div className="stat-card"><span>Margen potencial operativo</span><strong>{dineroStock(margenPotencial)}</strong></div>
       </div>
 
+      <p>El stock físico incluye archivados. Stock archivado a costo: {dineroStock(costoArchivado)}. No está disponible para nuevas ventas.</p>
       <div className="panel">
         <h3>Buscar stock por nombre o código</h3>
         <BarcodeScanner
           empresaId={empresaId}
           action="consultar"
+          lookupProduct={buscarProductoInventario}
           onQueryChange={(query) => { setBusqueda(query); setScanResult(null); }}
           onManualQuery={(query) => {
             const valor = normalizarBusqueda(query);
@@ -726,7 +781,7 @@ function Stock({ empresaId }: { empresaId: string }) {
               <tbody>
                 {filas.map((p) => {
                   const critico = p.stock_minimo != null && Number(p.stock_actual) <= Number(p.stock_minimo);
-                  return <tr key={p.id}><td><input type="checkbox" aria-label={`Valorizar ${p.nombre}`} checked={seleccionValorizacion.has(p.id)} onChange={(e)=>setSeleccionValorizacion(actual=>{const n=new Set(actual); if(e.target.checked)n.add(p.id);else n.delete(p.id);return n;})}/></td><td><strong>{p.nombre}</strong></td><td>{p.codigo_barras || p.codigo_interno || "-"}</td><td>{p.stock_actual}</td><td>{dineroStock(Number(p.costo_actual ?? p.costo_ultima_compra ?? 0))}</td><td>{dineroStock(Number(p.precio_venta ?? 0))}</td><td>{dineroStock(Number(p.stock_actual||0)*Number(p.costo_actual ?? p.costo_ultima_compra ?? 0))}</td><td>{dineroStock(Number(p.stock_actual||0)*Number(p.precio_venta ?? 0))}</td><td>{Number(p.stock_actual) <= 0 ? "SIN STOCK" : critico ? "CRÍTICO" : "OK"}</td></tr>;
+                  return <tr key={p.id}><td><input type="checkbox" aria-label={`Valorizar ${p.nombre}`} checked={seleccionValorizacion.has(p.id)} onChange={(e)=>setSeleccionValorizacion(actual=>{const n=new Set(actual); if(e.target.checked)n.add(p.id);else n.delete(p.id);return n;})}/></td><td><strong>{p.nombre}</strong>{p.archivado_comercial && <small>Archivado: no disponible para venta</small>}{p.activo === false && <small>Inactivo histórico</small>}</td><td>{p.codigo_barras || p.codigo_interno || "-"}</td><td>{p.stock_actual}</td><td>{dineroStock(Number(p.costo_actual ?? p.costo_ultima_compra ?? 0))}</td><td>{dineroStock(Number(p.precio_venta ?? 0))}</td><td>{dineroStock(Number(p.stock_actual||0)*Number(p.costo_actual ?? p.costo_ultima_compra ?? 0))}</td><td>{dineroStock(Number(p.stock_actual||0)*Number(p.precio_venta ?? 0))}</td><td>{Number(p.stock_actual) <= 0 ? "SIN STOCK" : critico ? "CRÍTICO" : "OK"}</td></tr>;
                 })}
               </tbody>
             </table>
@@ -755,3 +810,4 @@ function ListaPreciosSection({ empresaId, puedeEditar }: { empresaId: string; pu
 function Pendiente({ title }: { title: string }) {
   return <div className="panel"><h2>{title}</h2><p>Módulo en integración operativa. No se marca como aprobado hasta probar el circuito real.</p></div>;
 }
+

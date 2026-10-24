@@ -1,0 +1,101 @@
+[
+  {
+    "proname": "aplicar_margen_masivo_sigo",
+    "identity_args": "p_empresa_id uuid, p_margen_porcentaje numeric, p_producto_ids uuid[], p_base_costo text, p_redondeo numeric",
+    "owner": "postgres",
+    "body_md5": "9f3972cf398ab7819c48d29d1d319379",
+    "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=public"
+    ]
+  },
+  {
+    "proname": "cambiar_compra_sigo",
+    "identity_args": "p_empresa_id uuid, p_compra_id uuid, p_accion text, p_proveedor_id uuid, p_fecha date, p_tipo text, p_numero text, p_items jsonb",
+    "owner": "postgres",
+    "body_md5": "470d2ec837c3fa16a211a949bd17fce9",
+    "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=pg_catalog, public"
+    ]
+  },
+  {
+    "proname": "confirmar_compra_sigo",
+    "identity_args": "p_empresa_id uuid, p_proveedor_id uuid, p_items jsonb, p_fecha date, p_tipo_comprobante text, p_numero_comprobante text, p_idempotency_key text",
+    "owner": "postgres",
+    "body_md5": "c1012e7d6c134b057feccb1edbc21e5b",
+    "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=public"
+    ]
+  },
+  {
+    "proname": "confirmar_venta_sigo_v2",
+    "identity_args": "p_empresa_id uuid, p_items jsonb, p_medio_pago text, p_idempotency_key text, p_cliente_id uuid, p_descuento_pct numeric",
+    "owner": "postgres",
+    "body_md5": "bbb629aafb39901f63ed33a4e4a9e01c",
+    "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ]
+  },
+  {
+    "proname": "guardar_producto_medida_sigo",
+    "identity_args": "p_empresa_id uuid, p_producto_id uuid, p_codigo_interno text, p_codigo_barras text, p_nombre text, p_descripcion text, p_categoria text, p_marca text, p_proveedor text, p_costo_actual numeric, p_costo_ultima_compra numeric, p_precio_venta numeric, p_margen_ganancia numeric, p_margen_porcentaje numeric, p_stock_actual numeric, p_stock_minimo numeric, p_stock_maximo numeric, p_unidad_medida text",
+    "owner": "postgres",
+    "body_md5": "3fa1613fc0c15e7d77239d973949b626",
+    "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ]
+  },
+  {
+    "proname": "listar_productos_sigo",
+    "identity_args": "p_empresa_id uuid",
+    "owner": "postgres",
+    "body_md5": "11df39727f422e2d8ddbd2fe9ae92e11",
+    "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=public"
+    ]
+  },
+  {
+    "proname": "portal_cliente_catalogo_sigo",
+    "identity_args": "p_empresa_id uuid",
+    "owner": "postgres",
+    "body_md5": "6cc5e81062a35d8d145965345c446338",
+    "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=public"
+    ]
+  },
+  {
+    "proname": "redondear_precios_venta_sigo",
+    "identity_args": "p_empresa_id uuid, p_redondeo numeric, p_precios_esperados jsonb",
+    "owner": "postgres",
+    "body_md5": "87a8f7b1e0d735b7ca58454670070b9d",
+    "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=public"
+    ]
+  },
+  {
+    "proname": "registrar_devolucion_sigo",
+    "identity_args": "p_empresa_id uuid, p_venta_id uuid, p_items jsonb, p_motivo text, p_idempotency_key text, p_anular_total boolean",
+    "owner": "postgres",
+    "body_md5": "dd3aa9ea414a3ef25ee6965b33369a6a",
+    "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ]
+  }
+]

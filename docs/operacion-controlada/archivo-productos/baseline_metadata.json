@@ -1,0 +1,26 @@
+{
+  "checked_at": "2026-10-24T15:50:00Z",
+  "scope": "read-only pg_proc metadata, no commercial rows",
+  "functions": [
+    {
+      "signature": "listar_productos_sigo(uuid)",
+      "definition_md5": "11df39727f422e2d8ddbd2fe9ae92e11",
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "security_definer": true,
+      "proconfig": [
+        "search_path=public"
+      ]
+    },
+    {
+      "signature": "portal_cliente_catalogo_sigo(uuid)",
+      "definition_md5": "6cc5e81062a35d8d145965345c446338",
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "security_definer": true,
+      "proconfig": [
+        "search_path=public"
+      ]
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { cantidadEscaladaMedida, normalizarUnidadVenta, type UnidadVenta } from "./ventaPorMedidas";
+import { cantidadEscaladaMedida, normalizarRevisionUnidad, normalizarUnidadVenta, type UnidadVenta } from "./ventaPorMedidas";
 
 export type ProductoSigo = {
   id: string;
@@ -20,6 +20,9 @@ export type ProductoSigo = {
   stock_minimo: number | null;
   stock_maximo: number | null;
   unidad_medida?: UnidadVenta | null;
+  activo?: boolean;
+  archivado_comercial?: boolean;
+  unidad_revision?: string | null;
 };
 
 export type GuardarProductoSigoInput = {
@@ -41,6 +44,8 @@ export type GuardarProductoSigoInput = {
   stockMinimo?: number | null;
   stockMaximo?: number | null;
   unidadMedida?: UnidadVenta | null;
+  // Revisión capturada al abrir el editor; nunca se completa al guardar.
+  unidadRevision?: string | null;
 };
 
 type ProductoGuardadoReadback = {
@@ -54,6 +59,8 @@ type ProductoGuardadoReadback = {
   precio_venta: number | null;
   stock_actual: number | null;
   activo: boolean;
+  archivado_comercial?: boolean;
+  unidad_revision?: string;
 };
 
 function normalizarTexto(value?: string | null) {
@@ -67,6 +74,9 @@ function validarNumeroNoNegativo(nombre: string, valor?: number | null) {
 }
 
 function validarProducto(input: GuardarProductoSigoInput) {
+  if (input.unidadRevision != null && normalizarRevisionUnidad(input.unidadRevision) === null) {
+    throw new Error("La revisión de unidad no es válida. Actualizá el producto antes de guardar.");
+  }
   if (input.unidadMedida != null && normalizarUnidadVenta(input.unidadMedida) !== input.unidadMedida) {
     throw new Error("Unidad de venta inválida.");
   }
@@ -101,12 +111,14 @@ function mensajeErrorBackend(error: unknown, fallback: string) {
     ? String((error as { message?: unknown }).message ?? "")
     : error instanceof Error ? error.message : String(error ?? "");
 
-  if (original.includes("UNIT_CHANGE_REQUIRES_ZERO_STOCK")) return "No se puede cambiar la unidad mientras el producto tenga stock. No se guardaron los cambios.";
+  if (original.includes("CORRECTED_PRODUCT_UNIT_REVIEW_REQUIRED") || original.includes("CORRECTED_PRODUCT_REVISION_REVIEW_REQUIRED")) return "La unidad fue corregida. Actualizá el producto y revisá sus valores antes de guardar. No se guardaron los cambios.";
+  if (original.includes("CORRECTED_PRODUCT_HISTORY_PRESERVE")) return "La unidad corregida debe conservarse para proteger el historial. No se guardaron los cambios.";
+  if (original.includes("UNIT_CHANGE_REQUIRES_ZERO_STOCK")) return "No se guardaron cambios. Si la unidad fue cargada por error y no hubo movimientos, cerrá esta edición y elegí Corregir unidad de carga inicial.";
   if (original.includes("UNIT_CHANGE_REQUIRES_HISTORY_REVIEW")) return "No se puede cambiar la unidad de un producto con movimientos. Revisá su historial; no se guardaron los cambios.";
   if (original.includes("PRODUCT_STOCK_INVALID")) return "El stock o sus límites no respetan la precisión de la unidad. Los valores históricos sólo pueden conservarse sin cambiarlos; revisá la cantidad ingresada.";
   if (original.includes("PRODUCT_VALUE_INVALID")) return "El precio, costo o margen debe ser un número válido y no negativo.";
   if (original.includes("PRODUCT_UNIT_INVALID") || original.includes("UNIDAD_INVALIDA") || original.includes("UNIT_INVALID")) return "La unidad del producto no es válida. Revisala antes de vender.";
-  if (original.includes("guardar_producto_medida_sigo") && (original.includes("Could not find") || original.includes("does not exist"))) return "La base de datos todavía no tiene habilitado el guardado seguro por unidad. No se guardó el producto.";
+  if (original.includes("guardar_producto_medida_revision_sigo") && (original.includes("Could not find") || original.includes("does not exist"))) return "La base de datos todavía no tiene habilitado el guardado seguro por unidad. No se guardó el producto.";
   if (original.includes("PRODUCT_HAS_STOCK")) {
     return "No se puede dar de baja el producto mientras tenga stock. Dejá el stock en cero mediante el circuito operativo antes de desactivarlo.";
   }
@@ -209,39 +221,50 @@ export class ProductoGuardadoSinVerificarError extends Error {
   }
 }
 
-export async function listarUnidadesProductoSigo(empresaId: string): Promise<Record<string, UnidadVenta | null>> {
+export type RevisionUnidadProductoSigo = { unidad_medida: UnidadVenta | null; unidad_revision: string | null };
+
+export async function listarRevisionesUnidadProductoSigo(empresaId: string): Promise<Record<string, RevisionUnidadProductoSigo>> {
   if (!empresaId) throw new Error("EMPRESA_REQUIRED");
-  const mapa: Record<string, UnidadVenta | null> = {};
+  const mapa: Record<string, RevisionUnidadProductoSigo> = {};
   const pageSize = 1000;
   for (let from = 0; ; from += pageSize) {
-    const { data, error } = await supabase.rpc("listar_unidades_producto_sigo", { p_empresa_id: empresaId })
+    const { data, error } = await supabase.rpc("listar_revisiones_unidad_producto_sigo", { p_empresa_id: empresaId })
       .order("producto_id").range(from, from + pageSize - 1);
     if (error) throw new Error("No se pudieron verificar las unidades de los productos. Actualizá el catálogo antes de vender.");
-    const filas = (data ?? []) as { producto_id: string; unidad_medida: unknown }[];
-    for (const fila of filas) mapa[fila.producto_id] = normalizarUnidadVenta(fila.unidad_medida);
+    const filas = (data ?? []) as { producto_id: string; unidad_medida: unknown; unidad_revision: unknown }[];
+    for (const fila of filas) mapa[fila.producto_id] = {
+      unidad_medida: normalizarUnidadVenta(fila.unidad_medida),
+      unidad_revision: normalizarRevisionUnidad(fila.unidad_revision),
+    };
     if (filas.length < pageSize) break;
   }
   return mapa;
 }
 
-export async function listarProductosSigo(empresaId: string): Promise<ProductoSigo[]> {
+export async function listarUnidadesProductoSigo(empresaId: string): Promise<Record<string, UnidadVenta | null>> {
+  const revisiones = await listarRevisionesUnidadProductoSigo(empresaId);
+  return Object.fromEntries(Object.entries(revisiones).map(([id, snapshot]) => [id, snapshot.unidad_medida]));
+}
+
+export async function listarProductosSigo(empresaId: string, opciones: { inventario?: boolean } = {}): Promise<ProductoSigo[]> {
   if (!empresaId) throw new Error("EMPRESA_REQUIRED");
   // PostgREST/Supabase puede limitar una respuesta a 1000 filas. Conservamos paginación
   // y orden estable, también para unidades; nunca completar faltantes como piezas.
   const pageSize = 1000;
   const productos: ProductoSigo[] = [];
   for (let from = 0; ; from += pageSize) {
-    const { data, error } = await supabase.rpc("listar_productos_sigo", { p_empresa_id: empresaId })
+    const { data, error } = await supabase.rpc(opciones.inventario ? "listar_inventario_productos_sigo" : "listar_productos_sigo", { p_empresa_id: empresaId })
       .order("nombre").order("id").range(from, from + pageSize - 1);
     if (error) throw new Error(mensajeErrorBackend(error, "No se pudieron cargar los productos."));
     const pagina = (data ?? []) as ProductoSigo[];
     productos.push(...pagina);
     if (pagina.length < pageSize) break;
   }
+  if (opciones.inventario) return productos.map((producto) => ({ ...producto, unidad_medida: normalizarUnidadVenta(producto.unidad_medida) }));
   // Un error de unidades no oculta el catálogo, pero jamás autoriza vender por pieza.
-  let unidades: Record<string, UnidadVenta | null> = {};
-  try { unidades = await listarUnidadesProductoSigo(empresaId); } catch { /* fail closed por producto */ }
-  return productos.map((producto) => ({ ...producto, unidad_medida: unidades[producto.id] ?? null }));
+  let revisiones: Record<string, RevisionUnidadProductoSigo> = {};
+  try { revisiones = await listarRevisionesUnidadProductoSigo(empresaId); } catch { /* fail closed por producto */ }
+  return productos.map((producto) => ({ ...producto, unidad_medida: revisiones[producto.id]?.unidad_medida ?? null, unidad_revision: revisiones[producto.id]?.unidad_revision ?? null }));
 }
 
 export async function guardarProductoSigo(input: GuardarProductoSigoInput): Promise<string> {
@@ -252,7 +275,7 @@ export async function guardarProductoSigo(input: GuardarProductoSigoInput): Prom
   const esNuevo = !input.productoId;
   let respuesta;
   try {
-    respuesta = await supabase.rpc("guardar_producto_medida_sigo", {
+    respuesta = await supabase.rpc("guardar_producto_medida_revision_sigo", {
       p_empresa_id: input.empresaId,
       p_producto_id: input.productoId ?? null,
       p_codigo_interno: normalizarTexto(input.codigoInterno),
@@ -271,6 +294,7 @@ export async function guardarProductoSigo(input: GuardarProductoSigoInput): Prom
       p_stock_minimo: input.stockMinimo ?? null,
       p_stock_maximo: input.stockMaximo ?? null,
       p_unidad_medida: input.unidadMedida ?? null,
+      p_unidad_revision: input.unidadRevision ?? null,
     });
   } catch {
     throw new ProductoGuardadoSinVerificarError(input.productoId ?? null, "La conexión se interrumpió durante el guardado.");

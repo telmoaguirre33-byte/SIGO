@@ -1,4 +1,4 @@
-import { cantidadEscaladaMedida, normalizarUnidadVenta, type UnidadVenta } from "./ventaPorMedidas";
+import { cantidadEscaladaMedida, normalizarRevisionUnidad, normalizarUnidadVenta, type UnidadVenta } from "./ventaPorMedidas";
 import type { MedioPagoSigo } from "./ventas";
 
 export type PayloadIntentoCobro = {
@@ -7,7 +7,7 @@ export type PayloadIntentoCobro = {
   clienteId: string | null;
   descuentoPct: number;
   idempotencyKey: string;
-  items: { productoId: string; cantidad: number; unidadMedida: UnidadVenta }[];
+  items: { productoId: string; cantidad: number; unidadMedida: UnidadVenta; unidadRevision?: string | null }[];
 };
 export type IntentoCobro = {
   version: 1;
@@ -31,7 +31,7 @@ export function huellaPayloadCobro(payload: PayloadIntentoCobro): string {
   return JSON.stringify({ empresaId: payload.empresaId, medioPago: payload.medioPago,
     clienteId: payload.clienteId, descuentoPct: payload.descuentoPct,
     idempotencyKey: payload.idempotencyKey,
-    items: payload.items.map(({ productoId, cantidad, unidadMedida }) => ({ productoId, cantidad, unidadMedida })) });
+    items: payload.items.map(({ productoId, cantidad, unidadMedida, unidadRevision }) => ({ productoId, cantidad, unidadMedida, ...(unidadRevision !== undefined ? { unidadRevision } : {}) })) });
 }
 
 function validarIntento(value: unknown, empresaId: string): IntentoCobro {
@@ -55,6 +55,7 @@ function validarIntento(value: unknown, empresaId: string): IntentoCobro {
   for (const item of p.items) {
     if (!item || typeof item.productoId !== "string" || !item.productoId.trim()
       || !item.unidadMedida || normalizarUnidadVenta(item.unidadMedida) !== item.unidadMedida) throw new Error(ERROR_LECTURA);
+    if (item.unidadRevision != null && normalizarRevisionUnidad(item.unidadRevision) === null) throw new Error(ERROR_LECTURA);
     try { cantidadEscaladaMedida(item.cantidad, item.unidadMedida); }
     catch { throw new Error(ERROR_LECTURA); }
   }

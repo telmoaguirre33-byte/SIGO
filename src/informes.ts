@@ -270,7 +270,7 @@ export async function cargarResumenOperativoSigo(empresaId: string): Promise<Res
   inicioHoy.setHours(0, 0, 0, 0);
 
   const [productosResult, clientesResult, comprasResult, ventasResult, cajaResult] = await Promise.allSettled([
-    listarProductosSigo(empresaId),
+    listarProductosSigo(empresaId, { inventario: true }),
     listarClientesSigo(empresaId),
     listarComprasSigoCompletas(empresaId),
     listarVentasSigoCompletas(empresaId),
@@ -292,9 +292,9 @@ export async function cargarResumenOperativoSigo(empresaId: string): Promise<Res
   if (cajaResult.status === "rejected") modulosNoDisponibles.push("Caja");
 
   const visibles = productos.filter((producto) => producto.stock_actual != null);
-  const productosSinStock = visibles.filter((producto) => numeroSeguro(producto.stock_actual) <= 0).length;
+  const productosSinStock = visibles.filter((producto) => !producto.archivado_comercial && producto.activo !== false && String(producto.categoria ?? "").trim().toUpperCase() !== "NO_VENDIBLE" && numeroSeguro(producto.stock_actual) <= 0).length;
   const productosCriticos = visibles.filter((producto) =>
-    producto.stock_minimo != null && numeroSeguro(producto.stock_actual) <= numeroSeguro(producto.stock_minimo)
+    !producto.archivado_comercial && producto.activo !== false && String(producto.categoria ?? "").trim().toUpperCase() !== "NO_VENDIBLE" && producto.stock_minimo != null && numeroSeguro(producto.stock_actual) <= numeroSeguro(producto.stock_minimo)
   ).length;
   const unidadesStock = visibles.reduce((total, producto) => total + numeroSeguro(producto.stock_actual), 0);
 

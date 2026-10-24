@@ -1,0 +1,42 @@
+[
+  {
+    "case": "correct_then_archive_preserves_stock_revision",
+    "pass": true,
+    "expected_error": null
+  },
+  {
+    "case": "archive_then_correct_blocked",
+    "pass": true,
+    "expected_error": "INITIAL_UNIT_CORRECTION_NOT_ELIGIBLE"
+  },
+  {
+    "case": "reactivate_then_correct_allowed",
+    "pass": true,
+    "expected_error": null
+  },
+  {
+    "case": "correct_archive_reactivate_reverse_allowed",
+    "pass": true,
+    "expected_error": null
+  },
+  {
+    "case": "archived_stale_cart_rejected",
+    "pass": true,
+    "expected_error": "PRODUCT_ARCHIVED"
+  },
+  {
+    "case": "archived_stale_purchase_rejected",
+    "pass": true,
+    "expected_error": "PRODUCT_ARCHIVED"
+  },
+  {
+    "case": "archived_return_preserves_history_and_stock",
+    "pass": true,
+    "expected_error": null
+  },
+  {
+    "case": "correct_archived_catalog_excludes_inventory_preserves",
+    "pass": true,
+    "expected_error": null
+  }
+]
