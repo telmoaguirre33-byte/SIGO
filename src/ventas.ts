@@ -117,7 +117,7 @@ function mensajeVenta(error: unknown): string {
       ? String((error as { message?: unknown }).message ?? "")
       : String(error ?? "");
 
-  if (raw.includes("SALE_UNIT_MISMATCH")) return "Cambió la unidad de un producto mientras estaba en el carrito. No se confirmó la venta. Actualizá el catálogo y volvé a armar ese renglón.";
+  if (raw.includes("SALE_UNIT_MISMATCH") || raw.includes("CORRECTED_PRODUCT_UNIT_REVIEW_REQUIRED")) return "Cambió la unidad de un producto mientras estaba en el carrito. No se confirmó la venta. Actualizá el catálogo y volvé a armar ese renglón.";
   if (raw.includes("IDEMPOTENCY_CONFLICT")) return "La misma operación ya fue usada con datos distintos. Actualizá las ventas recientes antes de intentar otra confirmación.";
   if (raw.includes("IDEMPOTENCY_KEY_INVALID")) return "No se pudo generar una clave segura para confirmar la venta. Volvé a iniciar el carrito.";
   if (raw.includes("SALE_TOO_MANY_ITEMS")) return "La venta tiene demasiados renglones para una sola operación. Dividila en más de una venta.";
@@ -413,7 +413,7 @@ export class VentaRechazadaSinCambiosError extends Error {
 function rechazoRpcSinCambios(error: { code?: string; message?: string }): boolean {
   if (error.code !== "P0001") return false;
   // Un conflicto idempotente puede señalar una venta anterior: jamás liberar esa key.
-  return /^(ACCOUNT_CURRENT_REQUIRES_CLIENT|AUTH_REQUIRED|CLIENTS_READ_FORBIDDEN|CLIENT_NOT_FOUND|CREDIT_LIMIT_EXCEEDED|IDEMPOTENCY_KEY_INVALID|IDEMPOTENCY_KEY_REQUIRED|INSUFFICIENT_STOCK|PAYMENT_METHOD_INVALID|PRODUCT_NOT_FOUND|PRODUCT_PRICE_REQUIRED|PRODUCT_STOCK_REQUIRED|PRODUCT_UNIT_INVALID|SALES_WRITE_FORBIDDEN|SALE_DISCOUNT_INVALID|SALE_ITEMS_REQUIRED|SALE_ITEM_INVALID|SALE_QUANTITY_INVALID|SALE_TOO_MANY_ITEMS|SALE_UNIT_MISMATCH)(:|$)/.test(error.message ?? "");
+  return /^(ACCOUNT_CURRENT_REQUIRES_CLIENT|AUTH_REQUIRED|CLIENTS_READ_FORBIDDEN|CLIENT_NOT_FOUND|CREDIT_LIMIT_EXCEEDED|IDEMPOTENCY_KEY_INVALID|IDEMPOTENCY_KEY_REQUIRED|INSUFFICIENT_STOCK|PAYMENT_METHOD_INVALID|PRODUCT_NOT_FOUND|PRODUCT_PRICE_REQUIRED|PRODUCT_STOCK_REQUIRED|PRODUCT_UNIT_INVALID|SALES_WRITE_FORBIDDEN|CORRECTED_PRODUCT_UNIT_REVIEW_REQUIRED|SALE_DISCOUNT_INVALID|SALE_ITEMS_REQUIRED|SALE_ITEM_INVALID|SALE_QUANTITY_INVALID|SALE_TOO_MANY_ITEMS|SALE_UNIT_MISMATCH)(:|$)/.test(error.message ?? "");
 }
 
 export async function confirmarVentaSigo(input: {

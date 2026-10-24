@@ -1,0 +1,200 @@
+[
+  {
+    "case": "candidate_not_exposed",
+    "pass": true,
+    "expected_error": "permission denied",
+    "phase": "core"
+  },
+  {
+    "case": "disabled_even_with_grant",
+    "pass": true,
+    "expected_error": "INITIAL_UNIT_CORRECTION_NOT_ENABLED",
+    "phase": "core"
+  },
+  {
+    "case": "same_values_same_id_and_idempotent_receipt",
+    "pass": true,
+    "expected_error": null,
+    "phase": "core"
+  },
+  {
+    "case": "explicit_declaration_required",
+    "pass": true,
+    "expected_error": "INITIAL_UNIT_CORRECTION_CONFIRMATION_REQUIRED",
+    "phase": "core"
+  },
+  {
+    "case": "snapshot_rejects_intervening_price_change",
+    "pass": true,
+    "expected_error": "PRODUCT_CHANGED_RELOAD",
+    "phase": "core"
+  },
+  {
+    "case": "history_rejected_even_zero_stock",
+    "pass": true,
+    "expected_error": "UNIT_CHANGE_REQUIRES_HISTORY_REVIEW",
+    "phase": "core"
+  },
+  {
+    "case": "same_key_different_snapshot_conflict",
+    "pass": true,
+    "expected_error": "IDEMPOTENCY_CONFLICT",
+    "phase": "core"
+  },
+  {
+    "case": "private_audit_unreadable",
+    "pass": true,
+    "expected_error": "permission denied",
+    "phase": "core"
+  },
+  {
+    "case": "cross_tenant_rejected",
+    "pass": true,
+    "expected_error": "FORBIDDEN",
+    "phase": "core"
+  },
+  {
+    "case": "late_audit_failure_rolls_back",
+    "pass": true,
+    "expected_error": "synthetic_failure",
+    "phase": "core"
+  },
+  {
+    "case": "final_candidate_stays_disabled_pristine",
+    "pass": true,
+    "expected_error": null,
+    "phase": "core"
+  },
+  {
+    "case": "sale_missing_expected_unit_rejected",
+    "pass": true,
+    "expected_error": "CORRECTED_PRODUCT_UNIT_REVIEW_REQUIRED",
+    "phase": "guards"
+  },
+  {
+    "case": "sale_old_unit_rejected",
+    "pass": true,
+    "expected_error": "CORRECTED_PRODUCT_UNIT_REVIEW_REQUIRED",
+    "phase": "guards"
+  },
+  {
+    "case": "sale_fresh_unit_and_return_ok",
+    "pass": true,
+    "expected_error": null,
+    "phase": "guards"
+  },
+  {
+    "case": "purchase_missing_unit_rejected",
+    "pass": true,
+    "expected_error": "CORRECTED_PRODUCT_UNIT_REVIEW_REQUIRED",
+    "phase": "guards"
+  },
+  {
+    "case": "purchase_fresh_unit_and_retry_ok",
+    "pass": true,
+    "expected_error": null,
+    "phase": "guards"
+  },
+  {
+    "case": "purchase_retry_unit_payload_conflict",
+    "pass": true,
+    "expected_error": "IDEMPOTENCY_CONFLICT",
+    "phase": "guards"
+  },
+  {
+    "case": "legacy_product_writer_rejected",
+    "pass": true,
+    "expected_error": "CORRECTED_PRODUCT_UNIT_REVIEW_REQUIRED",
+    "phase": "guards"
+  },
+  {
+    "case": "explicit_product_edit_allowed",
+    "pass": true,
+    "expected_error": null,
+    "phase": "guards"
+  },
+  {
+    "case": "raw_movement_without_contract_rejected",
+    "pass": true,
+    "expected_error": "CORRECTED_PRODUCT_UNIT_REVIEW_REQUIRED",
+    "phase": "guards"
+  },
+  {
+    "case": "session_setting_not_authority",
+    "pass": true,
+    "expected_error": "CORRECTED_PRODUCT_UNIT_REVIEW_REQUIRED",
+    "phase": "guards"
+  },
+  {
+    "case": "private_authorizer_not_callable",
+    "pass": true,
+    "expected_error": "permission denied",
+    "phase": "guards"
+  },
+  {
+    "case": "historical_purchase_cancel_uses_protected_history",
+    "pass": true,
+    "expected_error": null,
+    "phase": "guards"
+  },
+  {
+    "case": "purchase_modify_without_unit_rejected",
+    "pass": true,
+    "expected_error": "CORRECTED_PRODUCT_UNIT_REVIEW_REQUIRED",
+    "phase": "guards"
+  },
+  {
+    "case": "purchase_modify_with_unit_ok",
+    "pass": true,
+    "expected_error": null,
+    "phase": "guards"
+  },
+  {
+    "case": "purchase_excess_precision_rejected",
+    "pass": true,
+    "expected_error": "CORRECTED_PRODUCT_QUANTITY_INVALID",
+    "phase": "guards"
+  },
+  {
+    "case": "purchase_milligram_precision_accepted",
+    "pass": true,
+    "expected_error": null,
+    "phase": "guards"
+  },
+  {
+    "case": "legacy_write_after_authorized_rpc_still_blocked",
+    "pass": true,
+    "expected_error": "CORRECTED_PRODUCT_UNIT_REVIEW_REQUIRED",
+    "phase": "guards"
+  },
+  {
+    "case": "truncate_cannot_erase_protected_history",
+    "pass": true,
+    "expected_error": "CORRECTED_PRODUCT_HISTORY_PRESERVE",
+    "phase": "guards"
+  },
+  {
+    "case": "json_history_without_unit_contract_rejected",
+    "pass": true,
+    "expected_error": "CORRECTED_PRODUCT_UNIT_REVIEW_REQUIRED",
+    "phase": "guards"
+  },
+  {
+    "case": "derived_margin_and_rounding_preserve_corrected_product",
+    "pass": true,
+    "expected_error": null,
+    "phase": "guards"
+  },
+  {
+    "case": "uncorrected_legacy_purchase_unchanged",
+    "pass": true,
+    "expected_error": null,
+    "phase": "guards"
+  },
+  {
+    "case": "guards_end_pristine",
+    "pass": true,
+    "expected_error": null,
+    "phase": "guards"
+  }
+]

@@ -39,6 +39,9 @@ jobs:
       - name: Verify read-only production migration gate (synthetic fixtures)
         run: node --test scripts/test-production-migration-gate.mjs
 
+      - name: Verify initial-unit correction UI and purchase contract
+        run: npm run test:unit-correction
+
       - name: Verify administrator notification security
         run: npm run test:admin-notifications
 
