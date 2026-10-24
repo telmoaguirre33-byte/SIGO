@@ -74,7 +74,7 @@ async function rpc(name, payload) {
 }
 for (const eventName of ['sigo:arca:venta', 'sigo:fiscal:caja']) window.addEventListener(eventName, event => state.fiscal.push({ eventName, detail: event.detail }));
 const mocks = {
-  './supabase': 'export const supabase={from:(t)=>globalThis.__cobro.query(t),rpc:(...a)=>{const q={abortSignal:(s)=>{globalThis.__cobro.signal?.(s);return q},then:(r,j)=>Promise.resolve().then(()=>globalThis.__cobro.rpc(...a)).then(r,j)};return q}};',
+  './supabase': 'export const supabase={auth:{onAuthStateChange:(cb)=>{cb("INITIAL_SESSION",{user:{id:"synthetic-operator"}});return {data:{subscription:{unsubscribe(){}}}}}},from:(t)=>globalThis.__cobro.query(t),rpc:(...a)=>{const q={abortSignal:(s)=>{globalThis.__cobro.signal?.(s);return q},then:(r,j)=>Promise.resolve().then(()=>globalThis.__cobro.rpc(...a)).then(r,j)};return q}};',
   './ticketVenta': 'export const imprimirTicketVenta=async(...a)=>globalThis.__cobro.print(...a);',
   './BarcodeScanner': 'import React from "react";export default function Scanner(p){return React.createElement("button",{id:"synthetic-add",onClick:()=>p.onProduct(globalThis.__cobro.products(p.empresaId)[0])},"Add synthetic");}',
   './clientes': 'export const listarClientesSigo=async()=>[];',

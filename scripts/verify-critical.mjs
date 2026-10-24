@@ -62,7 +62,7 @@ const checks = [
       'mercado_pago',
       'Mercado Pago',
       'BarcodeScanner',
-      'const resultado = await confirmarVentaSigo(',
+      'await confirmarVentaSigo(',
       'disabled={!puedeConfirmar||cajaBloqueada}',
       'const cajaBloqueada = confirmando || Boolean(intentoPendiente) || Boolean(errorPersistenciaCobro)',
       'guardarIntentoCobro(intento)',

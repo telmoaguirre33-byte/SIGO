@@ -1,3 +1,4 @@
+import { supabase } from "./supabase";
 import { useEffect, useMemo, useRef, useState } from "react";
 import BarcodeScanner from "./BarcodeScanner";
 import EditorCantidadMedida from "./EditorCantidadMedida";
@@ -77,12 +78,32 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   const intentoVisible = intentoPendiente?.payload.empresaId === empresaId ? intentoPendiente : null;
   const cajaBloqueada = confirmando || Boolean(intentoPendiente) || Boolean(errorPersistenciaCobro);
   const confirmacionEnCursoRef = useRef(false);
+  const operacionCobroRef = useRef<{ empresa: string; controller: AbortController } | null>(null);
   const montadoRef = useRef(false);
   useEffect(() => {
     montadoRef.current = true;
     return () => { montadoRef.current = false; };
   }, []);
+  // Observe auth synchronously; never await auth from a payment or auth callback.
+  // Legacy records contain no actor identity. This only guards this mounted view.
+  const sesionCobroRef = useRef<{ conocida: boolean; usuario: string | null; cambio: boolean; epoca: number }>({ conocida: false, usuario: null, cambio: false, epoca: 0 });
+  useEffect(() => {
+    let activo = true;
+    const { data } = supabase.auth.onAuthStateChange((evento, sesion) => {
+      if (!activo) return;
+      const actual = sesionCobroRef.current;
+      const usuario = sesion?.user?.id ?? null;
+      const cambio = evento === "SIGNED_OUT" || (actual.conocida ? actual.usuario !== usuario : evento !== "INITIAL_SESSION");
+      sesionCobroRef.current = { conocida: true, usuario, cambio: actual.cambio || cambio,
+        epoca: actual.epoca + (cambio ? 1 : 0) };
+    });
+    return () => { activo = false; data.subscription.unsubscribe(); };
+  }, []);
   const empresaActivaRef = useRef(empresaId);
+  const contextoEmpresaRef = useRef({ empresa: empresaId, epoca: 0 });
+  if (contextoEmpresaRef.current.empresa !== empresaId) {
+    contextoEmpresaRef.current = { empresa: empresaId, epoca: contextoEmpresaRef.current.epoca + 1 };
+  }
   const buscarRef = useRef<HTMLInputElement | null>(null);
   const cajaRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -92,13 +113,13 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   const productosEncontradosRef = useRef<ProductoSigo[]>([]);
   const productoSeleccionadoIdRef = useRef<string|null>(null);
 
-  async function cargarVentasRecientes(targetEmpresaId = empresaId) {
+  async function cargarVentasRecientes(targetEmpresaId = empresaId, contextoVigente?: () => boolean) {
     setVentasError("");
     try {
       const data = await listarVentasRecientesSigo(targetEmpresaId, 8);
-      if (empresaActivaRef.current === targetEmpresaId) setVentasRecientes(data);
+      if (empresaActivaRef.current === targetEmpresaId && (!contextoVigente || contextoVigente())) setVentasRecientes(data);
     } catch (err) {
-      if (empresaActivaRef.current !== targetEmpresaId) return;
+      if (empresaActivaRef.current !== targetEmpresaId || (contextoVigente && !contextoVigente())) return;
       setVentasRecientes([]);
       setVentasError(err instanceof Error ? err.message : "No se pudieron verificar las ventas recientes.");
     }
@@ -106,6 +127,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
 
   useEffect(() => {
     let cancelled = false;
+    if (operacionCobroRef.current && operacionCobroRef.current.empresa !== empresaId) operacionCobroRef.current.controller.abort();
     empresaActivaRef.current = empresaId;
     setItems([]);
     setUnidadesProducto({});
@@ -457,21 +479,50 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   async function confirmar(imprimirDespues = false, emitirFiscalDespues = false, recuperar = false) {
     if (confirmando || confirmacionEnCursoRef.current || errorPersistenciaCobro
       || (recuperar ? !intentoPendiente : !puedeConfirmar)) return;
+    const sesionConfirmacion = sesionCobroRef.current;
+    if (!sesionConfirmacion.conocida || !sesionConfirmacion.usuario || sesionConfirmacion.cambio) {
+      setError("La sesión cambió o todavía no pudo verificarse. Recargá la caja antes de recuperar o confirmar un cobro.");
+      return;
+    }
     confirmacionEnCursoRef.current = true;
     const empresaConfirmacion = empresaId;
+    const epocaEmpresa = contextoEmpresaRef.current.epoca;
+    const contextoVigente = () => {
+      const actual = sesionCobroRef.current;
+      return montadoRef.current && empresaActivaRef.current === empresaConfirmacion
+        && contextoEmpresaRef.current.empresa === empresaConfirmacion && contextoEmpresaRef.current.epoca === epocaEmpresa
+        && actual.conocida && !actual.cambio && actual.usuario === sesionConfirmacion.usuario
+        && actual.epoca === sesionConfirmacion.epoca;
+    };
     let intento: IntentoCobro | null = null;
     let protegido = false;
+    let adoptarConfirmado = false;
+    const controller = new AbortController();
+    let dejarObservarSesion: (() => void) | undefined;
+    let conciliacionEnCurso: Promise<unknown> | undefined;
+    operacionCobroRef.current = { empresa: empresaConfirmacion, controller };
     setConfirmando(true);
     setError("");
     setExito("");
     setAdvertencia("");
     try {
+      // Keep this operation observer until settlement, including while the POS is
+      // unmounted, so a delayed SDK token lookup cannot dispatch under a new user.
+      const { data } = supabase.auth.onAuthStateChange((evento, sesion) => {
+        if (evento === "SIGNED_OUT" || sesion?.user?.id !== sesionConfirmacion.usuario) controller.abort();
+      });
+      dejarObservarSesion = () => data.subscription.unsubscribe();
       if (recuperar) {
         // Leer otra vez detecta cambios de sesión antes de enviar. No tomar nada del carrito.
         intento = leerIntentoCobro(empresaConfirmacion);
-        if (!intento || intento.estado !== "pendiente" || intento.huella !== intentoPendiente?.huella) {
+        if (!contextoVigente() || !intento || intento.payload.empresaId !== empresaConfirmacion
+          || intento.payload.idempotencyKey !== intentoPendiente?.payload.idempotencyKey
+          || intento.huella !== intentoPendiente?.huella
+          || !["pendiente", "confirmado"].includes(intento.estado)) {
           throw new Error("El intento guardado cambió. Recargá la caja para revisar su estado antes de cobrar.");
         }
+        // A late ACK may have confirmed storage after this view loaded its snapshot.
+        adoptarConfirmado = intento.estado === "confirmado";
       } else {
         intento = crearIntentoCobro({
           empresaId: empresaConfirmacion, medioPago, clienteId: clienteId || null, descuentoPct,
@@ -479,38 +530,45 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
           items: items.map((item) => ({ productoId: item.producto.id, cantidad: item.cantidad, unidadMedida: item.unidad })),
         }, total);
       }
-      guardarIntentoCobro(intento);
-      setIntentoPendiente(intento);
+      if (!adoptarConfirmado) guardarIntentoCobro(intento);
+      if (!adoptarConfirmado) setIntentoPendiente(intento);
       protegido = true;
-      const resultado = await confirmarVentaSigo(intento.payload, {
+      const resultado = adoptarConfirmado ? {
+        ventaId: intento.ventaId!,
+        verificacion: Promise.resolve({ integridad: "no_verificada" as const, totalVerificado: null }),
+      } : await confirmarVentaSigo(intento.payload, {
+        contextoVigente,
+        signal: controller.signal,
         antesDeEnviar: () => {
+          if (!contextoVigente()) throw new Error("La sesión o empresa cambió. Conservamos el intento; recargá la caja para revisarlo.");
           const actualizado: IntentoCobro = { ...intento!, fase: "enviado" };
           guardarIntentoCobro(actualizado);
           intento = actualizado;
-          if (montadoRef.current && empresaActivaRef.current === empresaConfirmacion) setIntentoPendiente(actualizado);
+          if (contextoVigente()) setIntentoPendiente(actualizado);
         },
       });
+      conciliacionEnCurso = resultado.verificacion;
       // Tener UUID confirma la escritura aunque falle la conciliación posterior.
       // Persistir también si el operador cambió de empresa mientras esperaba.
       let guardado = true;
-      try { registrarCobroConfirmado(intento, resultado.ventaId); }
+      try { if (!adoptarConfirmado) registrarCobroConfirmado(intento, resultado.ventaId); }
       catch { guardado = false; }
       try { sessionStorage.setItem(`sigo:ultima-venta:${empresaConfirmacion}`, resultado.ventaId); } catch { /* el registro confirmado también guarda el UUID */ }
-      if (!montadoRef.current || empresaActivaRef.current !== empresaConfirmacion) {
+      if (!contextoVigente()) {
         void resultado.verificacion.catch(() => undefined);
         return;
       }
       if (guardado) setIntentoPendiente(null);
       else setError("La venta quedó confirmada, pero no se pudo guardar su estado en este navegador. No hagas otro cobro: usá Recuperar el mismo cobro para guardar el resultado.");
       setExito(recuperar ? "Cobro recuperado. No se creó una venta adicional. Podés facturar o reimprimir esta venta con F11/F12." : "Venta confirmada");
-      window.setTimeout(() => { if (montadoRef.current && empresaActivaRef.current === empresaConfirmacion) setExito(""); }, recuperar ? 9000 : 2200);
+      window.setTimeout(() => { if (contextoVigente()) setExito(""); }, recuperar ? 9000 : 2200);
       setUltimaVentaTicket(resultado.ventaId);
       // La recuperación nunca reanuda autorizaciones de impresión o emisión fiscal.
       if (!recuperar && emitirFiscalDespues) window.dispatchEvent(new CustomEvent("sigo:arca:venta", { detail: { empresaId: empresaConfirmacion, ventaId: resultado.ventaId } }));
       setAdvertencia("");
       const totalEsperado = intento.totalEsperado;
       void resultado.verificacion.then((verificado) => {
-        if (!montadoRef.current || empresaActivaRef.current !== empresaConfirmacion) return;
+        if (!contextoVigente()) return;
         const advertencias: string[] = [];
         if (verificado.totalVerificado != null && Math.abs(verificado.totalVerificado - totalEsperado) > DINERO_TOLERANCIA) {
           advertencias.push(`El precio cambió mientras confirmabas. SIGO registró el total vigente del backend: $ ${verificado.totalVerificado.toLocaleString("es-AR")}.`);
@@ -522,11 +580,11 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         }
         setAdvertencia(advertencias.join(" "));
       }).catch(() => {
-        if (montadoRef.current && empresaActivaRef.current === empresaConfirmacion) setAdvertencia("La venta quedó confirmada, pero no se pudo verificar la conciliación posterior. No repitas la venta hasta revisar Ventas/Informes.");
+        if (contextoVigente()) setAdvertencia("La venta quedó confirmada, pero no se pudo verificar la conciliación posterior. No repitas la venta hasta revisar Ventas/Informes.");
       });
       if (!recuperar && imprimirDespues) {
         void imprimirTicketVenta(empresaConfirmacion, resultado.ventaId, "80", true).catch((printErr) => {
-          if (montadoRef.current && empresaActivaRef.current === empresaConfirmacion) setError(printErr instanceof Error ? printErr.message : "La venta se confirmó, pero no se pudo abrir la impresión del ticket.");
+          if (contextoVigente()) setError(printErr instanceof Error ? printErr.message : "La venta se confirmó, pero no se pudo abrir la impresión del ticket.");
         });
       }
       // En recuperación el catálogo puede contener ya el stock descontado: releer, no restarlo otra vez.
@@ -538,9 +596,9 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         }));
       } else {
         void listarProductosSigo(empresaConfirmacion).then((data) => {
-          if (montadoRef.current && empresaActivaRef.current === empresaConfirmacion) setCatalogo(data);
+          if (contextoVigente()) setCatalogo(data);
         }).catch(() => {
-          if (montadoRef.current && empresaActivaRef.current === empresaConfirmacion) setCatalogoError("El cobro fue recuperado, pero no se pudo actualizar el catálogo. Recargá antes de otra venta.");
+          if (contextoVigente()) setCatalogoError("El cobro fue recuperado, pero no se pudo actualizar el catálogo. Recargá antes de otra venta.");
         });
       }
       setItems([]);
@@ -550,11 +608,11 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       setClienteId("");
       setMedioPago("efectivo");
       void listarClientesSigo(empresaConfirmacion).then((data) => {
-        if (montadoRef.current && empresaActivaRef.current === empresaConfirmacion) setClientes(data);
+        if (contextoVigente()) setClientes(data);
       }).catch((refreshErr) => {
-        if (montadoRef.current && empresaActivaRef.current === empresaConfirmacion) setClientesError(refreshErr instanceof Error ? refreshErr.message : "No se pudieron actualizar los clientes.");
+        if (contextoVigente()) setClientesError(refreshErr instanceof Error ? refreshErr.message : "No se pudieron actualizar los clientes.");
       });
-      void cargarVentasRecientes(empresaConfirmacion);
+      void cargarVentasRecientes(empresaConfirmacion, contextoVigente);
     } catch (err) {
       // Solo un rechazo definitivo de la primera llamada prueba que este intento no cobró.
       // En una recuperación, el rollback actual NO descarta un commit anterior.
@@ -562,7 +620,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       if (protegido && !recuperar && intento && err instanceof VentaRechazadaSinCambiosError) {
         try { registrarCobroRechazado(intento); rechazoGuardado = true; } catch { /* conservar pendiente */ }
       }
-      if (montadoRef.current && empresaActivaRef.current === empresaConfirmacion) {
+      if (contextoVigente()) {
         if (rechazoGuardado) setIntentoPendiente(null);
         setError(err instanceof Error ? err.message : "No se pudo confirmar la venta.");
         if (protegido && !rechazoGuardado) setAdvertencia(!recuperar && intento?.fase === "preparacion"
@@ -570,6 +628,11 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
           : "El resultado del cobro no está verificado. No vuelvas a armar ni cobrar esta venta: recuperá el mismo intento con el botón de recuperación.");
       }
     } finally {
+      // Keep cancellation active through the bounded readback as well. A stale
+      // callback may never refresh another actor's view or start its next read.
+      if (conciliacionEnCurso) void conciliacionEnCurso.then(dejarObservarSesion, dejarObservarSesion);
+      else dejarObservarSesion?.();
+      if (operacionCobroRef.current?.controller === controller) operacionCobroRef.current = null;
       confirmacionEnCursoRef.current = false;
       if (montadoRef.current) setConfirmando(false);
     }

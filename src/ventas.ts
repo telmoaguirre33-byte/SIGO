@@ -425,6 +425,25 @@ function rechazoRpcSinCambios(error: { code?: string; message?: string }): boole
   return /^(ACCOUNT_CURRENT_REQUIRES_CLIENT|AUTH_REQUIRED|CLIENTS_READ_FORBIDDEN|CLIENT_NOT_FOUND|CREDIT_LIMIT_EXCEEDED|IDEMPOTENCY_KEY_INVALID|IDEMPOTENCY_KEY_REQUIRED|INSUFFICIENT_STOCK|PAYMENT_METHOD_INVALID|PRODUCT_NOT_FOUND|PRODUCT_PRICE_REQUIRED|PRODUCT_STOCK_REQUIRED|PRODUCT_UNIT_INVALID|SALES_WRITE_FORBIDDEN|SALE_DISCOUNT_INVALID|SALE_ITEMS_REQUIRED|SALE_ITEM_INVALID|SALE_QUANTITY_INVALID|SALE_TOO_MANY_ITEMS|SALE_UNIT_MISMATCH)(:|$)/.test(error.message ?? "");
 }
 
+async function conCancelacionVenta<T>(plazo: AbortSignal, externa: AbortSignal | undefined, tarea: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  const abortar = () => {
+    controller.abort();
+    plazo.removeEventListener("abort", abortar);
+    externa?.removeEventListener("abort", abortar);
+  };
+  plazo.addEventListener("abort", abortar, { once: true });
+  externa?.addEventListener("abort", abortar, { once: true });
+  if (plazo.aborted || externa?.aborted) abortar();
+  try {
+    controller.signal.throwIfAborted();
+    return await tarea(controller.signal);
+  } finally {
+    plazo.removeEventListener("abort", abortar);
+    externa?.removeEventListener("abort", abortar);
+  }
+}
+
 export async function confirmarVentaSigo(input: {
   empresaId: string;
   items: VentaItemSigoInput[];
@@ -432,7 +451,7 @@ export async function confirmarVentaSigo(input: {
   clienteId?: string | null;
   descuentoPct?: number;
   idempotencyKey?: string;
-}, opciones: { antesDeEnviar?: () => void } = {}): Promise<{
+}, opciones: { antesDeEnviar?: () => void; contextoVigente?: () => boolean; signal?: AbortSignal } = {}): Promise<{
   ventaId: string;
   idempotencyKey: string;
   integridad: IntegridadVentaSigo;
@@ -469,18 +488,18 @@ export async function confirmarVentaSigo(input: {
   const idempotencyKey = normalizarIdentificador(input.idempotencyKey ?? crearIdempotencyKey());
   if (!idempotencyKey) throw new VentaRechazadaSinCambiosError("No se pudo generar una clave segura para confirmar la venta.");
 
-  const { estadoReintento, stockAntes } = await esperarCobro("preparacion", 12000, async (signal) => {
+  const { estadoReintento, stockAntes } = await esperarCobro("preparacion", 12000, (plazo) => conCancelacionVenta(plazo, opciones.signal, async (signal) => {
     const estadoReintento = await detectarEstadoReintento(empresaId, idempotencyKey, signal);
     signal.throwIfAborted();
     const stockAntes = await capturarStockAntes(empresaId, itemsConsolidados, estadoReintento, signal);
     signal.throwIfAborted();
     return { estadoReintento, stockAntes };
-  });
+  }));
 
   // This synchronous durable barrier runs before the mutation is even constructed.
   // An exception here prevents dispatch. Legacy callers need no new parameter.
   opciones.antesDeEnviar?.();
-  const { data, error } = await esperarCobro("envio", 25000, async (signal) => {
+  const { data, error } = await esperarCobro("envio", 25000, (plazo) => conCancelacionVenta(plazo, opciones.signal, async (signal) => {
     signal.throwIfAborted();
     return await supabase.rpc("confirmar_venta_sigo_v2", {
     p_empresa_id: empresaId,
@@ -494,20 +513,24 @@ export async function confirmarVentaSigo(input: {
     p_cliente_id: clienteId,
     p_descuento_pct: descuentoPct,
     }).abortSignal(signal);
-  });
+  }));
 
   if (error) {
     if (rechazoRpcSinCambios(error)) throw new VentaRechazadaSinCambiosError(mensajeVenta(error));
     throw new Error(mensajeVenta(error));
   }
-  const ventaId = normalizarIdentificador(typeof data === "string" ? data : String(data ?? ""));
-  if (!ventaId) throw new Error("La venta no devolvió comprobante. No la repitas hasta verificar su estado.");
+  if (typeof data !== "string" || data.length !== 36 || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data)) {
+    throw new Error("La venta no devolvió comprobante válido. No la repitas hasta verificar su estado.");
+  }
+  const ventaId = data;
 
   // La RPC confirma el cobro y descuenta el stock en una sola transacción.
   // Las lecturas de conciliación siguen ejecutándose, pero ya no bloquean la caja.
-  const verificacion = esperarCobro("verificacion", 12000, async (signal) => {
+  const verificacion = esperarCobro("verificacion", 12000, (plazo) => conCancelacionVenta(plazo, opciones.signal, async (signal) => {
+    if (opciones.contextoVigente && !opciones.contextoVigente()) throw new Error("SALE_CONTEXT_CHANGED");
     const cabecera = await leerCabeceraVentaConfirmada(empresaId, ventaId, input.medioPago, clienteId, signal);
     signal.throwIfAborted();
+    if (opciones.contextoVigente && !opciones.contextoVigente()) throw new Error("SALE_CONTEXT_CHANGED");
     const [integridadCaja, integridadStock] = await Promise.all([
       cabecera.total == null
         ? Promise.resolve(cabecera.integridad === "revisar" ? "revisar" as const : "no_verificada" as const)
@@ -532,7 +555,7 @@ export async function confirmarVentaSigo(input: {
       integridadStock,
       totalVerificado: cabecera.total,
     };
-  }).catch(() => ({
+  })).catch(() => ({
     integridad: "no_verificada" as const, integridadCabecera: "no_verificada" as const,
     integridadCaja: "no_verificada" as const, integridadStock: "no_verificada" as const, totalVerificado: null,
   }));
