@@ -91,8 +91,8 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
   const [borradoresServidor,setBorradoresServidor]=useState<BorradorCompraSigo[]>([]);
   const [borradorServidorId,setBorradorServidorId]=useState<string|null>(null);
   const [guardandoBorradorServidor,setGuardandoBorradorServidor]=useState(false);
-  const [detalleCompra,setDetalleCompra]=useState<{compra:CompraSigo;titulo:string;items:{productoId:string;nombre:string;codigo:string;cantidad:number;costo:number}[]}|null>(null);
-  const [edicionCompra,setEdicionCompra]=useState<{proveedorId:string;fecha:string;tipo:string;numero:string;items:{productoId:string;cantidad:string;costo:string}[]}|null>(null);
+  const [detalleCompra,setDetalleCompra]=useState<{compra:CompraSigo;titulo:string;items:{productoId:string;nombre:string;codigo:string;cantidad:number;costo:number;unidad_medida?:string|null;unidad_revision?:string|null}[]}|null>(null);
+  const [edicionCompra,setEdicionCompra]=useState<{proveedorId:string;fecha:string;tipo:string;numero:string;items:{productoId:string;cantidad:string;costo:string;unidad_medida?:string|null;unidad_revision?:string|null}[]}|null>(null);
   const [guardandoHistorial,setGuardandoHistorial]=useState(false);
   const [imagenHistorial,setImagenHistorial]=useState<string|null>(null);
   const [mensajeWhatsApp,setMensajeWhatsApp]=useState("");
@@ -344,16 +344,19 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
     const costo = Number.isFinite(costoBase) && costoBase >= 0 ? costoBase : 0;
 
     setLineas((actual) => {
-      const existente = actual.find((linea) => linea.producto_id === maestro.id);
+      const existente = actual.find((linea) => linea.producto_id === maestro.id
+        && (linea.unidad_medida ?? null) === (maestro.unidad_medida ?? null)
+        && (linea.unidad_revision ?? null) === (maestro.unidad_revision ?? null));
+      // Si la unidad cambió, no sumar a una cantidad expresada en la unidad anterior.
       if (existente) {
         return actual.map((linea) => linea.key === existente.key
           ? { ...linea, cantidad: Number(linea.cantidad || 0) + 1 }
           : linea);
       }
       if (actual.length === 1 && !actual[0].producto_id) {
-        return [{ ...actual[0], producto_id: maestro.id, cantidad: 1, costo_unitario: costo }];
+        return [{ ...actual[0], producto_id: maestro.id, unidad_medida: maestro.unidad_medida, unidad_revision: maestro.unidad_revision, cantidad: 1, costo_unitario: costo }];
       }
-      return [...actual, { key: nuevaClave(), producto_id: maestro.id, cantidad: 1, costo_unitario: costo }];
+      return [...actual, { key: nuevaClave(), producto_id: maestro.id, unidad_medida: maestro.unidad_medida, unidad_revision: maestro.unidad_revision, cantidad: 1, costo_unitario: costo }];
     });
   }
 
@@ -428,15 +431,20 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
 
   async function abrirCompra(compra:CompraSigo,accion?:"modificar"|"anular"){
     setError("");
+    // Captura el catálogo ya disponible; leer/anular historial no depende de recargarlo.
+    // Una unidad ausente o desactualizada se valida en backend al modificar, no se infiere.
+    if (empresaActivaRef.current !== empresaId) return;
+    const unidades = new Map(productos.map(p => [p.id, { unidad_medida: p.unidad_medida, unidad_revision: p.unidad_revision }]));
     const {data,error:detalleError}=await supabase.from("compra_items_sigo")
       .select("producto_id,cantidad,costo_unitario,productos(nombre,codigo_interno,codigo_barras)")
       .eq("empresa_id",empresaId).eq("compra_id",compra.id);
+    if (empresaActivaRef.current !== empresaId) return;
     if(detalleError){setError(detalleError.message);return;}
     setEdicionCompra(accion==="modificar"?{proveedorId:compra.proveedor_id,fecha:compra.fecha_compra,tipo:compra.tipo_comprobante??"",numero:compra.numero_comprobante??"",
-      items:(data??[]).map(fila=>({productoId:fila.producto_id,cantidad:String(fila.cantidad),costo:String(fila.costo_unitario)}))}:null);
+      items:(data??[]).map(fila=>({productoId:fila.producto_id,unidad_medida:unidades.get(fila.producto_id)?.unidad_medida,unidad_revision:unidades.get(fila.producto_id)?.unidad_revision,cantidad:String(fila.cantidad),costo:String(fila.costo_unitario)}))}:null);
     setDetalleCompra({compra,titulo:`${compra.tipo_comprobante??"Compra"} ${compra.numero_comprobante??""}`,
       items:(data??[]).map(fila=>{const p=Array.isArray(fila.productos)?fila.productos[0]:fila.productos;
-        return {productoId:fila.producto_id,nombre:p?.nombre??"Producto",codigo:p?.codigo_interno||p?.codigo_barras||"—",cantidad:Number(fila.cantidad),costo:Number(fila.costo_unitario)};})});
+        return {productoId:fila.producto_id,unidad_medida:unidades.get(fila.producto_id)?.unidad_medida,unidad_revision:unidades.get(fila.producto_id)?.unidad_revision,nombre:p?.nombre??"Producto",codigo:p?.codigo_interno||p?.codigo_barras||"—",cantidad:Number(fila.cantidad),costo:Number(fila.costo_unitario)};})});
 
   }
 
@@ -444,7 +452,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
     if(!detalleCompra || detalleCompra.compra.estado!=="confirmada")return;
     const c=detalleCompra.compra;
     setEdicionCompra({proveedorId:c.proveedor_id,fecha:c.fecha_compra,tipo:c.tipo_comprobante??"",numero:c.numero_comprobante??"",
-      items:detalleCompra.items.map(x=>({productoId:x.productoId,cantidad:String(x.cantidad),costo:String(x.costo)}))});
+      items:detalleCompra.items.map(x=>({productoId:x.productoId,unidad_medida:x.unidad_medida,unidad_revision:x.unidad_revision,cantidad:String(x.cantidad),costo:String(x.costo)}))});
   }
 
   async function cambiarCompraHistorial(accion:"modificar"|"anular"){
@@ -453,12 +461,12 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
     if(accion==="modificar" && !edicionCompra)return;
     setGuardandoHistorial(true);setError("");
     try{
-      const items=accion==="modificar"?edicionCompra!.items.map(x=>({producto_id:x.productoId,cantidad:Number(x.cantidad),costo_unitario:Number(x.costo)})):null;
+      const items=accion==="modificar"?edicionCompra!.items.map(x=>({producto_id:x.productoId,unidad_medida:x.unidad_medida,unidad_revision:x.unidad_revision,cantidad:Number(x.cantidad),costo_unitario:Number(x.costo)})):null;
       if(items && (items.length===0 || items.some(x=>!x.producto_id || !Number.isFinite(x.cantidad) || x.cantidad<=0 || !Number.isFinite(x.costo_unitario) || x.costo_unitario<0)))throw new Error("Revisá productos, cantidades y costos de la compra.");
       const {error:rpcError}=await supabase.rpc("cambiar_compra_sigo",{p_empresa_id:empresaId,p_compra_id:detalleCompra.compra.id,p_accion:accion,
         p_proveedor_id:accion==="modificar"?edicionCompra!.proveedorId:null,p_fecha:accion==="modificar"?edicionCompra!.fecha:null,
         p_tipo:accion==="modificar"?edicionCompra!.tipo:null,p_numero:accion==="modificar"?edicionCompra!.numero:null,p_items:items});
-      if(rpcError)throw new Error(rpcError.message.includes("STOCK_INSUFFICIENT_TO_REVERSE")?"No se puede descontar el stock de esta compra: parte de la mercadería ya se vendió. Revisá el inventario antes de anularla.":rpcError.message);
+      if(rpcError)throw new Error((rpcError.message.includes("CORRECTED_PRODUCT_PURCHASE_CHANGE_REVIEW_REQUIRED") || rpcError.message.includes("CORRECTED_PRODUCT_REVISION_REVIEW_REQUIRED"))?"La unidad capturada no permite modificar esta compra. Cerrá el editor, volvé a abrirlo y revisá productos, cantidades y costos por unidad antes de guardar. No se aplicó el cambio.":rpcError.message.includes("STOCK_INSUFFICIENT_TO_REVERSE")?"No se puede descontar el stock de esta compra: parte de la mercadería ya se vendió. Revisá el inventario antes de anularla.":rpcError.message);
       setDetalleCompra(null);setEdicionCompra(null);await cargar();
     }catch(err){setError(err instanceof Error?err.message:"No se pudo actualizar la compra.");}
     finally{setGuardandoHistorial(false);}
@@ -586,7 +594,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
         throw new Error("No repitas el mismo producto en una compra. Unificá la cantidad en una sola línea.");
       }
 
-      const items = validas.map(({ producto_id, cantidad, costo_unitario }) => ({ producto_id, cantidad, costo_unitario }));
+      const items = validas.map(({ producto_id, cantidad, costo_unitario, unidad_medida, unidad_revision }) => ({ producto_id, cantidad, costo_unitario, unidad_medida, unidad_revision }));
       const productosFrescos = await listarProductosSigo(empresaOperacion);
       if (empresaActivaRef.current !== empresaOperacion) return;
       const productosMap = new Map(productosFrescos.map((p) => [p.id, p]));
@@ -830,7 +838,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
             <tbody>
               {lineas.map((l) => (
                 <tr key={l.key}>
-                  <td><select value={l.producto_id} onChange={(e) => { const p = productos.find((x) => x.id === e.target.value); const costo = Number(p?.costo_actual ?? p?.costo_ultima_compra ?? 0); const precio = Number(p?.precio_venta ?? 0); const margen = Number(p?.margen_porcentaje ?? (costo > 0 && precio > 0 ? ((precio-costo)/costo)*100 : 0)); editarLinea(l.key, { producto_id: e.target.value, costo_unitario: costo, margen_porcentaje: margen, precio_venta: precio }); }} required><option value="">Seleccionar producto</option>{productos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></td>
+                  <td><select value={l.producto_id} onChange={(e) => { const p = productos.find((x) => x.id === e.target.value); const costo = Number(p?.costo_actual ?? p?.costo_ultima_compra ?? 0); const precio = Number(p?.precio_venta ?? 0); const margen = Number(p?.margen_porcentaje ?? (costo > 0 && precio > 0 ? ((precio-costo)/costo)*100 : 0)); editarLinea(l.key, { producto_id: e.target.value, unidad_medida: p?.unidad_medida, unidad_revision: p?.unidad_revision, costo_unitario: costo, margen_porcentaje: margen, precio_venta: precio }); }} required><option value="">Seleccionar producto</option>{productos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select><small>Unidad capturada: {l.unidad_medida ?? "sin verificar"}</small></td>
                   <td><input type="number" min="0.001" step="0.001" value={l.cantidad || ""} onFocus={(e) => e.currentTarget.select()} onChange={(e) => editarLinea(l.key, { cantidad: e.target.value === "" ? 0 : Number(e.target.value) })} /></td>
                   <td><input type="number" min="0" step="0.01" value={l.costo_unitario || ""} onFocus={(e) => e.currentTarget.select()} onChange={(e) => editarLinea(l.key, { costo_unitario: e.target.value === "" ? 0 : Number(e.target.value) })} /></td>
                   <td><input type="number" step="0.01" value={l.margen_porcentaje || ""} onFocus={(e) => e.currentTarget.select()} onChange={(e) => { const margen=e.target.value===""?0:Number(e.target.value); editarLinea(l.key,{margen_porcentaje:margen,precio_venta:Math.round(l.costo_unitario*(1+margen/100)*100)/100}); }} /></td><td><input type="number" min="0" step="0.01" value={l.precio_venta || ""} onChange={(e) => { const precio=e.target.value===""?0:Number(e.target.value); editarLinea(l.key,{precio_venta:precio,margen_porcentaje:l.costo_unitario>0?((precio-l.costo_unitario)/l.costo_unitario)*100:0}); }} /></td><td>$ {(l.cantidad * l.costo_unitario).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
@@ -886,7 +894,7 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
             <div className="form-group"><label>Fecha</label><input type="date" value={edicionCompra.fecha} onChange={e=>setEdicionCompra(a=>a?({...a,fecha:e.target.value}):a)}/></div>
             <div className="form-group"><label>Tipo de comprobante</label><input value={edicionCompra.tipo} onChange={e=>setEdicionCompra(a=>a?({...a,tipo:e.target.value}):a)}/></div>
             <div className="form-group"><label>Número de comprobante</label><input value={edicionCompra.numero} onChange={e=>setEdicionCompra(a=>a?({...a,numero:e.target.value}):a)}/></div></div>
-            <div className="table-wrapper"><table className="products-table"><thead><tr><th>Artículo</th><th>Cantidad</th><th>Costo unitario</th><th>Subtotal</th><th></th></tr></thead><tbody>{edicionCompra.items.map((item,i)=><tr key={i}><td><select value={item.productoId} onChange={e=>setEdicionCompra(a=>a?({...a,items:a.items.map((x,j)=>j===i?{...x,productoId:e.target.value}:x)}):a)}><option value="">Seleccionar producto</option>{productos.map(p=><option key={p.id} value={p.id}>{p.nombre} · {p.codigo_interno??p.codigo_barras??"sin código"}</option>)}</select></td><td><input type="number" min="0.001" step="0.001" value={item.cantidad} onChange={e=>setEdicionCompra(a=>a?({...a,items:a.items.map((x,j)=>j===i?{...x,cantidad:e.target.value}:x)}):a)}/></td><td><input type="number" min="0" step="0.01" value={item.costo} onChange={e=>setEdicionCompra(a=>a?({...a,items:a.items.map((x,j)=>j===i?{...x,costo:e.target.value}:x)}):a)}/></td><td>$ {(Number(item.cantidad)*Number(item.costo)).toLocaleString("es-AR")}</td><td><button type="button" className="admin-button danger-button" onClick={()=>setEdicionCompra(a=>a?({...a,items:a.items.filter((_,j)=>j!==i)}):a)}>Quitar</button></td></tr>)}</tbody></table></div>
+            <div className="table-wrapper"><table className="products-table"><thead><tr><th>Artículo</th><th>Cantidad</th><th>Costo unitario</th><th>Subtotal</th><th></th></tr></thead><tbody>{edicionCompra.items.map((item,i)=><tr key={i}><td><select value={item.productoId} onChange={e=>setEdicionCompra(a=>a?({...a,items:a.items.map((x,j)=>j===i?{...x,productoId:e.target.value,unidad_medida:productos.find(p=>p.id===e.target.value)?.unidad_medida,unidad_revision:productos.find(p=>p.id===e.target.value)?.unidad_revision}:x)}):a)}><option value="">Seleccionar producto</option>{productos.map(p=><option key={p.id} value={p.id}>{p.nombre} · {p.codigo_interno??p.codigo_barras??"sin código"}</option>)}</select><small>Unidad capturada: {item.unidad_medida ?? "sin verificar"}</small></td><td><input type="number" min="0.001" step="0.001" value={item.cantidad} onChange={e=>setEdicionCompra(a=>a?({...a,items:a.items.map((x,j)=>j===i?{...x,cantidad:e.target.value}:x)}):a)}/></td><td><input type="number" min="0" step="0.01" value={item.costo} onChange={e=>setEdicionCompra(a=>a?({...a,items:a.items.map((x,j)=>j===i?{...x,costo:e.target.value}:x)}):a)}/></td><td>$ {(Number(item.cantidad)*Number(item.costo)).toLocaleString("es-AR")}</td><td><button type="button" className="admin-button danger-button" onClick={()=>setEdicionCompra(a=>a?({...a,items:a.items.filter((_,j)=>j!==i)}):a)}>Quitar</button></td></tr>)}</tbody></table></div>
             <div className="form-actions"><button type="button" className="admin-button" onClick={()=>setEdicionCompra(a=>a?({...a,items:[...a.items,{productoId:"",cantidad:"1",costo:"0"}]}):a)}>+ Agregar artículo</button><button type="button" className="primary-button" disabled={guardandoHistorial} onClick={()=>void cambiarCompraHistorial("modificar")}>{guardandoHistorial?"Guardando…":"Guardar cambios"}</button><button type="button" className="admin-button" onClick={()=>setEdicionCompra(null)}>Cancelar</button></div>
           </div> : <><div className="table-wrapper"><table className="products-table"><thead><tr><th>Artículo</th><th>Código</th><th>Cantidad</th><th>Costo unitario</th><th>Subtotal</th></tr></thead><tbody>{detalleCompra.items.map((item,i)=><tr key={i}><td>{item.nombre}</td><td>{item.codigo}</td><td>{item.cantidad}</td><td>$ {item.costo.toLocaleString("es-AR")}</td><td>$ {(item.cantidad*item.costo).toLocaleString("es-AR")}</td></tr>)}</tbody></table></div>{detalleCompra.compra.estado==="confirmada"&&<div className="form-actions"><button type="button" className="admin-button" onClick={iniciarEdicionCompra}>Modificar</button><button type="button" className="admin-button danger-button" disabled={guardandoHistorial} onClick={()=>void cambiarCompraHistorial("anular")}>Eliminar / anular</button></div>}</>}
         </div>}

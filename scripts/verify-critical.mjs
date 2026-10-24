@@ -42,7 +42,7 @@ const checks = [
   },
   {
     file: 'src/productos.ts',
-    required: ['validarNumeroNoNegativo', 'STOCK_RANGE_INVALID', 'guardar_producto_medida_sigo', 'PRODUCT_HAS_STOCK', 'BARCODE_DUPLICATE_IN_COMPANY'],
+    required: ['validarNumeroNoNegativo', 'STOCK_RANGE_INVALID', 'guardar_producto_medida_revision_sigo', 'p_unidad_revision: input.unidadRevision ?? null', 'PRODUCT_HAS_STOCK', 'BARCODE_DUPLICATE_IN_COMPANY'],
     label: 'safe product lifecycle',
   },
   {

@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
 import { listarProductosSigo } from "./productos";
-import { cantidadEscaladaMedida, normalizarUnidadVenta, subtotalMedida, type UnidadVenta } from "./ventaPorMedidas";
+import { cantidadEscaladaMedida, normalizarRevisionUnidad, normalizarUnidadVenta, subtotalMedida, type UnidadVenta } from "./ventaPorMedidas";
 
 export type MedioPagoSigo =
   | "efectivo"
@@ -15,6 +15,7 @@ export type VentaItemSigoInput = {
   productoId: string;
   cantidad: number;
   unidadMedida?: UnidadVenta;
+  unidadRevision?: string | null;
 };
 
 export type IntegridadVentaSigo = "ok" | "revisar" | "no_verificada";
@@ -75,6 +76,7 @@ function casiIgualDinero(a: number, b: number) {
 function consolidarItemsVenta(items: VentaItemSigoInput[]): VentaItemSigoInput[] {
   const cantidades = new Map<string, number>();
   const unidades = new Map<string, UnidadVenta | undefined>();
+  const revisiones = new Map<string, string | null | undefined>();
   for (const item of items) {
     const productoId = normalizarIdentificador(item.productoId);
     if (!productoId || !Number.isFinite(item.cantidad) || item.cantidad <= 0) {
@@ -86,6 +88,13 @@ function consolidarItemsVenta(items: VentaItemSigoInput[]): VentaItemSigoInput[]
     if (unidades.has(productoId) && unidades.get(productoId) !== item.unidadMedida) {
       throw new Error("Un producto tiene unidades diferentes en el carrito. Retiralo y volvé a seleccionarlo.");
     }
+    if (item.unidadRevision != null && normalizarRevisionUnidad(item.unidadRevision) === null) {
+      throw new Error("La revisión de unidad no es válida. Retirá el renglón y volvé a seleccionarlo.");
+    }
+    if (revisiones.has(productoId) && (revisiones.get(productoId) ?? null) !== (item.unidadRevision ?? null)) {
+      throw new Error("Un producto tiene revisiones de unidad diferentes en el carrito. Retiralo y volvé a seleccionarlo.");
+    }
+    revisiones.set(productoId, item.unidadRevision);
     unidades.set(productoId, item.unidadMedida);
     if (item.unidadMedida !== undefined) {
       try { cantidadEscaladaMedida(item.cantidad, item.unidadMedida); }
@@ -101,7 +110,7 @@ function consolidarItemsVenta(items: VentaItemSigoInput[]): VentaItemSigoInput[]
     cantidades.set(productoId, cantidadAcumulada);
   }
 
-  return Array.from(cantidades, ([productoId, cantidad]) => ({ productoId, cantidad: cantidad / 1000, ...(unidades.get(productoId) ? { unidadMedida: unidades.get(productoId)! } : {}) }));
+  return Array.from(cantidades, ([productoId, cantidad]) => ({ productoId, cantidad: cantidad / 1000, ...(unidades.get(productoId) ? { unidadMedida: unidades.get(productoId)! } : {}), ...(revisiones.get(productoId) !== undefined ? { unidadRevision: revisiones.get(productoId) } : {}) }));
 }
 
 function combinarIntegridad(...estados: IntegridadVentaSigo[]): IntegridadVentaSigo {
@@ -117,7 +126,7 @@ function mensajeVenta(error: unknown): string {
       ? String((error as { message?: unknown }).message ?? "")
       : String(error ?? "");
 
-  if (raw.includes("SALE_UNIT_MISMATCH")) return "Cambió la unidad de un producto mientras estaba en el carrito. No se confirmó la venta. Actualizá el catálogo y volvé a armar ese renglón.";
+  if (raw.includes("SALE_UNIT_MISMATCH") || raw.includes("CORRECTED_PRODUCT_UNIT_REVIEW_REQUIRED") || raw.includes("CORRECTED_PRODUCT_REVISION_REVIEW_REQUIRED")) return "Cambió la unidad de un producto mientras estaba en el carrito. No se confirmó la venta. Actualizá el catálogo y volvé a armar ese renglón.";
   if (raw.includes("IDEMPOTENCY_CONFLICT")) return "La misma operación ya fue usada con datos distintos. Actualizá las ventas recientes antes de intentar otra confirmación.";
   if (raw.includes("IDEMPOTENCY_KEY_INVALID")) return "No se pudo generar una clave segura para confirmar la venta. Volvé a iniciar el carrito.";
   if (raw.includes("SALE_TOO_MANY_ITEMS")) return "La venta tiene demasiados renglones para una sola operación. Dividila en más de una venta.";
@@ -133,6 +142,7 @@ function mensajeVenta(error: unknown): string {
   if (raw.includes("INSUFFICIENT_STOCK")) return "El stock cambió y ya no alcanza para completar la venta. Revisá el carrito.";
   if (raw.includes("PRODUCT_PRICE_REQUIRED")) return "Hay un producto sin precio de venta configurado.";
   if (raw.includes("PRODUCT_STOCK_REQUIRED")) return "Hay un producto sin stock operativo configurado.";
+  if (raw.includes("PRODUCT_ARCHIVED")) return "Uno de los productos fue dado de baja comercial. No se confirmó esta venta; quitá ese producto o pedí su reactivación.";
   if (raw.includes("PRODUCT_NOT_FOUND")) return "Uno de los productos ya no está disponible en esta empresa.";
   if (raw.includes("SALE_ITEMS_REQUIRED")) return "Agregá al menos un producto antes de confirmar.";
   if (raw.includes("AUTH_REQUIRED")) return "La sesión venció. Volvé a ingresar a SIGO.";
@@ -339,7 +349,7 @@ async function verificarIntegridadStockVenta(
     // atribuimos el stock actual exclusivamente a esta confirmación.
     if (estadoReintento !== "nueva" || !stockAntes) return "no_verificada";
 
-    const productosDespues = await listarProductosSigo(empresaId);
+    const productosDespues = await listarProductosSigo(empresaId, { inventario: true });
     const despuesPorId = new Map(productosDespues.map((producto) => [producto.id, producto]));
     let huboMovimientoConcurrente = false;
 
@@ -413,7 +423,7 @@ export class VentaRechazadaSinCambiosError extends Error {
 function rechazoRpcSinCambios(error: { code?: string; message?: string }): boolean {
   if (error.code !== "P0001") return false;
   // Un conflicto idempotente puede señalar una venta anterior: jamás liberar esa key.
-  return /^(ACCOUNT_CURRENT_REQUIRES_CLIENT|AUTH_REQUIRED|CLIENTS_READ_FORBIDDEN|CLIENT_NOT_FOUND|CREDIT_LIMIT_EXCEEDED|IDEMPOTENCY_KEY_INVALID|IDEMPOTENCY_KEY_REQUIRED|INSUFFICIENT_STOCK|PAYMENT_METHOD_INVALID|PRODUCT_NOT_FOUND|PRODUCT_PRICE_REQUIRED|PRODUCT_STOCK_REQUIRED|PRODUCT_UNIT_INVALID|SALES_WRITE_FORBIDDEN|SALE_DISCOUNT_INVALID|SALE_ITEMS_REQUIRED|SALE_ITEM_INVALID|SALE_QUANTITY_INVALID|SALE_TOO_MANY_ITEMS|SALE_UNIT_MISMATCH)(:|$)/.test(error.message ?? "");
+  return /^(ACCOUNT_CURRENT_REQUIRES_CLIENT|AUTH_REQUIRED|CLIENTS_READ_FORBIDDEN|CLIENT_NOT_FOUND|CREDIT_LIMIT_EXCEEDED|IDEMPOTENCY_KEY_INVALID|IDEMPOTENCY_KEY_REQUIRED|INSUFFICIENT_STOCK|PAYMENT_METHOD_INVALID|PRODUCT_ARCHIVED|PRODUCT_NOT_FOUND|PRODUCT_PRICE_REQUIRED|PRODUCT_STOCK_REQUIRED|PRODUCT_UNIT_INVALID|SALES_WRITE_FORBIDDEN|CORRECTED_PRODUCT_UNIT_REVIEW_REQUIRED|CORRECTED_PRODUCT_REVISION_REVIEW_REQUIRED|SALE_DISCOUNT_INVALID|SALE_ITEMS_REQUIRED|SALE_ITEM_INVALID|SALE_QUANTITY_INVALID|SALE_TOO_MANY_ITEMS|SALE_UNIT_MISMATCH)(:|$)/.test(error.message ?? "");
 }
 
 export async function confirmarVentaSigo(input: {
@@ -469,6 +479,7 @@ export async function confirmarVentaSigo(input: {
       producto_id: item.productoId,
       cantidad: item.cantidad,
       ...(item.unidadMedida ? { unidad_medida: item.unidadMedida } : {}),
+      ...(item.unidadRevision !== undefined ? { unidad_revision: item.unidadRevision } : {}),
     })),
     p_medio_pago: input.medioPago,
     p_idempotency_key: idempotencyKey,

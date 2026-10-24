@@ -1,0 +1,18 @@
+{
+  "synthetic_only": true,
+  "installer_sha256": "8e8a34b850b18457a345bd8d606c1b0528248005ef6eaa53503c8956b1885fbd",
+  "results": [
+    {
+      "case": "success",
+      "pass": true
+    },
+    {
+      "case": "late_failure",
+      "pass": true
+    },
+    {
+      "case": "drift",
+      "pass": true
+    }
+  ]
+}

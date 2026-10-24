@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { cantidadEscaladaMedida, normalizarRevisionUnidad } from "./ventaPorMedidas";
 
 export type ProveedorSigo = {
   id: string;
@@ -30,6 +31,9 @@ export type CompraItemInput = {
   producto_id: string;
   cantidad: number;
   costo_unitario: number;
+  // Snapshot al seleccionar: nunca completar desde catálogo al confirmar.
+  unidad_medida?: string | null;
+  unidad_revision?: string | null;
 };
 
 export type VerificacionCompraSigo = {
@@ -131,6 +135,7 @@ async function leerCatalogoActivoCompra(empresaId: string): Promise<ProductoComp
       .select("id,nombre,codigo_interno,codigo_barras,stock_actual,costo_actual")
       .eq("empresa_id", empresaId)
       .eq("activo", true)
+      .eq("archivado_comercial", false)
       .range(desde, desde + PAGINA_PRODUCTOS_PREFLIGHT - 1);
     if (error) throw new Error(`No se pudo validar el catálogo antes de confirmar la compra: ${error.message}`);
 
@@ -184,6 +189,8 @@ function fechaIsoValida(value?: string): boolean {
 }
 
 function mensajeCompra(raw: string): string {
+  if (raw.includes("CORRECTED_PRODUCT_QUANTITY_INVALID")) return "La cantidad debe ser mayor que cero y respetar la precisión de su unidad (como máximo tres decimales). Revisá la cantidad antes de volver a confirmar.";
+  if (raw.includes("CORRECTED_PRODUCT_UNIT_REVIEW_REQUIRED") || raw.includes("CORRECTED_PRODUCT_REVISION_REVIEW_REQUIRED")) return "Se corrigió la unidad de un producto de esta compra. Actualizá el catálogo, volvé a seleccionar ese producto y revisá cantidad y costo por la nueva unidad antes de confirmar.";
   if (raw.includes("PURCHASE_DOCUMENT_DUPLICATE")) return "Ese comprobante ya fue ingresado para este proveedor. SIGO bloqueó la carga para evitar duplicar stock y costos.";
   if (raw.includes("IDEMPOTENCY_CONFLICT")) return "Esta compra ya fue confirmada con la misma clave pero datos distintos. Actualizá Compras antes de volver a intentar.";
   if (raw.includes("IDEMPOTENCY_KEY_REQUIRED") || raw.includes("IDEMPOTENCY_KEY_INVALID")) return "No se pudo generar una clave segura para confirmar la compra. Reiniciá la carga antes de volver a intentar.";
@@ -193,6 +200,7 @@ function mensajeCompra(raw: string): string {
   if (raw.includes("FORBIDDEN")) return "No tenés permiso para registrar compras.";
   if (raw.includes("STOCK_WRITE_REQUIRED")) return "Tu usuario puede cargar compras pero no modificar stock.";
   if (raw.includes("SUPPLIER_NOT_FOUND")) return "El proveedor no pertenece a la empresa activa.";
+  if (raw.includes("PRODUCT_ARCHIVED")) return "El producto está archivado y no admite nuevas compras. Su historial se conserva.";
   if (raw.includes("PRODUCT_NOT_FOUND")) return "Uno de los productos no pertenece a la empresa activa.";
   if (raw.includes("AUTH_REQUIRED")) return "La sesión venció. Volvé a ingresar a SIGO.";
   return raw || "No se pudo confirmar la compra.";
@@ -203,7 +211,7 @@ export function consolidarItemsCompra(items: CompraItemInput[]): CompraItemInput
     throw new Error(`La compra supera ${MAX_COMPRA_ITEMS} líneas. Dividila en más de una operación.`);
   }
 
-  const agrupados = new Map<string, { cantidad: number; costoPonderado: number }>();
+  const agrupados = new Map<string, { cantidad: number; costoPonderado: number; milesimas?: number; unidad_medida?: string | null; unidad_revision?: string | null }>();
 
   for (const item of items) {
     const productoId = item.producto_id?.trim();
@@ -217,17 +225,39 @@ export function consolidarItemsCompra(items: CompraItemInput[]): CompraItemInput
       throw new Error("Hay una línea de compra con costo inválido o fuera del límite operativo.");
     }
 
-    const previo = agrupados.get(productoId) ?? { cantidad: 0, costoPonderado: 0 };
-    const cantidadAcumulada = previo.cantidad + cantidad;
+    let milesimas: number | undefined;
+    if (item.unidad_medida === "kg") {
+      try { milesimas = cantidadEscaladaMedida(cantidad, "kg"); }
+      catch { throw new Error("La cantidad en kg debe tener como máximo tres decimales; no se redondeará automáticamente."); }
+    }
+
+    if (item.unidad_revision != null && normalizarRevisionUnidad(item.unidad_revision) === null) {
+      throw new Error("La revisión de unidad no es válida. Volvé a seleccionar el producto.");
+    }
+    const guardado = agrupados.get(productoId);
+    if (guardado && (guardado.unidad_revision ?? null) !== (item.unidad_revision ?? null)) {
+      throw new Error("El mismo producto tiene revisiones de unidad diferentes. Volvé a seleccionarlo antes de unificar cantidades.");
+    }
+    // null y undefined representan ausencia, nunca una unidad inferida.
+    if (guardado && (guardado.unidad_medida ?? null) !== (item.unidad_medida ?? null)) {
+      throw new Error("El mismo producto tiene unidades diferentes o una línea sin unidad. Revisá y volvé a seleccionar el producto antes de unificar cantidades.");
+    }
+    const previo = guardado ?? { cantidad: 0, costoPonderado: 0, unidad_medida: item.unidad_medida, unidad_revision: item.unidad_revision };
+    // Sumar kg en enteros evita enviar 0.1 + 0.2 como 0.30000000000000004.
+    // Para líneas legacy sin unidad se conserva exactamente el contrato anterior.
+    const milesimasAcumuladas = milesimas === undefined ? undefined : (guardado?.milesimas ?? 0) + milesimas;
+    const cantidadAcumulada = milesimasAcumuladas === undefined ? previo.cantidad + cantidad : milesimasAcumuladas / 1000;
     const costoPonderado = previo.costoPonderado + cantidad * costo;
     if (!Number.isFinite(cantidadAcumulada) || !Number.isFinite(costoPonderado) || cantidadAcumulada > MAX_CANTIDAD_ITEM) {
       throw new Error("La compra supera los valores numéricos permitidos.");
     }
-    agrupados.set(productoId, { cantidad: cantidadAcumulada, costoPonderado });
+    agrupados.set(productoId, { cantidad: cantidadAcumulada, costoPonderado, milesimas: milesimasAcumuladas, unidad_medida: previo.unidad_medida, unidad_revision: previo.unidad_revision });
   }
 
   return [...agrupados.entries()].map(([producto_id, valor]) => ({
     producto_id,
+    ...(valor.unidad_medida !== undefined ? { unidad_medida: valor.unidad_medida } : {}),
+    ...(valor.unidad_revision !== undefined ? { unidad_revision: valor.unidad_revision } : {}),
     cantidad: valor.cantidad,
     costo_unitario: valor.cantidad > 0 ? valor.costoPonderado / valor.cantidad : 0,
   }));
@@ -244,6 +274,7 @@ export async function listarProveedoresSigo(empresaId: string): Promise<Proveedo
       .select("id,empresa_id,razon_social,nombre_fantasia,cuit,telefono,email,direccion,activo")
       .eq("empresa_id", empresaNormalizada)
       .eq("activo", true)
+      .eq("archivado_comercial", false)
       .order("razon_social", { ascending: true })
       .range(desde, desde + PAGINA_PROVEEDORES - 1);
     if (error) throw error;
@@ -301,6 +332,7 @@ export async function guardarProveedorSigo(input: {
         .eq("id", existente.id)
         .eq("empresa_id", empresaId)
         .eq("activo", true)
+      .eq("archivado_comercial", false)
         .select("id,empresa_id,razon_social,nombre_fantasia,cuit,telefono,email,direccion,activo")
         .single();
       if (updateError) throw updateError;

@@ -42,34 +42,34 @@ test("alta producto+unidad usa una sola escritura atómica y verifica unidad", a
   const llamadas = [];
   const { guardarProductoSigo } = await moduloConRpc(async (nombre, params) => {
     llamadas.push({ nombre, params });
-    if (nombre === "guardar_producto_medida_sigo") return { data: producto.id, error: null };
+    if (nombre === "guardar_producto_medida_revision_sigo") return { data: producto.id, error: null };
     if (nombre === "verificar_producto_guardado_sigo") return { data: [producto], error: null };
-    if (nombre === "listar_unidades_producto_sigo") return { data: [{ producto_id: producto.id, unidad_medida: "kg" }], error: null };
+    if (nombre === "listar_revisiones_unidad_producto_sigo") return { data: [{ producto_id: producto.id, unidad_medida: "kg", unidad_revision: "0" }], error: null };
     throw new Error(`RPC no permitida: ${nombre}`);
   });
   assert.equal(await guardarProductoSigo(input), producto.id);
   assert.equal(llamadas[0].params.p_unidad_medida, "kg");
   assert.equal(llamadas[0].params.p_stock_actual, 1.5);
-  assert.deepEqual(llamadas.map((x) => x.nombre), ["guardar_producto_medida_sigo", "verificar_producto_guardado_sigo", "listar_unidades_producto_sigo"]);
+  assert.deepEqual(llamadas.map((x) => x.nombre), ["guardar_producto_medida_revision_sigo", "verificar_producto_guardado_sigo", "listar_revisiones_unidad_producto_sigo"]);
 });
 
 test("wrapper ausente no cae al guardado antiguo ni a unidad separada", async () => {
   const llamadas = [];
   const { guardarProductoSigo } = await moduloConRpc(async (nombre) => {
     llamadas.push(nombre);
-    return { data: null, error: { code: "PGRST202", message: "Could not find guardar_producto_medida_sigo" } };
+    return { data: null, error: { code: "PGRST202", message: "Could not find guardar_producto_medida_revision_sigo" } };
   });
   await assert.rejects(guardarProductoSigo(input), /No se guardó el producto/);
-  assert.deepEqual(llamadas, ["guardar_producto_medida_sigo"]);
+  assert.deepEqual(llamadas, ["guardar_producto_medida_revision_sigo"]);
 });
 
 test("unidad incorrecta postguardado es resultado incierto, no éxito ni segunda escritura", async () => {
   const llamadas = [];
   const modulo = await moduloConRpc(async (nombre) => {
     llamadas.push(nombre);
-    if (nombre === "guardar_producto_medida_sigo") return { data: producto.id, error: null };
+    if (nombre === "guardar_producto_medida_revision_sigo") return { data: producto.id, error: null };
     if (nombre === "verificar_producto_guardado_sigo") return { data: [producto], error: null };
-    return { data: [{ producto_id: producto.id, unidad_medida: "unidad" }], error: null };
+    return { data: [{ producto_id: producto.id, unidad_medida: "unidad", unidad_revision: "0" }], error: null };
   });
   await assert.rejects(modulo.guardarProductoSigo(input), (err) => err instanceof modulo.ProductoGuardadoSinVerificarError && err.productoId === producto.id && /No repitas el alta/.test(err.message));
   assert.equal(llamadas.filter((x) => x.startsWith("guardar")).length, 1);
@@ -79,9 +79,9 @@ test("edición de precio sin unidad explícita conserva unidad del producto", as
   const llamadas = [];
   const { guardarProductoSigo } = await moduloConRpc(async (nombre, params) => {
     llamadas.push({ nombre, params });
-    if (nombre === "guardar_producto_medida_sigo") return { data: producto.id, error: null };
+    if (nombre === "guardar_producto_medida_revision_sigo") return { data: producto.id, error: null };
     if (nombre === "verificar_producto_guardado_sigo") return { data: [producto], error: null };
-    return { data: [{ producto_id: producto.id, unidad_medida: "kg" }], error: null };
+    return { data: [{ producto_id: producto.id, unidad_medida: "kg", unidad_revision: "0" }], error: null };
   });
   await guardarProductoSigo({ empresaId: "empresa-1", productoId: producto.id, nombre: "Queso", precioVenta: 200 });
   assert.equal(llamadas[0].params.p_unidad_medida, null);
@@ -105,7 +105,7 @@ test("catálogo y unidades paginan más de 1000 productos sin omitir el peso", a
   const rangos = [];
   const { listarProductosSigo } = await moduloConRpc(async (nombre, params, range) => {
     rangos.push([nombre, ...range]);
-    const source = nombre === "listar_productos_sigo" ? catalogo : catalogo.map((p) => ({ producto_id: p.id, unidad_medida: "kg" }));
+    const source = nombre === "listar_productos_sigo" ? catalogo : catalogo.map((p) => ({ producto_id: p.id, unidad_medida: "kg", unidad_revision: "0" }));
     return { data: source.slice(range[0], range[1] + 1), error: null };
   });
   const cargados = await listarProductosSigo("empresa-1");
@@ -143,9 +143,9 @@ test("RPC recibe unidad esperada y conflicto concurrente se explica sin confirma
 test("frontend envía stock legado fraccional sin redondeo para validación transaccional", async () => {
   let guardado;
   const { guardarProductoSigo } = await moduloConRpc(async (nombre, params) => {
-    if (nombre === "guardar_producto_medida_sigo") { guardado = params; return { data: producto.id, error: null }; }
+    if (nombre === "guardar_producto_medida_revision_sigo") { guardado = params; return { data: producto.id, error: null }; }
     if (nombre === "verificar_producto_guardado_sigo") return { data: [producto], error: null };
-    return { data: [{ producto_id: producto.id, unidad_medida: "unidad" }], error: null };
+    return { data: [{ producto_id: producto.id, unidad_medida: "unidad", unidad_revision: "0" }], error: null };
   });
   await guardarProductoSigo({ ...input, productoId: producto.id, unidadMedida: "unidad" });
   assert.equal(guardado.p_stock_actual, 1.5);
@@ -180,4 +180,45 @@ test("rechazo transaccional se distingue de resultado incierto sin liberar confl
     const api = await moduloConRpc(async () => ({ data: null, error }), "ventas");
     await assert.rejects(api.confirmarVentaSigo({ empresaId: "empresa-1", items: [{ productoId: "p", cantidad: 1, unidadMedida: "unidad" }], medioPago: "efectivo", idempotencyKey: "retry-key" }), e => (e instanceof api.VentaRechazadaSinCambiosError) === definitivo);
   }
+});
+
+test("revisión canónica conserva precisión bigint y nunca inventa cero", async () => {
+  const { normalizarRevisionUnidad } = await import("../src/ventaPorMedidas.ts");
+  for (const valor of ["0", "1", "9007199254740993", "9223372036854775807"]) assert.equal(normalizarRevisionUnidad(valor), valor);
+  for (const valor of [undefined, null, 0, 1, "", "01", "-1", "+1", "1.0", "1e3", " 1", "9223372036854775808"]) assert.equal(normalizarRevisionUnidad(valor), null);
+  for (const revision of ["9007199254740993", undefined, 1, "01"]) {
+    const api = await moduloConRpc(async nombre => nombre === "listar_productos_sigo"
+      ? { data: [producto], error: null }
+      : { data: [{ producto_id: producto.id, unidad_medida: "kg", unidad_revision: revision }], error: null });
+    assert.equal((await api.listarProductosSigo("empresa-1"))[0].unidad_revision, typeof revision === "string" && revision !== "01" ? revision : null);
+  }
+});
+
+test("guardar producto envía revisión capturada sin consultar catálogo antes de escribir", async () => {
+  const llamadas = [];
+  const api = await moduloConRpc(async (nombre, params) => {
+    llamadas.push({ nombre, params });
+    if (nombre === "guardar_producto_medida_revision_sigo") return { data: producto.id, error: null };
+    if (nombre === "verificar_producto_guardado_sigo") return { data: [producto], error: null };
+    return { data: [{ producto_id: producto.id, unidad_medida: "kg", unidad_revision: "8" }], error: null };
+  });
+  await api.guardarProductoSigo({ ...input, productoId: producto.id, unidadRevision: "7" });
+  assert.equal(llamadas[0].nombre, "guardar_producto_medida_revision_sigo");
+  assert.equal(llamadas[0].params.p_unidad_revision, "7");
+  for (const invalida of [7, "07", "-1"]) await assert.rejects(api.guardarProductoSigo({ ...input, unidadRevision: invalida }), /revisión/);
+  assert.equal(llamadas.filter(x=>x.nombre.startsWith("guardar")).length, 1);
+});
+
+test("venta con misma unidad y revisiones distintas nunca se consolida ni refresca", async () => {
+  let enviado;
+  const api = await moduloConRpc(async (_, params) => {
+    enviado = params.p_items;
+    return { data: null, error: { code: "P0001", message: "CORRECTED_PRODUCT_REVISION_REVIEW_REQUIRED" } };
+  }, "ventas", "\nexport { consolidarItemsVenta };\n");
+  const item = revision => ({ productoId: "p", cantidad: 0.5, unidadMedida: "kg", ...(revision !== undefined ? { unidadRevision: revision } : {}) });
+  assert.deepEqual(api.consolidarItemsVenta([item("7"), item("7")]), [{ ...item("7"), cantidad: 1 }]);
+  for (const revision of ["8", undefined, null]) assert.throws(()=>api.consolidarItemsVenta([item("7"), item(revision)]), /revisiones.*diferentes/);
+  for (const revision of [7, "07", "9223372036854775808"]) assert.throws(()=>api.consolidarItemsVenta([item(revision)]), /revisión.*válida/);
+  await assert.rejects(api.confirmarVentaSigo({ empresaId: "empresa-1", medioPago: "efectivo", idempotencyKey: "same-unit-old-revision", items: [item("7")] }), e => e instanceof api.VentaRechazadaSinCambiosError);
+  assert.deepEqual(enviado, [{ producto_id: "p", cantidad: 0.5, unidad_medida: "kg", unidad_revision: "7" }]);
 });

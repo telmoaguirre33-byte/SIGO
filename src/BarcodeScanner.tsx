@@ -19,6 +19,7 @@ type Props = {
   onProductSearchKeyDown?: (key: string) => boolean;
   onCachedCode?: (code: string) => BarcodeProduct[] | null;
   queryResetKey?: number;
+  lookupProduct?: (empresaId: string, codigo: string) => Promise<BarcodeProduct[]>;
 };
 
 type BarcodeDetectorLike = {
@@ -67,6 +68,7 @@ export default function BarcodeScanner({
   onProductSearchKeyDown,
   onCachedCode,
   queryResetKey,
+  lookupProduct,
 }: Props) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -146,7 +148,7 @@ export default function BarcodeScanner({
     try {
       // En Caja–Venta, los códigos principales conocidos se resuelven desde el catálogo ya cargado.
       // Códigos alternativos o no reconocidos conservan la consulta segura al servidor.
-      const matches = onCachedCode?.(normalized) ?? await buscarProductoPorCodigo(empresaOperacion, normalized);
+      const matches = onCachedCode?.(normalized) ?? await (lookupProduct ?? buscarProductoPorCodigo)(empresaOperacion, normalized);
       const contextoVigente = empresaActivaRef.current === empresaOperacion
         && actionActivaRef.current === actionOperacion
         && requestRef.current === requestId;

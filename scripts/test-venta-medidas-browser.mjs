@@ -21,7 +21,7 @@ const mocks = {
   }, from() { throw new Error('Unexpected database read'); } };`,
   "./clientes": "export const listarClientesSigo = async () => [];",
   "./productos": `export const listarProductosSigo = async () => structuredClone(globalThis.__qa.products);
-    export const listarUnidadesProductoSigo = async () => Object.fromEntries(globalThis.__qa.products.map(p => [p.id,p.unidad_medida]));
+    export const listarRevisionesUnidadProductoSigo = async () => Object.fromEntries(globalThis.__qa.products.map(p => [p.id,{unidad_medida:p.unidad_medida,unidad_revision:p.unidad_revision}]));
     export const guardarProductoSigo = async () => {throw new Error('Product writes are prohibited in browser QA');};`,
   "./ofertasProductos": "export const listarOfertasProductos = async () => []; export const ofertaVigente = () => null; export const precioConOferta = (precio, descuento) => Math.round(precio*(1-descuento/100)*100)/100;",
   "./ventas": `export class VentaRechazadaSinCambiosError extends Error {} export const listarVentasRecientesSigo = async () => [];
@@ -38,7 +38,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import VentaRapidaOperativa from './src/VentaRapidaOperativa';
 const empresaId = '11111111-1111-4111-8111-111111111111';
-const product = (id,nombre,precio_venta,unidad_medida) => ({id,empresa_id:empresaId,nombre,precio_venta,unidad_medida,stock_actual:5,activo:true,codigo_interno:id,codigo_barras:id,descripcion:null,categoria:null,marca:null,proveedor:null,costo_actual:0,costo_ultima_compra:0,margen_ganancia:null,margen_porcentaje:null,stock_minimo:0,stock_maximo:null});
+const product = (id,nombre,precio_venta,unidad_medida) => ({id,empresa_id:empresaId,nombre,precio_venta,unidad_medida,unidad_revision:"7",stock_actual:5,activo:true,codigo_interno:id,codigo_barras:id,descripcion:null,categoria:null,marca:null,proveedor:null,costo_actual:0,costo_ultima_compra:0,margen_ganancia:null,margen_porcentaje:null,stock_minimo:0,stock_maximo:null});
 window.__qa = {empresaId,products:[product('peso-qa','Queso sintético',12000,'kg'),product('micro-qa','Micro sintético',1.99,'kg')],confirms:[],commonPrints:[],fiscalEvents:[],outsideKeys:[],blockedAccess:[]};
 window.fetch = async (...args) => {window.__qa.blockedAccess.push(['fetch',String(args[0])]);throw new Error('Network prohibited');};
 window.print = () => {window.__qa.blockedAccess.push(['print']);throw new Error('Physical printing prohibited');};

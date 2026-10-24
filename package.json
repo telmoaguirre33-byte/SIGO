@@ -10,7 +10,9 @@
     "verify:informes": "node scripts/verify-informes-navigation.mjs",
     "preview": "vite preview",
     "test:admin-notifications": "node scripts/test-admin-notifications.mjs",
-    "test:manual-medidas": "node --experimental-strip-types --test tests/ventaPorMedidas.test.mjs tests/persistenciaMedidas.test.mjs tests/editorCantidadMedida.test.mjs tests/editorCantidadMedida.dom.test.mjs tests/devolucionesMedidas.test.mjs tests/etiquetasPesoVariable.test.mjs tests/resolverEtiquetaVenta.test.mjs && node scripts/test-cobro-recuperacion-flow.mjs"
+    "test:manual-medidas": "node --experimental-strip-types --test tests/ventaPorMedidas.test.mjs tests/persistenciaMedidas.test.mjs tests/editorCantidadMedida.test.mjs tests/editorCantidadMedida.dom.test.mjs tests/devolucionesMedidas.test.mjs tests/etiquetasPesoVariable.test.mjs tests/resolverEtiquetaVenta.test.mjs && node scripts/test-cobro-recuperacion-flow.mjs",
+    "test:unit-correction": "node --experimental-strip-types --test tests/correccionUnidadInicial.test.mjs tests/dialogoCorreccionUnidadInicial.dom.test.mjs tests/adaptadorPersistencia.test.mjs tests/hostCorreccionUnidadInicial.dom.test.mjs tests/correccionBidireccional.test.mjs tests/correccionBidireccional.dom.test.mjs && node tests/compraUnidadEsperada.test.cjs",
+    "test:archivo-productos": "node --test tests/archivoProductos.test.mjs tests/archivoProductos.dom.test.mjs tests/archivoProductos.sql.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
@@ -35,6 +37,8 @@
     "vite": "^7.1.2",
     "esbuild": "^0.28.2",
     "jsdom": "^30.1.3",
-    "playwright": "1.62.1"
+    "playwright": "1.62.1",
+    "@electric-sql/pglite": "0.3.14",
+    "pg": "8.16.3"
   }
 }
