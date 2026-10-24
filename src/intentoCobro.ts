@@ -11,6 +11,8 @@ export type PayloadIntentoCobro = {
 };
 export type IntentoCobro = {
   version: 1;
+  // Missing on older attempts means the RPC may already have been sent.
+  fase?: "preparacion" | "enviado";
   estado: "pendiente" | "confirmado" | "rechazado";
   payload: PayloadIntentoCobro;
   huella: string;
@@ -38,7 +40,8 @@ function validarIntento(value: unknown, empresaId: string): IntentoCobro {
   if (!value || typeof value !== "object") throw new Error(ERROR_LECTURA);
   const intento = value as IntentoCobro;
   const p = intento.payload;
-  if (intento.version !== 1 || !["pendiente", "confirmado", "rechazado"].includes(intento.estado)
+  if ((intento.fase !== undefined && !["preparacion", "enviado"].includes(intento.fase))
+    || intento.version !== 1 || !["pendiente", "confirmado", "rechazado"].includes(intento.estado)
     || !p || p.empresaId !== empresaId || !empresaId.trim()
     || typeof p.idempotencyKey !== "string" || !p.idempotencyKey.trim()
     || !MEDIOS.includes(p.medioPago)
@@ -71,7 +74,7 @@ export function leerIntentoCobro(empresaId: string, almacen: AlmacenCobro = sess
 
 export function crearIntentoCobro(payload: PayloadIntentoCobro, totalEsperado: number): IntentoCobro {
   const copia = JSON.parse(JSON.stringify(payload)) as PayloadIntentoCobro;
-  return validarIntento({ version: 1, estado: "pendiente", payload: copia, huella: huellaPayloadCobro(copia),
+  return validarIntento({ version: 1, fase: "preparacion", estado: "pendiente", payload: copia, huella: huellaPayloadCobro(copia),
     totalEsperado, creadoEn: new Date().toISOString() }, payload.empresaId);
 }
 
@@ -80,6 +83,11 @@ export function guardarIntentoCobro(intento: IntentoCobro, almacen: AlmacenCobro
   const anterior = leerIntentoCobro(intento.payload.empresaId, almacen);
   if (anterior && anterior.payload.idempotencyKey === intento.payload.idempotencyKey && anterior.huella !== intento.huella) {
     throw new Error("La clave del cobro no se puede reutilizar para otro carrito.");
+  }
+  // Unknown legacy/enviado attempts may never be relabelled as not dispatched.
+  if (anterior?.estado === "pendiente" && anterior.huella === intento.huella
+    && anterior.fase !== "preparacion" && intento.fase === "preparacion") {
+    throw new Error("El resultado previo del cobro sigue pendiente. Recuperá el mismo intento sin cambiar su fase.");
   }
   if (anterior?.estado === "pendiente" && anterior.huella !== intento.huella) {
     throw new Error("Hay un cobro pendiente distinto. Recuperá ese mismo cobro antes de iniciar otra venta; no se enviaron los cambios del carrito.");

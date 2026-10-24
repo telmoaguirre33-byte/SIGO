@@ -209,13 +209,16 @@ export class ProductoGuardadoSinVerificarError extends Error {
   }
 }
 
-export async function listarUnidadesProductoSigo(empresaId: string): Promise<Record<string, UnidadVenta | null>> {
+export async function listarUnidadesProductoSigo(empresaId: string, signal?: AbortSignal): Promise<Record<string, UnidadVenta | null>> {
   if (!empresaId) throw new Error("EMPRESA_REQUIRED");
   const mapa: Record<string, UnidadVenta | null> = {};
   const pageSize = 1000;
   for (let from = 0; ; from += pageSize) {
-    const { data, error } = await supabase.rpc("listar_unidades_producto_sigo", { p_empresa_id: empresaId })
+    signal?.throwIfAborted();
+    const consulta = supabase.rpc("listar_unidades_producto_sigo", { p_empresa_id: empresaId })
       .order("producto_id").range(from, from + pageSize - 1);
+    const { data, error } = await (signal ? consulta.abortSignal(signal) : consulta);
+    signal?.throwIfAborted();
     if (error) throw new Error("No se pudieron verificar las unidades de los productos. Actualizá el catálogo antes de vender.");
     const filas = (data ?? []) as { producto_id: string; unidad_medida: unknown }[];
     for (const fila of filas) mapa[fila.producto_id] = normalizarUnidadVenta(fila.unidad_medida);
@@ -224,15 +227,18 @@ export async function listarUnidadesProductoSigo(empresaId: string): Promise<Rec
   return mapa;
 }
 
-export async function listarProductosSigo(empresaId: string): Promise<ProductoSigo[]> {
+export async function listarProductosSigo(empresaId: string, signal?: AbortSignal): Promise<ProductoSigo[]> {
   if (!empresaId) throw new Error("EMPRESA_REQUIRED");
   // PostgREST/Supabase puede limitar una respuesta a 1000 filas. Conservamos paginación
   // y orden estable, también para unidades; nunca completar faltantes como piezas.
   const pageSize = 1000;
   const productos: ProductoSigo[] = [];
   for (let from = 0; ; from += pageSize) {
-    const { data, error } = await supabase.rpc("listar_productos_sigo", { p_empresa_id: empresaId })
+    signal?.throwIfAborted();
+    const consulta = supabase.rpc("listar_productos_sigo", { p_empresa_id: empresaId })
       .order("nombre").order("id").range(from, from + pageSize - 1);
+    const { data, error } = await (signal ? consulta.abortSignal(signal) : consulta);
+    signal?.throwIfAborted();
     if (error) throw new Error(mensajeErrorBackend(error, "No se pudieron cargar los productos."));
     const pagina = (data ?? []) as ProductoSigo[];
     productos.push(...pagina);
@@ -240,7 +246,8 @@ export async function listarProductosSigo(empresaId: string): Promise<ProductoSi
   }
   // Un error de unidades no oculta el catálogo, pero jamás autoriza vender por pieza.
   let unidades: Record<string, UnidadVenta | null> = {};
-  try { unidades = await listarUnidadesProductoSigo(empresaId); } catch { /* fail closed por producto */ }
+  try { unidades = await listarUnidadesProductoSigo(empresaId, signal); } catch { /* fail closed por producto */ }
+  signal?.throwIfAborted();
   return productos.map((producto) => ({ ...producto, unidad_medida: unidades[producto.id] ?? null }));
 }
 

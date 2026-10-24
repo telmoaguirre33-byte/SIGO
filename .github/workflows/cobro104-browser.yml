@@ -1,0 +1,28 @@
+name: Cobro 104 synthetic browser recovery
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Real Chromium desktop and emulated mobile, synthetic service boundaries only
+        run: node scripts/test-cobro104-browser.mjs
+        env:
+          COBRO104_QA_DIR: artifacts/cobro104-browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cobro104-browser-evidence
+          path: artifacts/cobro104-browser

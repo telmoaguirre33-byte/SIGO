@@ -459,7 +459,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     confirmacionEnCursoRef.current = true;
     const empresaConfirmacion = empresaId;
     let intento: IntentoCobro | null = null;
-    let enviado = false;
+    let protegido = false;
     setConfirmando(true);
     setError("");
     setExito("");
@@ -480,8 +480,14 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       }
       guardarIntentoCobro(intento);
       setIntentoPendiente(intento);
-      enviado = true;
-      const resultado = await confirmarVentaSigo(intento.payload);
+      protegido = true;
+      const resultado = await confirmarVentaSigo(intento.payload, {
+        antesDeEnviar: () => {
+          const actualizado: IntentoCobro = { ...intento!, fase: "enviado" };
+          guardarIntentoCobro(actualizado);
+          intento = actualizado;
+        },
+      });
       // Tener UUID confirma la escritura aunque falle la conciliación posterior.
       // Persistir también si el operador cambió de empresa mientras esperaba.
       let guardado = true;
@@ -551,13 +557,15 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       // Solo un rechazo definitivo de la primera llamada prueba que este intento no cobró.
       // En una recuperación, el rollback actual NO descarta un commit anterior.
       let rechazoGuardado = false;
-      if (enviado && !recuperar && intento && err instanceof VentaRechazadaSinCambiosError) {
+      if (protegido && !recuperar && intento && err instanceof VentaRechazadaSinCambiosError) {
         try { registrarCobroRechazado(intento); rechazoGuardado = true; } catch { /* conservar pendiente */ }
       }
       if (montadoRef.current && empresaActivaRef.current === empresaConfirmacion) {
         if (rechazoGuardado) setIntentoPendiente(null);
         setError(err instanceof Error ? err.message : "No se pudo confirmar la venta.");
-        if (enviado && !rechazoGuardado) setAdvertencia("El resultado del cobro no está verificado. No vuelvas a armar ni cobrar esta venta: recuperá el mismo intento con el botón de recuperación.");
+        if (protegido && !rechazoGuardado) setAdvertencia(!recuperar && intento?.fase === "preparacion"
+          ? "La preparación del cobro no pudo completarse. Conservamos sus datos: usá Recuperar el mismo cobro para continuar."
+          : "El resultado del cobro no está verificado. No vuelvas a armar ni cobrar esta venta: recuperá el mismo intento con el botón de recuperación.");
       }
     } finally {
       confirmacionEnCursoRef.current = false;
