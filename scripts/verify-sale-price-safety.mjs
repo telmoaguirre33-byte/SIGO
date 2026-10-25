@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 
 function requireText(file, needles) {
   const text = fs.readFileSync(file, 'utf8');
@@ -19,12 +20,23 @@ requireText('src/BarcodeScanner.tsx', [
 requireText('src/VentaRapidaOperativa.tsx', [
   '!Number.isFinite(precio) || precio <= 0',
   'precio > 0',
-  'verificado.totalVerificado',
-  'total vigente del backend',
+  'avisoCobroConfirmado(verificado, totalEsperado)',
+  'setAdvertencia(aviso.texto)',
+  'setAdvertenciaRevision(aviso.requiereRevision)',
   'descuentoPct,',
   'precioUnitarioVenta(item,ofertas,descuentoPct)',
   'No se puede cobrar hasta comprobar los precios de oferta',
 ]);
+
+// Price comparison moved to a pure helper, not removed. Exercise its behaviour
+// as well as requiring that the POS actually renders its authoritative result.
+requireText('src/avisoCobroConfirmado.ts', [
+  'verificacion.totalVerificado',
+  'Math.abs(verificacion.totalVerificado - totalEsperado) > 0.01',
+  'El precio cambió mientras confirmabas.',
+  'requiereRevision: diferencia || verificacion.integridad === "revisar"',
+]);
+execFileSync(process.execPath, ['--experimental-strip-types', '--test', 'tests/avisoCobroConfirmado.test.mjs'], { stdio: 'inherit' });
 
 requireText('src/ventas.ts', [
   'const descuentoPct = input.descuentoPct ?? 0',
