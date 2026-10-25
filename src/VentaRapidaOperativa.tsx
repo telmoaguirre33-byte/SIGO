@@ -97,7 +97,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       // out. Keep the last known actor for this in-flight POS operation; otherwise
       // its successful ACK is persisted but ignored by the view, leaving the
       // in-memory pending flag blocking every subsequent sale until reload.
-      const sesionTemporalmenteNula = actual.conocida && Boolean(actual.usuario) && !usuario && evento !== "SIGNED_OUT";
+      const sesionTemporalmenteNula = actual.conocida && Boolean(actual.usuario) && !usuario && evento === "TOKEN_REFRESHED";
       const usuarioVigente = sesionTemporalmenteNula ? actual.usuario : usuario;
       const cambio = evento === "SIGNED_OUT" || (actual.conocida ? actual.usuario !== usuarioVigente : evento !== "INITIAL_SESSION");
       sesionCobroRef.current = { conocida: true, usuario: usuarioVigente, cambio: actual.cambio || cambio,
