@@ -64,9 +64,9 @@ async function localFetch(input, init = {}) {
   else if (table==='caja_movimientos_sigo') data=selected.map(r=>({venta_id:r.id,medio_pago:r.medio_pago,importe:r.total}));
   else assert.equal(table,'cliente_movimientos_sigo');
   const single = new Headers(init.headers).get('Accept')?.includes('application/vnd.pgrst.object+json');
-  if (table==='ventas_sigo' && single && state.holdNextReadback) {
+  if (table==='ventas_sigo' && eq('id') && state.holdNextReadback) {
     state.holdNextReadback=false;
-    return new Promise(resolve=>{state.releaseReadback=()=>resolve(response({...data[0],total:999}));});
+    return new Promise(resolve=>{state.releaseReadback=()=>resolve(response(single ? {...data[0],total:999} : data.map(r=>({...r,total:999}))));});
   }
   return response(single ? data[0]??null : data);
 }
