@@ -78,6 +78,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   const [intentoPendiente, setIntentoPendiente] = useState<IntentoCobro | null>(null);
   const [errorPersistenciaCobro, setErrorPersistenciaCobro] = useState("");
   const intentoVisible = intentoPendiente?.payload.empresaId === empresaId ? intentoPendiente : null;
+  const cobroProcesando = confirmando && Boolean(intentoVisible) && !errorPersistenciaCobro;
   const cajaBloqueada = confirmando || Boolean(intentoPendiente) || Boolean(errorPersistenciaCobro);
   const confirmacionEnCursoRef = useRef(false);
   const operacionCobroRef = useRef<{ empresa: string; controller: AbortController } | null>(null);
@@ -565,7 +566,8 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       if (guardado) setIntentoPendiente(null);
       else setError("La venta quedó confirmada, pero no se pudo guardar su estado en este navegador. No hagas otro cobro: usá Recuperar el mismo cobro para guardar el resultado.");
       setExito(recuperar ? "Cobro recuperado. No se creó una venta adicional. Podés facturar o reimprimir esta venta con F11/F12." : "Venta confirmada");
-      window.setTimeout(() => { if (avisoVigente()) setExito(""); }, recuperar ? 9000 : 2200);
+      // Keep the result readable until the next deliberate cart/payment action.
+      // A short timer hid the outcome before the operator could inspect it.
       setUltimaVentaTicket(resultado.ventaId);
       // La recuperación nunca reanuda autorizaciones de impresión o emisión fiscal.
       if (!recuperar && emitirFiscalDespues) window.dispatchEvent(new CustomEvent("sigo:arca:venta", { detail: { empresaId: empresaConfirmacion, ventaId: resultado.ventaId } }));
@@ -699,7 +701,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         onConfirmar={(cantidad) => { agregarCantidad(productoPorMedida, cantidad, reemplazandoCantidad); setProductoPorMedida(null); }}
         onCancelar={() => { setProductoPorMedida(null); window.setTimeout(() => buscarRef.current?.focus(), 0); }}
       />}
-      {(intentoVisible || errorPersistenciaCobro) && <div className="form-error" role="alert" data-cobro-pendiente="">
+      {(intentoVisible || errorPersistenciaCobro) && <div className={cobroProcesando ? "sigo-pos-cobro-en-curso" : "form-error"} role={cobroProcesando ? "status" : "alert"} data-cobro-pendiente="" data-cobro-estado={cobroProcesando ? "en_curso" : "pendiente"}>
         {intentoVisible ? <>
           <strong>{confirmando ? "Procesando el cobro…" : "Hay un cobro pendiente de verificar."}</strong>
           <p>{confirmando ? "Esperá la respuesta. Conservamos la misma referencia para proteger este cobro." : "No armes ni cobres otra venta. Recuperar completa o reconcilia el mismo cobro con su clave original, sin crear un segundo cobro. No imprime ni emite una factura automáticamente."}</p>
@@ -715,7 +717,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
             </dl>
             <p>Referencia de esta sesión y empresa. La fase registrada no confirma el resultado del cobro. Este registro no identifica al usuario que lo inició.</p>
           </details>
-          <button type="button" data-recuperar-cobro="" disabled={confirmando || Boolean(errorPersistenciaCobro)} onClick={() => void confirmar(false, false, true)}>{confirmando ? "Verificando el mismo cobro…" : "Recuperar el mismo cobro"}</button>
+          <button type="button" data-recuperar-cobro="" disabled={confirmando || Boolean(errorPersistenciaCobro)} onClick={() => void confirmar(false, false, true)}>{confirmando ? "Esperando confirmación…" : "Recuperar el mismo cobro"}</button>
         </> : errorPersistenciaCobro}
       </div>}
       <div className="sigo-pos-scan">
