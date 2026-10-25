@@ -15,7 +15,7 @@ const E = '11111111-1111-4111-8111-111111111111';
 const OTHER = '33333333-3333-4333-8333-333333333333';
 const origin = 'https://sigo-cobro104-qa.invalid/';
 const mocks = {
-  './supabase': 'export const supabase={auth:{onAuthStateChange(cb){cb("INITIAL_SESSION",{user:{id:"browser-synthetic-user"}});return {data:{subscription:{unsubscribe(){}}}};}},from:t=>window.__qa.query(t),rpc:(...a)=>{const p=window.__qa.rpc(...a);p.abortSignal=signal=>{window.__qa.signals.push({kind:"rpc",signal});return p};return p}};',
+  './supabase': 'export const supabase={auth:{onAuthStateChange(cb){window.__qa.authListeners.push(cb);cb("INITIAL_SESSION",{user:{id:"browser-synthetic-user"}});return {data:{subscription:{unsubscribe(){window.__qa.authListeners=window.__qa.authListeners.filter(listener=>listener!==cb)}}}};}},from:t=>window.__qa.query(t),rpc:(...a)=>{const p=window.__qa.rpc(...a);p.abortSignal=signal=>{window.__qa.signals.push({kind:"rpc",signal});return p};return p}};',
   './ticketVenta': 'export const imprimirTicketVenta=async(...a)=>window.__qa.prints.push(a);',
   './clientes': 'export const listarClientesSigo=async()=>[];',
   './productos': 'export const listarProductosSigo=async(e,signal)=>{if(signal){window.__qa.signals.push({kind:"stock",signal});if(window.__qa.mode==="stock"){window.__qa.mode="ok";return new Promise(resolve=>window.__qa.pending.push({resolve:()=>resolve(window.__qa.products(e))}));}}return window.__qa.products(e)};export const listarUnidadesProductoSigo=async(e)=>Object.fromEntries(window.__qa.products(e).map(p=>[p.id,p.unidad_medida]));export const guardarProductoSigo=async()=>{throw new Error("Product writes prohibited")};',
@@ -24,7 +24,7 @@ const mocks = {
 // This function is serialized into Chromium, not executed in Node/JSDOM.
 function fixture() {
   const E = '11111111-1111-4111-8111-111111111111';
-  const s = window.__qa = { calls:[], rows:[], prints:[], fiscal:[], blocked:[], pending:[], signals:[], mode:'lost', empresa:E };
+  const s = window.__qa = { calls:[], rows:[], prints:[], fiscal:[], blocked:[], pending:[], signals:[], authListeners:[], mode:'lost', empresa:E };
   s.products = empresa => ['unidad','kg','g','l','m'].map((u,i)=>({ id:`p-${u}`,empresa_id:empresa,nombre:`Sintetico ${u}`,codigo_interno:`QA${i}`,codigo_barras:`QA${i}`,precio_venta:20,stock_actual:1000-s.rows.filter(r=>r.empresa_id===empresa).flatMap(r=>r.items).filter(i=>i.producto_id===`p-${u}`).reduce((sum,i)=>sum+i.cantidad,0),activo:true,unidad_medida:u }));
   s.query = table => {
     const filters={}; let single=false;
@@ -145,6 +145,15 @@ try {
       await page.keyboard.press('F12');
       await page.waitForFunction(()=>__qa.prints.length===1);
       assert.equal((await snapshot()).prints[0][0],E);
+    });
+    await check('transient null auth refresh preserves a confirmed ACK and allows the next sale',async()=>{
+      await start('hang');await add();await page.keyboard.press('F9');await page.waitForFunction(()=>__qa.pending.length===1);
+      await page.evaluate(()=>{for(const cb of __qa.authListeners.slice())cb('TOKEN_REFRESHED',null);for(const cb of __qa.authListeners.slice())cb('SIGNED_IN',{user:{id:'browser-synthetic-user'}});});
+      await page.evaluate(()=>__qa.pending[0].resolve());
+      await page.waitForFunction(()=>JSON.parse(sessionStorage.getItem('sigo:intento-cobro:'+E))?.estado==='confirmado');
+      await page.waitForFunction(()=>!document.querySelector('[data-cobro-pendiente]'));
+      await add();await page.keyboard.press('F9');await page.waitForFunction(()=>__qa.calls.length===2&&__qa.rows.length===2);
+      const s=await snapshot();assert.equal(s.calls.length,2);assert.equal(s.rows.length,2);assert.notEqual(s.calls[0].p_idempotency_key,s.calls[1].p_idempotency_key);assert.deepEqual(s.blocked,[]);
     });
     assert.deepEqual((await snapshot()).blocked,[]);await page.screenshot({path:path.join(artifacts,`${mobile?'mobile':'desktop'}-recovered.png`),fullPage:true});await context.close();
   }
