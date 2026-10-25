@@ -11,6 +11,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -23,6 +25,21 @@ jobs:
         env:
           COBRO104_ACK_QA_DIR: artifacts/cobro104-browser/ack
           COBRO104_REAL_DEADLINE: "1"
+      - name: Pin the affected main source for independent baseline reproduction
+        run: |
+          git fetch --no-tags --depth=1 origin b00b691384a9ecf4ff08dc2d4b19ff692e709d05
+          mkdir -p .test-build/baseline/src
+          git show b00b691384a9ecf4ff08dc2d4b19ff692e709d05:src/VentaRapidaOperativa.tsx > .test-build/baseline/src/VentaRapidaOperativa.tsx
+          git show b00b691384a9ecf4ff08dc2d4b19ff692e709d05:src/SigoAuthGate.tsx > .test-build/baseline/src/SigoAuthGate.tsx
+      - name: Reproduce stale confirmed ACK against pinned main with real GoTrue
+        run: node scripts/test-cobro104-auth-lifecycle.mjs
+        env:
+          COBRO104_BASELINE_DIR: .test-build/baseline
+          COBRO104_AUTH_QA_DIR: artifacts/cobro104-browser/auth-baseline
+      - name: Verify fixed session lifecycle, gate, consecutive sales and recovery with real GoTrue
+        run: node scripts/test-cobro104-auth-lifecycle.mjs
+        env:
+          COBRO104_AUTH_QA_DIR: artifacts/cobro104-browser/auth-fixed
       - run: npx playwright install --with-deps chromium
       - name: Real Chromium desktop and emulated mobile, synthetic service boundaries only
         run: node scripts/test-cobro104-browser.mjs
