@@ -509,7 +509,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       // Keep this operation observer until settlement, including while the POS is
       // unmounted, so a delayed SDK token lookup cannot dispatch under a new user.
       const { data } = supabase.auth.onAuthStateChange((evento, sesion) => {
-        if (evento === "SIGNED_OUT" || sesion?.user?.id !== sesionConfirmacion.usuario) controller.abort();
+        if (evento === "SIGNED_OUT" || (sesion?.user?.id && sesion.user.id !== sesionConfirmacion.usuario)) controller.abort();
       });
       dejarObservarSesion = () => data.subscription.unsubscribe();
       if (recuperar) {
