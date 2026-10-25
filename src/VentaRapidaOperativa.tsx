@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { actualizarSesionCobro, cambioIdentidadCobro, type SesionCobro } from "./sesionCobro";
 import { useEffect, useMemo, useRef, useState } from "react";
 import BarcodeScanner from "./BarcodeScanner";
 import EditorCantidadMedida from "./EditorCantidadMedida";
@@ -86,16 +87,12 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   }, []);
   // Observe auth synchronously; never await auth from a payment or auth callback.
   // Legacy records contain no actor identity. This only guards this mounted view.
-  const sesionCobroRef = useRef<{ conocida: boolean; usuario: string | null; cambio: boolean; epoca: number }>({ conocida: false, usuario: null, cambio: false, epoca: 0 });
+  const sesionCobroRef = useRef<SesionCobro>({ conocida: false, usuario: null, cambio: false, epoca: 0 });
   useEffect(() => {
     let activo = true;
     const { data } = supabase.auth.onAuthStateChange((evento, sesion) => {
       if (!activo) return;
-      const actual = sesionCobroRef.current;
-      const usuario = sesion?.user?.id ?? null;
-      const cambio = evento === "SIGNED_OUT" || (actual.conocida ? actual.usuario !== usuario : evento !== "INITIAL_SESSION");
-      sesionCobroRef.current = { conocida: true, usuario, cambio: actual.cambio || cambio,
-        epoca: actual.epoca + (cambio ? 1 : 0) };
+      sesionCobroRef.current = actualizarSesionCobro(sesionCobroRef.current, evento, sesion?.user?.id);
     });
     return () => { activo = false; data.subscription.unsubscribe(); };
   }, []);
@@ -509,7 +506,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       // Keep this operation observer until settlement, including while the POS is
       // unmounted, so a delayed SDK token lookup cannot dispatch under a new user.
       const { data } = supabase.auth.onAuthStateChange((evento, sesion) => {
-        if (evento === "SIGNED_OUT" || (sesion?.user?.id && sesion.user.id !== sesionConfirmacion.usuario)) controller.abort();
+        if (cambioIdentidadCobro(sesionConfirmacion.usuario, evento, sesion?.user?.id)) controller.abort();
       });
       dejarObservarSesion = () => data.subscription.unsubscribe();
       if (recuperar) {
@@ -703,8 +700,8 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       />}
       {(intentoVisible || errorPersistenciaCobro) && <div className="form-error" role="alert" data-cobro-pendiente="">
         {intentoVisible ? <>
-          <strong>Hay un cobro pendiente de verificar.</strong>
-          <p>No armes ni cobres otra venta. Recuperar completa o reconcilia el mismo cobro con su clave original, sin crear un segundo cobro. No imprime ni emite una factura automáticamente.</p>
+          <strong>{confirmando ? "Procesando el cobro…" : "Hay un cobro pendiente de verificar."}</strong>
+          <p>{confirmando ? "Esperá la respuesta. Conservamos la misma referencia para proteger este cobro." : "No armes ni cobres otra venta. Recuperar completa o reconcilia el mismo cobro con su clave original, sin crear un segundo cobro. No imprime ni emite una factura automáticamente."}</p>
           <p>{intentoVisible.payload.items.length} renglón(es) · {etiquetaMedio(intentoVisible.payload.medioPago)} · Total esperado $ {intentoVisible.totalEsperado.toLocaleString("es-AR")}.</p>
           <details key={`${empresaId}:${intentoVisible.payload.idempotencyKey}`} data-referencia-cobro="">
             <summary>Ver referencia del cobro</summary>
