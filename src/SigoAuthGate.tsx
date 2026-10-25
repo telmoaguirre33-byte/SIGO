@@ -10,6 +10,18 @@ type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
+
+let promptInstalacionPendiente: BeforeInstallPromptEvent | null = null;
+
+// Capturar el evento al cargar el módulo, antes de que React ejecute efectos.
+// Chrome/Edge pueden emitirlo al abrir una PWA ya reconocida por el navegador.
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    promptInstalacionPendiente = event as BeforeInstallPromptEvent;
+    window.dispatchEvent(new Event("sigo:install-prompt-ready"));
+  });
+}
 type AuthMode = "login" | "register" | "register_member" | "subscription" | "recovery";
 
 const SIGO_PRODUCTION_URL = "https://comercial-lilac.vercel.app/";
@@ -19,6 +31,29 @@ const OWNER_ONBOARDING_MODE = "owner";
 const STAFF_ONBOARDING_MODE = "member";
 const SIGO_TRIAL_DAYS = 30;
 const SIGO_TRIAL_MS = SIGO_TRIAL_DAYS * 24 * 60 * 60 * 1000;
+
+function aplicacionYaInstalada() {
+  const standalone = window.matchMedia("(display-mode: standalone)").matches;
+  const iosStandalone = (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  return standalone || iosStandalone;
+}
+
+function instruccionesInstalacion() {
+  const ua = navigator.userAgent;
+  const android = /Android/i.test(ua);
+  const ios = /iPhone|iPad|iPod/i.test(ua);
+  const edge = /EdgA?|EdgiOS|Edg\//i.test(ua);
+  const chrome = /Chrome|CriOS/i.test(ua);
+  const safari = /Safari/i.test(ua) && !chrome && !edge;
+
+  if (ios) return "En iPhone o iPad: abrí SIGO en Safari, tocá Compartir y elegí “Añadir a pantalla de inicio”.";
+  if (android && (chrome || edge)) return "En Android: abrí el menú ⋮ de Chrome o Edge y elegí “Instalar app” o “Agregar a pantalla principal”.";
+  if (android) return "En Android, abrí esta dirección en Chrome y elegí ⋮ → “Instalar app” o “Agregar a pantalla principal”.";
+  if (edge) return "En Microsoft Edge: menú ⋯ → Aplicaciones → “Instalar este sitio como una aplicación”.";
+  if (chrome) return "En Google Chrome: usá el ícono Instalar de la barra de direcciones o menú ⋮ → “Instalar página como aplicación”.";
+  if (safari) return "En Safari para Mac: menú Archivo → “Añadir al Dock”.";
+  return "Este navegador no ofrece instalación directa. Abrí SIGO en Chrome o Edge y usá su opción “Instalar”.";
+}
 const SIGO_TRIAL_POLICY_EFFECTIVE_AT = Date.parse("2026-09-20T17:00:00.000Z");
 const MERCADOPAGO_SUBSCRIPTION_URL = String(import.meta.env.VITE_MERCADOPAGO_SUBSCRIPTION_URL ?? "").trim();
 
@@ -61,7 +96,8 @@ export default function SigoAuthGate({ children }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [mode, setMode] = useState<AuthMode>("login");
   const [puedeReenviarActivacion, setPuedeReenviarActivacion] = useState(false);
-  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(() => promptInstalacionPendiente);
+  const [aplicacionInstalada, setAplicacionInstalada] = useState(false);
   const [mostrarAyudaInstalacion, setMostrarAyudaInstalacion] = useState(false);
   const [mensajeInstalacion, setMensajeInstalacion] = useState("");
   const requestInFlight = useRef(false);
@@ -108,43 +144,66 @@ export default function SigoAuthGate({ children }: Props) {
   }, []);
 
   useEffect(() => {
-    const capturarInstalacion = (event: Event) => {
-      event.preventDefault();
-      setInstallPrompt(event as BeforeInstallPromptEvent);
+    const modoAplicacion = window.matchMedia("(display-mode: standalone)");
+    const actualizarEstadoInstalacion = () => {
+      setAplicacionInstalada(modoAplicacion.matches || (navigator as Navigator & { standalone?: boolean }).standalone === true);
+    };
+    const capturarInstalacion = () => {
+      setInstallPrompt(promptInstalacionPendiente);
     };
     const instalacionCompletada = () => {
+      setAplicacionInstalada(true);
       setInstallPrompt(null);
       setMostrarAyudaInstalacion(false);
       setMensajeInstalacion("SIGO se instaló correctamente en este dispositivo.");
     };
 
-    window.addEventListener("beforeinstallprompt", capturarInstalacion);
+    actualizarEstadoInstalacion();
+    modoAplicacion.addEventListener("change", actualizarEstadoInstalacion);
+
+    // Registrar el mismo worker que usa SIGO para notificaciones. Se hace al abrir
+    // la pantalla de ingreso para que la PWA pueda ser instalada antes de iniciar sesión.
+    if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+      void navigator.serviceWorker.register("/sw.js", { scope: "/" })
+        .then((registration) => registration.update())
+        .catch(() => undefined);
+    }
+
+    window.addEventListener("sigo:install-prompt-ready", capturarInstalacion);
     window.addEventListener("appinstalled", instalacionCompletada);
     return () => {
-      window.removeEventListener("beforeinstallprompt", capturarInstalacion);
+      modoAplicacion.removeEventListener("change", actualizarEstadoInstalacion);
+      window.removeEventListener("sigo:install-prompt-ready", capturarInstalacion);
       window.removeEventListener("appinstalled", instalacionCompletada);
     };
   }, []);
 
   async function instalarAplicacion() {
     setMensajeInstalacion("");
-    if (!installPrompt) {
-      setMostrarAyudaInstalacion((visible) => !visible);
+    if (aplicacionInstalada || aplicacionYaInstalada()) {
+      setAplicacionInstalada(true);
+      setMensajeInstalacion("SIGO ya está instalada en este dispositivo.");
+      return;
+    }
+    const prompt = installPrompt ?? promptInstalacionPendiente;
+    if (!prompt) {
+      setMostrarAyudaInstalacion(true);
       return;
     }
 
     try {
-      const prompt = installPrompt;
       await prompt.prompt();
       const { outcome } = await prompt.userChoice;
+      promptInstalacionPendiente = null;
       setInstallPrompt(null);
       if (outcome === "accepted") {
         setMostrarAyudaInstalacion(false);
-        setMensajeInstalacion("SIGO se instaló. Ya podés abrirlo desde tus aplicaciones.");
+        setMensajeInstalacion("El navegador aceptó la instalación. Al finalizar, abrí SIGO desde el ícono de aplicaciones.");
       } else {
         setMostrarAyudaInstalacion(true);
       }
     } catch {
+      promptInstalacionPendiente = null;
       setInstallPrompt(null);
       setMostrarAyudaInstalacion(true);
     }
@@ -447,18 +506,19 @@ export default function SigoAuthGate({ children }: Props) {
               className="sigo-install-app-button"
               type="button"
               onClick={() => void instalarAplicacion()}
-              aria-expanded={mostrarAyudaInstalacion}
+              disabled={aplicacionInstalada}
+              aria-expanded={!aplicacionInstalada && mostrarAyudaInstalacion}
               aria-controls="sigo-install-help"
             >
-              <span aria-hidden="true">↓</span>
-              Descargar la app
+              <span aria-hidden="true">{aplicacionInstalada ? "✓" : "↓"}</span>
+              {aplicacionInstalada ? "SIGO ya está instalada" : "Descargar la app"}
             </button>
           ) : null}
         </div>
         {mode === "login" && mostrarAyudaInstalacion ? (
           <div className="sigo-install-help" id="sigo-install-help" role="status">
             <strong>Instalá SIGO en este dispositivo</strong>
-            <span>Chrome o Edge: menú ⋮ → “Instalar SIGO” o “Aplicaciones”. Android: menú ⋮ → “Instalar app”. iPhone/iPad: Compartir → “Añadir a pantalla de inicio”.</span>
+            <span>{instruccionesInstalacion()}</span>
           </div>
         ) : null}
         {mode === "login" && mensajeInstalacion ? (
