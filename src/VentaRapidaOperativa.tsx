@@ -102,7 +102,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         return;
       }
       const cambio = evento === "SIGNED_OUT"
-        || (actual.conocida ? Boolean(actual.usuario && actual.usuario !== usuario) : evento !== "INITIAL_SESSION");
+        || (actual.conocida ? actual.usuario !== usuario && evento !== "INITIAL_SESSION" : evento !== "INITIAL_SESSION");
       sesionCobroRef.current = { conocida: true, usuario: evento === "SIGNED_OUT" ? null : usuario,
         cambio: actual.cambio || cambio, epoca: actual.epoca + (cambio ? 1 : 0) };
     });
