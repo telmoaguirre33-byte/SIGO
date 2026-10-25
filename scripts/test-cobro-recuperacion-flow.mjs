@@ -253,22 +253,16 @@ for (const shortcut of ['F9', 'F10', 'F11']) {
   console.log(`PASS: ${shortcut} post-commit deadline keeps uncertainty; late response inert; rollback cannot clear prior attempt; same-key recovery commits once`);
 }
 // A previous client version may have sent a record still labelled preparacion.
+// Recovery now bypasses the fragile preflight and asks the idempotent RPC directly.
 reset(); await mount(); await addWeight(); await keys('F9'); await unmount();
 const mixedVersion = leerIntentoCobro(E);
 mixedVersion.fase = 'preparacion';
 sessionStorage.setItem('sigo:intento-cobro:' + E, JSON.stringify(mixedVersion));
-let releaseMixed;
-state.preflightWait = new Promise(r => { releaseMixed = r; });
-await mount(); await click('[data-recuperar-cobro]'); await expire(12000);
-assert.match(document.body.textContent, /resultado del cobro no está verificado/i);
-assert.doesNotMatch(document.body.textContent, /No se llegó a enviar/);
-assert.equal(leerIntentoCobro(E).estado, 'pendiente');
+await mount(); await click('[data-recuperar-cobro]');
 assert.equal(state.commits, 1);
-releaseMixed(); await settle(); state.preflightWait = null;
-await click('[data-recuperar-cobro]');
-assert.equal(state.commits, 1); assert.equal(leerIntentoCobro(E).estado, 'confirmado');
+assert.equal(leerIntentoCobro(E).estado, 'confirmado');
 await unmount();
-console.log('PASS: mixed-version preparacion record never asserts that an older uncertain attempt was not sent');
+console.log('PASS: mixed-version preparacion record recovers by original idempotent RPC without preflight');
 
 reset({ loseResponse: false, signals: [] }); let releaseReadback;
 state.readbackWait = new Promise(r => { releaseReadback = r; });
