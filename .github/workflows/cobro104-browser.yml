@@ -18,6 +18,20 @@ jobs:
           node-version: 24
       - run: npm ci --no-audit --no-fund
       - run: npm run build
+      - name: Pin published feedback defect without modifying the candidate
+        run: |
+          git fetch --no-tags --depth=1 origin d0831b7dc20bce753d3943f981335accf5b239e9
+          mkdir -p .test-build/notice-baseline
+          git show d0831b7dc20bce753d3943f981335accf5b239e9:src/VentaRapidaOperativa.tsx > .test-build/notice-baseline/VentaRapidaOperativa.tsx
+      - name: Reproduce transient false error and disappearing confirmation in published source
+        run: node scripts/test-cobro104-notice.mjs
+        env:
+          COBRO104_NOTICE_BASELINE: .test-build/notice-baseline/VentaRapidaOperativa.tsx
+          COBRO104_NOTICE_QA_DIR: artifacts/cobro104-browser/notice-baseline
+      - name: Verify neutral processing, readable confirmation and unchanged uncertain-payment protection
+        run: node scripts/test-cobro104-notice.mjs
+        env:
+          COBRO104_NOTICE_QA_DIR: artifacts/cobro104-browser/notice-fixed
       - name: Confirmed payment messages preserve diagnostic limits
         run: node --experimental-strip-types --test tests/avisoCobroConfirmado.test.mjs
       - name: Natural GoTrue renewal, 5001 products, lost ACK and pre-dispatch identity protection
