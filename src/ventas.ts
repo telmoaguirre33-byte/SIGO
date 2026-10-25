@@ -451,7 +451,7 @@ export async function confirmarVentaSigo(input: {
   clienteId?: string | null;
   descuentoPct?: number;
   idempotencyKey?: string;
-}, opciones: { antesDeEnviar?: () => void; contextoVigente?: () => boolean; signal?: AbortSignal } = {}): Promise<{
+}, opciones: { antesDeEnviar?: () => void; contextoVigente?: () => boolean; signal?: AbortSignal; recuperacion?: boolean } = {}): Promise<{
   ventaId: string;
   idempotencyKey: string;
   integridad: IntegridadVentaSigo;
@@ -488,13 +488,18 @@ export async function confirmarVentaSigo(input: {
   const idempotencyKey = normalizarIdentificador(input.idempotencyKey ?? crearIdempotencyKey());
   if (!idempotencyKey) throw new VentaRechazadaSinCambiosError("No se pudo generar una clave segura para confirmar la venta.");
 
-  const { estadoReintento, stockAntes } = await esperarCobro("preparacion", 12000, (plazo) => conCancelacionVenta(plazo, opciones.signal, async (signal) => {
-    const estadoReintento = await detectarEstadoReintento(empresaId, idempotencyKey, signal);
-    signal.throwIfAborted();
-    const stockAntes = await capturarStockAntes(empresaId, itemsConsolidados, estadoReintento, signal);
-    signal.throwIfAborted();
-    return { estadoReintento, stockAntes };
-  }));
+  // En recuperación, la RPC valida la huella de la clave original antes de
+  // devolver una venta existente. Evitar lecturas preliminares de catálogo:
+  // pueden fallar por permisos/red y bloquear un cobro ya confirmado.
+  const { estadoReintento, stockAntes } = opciones.recuperacion
+    ? { estadoReintento: "desconocido" as EstadoReintentoVenta, stockAntes: null }
+    : await esperarCobro("preparacion", 12000, (plazo) => conCancelacionVenta(plazo, opciones.signal, async (signal) => {
+      const estadoReintento = await detectarEstadoReintento(empresaId, idempotencyKey, signal);
+      signal.throwIfAborted();
+      const stockAntes = await capturarStockAntes(empresaId, itemsConsolidados, estadoReintento, signal);
+      signal.throwIfAborted();
+      return { estadoReintento, stockAntes };
+    }));
 
   // This synchronous durable barrier runs before the mutation is even constructed.
   // An exception here prevents dispatch. Legacy callers need no new parameter.
