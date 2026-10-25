@@ -198,30 +198,21 @@ async function expire(ms) {
   await act(async () => entry[1].fn());
   await settle();
 }
+// Slow catalog and stale preflight reads must never be prerequisites for RPC.
+// A slow diagnostic query or full catalog must never delay dispatch of the RPC.
 for (const field of ['preflightWait', 'stockWait']) {
   reset({ loseResponse: false, signals: [] });
   let release;
-  await mount(); await addWeight();
   state[field] = new Promise(r => { release = r; });
-  await keys('F9', 'F9');
-  const original = leerIntentoCobro(E);
-  assert.equal(original.fase, 'preparacion'); assert.equal(state.calls.length, 0);
-  await expire(12000);
-  assert.ok(state.signals.some(s => s.aborted), 'preflight request signal aborted');
-  assert.equal(leerIntentoCobro(E).estado, 'pendiente');
-  assert.match(document.body.textContent, /La preparación del cobro no pudo completarse/);
-  assert.equal(document.querySelector('[data-recuperar-cobro]').disabled, false);
+  await mount(); await addWeight();
+  await keys('F9');
+  assert.equal(state.calls.length, 1, 'RPC must not wait for optional '+field);
+  assert.equal(state.commits, 1);
+  assert.equal(leerIntentoCobro(E).estado, 'confirmado');
   release(); await settle();
-  assert.equal(state.calls.length, 0, 'late preflight cannot start an invisible RPC');
-  assert.equal(leerIntentoCobro(E).fase, 'preparacion');
-  state[field] = null;
-  await unmount(); await mount(); await click('[data-recuperar-cobro]', 3);
-  assert.equal(state.calls.length, 1); assert.equal(state.commits, 1);
-  assert.equal(state.calls[0].p_idempotency_key, original.payload.idempotencyKey);
-  assert.equal(state.calls[0].p_items[0].cantidad, .75);
-  assert.equal(state.prints.length, 0); assert.equal(state.fiscal.length, 0);
+  assert.equal(state.commits, 1, 'late diagnostic cannot charge again');
   await unmount();
-  console.log(`PASS: ${field} deadline aborts and releases UI; late completion cannot charge; reload recovers same key/snapshot`);
+  console.log('PASS: '+field+' does not block the RPC or create a duplicate');
 }
 for (const shortcut of ['F9', 'F10', 'F11']) {
   reset({ loseResponse: false, signals: [] }); let release;
@@ -268,7 +259,14 @@ reset({ loseResponse: false, signals: [] }); let releaseReadback;
 state.readbackWait = new Promise(r => { releaseReadback = r; });
 await mount(); await addWeight(); await keys('F9');
 assert.equal(leerIntentoCobro(E).estado, 'confirmado');
-await expire(12000); assert.match(document.body.textContent, /conciliación automática no pudo verificarse/);
+await expire(12000);
+const diagnostic = document.querySelector('[data-cobro-diagnostico]');
+assert.ok(diagnostic);
+assert.match(diagnostic.textContent, /Venta confirmada/);
+assert.match(diagnostic.textContent, /comprobación adicional de caja o stock no está completa/);
+assert.equal(diagnostic.getAttribute('role'), 'status');
+assert.equal(document.querySelector('[data-recuperar-cobro]'), null);
+assert.doesNotMatch(diagnostic.textContent, /pendiente|stock verificado|hasta revisar/i);
 releaseReadback(); await settle(); assert.equal(leerIntentoCobro(E).estado, 'confirmado');
 await unmount();
 console.log('PASS: confirmed UUID is durable while readback hangs; reconciliation deadline does not undo the charge');

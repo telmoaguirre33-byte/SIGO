@@ -488,18 +488,12 @@ export async function confirmarVentaSigo(input: {
   const idempotencyKey = normalizarIdentificador(input.idempotencyKey ?? crearIdempotencyKey());
   if (!idempotencyKey) throw new VentaRechazadaSinCambiosError("No se pudo generar una clave segura para confirmar la venta.");
 
-  // En recuperación, la RPC valida la huella de la clave original antes de
-  // devolver una venta existente. Evitar lecturas preliminares de catálogo:
-  // pueden fallar por permisos/red y bloquear un cobro ya confirmado.
-  const { estadoReintento, stockAntes } = opciones.recuperacion
-    ? { estadoReintento: "desconocido" as EstadoReintentoVenta, stockAntes: null }
-    : await esperarCobro("preparacion", 12000, (plazo) => conCancelacionVenta(plazo, opciones.signal, async (signal) => {
-      const estadoReintento = await detectarEstadoReintento(empresaId, idempotencyKey, signal);
-      signal.throwIfAborted();
-      const stockAntes = await capturarStockAntes(empresaId, itemsConsolidados, estadoReintento, signal);
-      signal.throwIfAborted();
-      return { estadoReintento, stockAntes };
-    }));
+  // La RPC valida permisos, stock e idempotencia en la misma transacción.
+  // No consultar todo el catálogo antes de enviar: en comercios grandes esa
+  // lectura agotaba el plazo e impedía cobrar incluso una venta válida.
+  // Sin snapshot previo, el diagnóstico posterior no debe afirmar stock verificado.
+  const estadoReintento: EstadoReintentoVenta = "desconocido";
+  const stockAntes: SnapshotStockVenta | null = null;
 
   // This synchronous durable barrier runs before the mutation is even constructed.
   // An exception here prevents dispatch. Legacy callers need no new parameter.

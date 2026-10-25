@@ -1,0 +1,51 @@
+name: Cobro 104 isolated PostgreSQL transactions
+on:
+  pull_request:
+    paths:
+      - 'src/VentaRapidaOperativa.tsx'
+      - 'src/ventas.ts'
+      - 'src/intentoCobro.ts'
+      - 'src/esperaCobro.ts'
+      - 'src/sesionCobro.ts'
+      - 'src/SigoAuthGate.tsx'
+      - 'supabase/migrations/**'
+      - 'scripts/test-cobro104-db.mjs'
+      - '.github/workflows/cobro104-db.yml'
+permissions:
+  contents: read
+jobs:
+  actual-sale-rpc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: sigo_cobro104_qa
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: isolated_test_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: PostgreSQL client
+        run: command -v psql || (sudo apt-get update && sudo apt-get install -y postgresql-client)
+      - name: Actual RPC against empty isolated PostgreSQL 17 only
+        env:
+          SIGO_ISOLATED_TEST_DB: '1'
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGDATABASE: sigo_cobro104_qa
+          PGUSER: postgres
+          PGPASSWORD: isolated_test_only
+          COBRO104_DB_QA_DIR: artifacts/cobro104-db
+        run: node scripts/test-cobro104-db.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cobro104-db-evidence
+          path: artifacts/cobro104-db

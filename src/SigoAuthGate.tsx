@@ -87,7 +87,10 @@ export default function SigoAuthGate({ children }: Props) {
         setError("");
         setSuccess("Enlace validado. Elegí una nueva contraseña.");
       }
-      setSession(nextSession);
+      // Only an explicit sign-out tears down the cashier. A transient event
+      // without a session must not discard a cart or orphan its payment ACK.
+      if (event === "SIGNED_OUT") setSession(null);
+      else if (nextSession) setSession(nextSession);
       setLoading(false);
     });
 

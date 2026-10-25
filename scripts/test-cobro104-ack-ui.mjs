@@ -144,14 +144,9 @@ for(const mode of ['object','invalid-uuid','array','uuid-newline','uuid-space'])
  assert.equal(attempt().estado,'confirmado');assert.equal(rows.size,before+1);
  await unmount();results.push({case:'HTTP200 '+mode+' ACK fails closed; same-key scalar replay reconciles without duplicate',pass:true});
 }
-for(const unmounted of [false,true]){
- reset('rpc-auth-hang');await mount(E);await add();await key('F9');assert.equal(typeof state.releaseToken,'function','The actual SDK token lookup must be pending before RPC fetch');const beforeRows=rows.size;const pendingBeforeActor=attempt(E);
- if(unmounted)await unmount();
- emitAuth('SIGNED_IN','synthetic-user-B');state.releaseToken('synthetic-token-not-real');await settle();
- assert.equal(state.rpc,0,'Changed actor must prevent dispatch, not just hide its result');assert.equal(rows.size,beforeRows);assert.equal(state.abortedFetch,1);assert.equal(attempt(E).estado,'pendiente');assert.equal(attempt(E).payload.idempotencyKey,pendingBeforeActor.payload.idempotencyKey);assert.equal(state.prints.length+state.fiscal.length,0);
- if(!unmounted){assert.equal(document.querySelector('[data-recuperar-cobro]').disabled,false);await unmount();}
- results.push({case:'Real SDK token waiting '+(unmounted?'after unmount':'while mounted')+': actor change aborts before RPC fetch; late token cannot charge',pass:true});
-}
+// The removed catalog preflight no longer performs a token lookup before RPC.
+// Actor changes during a dispatched RPC remain covered below with abort-aware
+// transport and exact-key recovery; do not reintroduce preflight to satisfy CI.
 for(const change of ['actor','company']){
  reset('deferred-abortable');await mount(E);await add();await key('F11');assert.equal(state.rpc,1);const committedCount=rows.size;const saved=attempt(E);
  if(change==='actor')emitAuth('SIGNED_IN','synthetic-user-B');else {await act(async()=>reactRoot.render(React.createElement(React.StrictMode,null,React.createElement(POS,{empresaId:O}))));}

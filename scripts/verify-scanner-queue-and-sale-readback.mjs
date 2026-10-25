@@ -4,13 +4,15 @@ import path from "node:path";
 const root = process.cwd();
 const scannerPath = path.join(root, "src", "BarcodeScanner.tsx");
 const salePath = path.join(root, "src", "VentaRapidaOperativa.tsx");
+const diagnosticPath = path.join(root, "src", "avisoCobroConfirmado.ts");
 
-for (const file of [scannerPath, salePath]) {
+for (const file of [scannerPath, salePath, diagnosticPath]) {
   if (!fs.existsSync(file)) throw new Error(`Missing scanner/sale file: ${path.relative(root, file)}`);
 }
 
 const scanner = fs.readFileSync(scannerPath, "utf8");
 const sale = fs.readFileSync(salePath, "utf8");
+const diagnostic = fs.readFileSync(diagnosticPath, "utf8");
 
 for (const required of [
   "MAX_PENDING_SCANS = 50",
@@ -41,11 +43,19 @@ for (const required of [
   "!Number.isFinite(precio) || precio <= 0",
   "resultado.verificacion.then",
   "const totalEsperado = intento.totalEsperado",
-  "Math.abs(verificado.totalVerificado - totalEsperado) > DINERO_TOLERANCIA",
-  "SIGO registró el total vigente del backend",
+  "avisoCobroConfirmado(verificado, totalEsperado)",
+  "setAdvertencia(aviso.texto)",
+  "setAdvertenciaRevision(aviso.requiereRevision)",
   "Venta confirmada",
 ]) {
   if (!sale.includes(required)) throw new Error(`Sale verified-total safeguard missing: ${required}`);
+}
+for (const required of [
+  "Math.abs(verificacion.totalVerificado - totalEsperado) > 0.01",
+  'verificacion.totalVerificado!.toLocaleString("es-AR")',
+  'requiereRevision: diferencia || verificacion.integridad === "revisar"',
+]) {
+  if (!diagnostic.includes(required)) throw new Error(`Extracted verified-total safeguard missing: ${required}`);
 }
 
 const rpcConfirmation = sale.search(/await confirmarVentaSigo\(intento\.payload(?:,|\))/);
@@ -58,4 +68,4 @@ if (rpcConfirmation < 0 || persistConfirmedId <= rpcConfirmation
   throw new Error("Caja must persist the confirmed UUID and display confirmation before scheduling non-blocking secondary readbacks");
 }
 
-console.log("Scanner/sale verified: rapid manual/wedge reads are queued, tenant/action context is protected, and the sale receipt shows the backend-verified total.");
+console.log("Scanner/sale verified: rapid manual/wedge reads are queued, tenant/action context is protected, and backend total discrepancies remain visible without delaying confirmation.");

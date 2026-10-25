@@ -106,10 +106,12 @@ try {
       await start();await add();await page.keyboard.press('F10');await page.waitForFunction(()=>__qa.calls.length===1);await page.waitForFunction(()=>!document.querySelector('[data-recuperar-cobro]').disabled);const before=await snapshot();const saved=await attempt();
       await page.reload();await page.addScriptTag({content:bundle.outputFiles[0].text});await page.evaluate(s=>{__qa.rows=s.rows;__qa.calls=s.calls;__qa.mode='ok'},before);await page.locator('[data-recuperar-cobro]').waitFor();assert.deepEqual(await attempt(),saved);assert.equal((await snapshot()).calls.length,1);await recover();const after=await snapshot();assert.equal(after.rows.length,1);assert.deepEqual(after.calls[0],after.calls[1]);assert.equal(after.prints.length+after.fiscal.length,0);
     });
-    for(const mode of ['preflight','stock'])await check(`${mode} timeout sends zero RPC and late completion cannot secretly charge`,async()=>{
-      await start(mode);await add();await page.keyboard.press('F11');await page.waitForFunction(()=>__qa.pending.length===1);const original=(await attempt()).payload;
-      await page.clock.fastForward(13000);await page.clock.resume();await page.waitForFunction(()=>!document.querySelector('[data-recuperar-cobro]').disabled);const blocked=await snapshot();assert.equal(blocked.calls.length,0);assert.equal(blocked.rows.length,0);assert.ok(blocked.signals.some(x=>x.kind===(mode==='stock'?'stock':'query')&&x.aborted));assert.equal((await attempt()).fase,'preparacion');
-      await page.evaluate(()=>__qa.pending[0].resolve());await page.waitForTimeout(100);assert.equal((await snapshot()).calls.length,0);assert.deepEqual((await attempt()).payload,original);await recover();const after=await snapshot();assert.equal(after.calls.length,1);assert.equal(after.rows.length,1);assert.equal(after.calls[0].p_idempotency_key,original.idempotencyKey);assert.equal(after.prints.length+after.fiscal.length,0);
+    for(const mode of ['preflight','stock'])await check(`${mode} delayed diagnostics do not block payment RPC`,async()=>{
+      await start(mode);await add();await page.keyboard.press('F9');
+      await page.waitForFunction(()=>__qa.calls.length===1);
+      const after=await snapshot();assert.equal(after.rows.length,1);
+      assert.equal(after.calls.length,1);
+      assert.equal((await attempt()).estado,'confirmado');
     });
     for(const [unit,input,expected] of [['unidad',null,1],['kg','750',.75],['g','750',750],['l','0.75',.75],['m','0.75',.75]])await check(`${unit}: exact base-unit payload survives lost response and recovery`,async()=>{
       await start();await add(unit,input);await page.keyboard.press('F9');await page.waitForFunction(()=>__qa.calls.length===1);await recover();const s=await snapshot();assert.equal(s.rows.length,1);assert.deepEqual(s.calls[0],s.calls[1]);assert.equal(s.calls[0].p_items[0].cantidad,expected);assert.equal(s.calls[0].p_items[0].unidad_medida,unit);assert.equal(s.fiscal.length+s.prints.length,0);
