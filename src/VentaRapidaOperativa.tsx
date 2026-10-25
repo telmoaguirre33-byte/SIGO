@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { actualizarSesionCobro, cambioIdentidadCobro, type SesionCobro } from "./sesionCobro";
+import { avisoCobroConfirmado } from "./avisoCobroConfirmado";
 import { useEffect, useMemo, useRef, useState } from "react";
 import BarcodeScanner from "./BarcodeScanner";
 import EditorCantidadMedida from "./EditorCantidadMedida";
@@ -19,8 +20,6 @@ import {
 } from "./ventas";
 
 type ItemVenta = { producto: BarcodeProduct; cantidad: number; unidad: UnidadVenta };
-
-const DINERO_TOLERANCIA = 0.01;
 
 function nuevaClaveVenta() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
@@ -70,6 +69,8 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   const [exito, setExito] = useState("");
   const [ultimaVentaTicket, setUltimaVentaTicket] = useState<string | null>(null);
   const [advertencia, setAdvertencia] = useState("");
+  const [advertenciaRevision, setAdvertenciaRevision] = useState(false);
+  const secuenciaAvisosRef = useRef(0);
   const [descuentoPct,setDescuentoPct]=useState(0);
   const [productoSeleccionadoId,setProductoSeleccionadoId]=useState<string|null>(null);
   const [scannerInstanceKey,setScannerInstanceKey]=useState(0);
@@ -482,6 +483,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       return;
     }
     confirmacionEnCursoRef.current = true;
+    const secuenciaAviso = ++secuenciaAvisosRef.current;
     const empresaConfirmacion = empresaId;
     const epocaEmpresa = contextoEmpresaRef.current.epoca;
     const contextoVigente = () => {
@@ -491,6 +493,9 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         && actual.conocida && !actual.cambio && actual.usuario === sesionConfirmacion.usuario
         && actual.epoca === sesionConfirmacion.epoca;
     };
+    // An older diagnostic must not overwrite the messages or catalogue of a newer sale.
+    // This does not cancel or change persistence of any in-flight payment.
+    const avisoVigente = () => contextoVigente() && secuenciaAvisosRef.current === secuenciaAviso;
     let intento: IntentoCobro | null = null;
     let protegido = false;
     let adoptarConfirmado = false;
@@ -502,6 +507,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     setError("");
     setExito("");
     setAdvertencia("");
+    setAdvertenciaRevision(false);
     try {
       // Keep this operation observer until settlement, including while the POS is
       // unmounted, so a delayed SDK token lookup cannot dispatch under a new user.
@@ -559,30 +565,25 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       if (guardado) setIntentoPendiente(null);
       else setError("La venta quedó confirmada, pero no se pudo guardar su estado en este navegador. No hagas otro cobro: usá Recuperar el mismo cobro para guardar el resultado.");
       setExito(recuperar ? "Cobro recuperado. No se creó una venta adicional. Podés facturar o reimprimir esta venta con F11/F12." : "Venta confirmada");
-      window.setTimeout(() => { if (contextoVigente()) setExito(""); }, recuperar ? 9000 : 2200);
+      window.setTimeout(() => { if (avisoVigente()) setExito(""); }, recuperar ? 9000 : 2200);
       setUltimaVentaTicket(resultado.ventaId);
       // La recuperación nunca reanuda autorizaciones de impresión o emisión fiscal.
       if (!recuperar && emitirFiscalDespues) window.dispatchEvent(new CustomEvent("sigo:arca:venta", { detail: { empresaId: empresaConfirmacion, ventaId: resultado.ventaId } }));
       setAdvertencia("");
       const totalEsperado = intento.totalEsperado;
       void resultado.verificacion.then((verificado) => {
-        if (!contextoVigente()) return;
-        const advertencias: string[] = [];
-        if (verificado.totalVerificado != null && Math.abs(verificado.totalVerificado - totalEsperado) > DINERO_TOLERANCIA) {
-          advertencias.push(`El precio cambió mientras confirmabas. SIGO registró el total vigente del backend: $ ${verificado.totalVerificado.toLocaleString("es-AR")}.`);
-        }
-        if (verificado.integridad !== "ok") {
-          advertencias.push(verificado.integridad === "revisar"
-            ? "La venta quedó registrada, pero no se pudo conciliar su movimiento de Caja/Cuenta Corriente o stock. NO repitas la venta: revisá el estado operativo o Informes."
-            : "La venta quedó registrada, pero la conciliación automática no pudo verificarse. NO repitas la venta hasta revisar Ventas/Informes.");
-        }
-        setAdvertencia(advertencias.join(" "));
+        if (!avisoVigente()) return;
+        const aviso = avisoCobroConfirmado(verificado, totalEsperado);
+        setAdvertencia(aviso.texto);
+        setAdvertenciaRevision(aviso.requiereRevision);
       }).catch(() => {
-        if (contextoVigente()) setAdvertencia("La venta quedó confirmada, pero no se pudo verificar la conciliación posterior. No repitas la venta hasta revisar Ventas/Informes.");
+        if (!avisoVigente()) return;
+        setAdvertencia(avisoCobroConfirmado({ integridad: "no_verificada", totalVerificado: null }, totalEsperado).texto);
+        setAdvertenciaRevision(false);
       });
       if (!recuperar && imprimirDespues) {
         void imprimirTicketVenta(empresaConfirmacion, resultado.ventaId, "80", true).catch((printErr) => {
-          if (contextoVigente()) setError(printErr instanceof Error ? printErr.message : "La venta se confirmó, pero no se pudo abrir la impresión del ticket.");
+          if (avisoVigente()) setError(printErr instanceof Error ? printErr.message : "La venta se confirmó, pero no se pudo abrir la impresión del ticket.");
         });
       }
       // En recuperación el catálogo puede contener ya el stock descontado: releer, no restarlo otra vez.
@@ -594,9 +595,9 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         }));
       } else {
         void listarProductosSigo(empresaConfirmacion).then((data) => {
-          if (contextoVigente()) setCatalogo(data);
+          if (avisoVigente()) setCatalogo(data);
         }).catch(() => {
-          if (contextoVigente()) setCatalogoError("El cobro fue recuperado, pero no se pudo actualizar el catálogo. Recargá antes de otra venta.");
+          if (avisoVigente()) setCatalogoError("El cobro fue recuperado, pero no se pudo actualizar el catálogo. Recargá antes de otra venta.");
         });
       }
       setItems([]);
@@ -606,11 +607,11 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       setClienteId("");
       setMedioPago("efectivo");
       void listarClientesSigo(empresaConfirmacion).then((data) => {
-        if (contextoVigente()) setClientes(data);
+        if (avisoVigente()) setClientes(data);
       }).catch((refreshErr) => {
-        if (contextoVigente()) setClientesError(refreshErr instanceof Error ? refreshErr.message : "No se pudieron actualizar los clientes.");
+        if (avisoVigente()) setClientesError(refreshErr instanceof Error ? refreshErr.message : "No se pudieron actualizar los clientes.");
       });
-      void cargarVentasRecientes(empresaConfirmacion, contextoVigente);
+      void cargarVentasRecientes(empresaConfirmacion, avisoVigente);
     } catch (err) {
       // Solo un rechazo definitivo de la primera llamada prueba que este intento no cobró.
       // En una recuperación, el rollback actual NO descarta un commit anterior.
@@ -723,7 +724,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         {busquedaProducto.trim()&&productosEncontrados.length>0&&<div className="sigo-pos-results">{productosEncontrados.map((p)=><button type="button" data-pos-suggestion="" data-product-id={p.id} aria-selected={p.id===productoSeleccionadoVisibleId} className={p.id===productoSeleccionadoVisibleId?"active":""} key={p.id} onMouseEnter={()=>{productoSeleccionadoIdRef.current=p.id;setProductoSeleccionadoId(p.id)}} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}{Number(p.stock_actual??0)<=0?" · SIN STOCK":""}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} / {p.unidad_medida ?? "unidad sin verificar"} · Stock {formatoStockMedida(Number(p.stock_actual ?? 0), p.unidad_medida)}</span></button>)}</div>}{busquedaProducto.trim()&&productosEncontrados.length===0&&!catalogoError&&<div className="sigo-pos-results"><div className="table-empty">No encontré productos. Probá con nombre, marca, código interno o EAN.</div></div>}
       </div>
       {productoBloqueado&&<div className="form-error"><strong>{productoBloqueado.producto.nombre}</strong> · {productoBloqueado.razon==="stock"?"Sin stock disponible.":"Sin precio válido."}</div>}
-      {error&&<p className="form-error" role="alert">{error}</p>}{ofertasError&&<p className="form-error" role="alert">No se puede cobrar hasta comprobar los precios de oferta: {ofertasError}</p>}{exito&&<span className="sigo-pos-success-inline" role="status">{exito}</span>}{advertencia&&<p className="form-error">{advertencia}</p>}
+      {error&&<p className="form-error" role="alert">{error}</p>}{ofertasError&&<p className="form-error" role="alert">No se puede cobrar hasta comprobar los precios de oferta: {ofertasError}</p>}{exito&&<span className="sigo-pos-success-inline" role="status">{exito}</span>}{advertencia&&<p data-cobro-diagnostico="" className={advertenciaRevision || cajaBloqueada ? "form-error" : "sigo-pos-verification-note"} role={advertenciaRevision || cajaBloqueada ? "alert" : "status"}>{advertencia}</p>}
       <div className="sigo-pos-grid">
         <section className="sigo-pos-cart">
           <div className="table-wrapper"><table className="products-table"><thead><tr><th>#</th><th>Producto</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th></th></tr></thead><tbody>{items.map((item,i)=>{const precio=precioUnitarioVenta(item,ofertas,descuentoPct);return <tr key={item.producto.id}><td>{i+1}</td><td><strong>{item.producto.nombre}</strong><small>{item.producto.codigo_interno||item.producto.codigo_barras||""}</small></td><td><div className="sigo-pos-qty"><button disabled={cajaBloqueada || Boolean(productoPorMedida)} onClick={()=>cambiarCantidad(item.producto.id,-pasoCantidadMedida(item.unidad))}>−</button><button type="button" style={{ width: "auto", minWidth: "5rem", padding: "0 0.4rem" }} disabled={cajaBloqueada || Boolean(productoPorMedida)} aria-label={`Editar cantidad de ${item.producto.nombre}`} onClick={()=>editarCantidad(item)}><strong>{formatoCantidadMedida(item.cantidad, item.unidad)}</strong></button><button disabled={cajaBloqueada || Boolean(productoPorMedida)} onClick={()=>cambiarCantidad(item.producto.id,pasoCantidadMedida(item.unidad))}>+</button></div></td><td>$ {precio.toLocaleString("es-AR")} / {item.unidad}</td><td><strong>$ {subtotalMedida(item.cantidad, precio).toLocaleString("es-AR")}</strong></td><td><button className="sigo-pos-remove" disabled={cajaBloqueada || Boolean(productoPorMedida)} onClick={()=>setItems(a=>a.filter(x=>x.producto.id!==item.producto.id))}>🗑</button></td></tr>})}</tbody></table>{!items.length&&<div className="table-empty">Escaneá o buscá un producto para iniciar la venta.</div>}</div>
