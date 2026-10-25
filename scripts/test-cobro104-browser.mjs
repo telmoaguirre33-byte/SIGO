@@ -155,6 +155,13 @@ try {
       await add();await page.keyboard.press('F9');await page.waitForFunction(()=>__qa.calls.length===2&&__qa.rows.length===2);
       const s=await snapshot();assert.equal(s.calls.length,2);assert.equal(s.rows.length,2);assert.notEqual(s.calls[0].p_idempotency_key,s.calls[1].p_idempotency_key);assert.deepEqual(s.blocked,[]);
     });
+    for(const event of ['SIGNED_OUT','SIGNED_IN'])await check(`explicit ${event} blocks a stale pending recovery`,async()=>{
+      await start();await add();await page.keyboard.press('F9');await page.waitForFunction(()=>__qa.calls.length===1);await page.waitForFunction(()=>!document.querySelector('[data-recuperar-cobro]').disabled);
+      const original=(await attempt()).payload;
+      await page.evaluate(e=>{for(const cb of __qa.authListeners.slice())cb(e,e==='SIGNED_OUT'?null:{user:{id:'different-synthetic-user'}})},event);
+      await page.locator('[data-recuperar-cobro]').click();await page.waitForTimeout(50);
+      const s=await snapshot();assert.equal(s.calls.length,1);assert.equal(s.rows.length,1);assert.equal(s.calls[0].p_idempotency_key,original.idempotencyKey);assert.equal((await attempt()).estado,'pendiente');assert.ok(await page.locator('[data-recuperar-cobro]').count());assert.deepEqual(s.blocked,[]);
+    });
     assert.deepEqual((await snapshot()).blocked,[]);await page.screenshot({path:path.join(artifacts,`${mobile?'mobile':'desktop'}-recovered.png`),fullPage:true});await context.close();
   }
   assert.deepEqual(network,[]);assert.deepEqual(errors,[]);
