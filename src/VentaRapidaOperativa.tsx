@@ -93,9 +93,18 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       if (!activo) return;
       const actual = sesionCobroRef.current;
       const usuario = sesion?.user?.id ?? null;
-      const cambio = evento === "SIGNED_OUT" || (actual.conocida ? actual.usuario !== usuario : evento !== "INITIAL_SESSION");
-      sesionCobroRef.current = { conocida: true, usuario, cambio: actual.cambio || cambio,
-        epoca: actual.epoca + (cambio ? 1 : 0) };
+      // A transient null on refresh does not mean the actor changed. Preserve the last
+      // authenticated identity so a late ACK can still settle the same sale.
+      if (!usuario && evento !== "SIGNED_OUT") {
+        if (evento === "INITIAL_SESSION" && !actual.conocida) {
+          sesionCobroRef.current = { ...actual, conocida: true };
+        }
+        return;
+      }
+      const cambio = evento === "SIGNED_OUT"
+        || (actual.conocida ? actual.usuario !== usuario && evento !== "INITIAL_SESSION" : evento !== "INITIAL_SESSION");
+      sesionCobroRef.current = { conocida: true, usuario: evento === "SIGNED_OUT" ? null : usuario,
+        cambio: actual.cambio || cambio, epoca: actual.epoca + (cambio ? 1 : 0) };
     });
     return () => { activo = false; data.subscription.unsubscribe(); };
   }, []);
