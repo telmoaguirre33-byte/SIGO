@@ -198,30 +198,17 @@ async function expire(ms) {
   await act(async () => entry[1].fn());
   await settle();
 }
+// Slow catalog and stale preflight reads must never be prerequisites for RPC.
 for (const field of ['preflightWait', 'stockWait']) {
   reset({ loseResponse: false, signals: [] });
-  let release;
+  state[field] = new Promise(() => {});
   await mount(); await addWeight();
-  state[field] = new Promise(r => { release = r; });
-  await keys('F9', 'F9');
-  const original = leerIntentoCobro(E);
-  assert.equal(original.fase, 'preparacion'); assert.equal(state.calls.length, 0);
-  await expire(12000);
-  assert.ok(state.signals.some(s => s.aborted), 'preflight request signal aborted');
-  assert.equal(leerIntentoCobro(E).estado, 'pendiente');
-  assert.match(document.body.textContent, /La preparación del cobro no pudo completarse/);
-  assert.equal(document.querySelector('[data-recuperar-cobro]').disabled, false);
-  release(); await settle();
-  assert.equal(state.calls.length, 0, 'late preflight cannot start an invisible RPC');
-  assert.equal(leerIntentoCobro(E).fase, 'preparacion');
-  state[field] = null;
-  await unmount(); await mount(); await click('[data-recuperar-cobro]', 3);
-  assert.equal(state.calls.length, 1); assert.equal(state.commits, 1);
-  assert.equal(state.calls[0].p_idempotency_key, original.payload.idempotencyKey);
-  assert.equal(state.calls[0].p_items[0].cantidad, .75);
-  assert.equal(state.prints.length, 0); assert.equal(state.fiscal.length, 0);
+  await keys('F9');
+  assert.equal(state.calls.length, 1, 'RPC must run without waiting for '+field);
+  assert.equal(state.commits, 1);
+  assert.equal(leerIntentoCobro(E).estado, 'confirmado');
   await unmount();
-  console.log(`PASS: ${field} deadline aborts and releases UI; late completion cannot charge; reload recovers same key/snapshot`);
+  console.log('PASS: '+field+' does not block confirmed sale');
 }
 for (const shortcut of ['F9', 'F10', 'F11']) {
   reset({ loseResponse: false, signals: [] }); let release;
