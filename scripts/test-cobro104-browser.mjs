@@ -50,7 +50,7 @@ function fixture() {
     s.calls.push(structuredClone(p));
     let row=s.rows.find(r=>r.empresa_id===p.p_empresa_id&&r.idempotency_key===p.p_idempotency_key);
     if(row&&row.fingerprint!==JSON.stringify(p))return {data:null,error:{code:'P0001',message:'IDEMPOTENCY_CONFLICT'}};
-    if(!row){row={id:`22222222-2222-4222-8222-${String(s.rows.length+1).padStart(12,'0')}`,empresa_id:p.p_empresa_id,idempotency_key:p.p_idempotency_key,fingerprint:JSON.stringify(p),items:p.p_items.map(i=>({...i,precio_unitario:20,subtotal:Math.round(i.cantidad*20*100)/100})),numero:s.rows.length+1,medio_pago:p.p_medio_pago,cliente_id:p.p_cliente_id,created_at:'2026-10-24T00:00:00Z'};row.total=row.items.reduce((a,i)=>a+i.subtotal,0);s.rows.push(row);}
+    if(!row){row={id:`22222222-2222-4222-8222-${String(s.rows.length+1).padStart(12,'0')}`,empresa_id:p.p_empresa_id,idempotency_key:p.p_idempotency_key,fingerprint:JSON.stringify(p),items:p.p_items.map(i=>({...i,precio_unitario:20,subtotal:Math.round(i.cantidad*20*100)/100})),numero:s.rows.length+1,medio_pago:p.p_medio_pago,cliente_id:p.p_cliente_id,estado:'confirmada',created_at:'2026-10-24T00:00:00Z'};row.total=row.items.reduce((a,i)=>a+i.subtotal,0);s.rows.push(row);}
     const mode=s.mode;s.mode='ok';
     if(mode==='lost')throw new Error('Synthetic lost response AFTER COMMIT');
     if(mode==='hang')return new Promise((resolve,reject)=>s.pending.push({resolve:()=>resolve({data:row.id,error:null}),reject:()=>reject(new Error('Synthetic late rejection'))}));
@@ -81,8 +81,26 @@ try {
     }
     async function recover(){await page.locator('[data-recuperar-cobro]').waitFor();await page.waitForFunction(()=>!document.querySelector('[data-recuperar-cobro]').disabled);await page.locator('[data-recuperar-cobro]').evaluate(el=>{el.click();el.click();el.click();});await page.waitForFunction(e=>JSON.parse(sessionStorage.getItem('sigo:intento-cobro:'+e))?.estado==='confirmado',E);}
     async function check(name,run){try{await run();assert.deepEqual((await snapshot()).blocked,[]);}catch(e){await page.screenshot({path:path.join(artifacts,`${mobile?'mobile':'desktop'}-failure.png`),fullPage:true}).catch(()=>{});throw e;}results.push(`${mobile?'mobile':'desktop'}: ${name}`);console.log('PASS',results.at(-1));}
+    await check('normal progress is compact neutral status; confirmed result stays readable',async()=>{
+      await start('hang');await add('unidad');await page.keyboard.press('F9');await page.waitForFunction(()=>__qa.pending.length===1);
+      const notice=page.locator('[data-cobro-pendiente]');
+      assert.equal(await notice.getAttribute('role'),'status');assert.equal(await notice.getAttribute('data-cobro-estado'),'en_curso');
+      const style=await notice.evaluate(el=>({error:el.classList.contains('form-error'),background:getComputedStyle(el).backgroundColor,height:el.getBoundingClientRect().height,width:el.getBoundingClientRect().width,available:el.parentElement.getBoundingClientRect().width}));
+      assert.equal(style.error,false);assert.equal(style.background,'rgb(248, 250, 252)');assert.ok(style.height<100);assert.ok(style.width<=style.available+1);
+      assert.equal(await page.locator('[data-recuperar-cobro]').isDisabled(),true);
+      assert.equal((await attempt()).estado,'pendiente');
+      await page.screenshot({path:path.join(artifacts,`${mobile?'mobile':'desktop'}-normal-progress.png`),fullPage:true});
+      await page.evaluate(()=>__qa.pending[0].resolve());
+      await page.waitForFunction(e=>JSON.parse(sessionStorage.getItem('sigo:intento-cobro:'+e))?.estado==='confirmado'&&!document.querySelector('[data-cobro-pendiente]'),E);
+      await page.clock.fastForward(3500);await page.clock.resume();
+      assert.equal(await page.locator('.sigo-pos-success-inline').innerText(),'Venta confirmada');
+      const paid=await snapshot();assert.equal(paid.calls.length,1);assert.equal(paid.rows.length,1);assert.equal(paid.prints.length+paid.fiscal.length,0);
+      await page.screenshot({path:path.join(artifacts,`${mobile?'mobile':'desktop'}-readable-confirmation.png`),fullPage:true});
+    });
     await check('lost response, double click and F9–F12 preserve one intent; explicit recovery creates no duplicate or output',async()=>{
       await start();await add();await page.locator('.sigo-pos-action.cobrar').evaluate(el=>{el.click();el.click();});await page.waitForFunction(()=>__qa.calls.length===1);await page.waitForFunction(()=>!document.querySelector('[data-recuperar-cobro]').disabled);
+      assert.equal(await page.locator('[data-cobro-pendiente]').getAttribute('role'),'alert');
+      assert.equal(await page.locator('[data-cobro-pendiente]').evaluate(el=>el.classList.contains('form-error')),true);
       for(const key of ['F9','F10','F11','F12'])await page.keyboard.press(key);
       const before=await snapshot();assert.equal(before.calls.length,1);assert.equal(before.rows.length,1);assert.equal(before.prints.length+before.fiscal.length,0);
       const pending=await attempt();
