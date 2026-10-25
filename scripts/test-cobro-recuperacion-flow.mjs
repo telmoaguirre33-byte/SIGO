@@ -199,16 +199,20 @@ async function expire(ms) {
   await settle();
 }
 // Slow catalog and stale preflight reads must never be prerequisites for RPC.
+// A slow diagnostic query or full catalog must never delay dispatch of the RPC.
 for (const field of ['preflightWait', 'stockWait']) {
   reset({ loseResponse: false, signals: [] });
-  state[field] = new Promise(() => {});
+  let release;
+  state[field] = new Promise(r => { release = r; });
   await mount(); await addWeight();
   await keys('F9');
-  assert.equal(state.calls.length, 1, 'RPC must run without waiting for '+field);
+  assert.equal(state.calls.length, 1, 'RPC must not wait for optional '+field);
   assert.equal(state.commits, 1);
   assert.equal(leerIntentoCobro(E).estado, 'confirmado');
+  release(); await settle();
+  assert.equal(state.commits, 1, 'late diagnostic cannot charge again');
   await unmount();
-  console.log('PASS: '+field+' does not block confirmed sale');
+  console.log('PASS: '+field+' does not block the RPC or create a duplicate');
 }
 for (const shortcut of ['F9', 'F10', 'F11']) {
   reset({ loseResponse: false, signals: [] }); let release;
