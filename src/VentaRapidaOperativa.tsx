@@ -537,6 +537,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         ventaId: intento.ventaId!,
         verificacion: Promise.resolve({ integridad: "no_verificada" as const, totalVerificado: null }),
       } : await confirmarVentaSigo(intento.payload, {
+        recuperacion: recuperar,
         contextoVigente,
         signal: controller.signal,
         antesDeEnviar: () => {
