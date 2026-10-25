@@ -27,6 +27,7 @@ jobs:
           COBRO104_REAL_DEADLINE: "1"
       - name: Pin the affected main source for independent baseline reproduction
         run: |
+          git fetch --no-tags --depth=1 origin b00b691384a9ecf4ff08dc2d4b19ff692e709d05
           mkdir -p .test-build/baseline/src
           git show b00b691384a9ecf4ff08dc2d4b19ff692e709d05:src/VentaRapidaOperativa.tsx > .test-build/baseline/src/VentaRapidaOperativa.tsx
           git show b00b691384a9ecf4ff08dc2d4b19ff692e709d05:src/SigoAuthGate.tsx > .test-build/baseline/src/SigoAuthGate.tsx

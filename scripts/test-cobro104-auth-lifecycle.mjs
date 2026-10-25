@@ -36,7 +36,7 @@ async function localFetch(input, init = {}) {
   const url = new URL(String(input));
   assert.equal(url.origin, 'https://auth-lifecycle.invalid');
   if (url.pathname === '/auth/v1/token') { refreshes++; return response(session()); }
-  if (url.pathname === '/auth/v1/user') return response(session().user);
+  if (url.pathname === '/auth/v1/user') { const bearer=new Headers(init.headers).get('Authorization').replace(/^Bearer /i,''); const userId=JSON.parse(Buffer.from(bearer.split('.')[1],'base64url').toString()).sub; return response(session(userId).user); }
   if (url.pathname === '/auth/v1/logout') return new Response(null, {status:204});
   if (url.pathname === '/rest/v1/rpc/confirmar_venta_sigo_v2') {
     init.signal?.throwIfAborted();
@@ -75,7 +75,7 @@ const mocks = {
   './adminPush':'export const cerrarSesionConPushRevocado=async()=>{};export const notificarAltaEmpresaAdmin=async()=>{};',
 };
 const out=process.cwd()+'/.test-build/cobro104-auth-lifecycle.mjs';
-await build({stdin:{contents:'export {default as POS} from "./src/VentaRapidaOperativa";export {default as Gate} from "./src/SigoAuthGate";',resolveDir:process.cwd(),loader:'tsx'},outfile:out,bundle:true,format:'esm',platform:'node',jsx:'automatic',external:['react','react-dom','react/jsx-runtime'],define:{'import.meta.env.VITE_MERCADOPAGO_SUBSCRIPTION_URL':'""'},plugins:[{name:'local-http-only',setup(b){
+await build({stdin:{contents:'export {default as POS} from "./src/VentaRapidaOperativa";export {default as Gate} from "./src/SigoAuthGate";',resolveDir:process.cwd(),loader:'tsx'},outfile:out,bundle:true,format:'esm',platform:'node',jsx:'automatic',external:['react','react-dom','react/jsx-runtime'],define:{'import.meta.env':JSON.stringify({VITE_PUBLIC_APP_URL:'https://auth-lifecycle.invalid/',VITE_MERCADOPAGO_SUBSCRIPTION_URL:''})},plugins:[{name:'local-http-only',setup(b){
   if(baseline)b.onLoad({filter:/\/(VentaRapidaOperativa|SigoAuthGate)\.tsx$/},async a=>({contents:await fs.readFile(baseline+'/src/'+a.path.split('/').at(-1),'utf8'),loader:'tsx',resolveDir:process.cwd()+'/src'}));
   b.onResolve({filter:/^\.\//},a=>mocks[a.path]?{path:a.path,namespace:'boundary'}:null);
   b.onLoad({filter:/.*/,namespace:'boundary'},a=>({contents:mocks[a.path],loader:'tsx',resolveDir:process.cwd()}));
@@ -117,7 +117,7 @@ else {
   await start();await mount();await add();mode='lost';const before=rows.size;await key('F11');assert.equal(attempt().estado,'pendiente');const original=attempt();await unmount();await mount();assert.equal(rpc,1);await act(async()=>document.querySelector('[data-recuperar-cobro]').click());await settle();assert.equal(attempt().estado,'confirmado');assert.equal(rows.size,before+1);assert.equal(attempt().payload.idempotencyKey,original.payload.idempotencyKey);assert.equal(prints.length+fiscal.length,0);await add();await key('F9');assert.equal(pending(),false);pass('Lost post-commit response, reload, exact-key explicit recovery and next sale without duplicate/output');await stop();
   for(const change of ['user','signout']){
     await start();await mount();await add();mode='deferred';await key('F11');const late=release;
-    if(change==='user')await act(async()=>client.auth._notifyAllSubscribers('SIGNED_IN',session(B)));
+    if(change==='user'){let changed;await act(async()=>{changed=await client.auth.setSession(session(B));});assert.equal(changed.error,null);assert.equal(changed.data.session.user.id,B);}
     else await act(async()=>client.auth.signOut({scope:'local'}));
     await act(async()=>late());await settle();assert.equal(attempt().estado,'confirmado');assert.equal(pending(),true);assert.equal(prints.length+fiscal.length,0);const sent=rpc;await act(async()=>document.querySelector('[data-recuperar-cobro]').click());await settle();assert.equal(rpc,sent);pass('Real auth '+change+' change blocks stale adoption and all print/fiscal output');await stop();
   }
