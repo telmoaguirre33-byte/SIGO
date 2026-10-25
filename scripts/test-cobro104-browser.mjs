@@ -150,7 +150,7 @@ try {
       await start('hang');await add();await page.keyboard.press('F9');await page.waitForFunction(()=>__qa.pending.length===1);
       await page.evaluate(()=>{for(const cb of __qa.authListeners.slice())cb('TOKEN_REFRESHED',null);for(const cb of __qa.authListeners.slice())cb('SIGNED_IN',{user:{id:'browser-synthetic-user'}});});
       await page.evaluate(()=>__qa.pending[0].resolve());
-      await page.waitForFunction(()=>JSON.parse(sessionStorage.getItem('sigo:intento-cobro:'+E))?.estado==='confirmado');
+      await page.waitForFunction(e=>JSON.parse(sessionStorage.getItem('sigo:intento-cobro:'+e))?.estado==='confirmado',E);
       await page.waitForFunction(()=>!document.querySelector('[data-cobro-pendiente]'));
       await add();await page.keyboard.press('F9');await page.waitForFunction(()=>__qa.calls.length===2&&__qa.rows.length===2);
       const s=await snapshot();assert.equal(s.calls.length,2);assert.equal(s.rows.length,2);assert.notEqual(s.calls[0].p_idempotency_key,s.calls[1].p_idempotency_key);assert.deepEqual(s.blocked,[]);
