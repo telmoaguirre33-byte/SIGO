@@ -1,0 +1,38 @@
+name: Supabase 17 · recuperación sintética aislada
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/supabase-synthetic-recovery.yml'
+      - 'scripts/recovery-ci/**'
+permissions:
+  contents: read
+concurrency:
+  group: supabase-recovery-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  synthetic-recovery:
+    # Repositorio público: runner estándar, sin proyectos ni servicios externos.
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: supabase/supabase
+          ref: d4584290813a59954d7d6f098a5fb31ff433afaa
+          path: .recovery-upstream
+          sparse-checkout: docker
+          persist-credentials: false
+      - name: Ensayar Supabase real, sin secretos ni datos productivos
+        run: python3 scripts/recovery-ci/run.py
+      - name: Guardar únicamente resultados saneados
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: supabase-synthetic-recovery-${{ github.run_id }}
+          path: recovery-evidence/
+          if-no-files-found: error
+          retention-days: 7

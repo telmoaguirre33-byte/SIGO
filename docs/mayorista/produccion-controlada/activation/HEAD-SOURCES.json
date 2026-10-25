@@ -1,0 +1,81 @@
+{
+  "head": "a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b",
+  "verifiedFromGitHub": true,
+  "files": [
+    {
+      "path": "src/modules/mayorista/integration/company-config.ts",
+      "sha": "957b5fa557afd1c77f136388cada54bb597fcf46",
+      "url": "https://github.com/telmoaguirre33-byte/SIGO/blob/a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b/src/modules/mayorista/integration/company-config.ts"
+    },
+    {
+      "path": "src/modules/mayorista/integration/MayoristaLauncher.tsx",
+      "sha": "1952eec680611f20c7204a2c8311257bb07f2685",
+      "url": "https://github.com/telmoaguirre33-byte/SIGO/blob/a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b/src/modules/mayorista/integration/MayoristaLauncher.tsx"
+    },
+    {
+      "path": "src/modules/mayorista/integration/access-policy.ts",
+      "sha": "e5ff7cbd8235aeba6076e748b0496cf9da52e2a3",
+      "url": "https://github.com/telmoaguirre33-byte/SIGO/blob/a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b/src/modules/mayorista/integration/access-policy.ts"
+    },
+    {
+      "path": "src/modules/mayorista/backend/commercial-runtime.mjs",
+      "sha": "cb44882f4ccbb0811c368caeb0b56e2f5ee148d3",
+      "url": "https://github.com/telmoaguirre33-byte/SIGO/blob/a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b/src/modules/mayorista/backend/commercial-runtime.mjs"
+    },
+    {
+      "path": "src/modules/mayorista/backend/commercial-grants.mjs",
+      "sha": "098ac4649843aa7e3344b569f7a481e2409d47a8",
+      "url": "https://github.com/telmoaguirre33-byte/SIGO/blob/a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b/src/modules/mayorista/backend/commercial-grants.mjs"
+    },
+    {
+      "path": "docs/mayorista/sql/005_integracion_empresa_NO_APLICAR.sql",
+      "sha": "363945cc8c2cee1492585f8060b34b91623f0051",
+      "url": "https://github.com/telmoaguirre33-byte/SIGO/blob/a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b/docs/mayorista/sql/005_integracion_empresa_NO_APLICAR.sql"
+    },
+    {
+      "path": "docs/mayorista/sql/011_destino_predeterminado_NO_APLICAR.sql",
+      "sha": "9e0857e9a1497a90f5facfa6896d2e505e808b03",
+      "url": "https://github.com/telmoaguirre33-byte/SIGO/blob/a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b/docs/mayorista/sql/011_destino_predeterminado_NO_APLICAR.sql"
+    },
+    {
+      "path": "src/supabase.ts",
+      "sha": "570aa1f88faea19e8dd5616515f168fc26ae2c22",
+      "url": "https://github.com/telmoaguirre33-byte/SIGO/blob/a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b/src/supabase.ts"
+    },
+    {
+      "path": "src/modules/mayorista/integration/preview-qa-config.ts",
+      "sha": "e631862a025a49d8283085e6aa0e357680e08e19",
+      "url": "https://github.com/telmoaguirre33-byte/SIGO/blob/a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b/src/modules/mayorista/integration/preview-qa-config.ts"
+    },
+    {
+      "path": "src/modules/mayorista/backend/commercial-server.mjs",
+      "sha": "a0f5411270bbcda16fdc25ca24a6704afd80be22",
+      "url": "https://github.com/telmoaguirre33-byte/SIGO/blob/a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b/src/modules/mayorista/backend/commercial-server.mjs"
+    },
+    {
+      "path": "src/modules/mayorista/release/commercial-assets.mjs",
+      "sha": "c5e71299e791232365ba1ee0fab0d81ca62818b1",
+      "url": "https://github.com/telmoaguirre33-byte/SIGO/blob/a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b/src/modules/mayorista/release/commercial-assets.mjs"
+    },
+    {
+      "path": "src/modules/mayorista/api/origins.mjs",
+      "sha": "47817e8323162e3601c6f9baf8b25b985c149409",
+      "url": "https://github.com/telmoaguirre33-byte/SIGO/blob/a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b/src/modules/mayorista/api/origins.mjs"
+    },
+    {
+      "path": "src/modules/mayorista/backend/static-assets.mjs",
+      "sha": "1a7fe6c9e5c26664e17062d4c98a6262a3398d6c",
+      "url": "https://github.com/telmoaguirre33-byte/SIGO/blob/a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b/src/modules/mayorista/backend/static-assets.mjs"
+    },
+    {
+      "path": "supabase/migrations/20261013090000_mayorista_modulo_matriz.sql",
+      "sha": "4eb9c3b4cef125ca14f7bfce88405ebbcdbcb217",
+      "url": "https://github.com/telmoaguirre33-byte/SIGO/blob/a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b/supabase/migrations/20261013090000_mayorista_modulo_matriz.sql"
+    },
+    {
+      "path": "supabase/migrations/20260919083000_modulo_busqueda_ean_matriz.sql",
+      "sha": "663dd7fa3425c939d911b1303ef032bcb3840949",
+      "url": "https://github.com/telmoaguirre33-byte/SIGO/blob/a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b/supabase/migrations/20260919083000_modulo_busqueda_ean_matriz.sql"
+    }
+  ]
+}

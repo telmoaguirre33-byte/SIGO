@@ -1,0 +1,53 @@
+export const MAYORISTA_FEATURE = "mayorista_distribuidora";
+export type AccessContext = { empresaId: string; rol: string };
+export type CompanyAccessConfig = {
+  empresaId: string;
+  habilitado: boolean;
+  aplicacionDisponible: boolean;
+  origenAprobado: string;
+  administracionUrl: string;
+  vendedorUrl: string;
+  qaAislado?: boolean;
+  tipoNegocio?: "minorista" | "mayorista" | "mixto";
+};
+export type AccessDecision = { enabled: boolean; reason: string; adminUrl?: string; sellerUrl?: string };
+
+/** Mismo flag persistente que Matriz. La conexión operativa es un estado separado. */
+export function isMayoristaEnabled(context: AccessContext, config?: CompanyAccessConfig | null): boolean {
+  return !!context.empresaId && ['owner','admin'].includes(context.rol) &&
+    config?.empresaId === context.empresaId && config.habilitado === true && config.tipoNegocio !== 'minorista';
+}
+
+function safeUrl(value: string, approvedOrigin: string): string | null {
+  try {
+    const origin = new URL(approvedOrigin);
+    const url = new URL(value);
+    if (origin.protocol !== "https:" || origin.origin !== approvedOrigin ||
+        url.protocol !== "https:" || url.origin !== origin.origin || url.username || url.password || url.hash)
+      return null;
+    // Never forward SIGO credentials or tokens in a URL.
+    if ([...url.searchParams.keys()].some(k => /token|key|secret|password|session|jwt/i.test(k))) return null;
+    return url.href;
+  } catch { return null; }
+}
+export function resolveMayoristaAccess(context: AccessContext, config?: CompanyAccessConfig | null): AccessDecision {
+  if (!context.empresaId || !["owner", "admin"].includes(context.rol))
+    return {enabled:false, reason:"Este acceso requiere un administrador de la empresa."};
+  if (!isMayoristaEnabled(context, config))
+    return {enabled:false, reason:"Mayorista / Distribuidora está desactivado para esta empresa."};
+  if (config!.aplicacionDisponible !== true)
+    return {enabled:false, reason:"El módulo operativo todavía no está disponible en este entorno."};
+  const adminUrl = safeUrl(config!.administracionUrl, config!.origenAprobado);
+  const sellerUrl = safeUrl(config!.vendedorUrl, config!.origenAprobado);
+  if (!adminUrl || !sellerUrl)
+    return {enabled:false, reason:"Los destinos de Mayorista requieren validación."};
+  return {enabled:true, reason:"Módulo Mayorista integrado en SIGO.", adminUrl, sellerUrl};
+}
+
+
+/** Prefijo fijo publicado por el backend QA. Nunca se toma de parámetros del navegador. */
+export function mayoristaBackendBase(config: CompanyAccessConfig): string {
+ const admin=new URL(config.administracionUrl),seller=new URL(config.vendedorUrl);
+ if(admin.origin!==config.origenAprobado||seller.origin!==config.origenAprobado)throw Error('Destino Mayorista inválido');
+ return config.origenAprobado+(admin.pathname==='/integracion-qa/portal.html'&&seller.pathname==='/integracion-qa/secure.html'?'/integracion-qa':'');
+}

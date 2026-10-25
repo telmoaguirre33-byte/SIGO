@@ -1,0 +1,69 @@
+{
+  "formatVersion": 1,
+  "status": "PREPARADO_NO_EJECUTADO_BLOQUEADO",
+  "approved": false,
+  "repository": "telmoaguirre33-byte/SIGO",
+  "head": null,
+  "sigoOrigin": "https://www.sigo-gestion.com",
+  "targetLabel": "lapizcito5",
+  "empresaId": "8728d172-7c1b-4de3-88ae-c20fc19c1fce",
+  "expectedActorId": null,
+  "targetIdentityEvidence": "Metadata comercial aportada por coordinador: lapizcito5 activa; UUID verificado; sin lectura de datos comerciales",
+  "targetIdentityReviewed": true,
+  "desiredTipo": "mixto",
+  "reviewedMayoristaToMixto": false,
+  "desiredModule": {
+    "clave": "mayorista_distribuidora",
+    "habilitado": true
+  },
+  "publicOrigin": null,
+  "runtimeProfileSha256": null,
+  "runtimeReadinessEvidence": null,
+  "sourceCoherenceEvidence": null,
+  "exclusiveGuardEvidence": null,
+  "strictExclusivityGuardVerified": false,
+  "expectedBefore": null,
+  "expectedAfter": null,
+  "rollbackApproved": false,
+  "changeGlobalDefault": false,
+  "changeLicensesSubscriptionsPermissions": false,
+  "executeSql": false,
+  "deploy": false,
+  "blockingReasons": [
+    "SHA exacto del release preparado pendiente de integración/revisión; reviewedBaseHead documenta sólo la base",
+    "Snapshot y esquema comercial pendientes (no existen tipo/destinos/mayorista/ledger)",
+    "Origen/runtime comercial autorizado y readiness pendientes",
+    "Allowlist incorporada al candidato; pendiente CI y deployment comercial autorizado",
+    "Excepciones runtime requieren autorización expresa; sus flags existentes se preservan sin incorporarlas automáticamente",
+    "Autorización de ejecución productiva no solicitada en esta preparación"
+  ],
+  "currentTargetModuleEnabled": true,
+  "commercialMetadata": {
+    "postgresVersion": "17.6",
+    "targetActiva": true,
+    "targetModuleAlreadyEnabled": true,
+    "otherEnabledCount": 2,
+    "disabledCount": 23,
+    "existingTypeTable": false,
+    "existingDestinationTables": false,
+    "existingMayoristaSchema": false,
+    "existingLedger": false,
+    "otherEnabledIds": [
+      "a042a6f6-8340-4e0f-9e3b-3c6e94a1197f",
+      "aab659c1-a0f7-4f3a-9e3a-fadb9fac88a8"
+    ],
+    "authorizationNotInferredFromExistingFlags": true
+  },
+  "allowedCompanyIdsCandidate": [
+    "8728d172-7c1b-4de3-88ae-c20fc19c1fce"
+  ],
+  "reviewedBaseHead": "a1d36afc1ab4ddbfc04a08ed587142c9f76a9c9b",
+  "existingEnabledOtherEmpresaIds": [
+    "a042a6f6-8340-4e0f-9e3b-3c6e94a1197f",
+    "aab659c1-a0f7-4f3a-9e3a-fadb9fac88a8"
+  ],
+  "authorizedRuntimeExceptionIds": [],
+  "exceptionAuthorizationEvidence": null,
+  "productionHeadObserved": "aa104b572bc1af9d4b97054c702b444c693721a5",
+  "productionDeploymentObserved": "dpl_5wiuaSNWuATzwz4i7KsD3fg1S9V7"
+}
