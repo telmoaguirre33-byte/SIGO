@@ -93,9 +93,18 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       if (!activo) return;
       const actual = sesionCobroRef.current;
       const usuario = sesion?.user?.id ?? null;
-      const cambio = evento === "SIGNED_OUT" || (actual.conocida ? actual.usuario !== usuario : evento !== "INITIAL_SESSION");
-      sesionCobroRef.current = { conocida: true, usuario, cambio: actual.cambio || cambio,
-        epoca: actual.epoca + (cambio ? 1 : 0) };
+      // Un evento sin usuario durante la restauración/renovación de sesión
+      // no prueba un cambio de identidad. Mantener la identidad conocida.
+      // SIGNED_OUT y un usuario distinto sí invalidan la operación.
+      const cierre = evento === "SIGNED_OUT";
+      const identidadDistinta = actual.usuario !== null && usuario !== null && actual.usuario !== usuario;
+      const cambio = cierre || identidadDistinta;
+      sesionCobroRef.current = {
+        conocida: actual.conocida || usuario !== null || cierre,
+        usuario: cierre ? null : (usuario ?? actual.usuario),
+        cambio: actual.cambio || cambio,
+        epoca: actual.epoca + (cambio ? 1 : 0),
+      };
     });
     return () => { activo = false; data.subscription.unsubscribe(); };
   }, []);
