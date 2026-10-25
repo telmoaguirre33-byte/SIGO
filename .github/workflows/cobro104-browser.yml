@@ -18,6 +18,12 @@ jobs:
           node-version: 24
       - run: npm ci --no-audit --no-fund
       - run: npm run build
+      - name: Confirmed payment messages preserve diagnostic limits
+        run: node --experimental-strip-types --test tests/avisoCobroConfirmado.test.mjs
+      - name: Natural GoTrue renewal, 5001 products, lost ACK and pre-dispatch identity protection
+        run: node scripts/test-cobro104-release-guards.mjs
+        env:
+          COBRO104_RELEASE_QA_DIR: artifacts/cobro104-browser/release-guards
       - name: Real SDK delayed session and response body with synthetic transport
         run: node --experimental-strip-types scripts/test-cobro104-sdk.mjs
       - name: Real SDK HTTP ACK, local persistence and remount regression
