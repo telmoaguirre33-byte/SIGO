@@ -106,13 +106,12 @@ try {
       await start();await add();await page.keyboard.press('F10');await page.waitForFunction(()=>__qa.calls.length===1);await page.waitForFunction(()=>!document.querySelector('[data-recuperar-cobro]').disabled);const before=await snapshot();const saved=await attempt();
       await page.reload();await page.addScriptTag({content:bundle.outputFiles[0].text});await page.evaluate(s=>{__qa.rows=s.rows;__qa.calls=s.calls;__qa.mode='ok'},before);await page.locator('[data-recuperar-cobro]').waitFor();assert.deepEqual(await attempt(),saved);assert.equal((await snapshot()).calls.length,1);await recover();const after=await snapshot();assert.equal(after.rows.length,1);assert.deepEqual(after.calls[0],after.calls[1]);assert.equal(after.prints.length+after.fiscal.length,0);
     });
-    for(const mode of ['preflight','stock'])await check(`${mode} stalled catalog does not prevent RPC dispatch`,async()=>{
+    for(const mode of ['preflight','stock'])await check(`${mode} delayed diagnostics do not block payment RPC`,async()=>{
       await start(mode);await add();await page.keyboard.press('F9');
       await page.waitForFunction(()=>__qa.calls.length===1);
-      const after=await snapshot();
-      assert.equal(after.rows.length,1,'RPC must commit without preflight/catalog read');
+      const after=await snapshot();assert.equal(after.rows.length,1);
       assert.equal(after.calls.length,1);
-      assert.equal((await attempt()).fase,'enviado');
+      assert.equal((await attempt()).estado,'confirmado');
     });
     for(const [unit,input,expected] of [['unidad',null,1],['kg','750',.75],['g','750',750],['l','0.75',.75],['m','0.75',.75]])await check(`${unit}: exact base-unit payload survives lost response and recovery`,async()=>{
       await start();await add(unit,input);await page.keyboard.press('F9');await page.waitForFunction(()=>__qa.calls.length===1);await recover();const s=await snapshot();assert.equal(s.rows.length,1);assert.deepEqual(s.calls[0],s.calls[1]);assert.equal(s.calls[0].p_items[0].cantidad,expected);assert.equal(s.calls[0].p_items[0].unidad_medida,unit);assert.equal(s.fiscal.length+s.prints.length,0);
