@@ -24,10 +24,11 @@ const B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const P = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const results = [];
 let state, sdk, boundary, root, mounted = false, authSubscription;
+let authRun = 0;
 function session(userId = A, expired = false) {
   const now = Math.floor(Date.now() / 1000), exp = now + (expired ? -60 : 3600);
   const enc = value => Buffer.from(JSON.stringify(value)).toString('base64url');
-  return { access_token: enc({alg:'HS256',typ:'JWT'})+'.'+enc({sub:userId,exp,aud:'authenticated',role:'authenticated'})+'.synthetic', refresh_token:'synthetic-'+userId, token_type:'bearer', expires_in:3600, expires_at:exp, user:{id:userId,aud:'authenticated',role:'authenticated',created_at:'2026-01-01T00:00:00Z',app_metadata:{},user_metadata:{}} };
+  return { access_token: enc({alg:'HS256',typ:'JWT'})+'.'+enc({sub:userId,exp,aud:'authenticated',role:'authenticated'})+'.'+enc('synthetic-signature'), refresh_token:'synthetic-'+userId, token_type:'bearer', expires_in:3600, expires_at:exp, user:{id:userId,aud:'authenticated',role:'authenticated',created_at:'2026-01-01T00:00:00Z',app_metadata:{},user_metadata:{}} };
 }
 const response = data => new Response(JSON.stringify(data), { status:200, headers:{'Content-Type':'application/json'} });
 function product(e, i = 0) { return { id:i ? `dddddddd-dddd-4ddd-8ddd-${String(i).padStart(12,'0')}` : P,empresa_id:e,nombre:'Producto QA '+i,codigo_interno:'QA'+i,codigo_barras:'QA'+i,precio_venta:20,stock_actual:1000,activo:true,unidad_medida:'unidad' }; }
@@ -115,8 +116,9 @@ async function start({expired=false,controlledToken=false}={}) {
       },
     };
   }else{
-    const values=new Map([['release-auth',JSON.stringify(session(A,expired))]]);
-    sdk=createClient('https://sigo-release.invalid','synthetic-placeholder',{auth:{storageKey:'release-auth',storage:{getItem:k=>values.get(k)??null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)},autoRefreshToken:true,detectSessionInUrl:false,persistSession:true},global:{fetch:localFetch}});
+    const storageKey = 'release-auth-'+(++authRun);
+    const values=new Map([[storageKey,JSON.stringify(session(A,expired))]]);
+    sdk=createClient('https://sigo-release.invalid','synthetic-placeholder',{auth:{storageKey,storage:{getItem:k=>values.get(k)??null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)},autoRefreshToken:true,detectSessionInUrl:false,persistSession:true},global:{fetch:localFetch}});
     boundary=sdk;
     authSubscription=sdk.auth.onAuthStateChange((event,s)=>state.events.push({event,user:s?.user?.id??null})).data.subscription;
   }
