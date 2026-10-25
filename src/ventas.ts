@@ -488,6 +488,25 @@ export async function confirmarVentaSigo(input: {
   const idempotencyKey = normalizarIdentificador(input.idempotencyKey ?? crearIdempotencyKey());
   if (!idempotencyKey) throw new VentaRechazadaSinCambiosError("No se pudo generar una clave segura para confirmar la venta.");
 
+  // Reconciliar primero un reintento existente. Si el RPC anterior confirmó pero
+  // su respuesta se perdió, no necesitamos reenviar ni modificar stock/caja.
+  // Una lectura fallida NO demuestra ausencia: continuar con la misma clave
+  // idempotente y dejar que la función SQL resuelva el reintento.
+  try {
+    const { data: existentes, error: errorExistentes } = await supabase
+      .from("ventas_sigo")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("idempotency_key", idempotencyKey)
+      .limit(1);
+    if (!errorExistentes && Array.isArray(existentes) && existentes.length === 1 && typeof existentes[0]?.id === "string") {
+      const ventaId = existentes[0].id;
+      const integridad = "no_verificada" as const;
+      const verificacion = Promise.resolve({ integridad, integridadCabecera: integridad, integridadCaja: integridad, integridadStock: integridad, totalVerificado: null });
+      return { ventaId, idempotencyKey, integridad, integridadCabecera: integridad, integridadCaja: integridad, integridadStock: integridad, totalVerificado: null, verificacion };
+    }
+  } catch { /* mantener el reintento idempotente si falla la consulta */ }
+
   const { estadoReintento, stockAntes } = await esperarCobro("preparacion", 12000, (plazo) => conCancelacionVenta(plazo, opciones.signal, async (signal) => {
     const estadoReintento = await detectarEstadoReintento(empresaId, idempotencyKey, signal);
     signal.throwIfAborted();
