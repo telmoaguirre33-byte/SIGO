@@ -119,7 +119,7 @@ for(const mismatch of ['key','fingerprint','company','uuid','uuid-newline']){
  await unmount();results.push({case:'Confirmed storage with mismatched '+mismatch+' is not adopted or sent to RPC',pass:true});
 }
 reset('deferred');await mount(E);await add();await key('F10');const afterUnmountRelease=state.release;await unmount();await act(async()=>afterUnmountRelease());await settle();assert.equal(attempt(E).estado,'confirmado');await mount(E);assert.equal(Boolean(document.querySelector('[data-recuperar-cobro]')),false);assert.equal(document.querySelector('.sigo-pos-action.reprint').disabled,false);assert.equal(state.prints.length+state.fiscal.length,0);await unmount();results.push({case:'StrictMode: late scalar ACK settles while unmounted, next mount sees confirmed UUID, no busy or print',pass:true});
-for(const event of ['SIGNED_OUT','different-user','round-trip-user','unknown-initial']){
+for(const event of ['SIGNED_OUT','different-user','round-trip-user','unknown-initial','null-nonrefresh']){
  reset('empty');await mount(E);await add();await key('F9');const original=attempt(E);
  if(event==='unknown-initial'){await unmount();initialAuthEnabled=false;await mount(E);}
  const confirmed={...structuredClone(original),estado:'confirmado',ventaId:'99999999-9999-4999-8999-999999999999'};
@@ -127,6 +127,7 @@ for(const event of ['SIGNED_OUT','different-user','round-trip-user','unknown-ini
  if(event==='SIGNED_OUT')emitAuth('SIGNED_OUT',null);
  if(event==='different-user')emitAuth('SIGNED_IN','synthetic-user-B');
  if(event==='round-trip-user'){emitAuth('SIGNED_IN','synthetic-user-B');emitAuth('SIGNED_IN','synthetic-user-A');}
+ if(event==='null-nonrefresh')emitAuth('INITIAL_SESSION',null);
  const beforeRPC=state.rpc;await act(async()=>document.querySelector('[data-recuperar-cobro]').click());await settle();
  assert.equal(state.rpc,beforeRPC);assert.ok(document.querySelector('[data-recuperar-cobro]'),'Auth-invalid context must not adopt confirmed ACK');
  assert.equal(document.querySelector('[data-recuperar-cobro]').disabled,false);assert.equal(state.prints.length+state.fiscal.length,0);
