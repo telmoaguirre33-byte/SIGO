@@ -1,0 +1,148 @@
+{
+  "event": "P0_SCALE_CI",
+  "date": "2026-10-16T13:57:32.839Z",
+  "target": "CI PostgreSQL local",
+  "externalIdentity": "stub",
+  "fiscalTransport": "simulated_wsfe",
+  "concurrency": 8,
+  "errors": [],
+  "productionActivation": false,
+  "reconciliation": {
+    "orders": 16,
+    "delivered": 16,
+    "sales": 16,
+    "collections": 16,
+    "consolidatedLoads": 8,
+    "simulatedInvoices": 1,
+    "stockBefore": 10000,
+    "stockAfter": 9984,
+    "balancesRestored": true,
+    "persistedAcrossConnections": true
+  },
+  "search": {
+    "products": 5000,
+    "queries": 320,
+    "p95Ms": 1.2100139999965904
+  },
+  "durationMs": 39812.718299,
+  "nodeCpuMicroseconds": {
+    "user": 6956903,
+    "system": 550313
+  },
+  "nodeMemory": {
+    "before": {
+      "rss": 299851776,
+      "heapTotal": 103768064,
+      "heapUsed": 55070400,
+      "external": 7228467,
+      "arrayBuffers": 3033299
+    },
+    "after": {
+      "rss": 509128704,
+      "heapTotal": 198402048,
+      "heapUsed": 83549480,
+      "external": 31312325,
+      "arrayBuffers": 18664228
+    },
+    "maxRSSKiB": 517288
+  },
+  "databaseResourceMetrics": "not measured",
+  "responseTimes": {
+    "POST /auth/login": {
+      "n": 14,
+      "p50Ms": 162.30221299999903,
+      "p95Ms": 237.97019100000034,
+      "maxMs": 237.97019100000034
+    },
+    "POST /auth/sigo": {
+      "n": 1,
+      "p50Ms": 46.345006999999896,
+      "p95Ms": 46.345006999999896,
+      "maxMs": 46.345006999999896
+    },
+    "GET /me": {
+      "n": 6,
+      "p50Ms": 4.847764000001916,
+      "p95Ms": 5.04153800000131,
+      "maxMs": 5.04153800000131
+    },
+    "GET /catalog": {
+      "n": 9,
+      "p50Ms": 2198.042013000002,
+      "p95Ms": 4313.934397000001,
+      "maxMs": 4313.934397000001
+    },
+    "OPTIONS /me": {
+      "n": 1,
+      "p50Ms": 0.6933030000000144,
+      "p95Ms": 0.6933030000000144,
+      "maxMs": 0.6933030000000144
+    },
+    "POST /orders": {
+      "n": 33,
+      "p50Ms": 1334.9794970000003,
+      "p95Ms": 3235.3477280000006,
+      "maxMs": 3471.3683240000028
+    },
+    "GET /orders": {
+      "n": 8,
+      "p50Ms": 8.497483999999531,
+      "p95Ms": 10.1025269999991,
+      "maxMs": 10.1025269999991
+    },
+    "GET /cargas": {
+      "n": 9,
+      "p50Ms": 6.916218999998819,
+      "p95Ms": 7.313196999995853,
+      "maxMs": 7.313196999995853
+    },
+    "POST /cargas/commands": {
+      "n": 41,
+      "p50Ms": 19.645853000001807,
+      "p95Ms": 1306.2816539999985,
+      "maxMs": 1317.2018739999985
+    },
+    "POST /operations/loads": {
+      "n": 8,
+      "p50Ms": 11.43532899999991,
+      "p95Ms": 12.754235999993398,
+      "maxMs": 12.754235999993398
+    },
+    "POST /operations/loads/commands": {
+      "n": 112,
+      "p50Ms": 12.137738999997964,
+      "p95Ms": 14.800436000004993,
+      "maxMs": 16.348825000000943
+    },
+    "POST /shared/commerce": {
+      "n": 32,
+      "p50Ms": 10.524662999996508,
+      "p95Ms": 12.066730999998981,
+      "maxMs": 14.698106000003463
+    },
+    "GET /operations/loads": {
+      "n": 16,
+      "p50Ms": 7.934593999998469,
+      "p95Ms": 9.218010000004142,
+      "maxMs": 9.218010000004142
+    },
+    "POST /shared/collections": {
+      "n": 32,
+      "p50Ms": 7.325057000001834,
+      "p95Ms": 8.997133000004396,
+      "maxMs": 10.074024000001373
+    },
+    "GET /admin/dashboard": {
+      "n": 1,
+      "p50Ms": 2791.7267429999993,
+      "p95Ms": 2791.7267429999993,
+      "maxMs": 2791.7267429999993
+    },
+    "GET /admin/reports": {
+      "n": 1,
+      "p50Ms": 99.52072800000315,
+      "p95Ms": 99.52072800000315,
+      "maxMs": 99.52072800000315
+    }
+  }
+}
