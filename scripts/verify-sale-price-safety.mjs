@@ -34,7 +34,9 @@ requireText('src/avisoCobroConfirmado.ts', [
   'verificacion.totalVerificado',
   'Math.abs(verificacion.totalVerificado - totalEsperado) > 0.01',
   'El precio cambió mientras confirmabas.',
-  'requiereRevision: diferencia || verificacion.integridad === "revisar"',
+  'verificacion.integridad === "revisar"',
+  'componentes.some((estado) => estado === "revisar")',
+  'requiereRevision: diferencia || requiereRevision',
 ]);
 execFileSync(process.execPath, ['--experimental-strip-types', '--test', 'tests/avisoCobroConfirmado.test.mjs'], { stdio: 'inherit' });
 
