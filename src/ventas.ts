@@ -339,7 +339,11 @@ async function verificarDetalleYStockVenta(
 
     if (registrado.size !== esperado.size) return detalleIncorrecto;
     for (const [productoId, cantidad] of esperado) {
-      if (Math.abs((registrado.get(productoId) ?? Number.NaN) - cantidad) > STOCK_TOLERANCIA) return detalleIncorrecto;
+      const cantidadRegistrada = registrado.get(productoId);
+      // NaN nunca supera una tolerancia: si cambia el ID pero coincide
+      // la cantidad de renglones, la venta sí debe quedar para revisión.
+      if (cantidadRegistrada === undefined || !Number.isFinite(cantidadRegistrada)
+        || Math.abs(cantidadRegistrada - cantidad) > STOCK_TOLERANCIA) return detalleIncorrecto;
     }
     if (totalVenta == null || !Number.isFinite(totalVenta)) return sinVerificar;
     if (!casiIgualDinero(totalDetalle, totalVenta)) return detalleIncorrecto;
