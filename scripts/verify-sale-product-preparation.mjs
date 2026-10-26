@@ -23,7 +23,7 @@ for (const token of [
   "resultados.find((fila) => fila.id === productoSeleccionadoIdRef.current)",
   "if (producto) seleccionarProductoManual(producto)",
   'data-product-id={p.id}',
-  'aria-selected={p.id===productoSeleccionadoVisibleId}',
+  'aria-selected={p.id === productoSeleccionadoVisibleId}',
   'No encontré productos. Probá con nombre, marca, código interno o EAN.',
   'definí un precio de venta mayor a cero antes de vender',
   'sin stock disponible',
