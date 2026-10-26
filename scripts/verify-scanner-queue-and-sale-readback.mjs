@@ -53,7 +53,9 @@ for (const required of [
 for (const required of [
   "Math.abs(verificacion.totalVerificado - totalEsperado) > 0.01",
   'verificacion.totalVerificado!.toLocaleString("es-AR")',
-  'requiereRevision: diferencia || verificacion.integridad === "revisar"',
+  'verificacion.integridad === "revisar"',
+  'componentes.some((estado) => estado === "revisar")',
+  'requiereRevision: diferencia || requiereRevision',
 ]) {
   if (!diagnostic.includes(required)) throw new Error(`Extracted verified-total safeguard missing: ${required}`);
 }

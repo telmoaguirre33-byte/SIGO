@@ -263,7 +263,7 @@ await expire(12000);
 const diagnostic = document.querySelector('[data-cobro-diagnostico]');
 assert.ok(diagnostic);
 assert.match(diagnostic.textContent, /Venta confirmada/);
-assert.match(diagnostic.textContent, /comprobación adicional de caja o stock no está completa/);
+assert.match(diagnostic.textContent, /comprobación adicional del comprobante, caja o detalle no está completa/);
 assert.equal(diagnostic.getAttribute('role'), 'status');
 assert.equal(document.querySelector('[data-recuperar-cobro]'), null);
 assert.doesNotMatch(diagnostic.textContent, /pendiente|stock verificado|hasta revisar/i);

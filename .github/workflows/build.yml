@@ -12,7 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,7 +33,9 @@ jobs:
 
       - name: Verify manual sales in Chromium without real services
         run: |
-          npx playwright install --with-deps chromium
+          # Evitar apt/fuentes desde mirrors saturados. Chromium fallará
+          # explícitamente al iniciarse si falta alguna biblioteca nativa.
+          npx playwright install chromium
           node scripts/test-venta-medidas-browser.mjs
 
       - name: Verify read-only production migration gate (synthetic fixtures)

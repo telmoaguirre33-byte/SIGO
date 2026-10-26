@@ -298,7 +298,7 @@ async function capturarStockAntes(
   }
 }
 
-async function verificarIntegridadStockVenta(
+async function verificarDetalleYStockVenta(
   empresaId: string,
   ventaId: string,
   items: VentaItemSigoInput[],
@@ -306,7 +306,10 @@ async function verificarIntegridadStockVenta(
   estadoReintento: EstadoReintentoVenta,
   totalVenta: number | null,
   signal: AbortSignal,
-): Promise<IntegridadVentaSigo> {
+): Promise<{ integridadDetalle: IntegridadVentaSigo; integridadStock: IntegridadVentaSigo }> {
+  let detalleVerificado = false;
+  const sinVerificar = { integridadDetalle: "no_verificada", integridadStock: "no_verificada" } as const;
+  const detalleIncorrecto = { integridadDetalle: "revisar", integridadStock: "no_verificada" } as const;
   try {
     const { data: detalle, error: detalleError } = await supabase
       .from("venta_items_sigo")
@@ -314,7 +317,7 @@ async function verificarIntegridadStockVenta(
       .eq("empresa_id", empresaId)
       .eq("venta_id", ventaId).abortSignal(signal);
 
-    if (detalleError) return "no_verificada";
+    if (detalleError) return sinVerificar;
 
     const esperado = new Map(items.map((item) => [item.productoId, Number(item.cantidad)]));
     const registrado = new Map<string, number>();
@@ -325,26 +328,34 @@ async function verificarIntegridadStockVenta(
       const cantidad = Number(fila.cantidad);
       const precioUnitario = Number(fila.precio_unitario);
       const subtotal = Number(fila.subtotal);
-      if (!productoId || !Number.isFinite(cantidad) || cantidad <= 0) return "revisar";
-      if (!Number.isFinite(precioUnitario) || precioUnitario <= 0) return "revisar";
-      if (!Number.isFinite(subtotal) || subtotal < 0) return "revisar";
+      if (!productoId || !Number.isFinite(cantidad) || cantidad <= 0) return detalleIncorrecto;
+      if (!Number.isFinite(precioUnitario) || precioUnitario <= 0) return detalleIncorrecto;
+      if (!Number.isFinite(subtotal) || subtotal < 0) return detalleIncorrecto;
       const subtotalCalculado = subtotalMedida(cantidad, precioUnitario);
-      if (!casiIgualDinero(subtotal, subtotalCalculado)) return "revisar";
+      if (!casiIgualDinero(subtotal, subtotalCalculado)) return detalleIncorrecto;
       totalDetalle += subtotal;
       registrado.set(productoId, (registrado.get(productoId) ?? 0) + cantidad);
     }
 
-    if (registrado.size !== esperado.size) return "revisar";
+    if (registrado.size !== esperado.size) return detalleIncorrecto;
     for (const [productoId, cantidad] of esperado) {
-      if (Math.abs((registrado.get(productoId) ?? Number.NaN) - cantidad) > STOCK_TOLERANCIA) return "revisar";
+      const cantidadRegistrada = registrado.get(productoId);
+      // NaN nunca supera una tolerancia: si cambia el ID pero coincide
+      // la cantidad de renglones, la venta sí debe quedar para revisión.
+      if (cantidadRegistrada === undefined || !Number.isFinite(cantidadRegistrada)
+        || Math.abs(cantidadRegistrada - cantidad) > STOCK_TOLERANCIA) return detalleIncorrecto;
     }
-    if (totalVenta == null || !Number.isFinite(totalVenta)) return "no_verificada";
-    if (!casiIgualDinero(totalDetalle, totalVenta)) return "revisar";
+    if (totalVenta == null || !Number.isFinite(totalVenta)) return sinVerificar;
+    if (!casiIgualDinero(totalDetalle, totalVenta)) return detalleIncorrecto;
 
     // Un retry idempotente devuelve la venta existente sin volver a descontar stock.
     // Si no podemos demostrar que la llamada era nueva, validamos el detalle pero no
     // atribuimos el stock actual exclusivamente a esta confirmación.
-    if (estadoReintento !== "nueva" || !stockAntes) return "no_verificada";
+    detalleVerificado = true;
+    if (estadoReintento !== "nueva" || !stockAntes) {
+      // RPC valida el descuento atómicamente; no afirmamos verificar el delta sin referencia.
+      return { integridadDetalle: "ok", integridadStock: "no_verificada" };
+    }
 
     signal.throwIfAborted();
     const productosDespues = await listarProductosSigo(empresaId, signal);
@@ -355,12 +366,12 @@ async function verificarIntegridadStockVenta(
     for (const item of items) {
       const antes = stockAntes.get(item.productoId);
       const despues = Number(despuesPorId.get(item.productoId)?.stock_actual);
-      if (antes == null || !Number.isFinite(despues)) return "no_verificada";
+      if (antes == null || !Number.isFinite(despues)) return { integridadDetalle: "ok", integridadStock: "no_verificada" };
       const esperadoDespues = antes - item.cantidad;
 
       if (despues > esperadoDespues + STOCK_TOLERANCIA) {
         // El stock no refleja el descuento esperado (o hubo una entrada concurrente): requiere revisión.
-        return "revisar";
+        return { integridadDetalle: "ok", integridadStock: "revisar" };
       }
       if (despues < esperadoDespues - STOCK_TOLERANCIA) {
         // Otra salida concurrente puede haber ocurrido. La venta existe, pero no atribuimos el delta completo.
@@ -368,9 +379,9 @@ async function verificarIntegridadStockVenta(
       }
     }
 
-    return huboMovimientoConcurrente ? "no_verificada" : "ok";
+    return { integridadDetalle: "ok", integridadStock: huboMovimientoConcurrente ? "no_verificada" : "ok" };
   } catch {
-    return "no_verificada";
+    return { integridadDetalle: detalleVerificado ? "ok" : "no_verificada", integridadStock: "no_verificada" };
   }
 }
 
@@ -457,12 +468,14 @@ export async function confirmarVentaSigo(input: {
   integridad: IntegridadVentaSigo;
   integridadCabecera: IntegridadVentaSigo;
   integridadCaja: IntegridadVentaSigo;
+  integridadDetalle: IntegridadVentaSigo;
   integridadStock: IntegridadVentaSigo;
   totalVerificado: number | null;
   verificacion: Promise<{
     integridad: IntegridadVentaSigo;
     integridadCabecera: IntegridadVentaSigo;
     integridadCaja: IntegridadVentaSigo;
+    integridadDetalle: IntegridadVentaSigo;
     integridadStock: IntegridadVentaSigo;
     totalVerificado: number | null;
   }>;
@@ -530,13 +543,13 @@ export async function confirmarVentaSigo(input: {
     const cabecera = await leerCabeceraVentaConfirmada(empresaId, ventaId, input.medioPago, clienteId, signal);
     signal.throwIfAborted();
     if (opciones.contextoVigente && !opciones.contextoVigente()) throw new Error("SALE_CONTEXT_CHANGED");
-    const [integridadCaja, integridadStock] = await Promise.all([
+    const [integridadCaja, comprobacionDetalleStock] = await Promise.all([
       cabecera.total == null
         ? Promise.resolve(cabecera.integridad === "revisar" ? "revisar" as const : "no_verificada" as const)
         : verificarIntegridadVentas(empresaId, [{ id: ventaId, medio_pago: input.medioPago, total: cabecera.total }], signal)
             .then((mapa) => mapa.get(ventaId) ?? "no_verificada")
             .catch(() => "no_verificada" as const),
-      verificarIntegridadStockVenta(
+      verificarDetalleYStockVenta(
         empresaId,
         ventaId,
         itemsConsolidados,
@@ -548,15 +561,17 @@ export async function confirmarVentaSigo(input: {
     ]);
 
     return {
-      integridad: combinarIntegridad(cabecera.integridad, integridadCaja, integridadStock),
+      integridad: combinarIntegridad(cabecera.integridad, integridadCaja, comprobacionDetalleStock.integridadDetalle, comprobacionDetalleStock.integridadStock),
       integridadCabecera: cabecera.integridad,
       integridadCaja,
-      integridadStock,
+      integridadDetalle: comprobacionDetalleStock.integridadDetalle,
+      integridadStock: comprobacionDetalleStock.integridadStock,
       totalVerificado: cabecera.total,
     };
   })).catch(() => ({
     integridad: "no_verificada" as const, integridadCabecera: "no_verificada" as const,
-    integridadCaja: "no_verificada" as const, integridadStock: "no_verificada" as const, totalVerificado: null,
+    integridadCaja: "no_verificada" as const, integridadDetalle: "no_verificada" as const,
+    integridadStock: "no_verificada" as const, totalVerificado: null,
   }));
 
   return {
@@ -565,6 +580,7 @@ export async function confirmarVentaSigo(input: {
     integridad: "no_verificada",
     integridadCabecera: "no_verificada",
     integridadCaja: "no_verificada",
+    integridadDetalle: "no_verificada",
     integridadStock: "no_verificada",
     totalVerificado: null,
     verificacion,
