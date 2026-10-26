@@ -62,7 +62,8 @@ jobs:
         run: node scripts/test-cobro104-auth-lifecycle.mjs
         env:
           COBRO104_AUTH_QA_DIR: artifacts/cobro104-browser/auth-fixed
-      - run: npx playwright install --with-deps chromium
+      # El runner ubuntu-latest incluye librerías de Chromium; evitar la descarga de fuentes via apt saturado.
+      - run: npx playwright install chromium
       - name: Real Chromium desktop and emulated mobile, synthetic service boundaries only
         run: node scripts/test-cobro104-browser.mjs
         env:
