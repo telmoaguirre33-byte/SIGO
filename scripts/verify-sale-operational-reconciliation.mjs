@@ -5,7 +5,7 @@ const ventas = fs.readFileSync("src/ventas.ts", "utf8");
 for (const required of [
   'detectarEstadoReintento',
   'capturarStockAntes',
-  'verificarIntegridadStockVenta',
+  'verificarDetalleYStockVenta',
   'leerCabeceraVentaConfirmada',
   'venta_items_sigo',
   'producto_id,cantidad,precio_unitario,subtotal',
@@ -20,9 +20,10 @@ for (const required of [
   'medioPago !== venta.medio_pago',
   'estadoReintento !== "nueva"',
   'esperadoDespues = antes - item.cantidad',
-  'combinarIntegridad(cabecera.integridad, integridadCaja, integridadStock)',
+  'combinarIntegridad(cabecera.integridad, integridadCaja, comprobacionDetalleStock.integridadDetalle, comprobacionDetalleStock.integridadStock)',
   'integridadCabecera',
   'integridadCaja',
+  'integridadDetalle',
   'integridadStock',
   'totalVerificado',
 ]) {
@@ -31,18 +32,24 @@ for (const required of [
   }
 }
 
+if (ventas.indexOf('const estadoReintento: EstadoReintentoVenta = "desconocido"') < 0
+  || ventas.indexOf('const stockAntes: SnapshotStockVenta | null = null') < 0
+  || ventas.includes('await capturarStockAntes(empresaId, itemsConsolidados')) {
+  throw new Error("The full product catalog cannot be a prerequisite of a payment RPC");
+}
+
 if (!ventas.includes('confirmar_venta_sigo_v2')) {
   throw new Error("Sale confirmation must remain on the hardened transactional RPC");
 }
 
 if (!ventas.includes('listarProductosSigo')) {
-  throw new Error("Sale confirmation must capture/verify tenant product stock around a new transaction");
+  throw new Error("Post-sale verification must keep optional tenant product stock checks");
 }
 
 const rpcIndex = ventas.indexOf('supabase.rpc("confirmar_venta_sigo_v2"');
 const headerIndex = ventas.indexOf('leerCabeceraVentaConfirmada(empresaId, ventaId');
 const cashIndex = ventas.indexOf('verificarIntegridadVentas(empresaId, [{ id: ventaId');
-const stockIndex = ventas.indexOf('verificarIntegridadStockVenta(');
+const stockIndex = ventas.indexOf('verificarDetalleYStockVenta(', rpcIndex);
 if (rpcIndex < 0 || headerIndex < rpcIndex || cashIndex < rpcIndex || stockIndex < 0) {
   throw new Error("Sale reconciliation must run after the single transactional RPC, never before or by replaying it");
 }
@@ -55,4 +62,4 @@ if (/\.from\(["']productos["']\)[\s\S]{0,220}\.(insert|update|upsert|delete)\s*\
   throw new Error("Frontend sale verification must remain read-only for products");
 }
 
-console.log("Sale operational reconciliation verified: header, detail math, cash/account amount, payment method and stock delta are checked without replaying the transaction.");
+console.log("Sale operational reconciliation verified: header, independent detail math, cash/account, payment method and optional stock delta are classified without replaying the transaction.");
