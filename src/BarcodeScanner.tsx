@@ -490,7 +490,7 @@ export default function BarcodeScanner({
                 : "";
               return;
             }
-            if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Escape") {
+            if (["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", "Escape"].includes(e.key)) {
               inputWedgeRef.current = { buffer: "", lastAt: 0 };
             }
             if (isLikelyScannerSubmit(e.key)) {

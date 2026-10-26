@@ -38,6 +38,11 @@ jobs:
           npx playwright install chromium
           node scripts/test-venta-medidas-browser.mjs
 
+      - name: Verify complete POS product search with accents, paging and scanner
+        run: |
+          node --experimental-strip-types tests/busquedaCaja.test.mjs
+          node scripts/test-busqueda-caja-browser.mjs
+
       - name: Verify read-only production migration gate (synthetic fixtures)
         run: node --test scripts/test-production-migration-gate.mjs
 

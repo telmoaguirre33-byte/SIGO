@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 import { actualizarSesionCobro, cambioIdentidadCobro, type SesionCobro } from "./sesionCobro";
 import { avisoCobroConfirmado } from "./avisoCobroConfirmado";
+import { buscarProductosCaja, crearIndiceBusquedaCaja } from "./busquedaCaja";
 import { useEffect, useMemo, useRef, useState } from "react";
 import BarcodeScanner from "./BarcodeScanner";
 import EditorCantidadMedida from "./EditorCantidadMedida";
@@ -20,6 +21,7 @@ import {
 } from "./ventas";
 
 type ItemVenta = { producto: BarcodeProduct; cantidad: number; unidad: UnidadVenta };
+const TAMANO_PAGINA_BUSQUEDA = 20;
 
 function nuevaClaveVenta() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
@@ -105,6 +107,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   }
   const buscarRef = useRef<HTMLInputElement | null>(null);
   const cajaRef = useRef<HTMLDivElement | null>(null);
+  const resultadosBusquedaRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     buscarRef.current = cajaRef.current?.querySelector<HTMLInputElement>(".barcode-entry-row input") ?? null;
     return () => { buscarRef.current = null; };
@@ -207,23 +210,19 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     [clientes, clienteId],
   );
 
-  const productosEncontrados = useMemo(() => {
-    const q = busquedaProducto.trim().toLocaleLowerCase("es-AR");
-    if (q.length < 2) return [];
-    return catalogo
-      .filter((producto) => [producto.nombre, producto.codigo_interno, producto.codigo_barras, producto.marca]
-        .filter(Boolean)
-        .join(" ")
-        .toLocaleLowerCase("es-AR")
-        .includes(q))
-      .slice(0, 12);
-  }, [busquedaProducto, catalogo]);
+  const indiceBusqueda = useMemo(() => crearIndiceBusquedaCaja(catalogo, empresaId), [catalogo, empresaId]);
+  const productosEncontrados = useMemo(() => buscarProductosCaja(indiceBusqueda, busquedaProducto), [indiceBusqueda, busquedaProducto]);
 
   productosEncontradosRef.current = productosEncontrados;
-  const productoSeleccionadoVisibleId = productosEncontrados.some((producto) => producto.id === productoSeleccionadoId)
-    ? productoSeleccionadoId
-    : productosEncontrados[0]?.id ?? null;
+  const indiceSeleccionado = Math.max(0, productosEncontrados.findIndex((producto) => producto.id === productoSeleccionadoId));
+  const productoSeleccionadoVisibleId = productosEncontrados[indiceSeleccionado]?.id ?? null;
+  const inicioPaginaBusqueda = Math.floor(indiceSeleccionado / TAMANO_PAGINA_BUSQUEDA) * TAMANO_PAGINA_BUSQUEDA;
+  const finPaginaBusqueda = Math.min(inicioPaginaBusqueda + TAMANO_PAGINA_BUSQUEDA, productosEncontrados.length);
+  const productosPagina = productosEncontrados.slice(inicioPaginaBusqueda, finPaginaBusqueda);
   productoSeleccionadoIdRef.current = productoSeleccionadoVisibleId;
+  useEffect(() => {
+    if (resultadosBusquedaRef.current) resultadosBusquedaRef.current.scrollTop = 0;
+  }, [inicioPaginaBusqueda, busquedaProducto]);
 
   function marcarProductoBloqueado(producto: BarcodeProduct, razon: "precio" | "stock") {
     setProductoBloqueado({ producto, razon });
@@ -259,29 +258,35 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     agregar(producto);
   }
 
+  function seleccionarResultadoBusqueda(indice: number) {
+    const resultados = productosEncontradosRef.current;
+    const producto = resultados[Math.max(0, Math.min(resultados.length - 1, indice))];
+    if (!producto) return;
+    productoSeleccionadoIdRef.current = producto.id;
+    setProductoSeleccionadoId(producto.id);
+    window.setTimeout(() => {
+      Array.from(resultadosBusquedaRef.current?.querySelectorAll<HTMLElement>("[data-pos-suggestion]") ?? [])
+        .find((fila) => fila.dataset.productId === producto.id)
+        ?.scrollIntoView({ block: "nearest" });
+    }, 0);
+  }
+
   function manejarTeclaBusquedaProducto(key: string) {
     const resultados = productosEncontradosRef.current;
     const consultaActiva = Boolean(busquedaProducto.trim());
-    if ((key === "ArrowDown" || key === "ArrowUp") && consultaActiva && resultados.length > 0) {
+    if (["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End"].includes(key) && consultaActiva && resultados.length > 0) {
       const indiceActual = resultados.findIndex((producto) => producto.id === productoSeleccionadoIdRef.current);
       const indiceBase = indiceActual < 0 ? 0 : indiceActual;
-      const siguiente = key === "ArrowDown"
-        ? Math.min(resultados.length - 1, indiceBase + 1)
-        : Math.max(0, indiceBase - 1);
-      const producto = resultados[siguiente];
-      productoSeleccionadoIdRef.current = producto.id;
-      setProductoSeleccionadoId(producto.id);
-      window.setTimeout(() => {
-        Array.from(document.querySelectorAll<HTMLElement>("[data-pos-suggestion]"))
-          .find((fila) => fila.dataset.productId === producto.id)
-          ?.scrollIntoView({ block: "nearest" });
-      }, 0);
+      const siguiente = key === "Home" ? 0 : key === "End" ? resultados.length - 1
+        : indiceBase + (key === "PageDown" ? TAMANO_PAGINA_BUSQUEDA : key === "PageUp" ? -TAMANO_PAGINA_BUSQUEDA : key === "ArrowDown" ? 1 : -1);
+      seleccionarResultadoBusqueda(siguiente);
       return true;
     }
     if (key === "Escape" && consultaActiva) {
       setBusquedaProducto("");
       productoSeleccionadoIdRef.current = null;
       setProductoSeleccionadoId(null);
+      setScannerInstanceKey((key) => key + 1);
       return true;
     }
     if (key === "Enter" && consultaActiva) {
@@ -723,7 +728,17 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       <div className="sigo-pos-scan">
         {!cajaBloqueada && !productoPorMedida && <BarcodeScanner key={scannerInstanceKey} empresaId={empresaId} action="vender" onCachedCode={(code)=>{const encontrados=catalogo.filter((p)=>p.empresa_id===empresaId&&(normalizeBarcode(p.codigo_barras??"")===code||normalizeBarcode(p.codigo_interno??"")===code));return encontrados.length?encontrados:null}} onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null)}} onManualQuery={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null);return !/^\\d{6,}$/.test(query.trim())}} onProductSearchKeyDown={manejarTeclaBusquedaProducto}/>}
 
-        {busquedaProducto.trim()&&productosEncontrados.length>0&&<div className="sigo-pos-results">{productosEncontrados.map((p)=><button type="button" data-pos-suggestion="" data-product-id={p.id} aria-selected={p.id===productoSeleccionadoVisibleId} className={p.id===productoSeleccionadoVisibleId?"active":""} key={p.id} onMouseEnter={()=>{productoSeleccionadoIdRef.current=p.id;setProductoSeleccionadoId(p.id)}} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}{Number(p.stock_actual??0)<=0?" · SIN STOCK":""}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} / {p.unidad_medida ?? "unidad sin verificar"} · Stock {formatoStockMedida(Number(p.stock_actual ?? 0), p.unidad_medida)}</span></button>)}</div>}{busquedaProducto.trim()&&productosEncontrados.length===0&&!catalogoError&&<div className="sigo-pos-results"><div className="table-empty">No encontré productos. Probá con nombre, marca, código interno o EAN.</div></div>}
+        {busquedaProducto.trim() && productosEncontrados.length > 0 && <>
+          <div className="sigo-pos-search-navigation">
+            <span data-pos-search-count="" role="status">{productosEncontrados.length.toLocaleString("es-AR")} coincidencias · {inicioPaginaBusqueda + 1}–{finPaginaBusqueda}</span>
+            {productosEncontrados.length > TAMANO_PAGINA_BUSQUEDA && <div>
+              <button type="button" disabled={inicioPaginaBusqueda === 0} onClick={() => seleccionarResultadoBusqueda(inicioPaginaBusqueda - TAMANO_PAGINA_BUSQUEDA)}>Anterior</button>
+              <button type="button" disabled={finPaginaBusqueda >= productosEncontrados.length} onClick={() => seleccionarResultadoBusqueda(finPaginaBusqueda)}>Siguiente</button>
+            </div>}
+          </div>
+          <div className="sigo-pos-results" ref={resultadosBusquedaRef}>{productosPagina.map((p) => <button type="button" data-pos-suggestion="" data-product-id={p.id} aria-selected={p.id === productoSeleccionadoVisibleId} className={p.id === productoSeleccionadoVisibleId ? "active" : ""} key={p.id} onMouseEnter={() => { productoSeleccionadoIdRef.current = p.id; setProductoSeleccionadoId(p.id); }} onClick={() => seleccionarProductoManual(p)}><strong>{p.nombre}{Number(p.stock_actual ?? 0) <= 0 ? " · SIN STOCK" : ""}</strong><span>{p.codigo_interno || p.codigo_barras || "Sin código"} · $ {Number(p.precio_venta || 0).toLocaleString("es-AR")} / {p.unidad_medida ?? "unidad sin verificar"} · Stock {formatoStockMedida(Number(p.stock_actual ?? 0), p.unidad_medida)}</span></button>)}</div>
+        </>}
+        {busquedaProducto.trim() && productosEncontrados.length === 0 && !catalogoError && <div className="sigo-pos-results"><div className="table-empty">No encontré productos. Probá con nombre, marca, código interno o EAN.</div></div>}
       </div>
       {productoBloqueado&&<div className="form-error"><strong>{productoBloqueado.producto.nombre}</strong> · {productoBloqueado.razon==="stock"?"Sin stock disponible.":"Sin precio válido."}</div>}
       {error&&<p className="form-error" role="alert">{error}</p>}{ofertasError&&<p className="form-error" role="alert">No se puede cobrar hasta comprobar los precios de oferta: {ofertasError}</p>}{exito&&<span className="sigo-pos-success-inline" role="status">{exito}</span>}{advertencia&&<p data-cobro-diagnostico="" className={advertenciaRevision || cajaBloqueada ? "form-error" : "sigo-pos-verification-note"} role={advertenciaRevision || cajaBloqueada ? "alert" : "status"}>{advertencia}</p>}
