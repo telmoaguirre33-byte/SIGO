@@ -34,6 +34,8 @@ jobs:
           COBRO104_NOTICE_QA_DIR: artifacts/cobro104-browser/notice-fixed
       - name: Confirmed payment messages preserve diagnostic limits
         run: node --experimental-strip-types --test tests/avisoCobroConfirmado.test.mjs
+      - name: Post-sale header cash detail and stock evidence stay independently classified
+        run: node scripts/test-cobro104-diagnostico-integracion.mjs
       - name: Natural GoTrue renewal, 5001 products, lost ACK and pre-dispatch identity protection
         run: node scripts/test-cobro104-release-guards.mjs
         env:
