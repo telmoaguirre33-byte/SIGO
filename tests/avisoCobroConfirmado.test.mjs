@@ -32,3 +32,43 @@ test('falta de total no fabrica una diferencia monetaria', () => {
   assert.equal(aviso.requiereRevision, false);
   assert.doesNotMatch(aviso.texto, /El precio cambió/);
 });
+
+
+test('comprobante caja y detalle verificados no generan un cartel por faltar el stock anterior', () => {
+  const aviso = avisoCobroConfirmado({
+    integridad: 'no_verificada', totalVerificado: 12000,
+    integridadCabecera: 'ok', integridadCaja: 'ok', integridadDetalle: 'ok', integridadStock: 'no_verificada',
+  }, 12000);
+  assert.deepEqual(aviso, { texto: '', requiereRevision: false });
+});
+
+test('no se oculta un fallo al comprobar la caja', () => {
+  const aviso = avisoCobroConfirmado({
+    integridad: 'no_verificada', totalVerificado: 100,
+    integridadCabecera: 'ok', integridadCaja: 'no_verificada', integridadDetalle: 'ok', integridadStock: 'no_verificada',
+  }, 100);
+  assert.match(aviso.texto, /comprobación adicional/);
+  assert.equal(aviso.requiereRevision, false);
+});
+
+test('diferencia real del detalle o del stock conserva aviso de revisión', () => {
+  for (const campo of ['integridadDetalle', 'integridadStock']) {
+    const estados = { integridadCabecera: 'ok', integridadCaja: 'ok', integridadDetalle: 'ok', integridadStock: 'no_verificada' };
+    estados[campo] = 'revisar';
+    const aviso = avisoCobroConfirmado({
+      integridad: 'revisar', totalVerificado: 100, ...estados,
+    }, 100);
+    assert.equal(aviso.requiereRevision, true);
+    assert.match(aviso.texto, /detectó una diferencia/);
+    assert.match(aviso.texto, /no vuelvas a cobrar/);
+  }
+});
+
+test('una diferencia de total nunca se oculta aunque falte sólo la referencia de stock', () => {
+  const aviso = avisoCobroConfirmado({
+    integridad: 'no_verificada', totalVerificado: 125,
+    integridadCabecera: 'ok', integridadCaja: 'ok', integridadDetalle: 'ok', integridadStock: 'no_verificada',
+  }, 100);
+  assert.equal(aviso.requiereRevision, true);
+  assert.match(aviso.texto, /125/);
+});
