@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /matriz
+Disallow: /caja
+
+User-agent: OAI-SearchBot
+Allow: /
+
+Sitemap: https://www.sigo-gestion.com/sitemap.xml
