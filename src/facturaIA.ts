@@ -247,7 +247,7 @@ function validarProductoFacturaContraMaestro(item: FacturaItemIA, productos: Pro
   if (idsPorCodigo.size === 1) {
     const productoId = [...idsPorCodigo][0];
     if (porNombre.length > 0 && porNombre.every((producto) => producto.id !== productoId)) {
-      throw new Error(`La línea “${item.descripcion}” tiene código y nombre que apuntan a productos distintos. Revisala manualmente antes de ingresar stock.`);
+      // El conflicto se resuelve explícitamente en la revisión de Compra IA.\n      // No asignar stock ni modificar el maestro durante el análisis.\n      return;
     }
     return;
   }

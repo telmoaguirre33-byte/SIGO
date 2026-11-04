@@ -481,7 +481,7 @@ export default async function handler(req, res) {
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return json(res, 503, { error: "AI_NOT_CONFIGURED" });
+  if (!apiKey && !process.env.OPENAI_API_KEY) return json(res, 503, { error: "AI_NOT_CONFIGURED" });
 
   const model = process.env.GEMINI_INVOICE_MODEL || "gemini-3.8-flash";
   const fallbackModel = process.env.GEMINI_INVOICE_FALLBACK_MODEL || "gemini-3.1-flash-lite-preview";
@@ -499,9 +499,57 @@ Respondé SOLAMENTE JSON válido con esta forma exacta:
 {"proveedor":{"razon_social":string|null,"cuit":string|null},"fecha":string|null,"tipo_comprobante":string|null,"numero_comprobante":string|null,"moneda":string|null,"total":number|null,"confianza_general":number,"items":[{"descripcion":string,"codigo":string|null,"codigo_barras":string|null,"cantidad":number,"costo_unitario":number,"total_linea":number|null,"confianza":number}]}
 confianza_general y confianza van de 0 a 1.`;
 
+  // QA opt-in: never expose the API key or write stock during document analysis.
+  // Production remains on its current provider unless explicitly configured.
+  const openaiKey = process.env.OPENAI_API_KEY;
+  let aiResponse;
+  if (openaiKey) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 40_000);
+    try {
+      const parts = [{ type: "text", text: prompt }];
+      if (documentType === "texto") parts.push({ type: "text", text: mensajeTexto });
+      else if (documentType === "pdf") parts.push({ type: "file", file: { filename, file_data: documentDataUrl } });
+      else parts.push({ type: "image_url", image_url: { url: documentDataUrl, detail: "high" } });
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST", signal: controller.signal,
+        headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: process.env.OPENAI_INVOICE_MODEL || "gpt-4.1-mini",
+          messages: [
+            { role: "system", content: "Extraé fielmente los datos del comprobante. Respondé solamente JSON válido, sin inventar datos." },
+            { role: "user", content: parts },
+          ],
+          response_format: { type: "json_object" },
+          max_completion_tokens: 6000,
+        }),
+      });
+      if (!response.ok) {
+        console.warn("SIGO invoice OpenAI status", { status: response.status });
+        if (response.status === 429) return json(res, 429, { error: "AI_RATE_LIMIT", message: "El servicio de IA alcanzó su límite temporal. Intentá más tarde." });
+        if (response.status === 401 || response.status === 403) return json(res, 503, { error: "AI_CREDENTIALS_ERROR", message: "El servicio de IA requiere revisar su configuración." });
+        return json(res, 502, { error: "AI_UNAVAILABLE", message: "El servicio de IA no pudo analizar el comprobante. No se guardó la compra." });
+      }
+      const data = await response.json();
+      const output = data?.choices?.[0]?.message?.content;
+      if (typeof output !== "string" || !output.trim() || data?.choices?.[0]?.finish_reason === "length") {
+        return json(res, 502, { error: "AI_INVALID_OUTPUT", message: "La lectura quedó incompleta. No se guardó ninguna compra." });
+      }
+      // Preserve all existing validation, normalization and review safeguards.
+      aiResponse = { ok: true, json: async () => ({
+        candidates: [{ content: { parts: [{ text: output }] } }],
+        modelVersion: data?.model || "openai",
+      }) };
+    } catch (error) {
+      if (error?.name === "AbortError") return json(res, 504, { error: "AI_TIMEOUT", message: "El servicio de IA tardó demasiado. No se guardó la compra." });
+      console.warn("SIGO invoice OpenAI connection error", { name: error?.name || "unknown" });
+      return json(res, 502, { error: "AI_UNAVAILABLE", message: "No se pudo conectar con la IA. No se guardó la compra." });
+    } finally {
+      clearTimeout(timeout);
+    }
+  } else {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
-  let aiResponse;
   try {
     const fetchGemini = (modelo) => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
       method: "POST",
@@ -558,6 +606,8 @@ confianza_general y confianza van de 0 a 1.`;
     return json(res, 502, { error: "AI_UNAVAILABLE", message: "No se pudo conectar con el servicio de IA." });
   } finally {
     clearTimeout(timeout);
+  }
+
   }
 
   if (!aiResponse.ok) {
