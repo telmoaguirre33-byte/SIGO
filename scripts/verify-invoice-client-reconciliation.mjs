@@ -2,6 +2,10 @@ import fs from 'node:fs';
 
 const client = fs.readFileSync('src/facturaIA.ts', 'utf8');
 const server = fs.readFileSync('api/compras/analizar-factura.js', 'utf8');
+const purchaseUI = fs.readFileSync('src/ComprasOperativas.tsx', 'utf8');
+if (!purchaseUI.includes('conflictoCodigoNombreFactura') || !purchaseUI.includes('Seleccionar producto obligatorio') || !purchaseUI.includes('Seleccioná explícitamente el producto correcto')) {
+  throw new Error('Invoice AI must require explicit product selection when supplier code and name disagree');
+}
 
 const clientRequired = [
   ['MAX_INVOICE_ITEMS = 300', 'client invoice line limit'],
@@ -21,7 +25,7 @@ const clientRequired = [
   ['validarProductoFacturaContraMaestro', 'product master ambiguity reconciliation'],
   ['coincide por código con más de un producto activo', 'duplicate product-code block'],
   ['coincide por nombre con más de un producto activo', 'duplicate product-name block'],
-  ['código y nombre que apuntan a productos distintos', 'product code/name conflict block'],
+  ['El conflicto se resuelve explícitamente en la revisión de Compra IA', 'product code/name conflict defers to explicit review'],
   ['permite vincular explícitamente esta línea al producto existente', 'existing product identity review path'],
   ['validarProveedorFacturaContraMaestro', 'supplier master ambiguity reconciliation'],
   ['El CUIT leído coincide con más de un proveedor activo', 'duplicate supplier-CUIT block'],
