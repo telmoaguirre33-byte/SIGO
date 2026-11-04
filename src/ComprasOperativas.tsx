@@ -83,6 +83,14 @@ function encontrarProducto(item: FacturaItemIA, productos: ProductoSigo[]) {
   return productos.find((p) => normalizar(p.nombre) === nombre);
 }
 
+function conflictoCodigoNombreFactura(item: FacturaItemIA, productos: ProductoSigo[]): boolean {
+  const codigos = [item.codigo_barras, item.codigo].map((c) => String(c ?? "").trim()).filter(Boolean);
+  const porCodigo = productos.filter((p) => codigos.some((c) => p.codigo_barras === c || p.codigo_interno === c));
+  const nombre = normalizar(item.descripcion);
+  const porNombre = nombre ? productos.filter((p) => normalizar(p.nombre) === nombre) : [];
+  return porCodigo.length > 0 && porNombre.length > 0 && !porCodigo.some((p) => porNombre.some((n) => n.id === p.id));
+}
+
 type BorradorCompraSigo = { id:string; empresa_id:string; documento:{facturaIA:FacturaCompraIA;preciosVentaFactura:Record<number,string>;margenesFactura:Record<number,string>;codigosBarrasFactura:Record<number,string>;codigosInternosFactura:Record<number,string>;vinculosFactura:Record<number,string>;idempotencyKey:string;imagenDataUrl?:string|null};estado:string;compra_id?:string|null;created_at:string };
 
 export default function ComprasOperativas({ empresaId, vista = "todo", onCambiarVista }: { empresaId: string; vista?: "todo" | "manual" | "ia" | "historial"; onCambiarVista?:(vista:"menu"|"manual"|"ia"|"historial")=>void }) {
@@ -251,7 +259,11 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
     };
   }
 
-  const productoFactura = (item: FacturaItemIA, index: number) => productos.find((p)=>p.id===vinculosFactura[index]) ?? encontrarProducto(itemFacturaEfectivo(item, index), productos);
+  const productoFactura = (item: FacturaItemIA, index: number) => {
+    const efectivo = itemFacturaEfectivo(item, index);
+    if (conflictoCodigoNombreFactura(efectivo, productos) && !vinculosFactura[index]) return undefined;
+    return productos.find((p)=>p.id===vinculosFactura[index]) ?? encontrarProducto(efectivo, productos);
+  };
 
   const pendientesFactura = useMemo<PendienteFactura[]>(() => {
     if (!facturaIA) return [];
@@ -260,11 +272,14 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
       const nombre = item.descripcion.trim();
       const cantidad = Number(item.cantidad);
       const costo = Number(item.costo_unitario);
-      const existente = productos.find((p)=>p.id===vinculosFactura[index]) ?? encontrarProducto({
+      const efectivo = {
         ...item,
         codigo_barras: codigosBarrasFactura[index] ?? item.codigo_barras,
         codigo: codigosInternosFactura[index] ?? item.codigo,
-      }, productos);
+      };
+      const conflicto = conflictoCodigoNombreFactura(efectivo, productos);
+      const existente = productos.find((p)=>p.id===vinculosFactura[index]) ?? (conflicto ? undefined : encontrarProducto(efectivo, productos));
+      if (conflicto && !vinculosFactura[index]) motivos.push("Código y nombre coinciden con artículos diferentes. Seleccioná explícitamente el producto correcto antes de continuar.");
       if (!nombre) motivos.push("Falta el nombre del producto.");
       if (!Number.isFinite(cantidad) || cantidad <= 0) motivos.push("La cantidad debe ser mayor que cero.");
       if (!Number.isFinite(costo) || costo <= 0) motivos.push("El costo unitario debe ser mayor que cero.");
@@ -714,9 +729,9 @@ export default function ComprasOperativas({ empresaId, vista = "todo", onCambiar
                       <tr id={`factura-item-${index}`} key={`${item.descripcion}-${index}`}>
                         <td>{correccionFacturaAbierta ? <input value={item.descripcion} onChange={(e)=>{setCompraPreparadaIA(null);setFacturaIA((actual)=>actual ? ({...actual,items:actual.items.map((x,i)=>i===index?{...x,descripcion:e.target.value}:x)}) : actual);}} aria-label={`Nombre para producto ${index + 1}`} /> : <strong>{item.descripcion}</strong>}<small style={{display:"block"}}>{existente ? `Stock: ${stockAnterior} → ${stockAnterior + item.cantidad}` : `Nuevo · ingresan ${item.cantidad} unidades`}</small></td>
                         <td>{existente ? (existente.codigo_interno ?? existente.codigo_barras ?? "Código interno automático") : <div style={{display:"grid",gap:6}}>
-                          <strong style={{color:"#b45309"}}>⚠️ PRODUCTO NUEVO</strong>
+                          <strong style={{color:"#b45309"}}>{conflictoCodigoNombreFactura(itemFacturaEfectivo(item, index), productos) ? "⚠️ CONFLICTO: ELEGÍ EL PRODUCTO CORRECTO" : "⚠️ PRODUCTO NUEVO"}</strong>
                           <select value={vinculosFactura[index] ?? ""} onChange={(e)=>{setCompraPreparadaIA(null);setVinculosFactura(a=>({...a,[index]:e.target.value}));}}>
-                            <option value="">Crear como producto nuevo</option>
+                            <option value="">{conflictoCodigoNombreFactura(itemFacturaEfectivo(item, index), productos) ? "Seleccionar producto obligatorio" : "Crear como producto nuevo"}</option>
                             {productos.map((p)=><option key={p.id} value={p.id}>Vincular existente: {p.nombre}{p.codigo_barras ? ` · ${p.codigo_barras}` : ""}</option>)}
                           </select>
                           <input value={codigosBarrasFactura[index] ?? item.codigo_barras ?? ""} onChange={(e)=>{setCompraPreparadaIA(null);setCodigosBarrasFactura(a=>({...a,[index]:e.target.value}));}} placeholder="Código de barras (opcional)" aria-label={`Código de barras para ${item.descripcion}`} />
