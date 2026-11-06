@@ -3,10 +3,19 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
-// Reviewed candidates, NOT permission to apply. No SQL execution in this module.
-export const REVIEWED_MIGRATIONS = Object.freeze([
-  Object.freeze({ version: '20261022024847', name: 'manual_medidas_atomicas', sha256: 'd525682cf0ac327221a389f4668748b40d6fd81e0a31b70c79e5b05a59312c21' }),
-]);
+// Only V4's newly recorded API identity is reconciled. Historical drift stays blocked.
+// The canonical SQL is unchanged; the applied wrapper is evidence, not a fresh-install migration.
+export const V4_RECONCILIATION = Object.freeze({
+  sourceVersion: '20261022024847',
+  sourceName: 'manual_medidas_atomicas',
+  version: '20261023144934',
+  name: 'manual_medidas_atomicas_guarded',
+  sha256: 'd525682cf0ac327221a389f4668748b40d6fd81e0a31b70c79e5b05a59312c21',
+  appliedStatementSha256: 'c572b9e11d4326192ac0e1878a3e7b66f61fb24513727df857a4e5190a0065f6',
+});
+
+// Reviewed SQL, NOT permission to apply. No SQL execution in this module.
+export const REVIEWED_MIGRATIONS = Object.freeze([V4_RECONCILIATION]);
 
 function reject(code) { throw new Error(code); }
 
@@ -37,9 +46,11 @@ export function assessMigrationHistory(local, envelope) {
   validateRows(remote, 'REMOTE');
   const localByVersion = new Map(local.map(row => [row.version, row]));
   const remoteByVersion = new Map(remote.map(row => [row.version, row]));
+  if (localByVersion.has(V4_RECONCILIATION.sourceVersion)) reject('SUPERSEDED_V4_VERSION_PRESENT');
   for (const reviewed of REVIEWED_MIGRATIONS) {
     const actual = localByVersion.get(reviewed.version);
     if (!actual || actual.name !== reviewed.name || actual.sha256 !== reviewed.sha256) reject('REVIEWED_CANDIDATE_HASH_OR_NAME_MISMATCH');
+    if (local.some(row => row.version !== reviewed.version && row.sha256 === reviewed.sha256)) reject('REVIEWED_CANDIDATE_DUPLICATE_BYTES');
   }
   const safeEntry = ({ version, name }) => ({ version, name });
   const pending = local.filter(row => !remoteByVersion.has(row.version));
