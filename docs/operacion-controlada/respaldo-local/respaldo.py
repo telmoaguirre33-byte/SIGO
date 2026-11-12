@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """SIGO: captura local de PostgreSQL y restauración exclusivamente sin red.
-No instala migraciones ni publica aplicaciones. Python 3.10+, Docker local, GnuPG.
+No instala migraciones en producción ni publica aplicaciones. Python 3.10+, Docker local, GnuPG.
 """
 import argparse
 import getpass
@@ -359,7 +359,7 @@ def restore_files(docker, work, meta, image, keep=False, candidate_dir=None):
                 'container':name if keep else 'removed_after_verification'}
     finally:
         if not keep:
-            if box_started: run(docker+['rm','-f',name],timeout=30)
+            if box_started: run(docker+['rm','-f','-v',name],timeout=30)
             run(docker+['volume','rm',volume],timeout=30)
 
 
@@ -422,7 +422,7 @@ def main():
                 files=work/'captura';files.mkdir(mode=0o700)
                 meta=capture(PG(docker,box,service=True),files)
             finally:
-                run(docker+['rm','-f',box],timeout=30)
+                run(docker+['rm','-f','-v',box],timeout=30)
             print('Captura terminada. Elegir frase de cifrado nueva, distinta de la contraseña de DB.')
             phrase=hidden('Frase de cifrado (mínimo 16 caracteres, guardar en gestor privado): ')
             if len(phrase)<16 or phrase!=hidden('Repetir frase de cifrado: '):
@@ -461,7 +461,7 @@ def main():
             (folder/'resultado-sin-secretos.json').write_text(json.dumps(report,indent=2))
             print(json.dumps(report,indent=2))
             print('Informe: '+str(folder/'resultado-sin-secretos.json'))
-    print('No se aplicó SQL ni se desplegó la aplicación.')
+    print('No se modificó PostgreSQL de producción ni se desplegó la aplicación.')
 
 
 if __name__=='__main__':
