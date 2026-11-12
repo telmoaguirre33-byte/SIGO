@@ -116,11 +116,21 @@ def schema_difference_summary(before,after):
             category=next((prefix.decode().strip().replace(' ','_')for prefix in families if line.startswith(prefix)),'OTHER')
             counts[category]+=n
         return dict(counts)
+    left=normalized_schema(before,parts=True);right=normalized_schema(after,parts=True)
+    def object_types(chunks):
+        counts=Counter();known={b'ACL',b'DEFAULT ACL',b'FUNCTION',b'PROCEDURE',b'TABLE',b'VIEW',b'POLICY',b'INDEX',b'CONSTRAINT',b'FK CONSTRAINT',b'TRIGGER',b'COMMENT',b'EXTENSION',b'SCHEMA',b'DATABASE',b'DATABASE PROPERTIES',b'SEQUENCE',b'SEQUENCE OWNED BY',b'TYPE'}
+        for chunk,n in chunks.items():
+            m=re.search(rb'; Type: ([A-Z _]+); Schema:',chunk.splitlines()[1])
+            counts[m[1].decode()if m and m[1]in known else'OTHER']+=n
+        return dict(counts)
     return {'same_line_multiset':a==z,'source_only_line_categories':classify(a-z),
-            'restored_only_line_categories':classify(z-a)}
+            'restored_only_line_categories':classify(z-a),'same_preamble':left[0]==right[0],
+            'same_footer':left[2]==right[2],
+            'source_only_object_types':object_types(Counter(left[1])-Counter(right[1])),
+            'restored_only_object_types':object_types(Counter(right[1])-Counter(left[1]))}
 
 
-def normalized_schema(data):
+def normalized_schema(data,parts=False):
     # pg_dump can reorder independent objects after OIDs change on restore.
     # Compare complete named blocks, never sorted lines/statements inside a
     # function. Detect dump headers only outside SQL strings/dollar bodies.
@@ -156,11 +166,30 @@ def normalized_schema(data):
                 if match:quote=match[0];i+=len(quote);continue
             i+=1
     if quote is not None or block_depth:raise RuntimeError('El esquema requiere revisión de su delimitación SQL.')
-    if not starts:return normalized(data)
+    if not starts:return(normalized(data),[],b'')if parts else normalized(data)
     end=footer if footer is not None else len(lines)
     def content(first,last):return b'\n'.join(lines[first:last]).rstrip(b'\n')
     chunks=[content(first,last)for first,last in zip(starts,starts[1:]+[end])]
-    return b'\n\n'.join([content(0,starts[0]),*sorted(chunks),content(end,len(lines))])
+    prepared=(content(0,starts[0]),sorted(normalized_acl_block(chunk)for chunk in chunks),content(end,len(lines)))
+    return prepared if parts else b'\n\n'.join([prepared[0],*prepared[1],prepared[2]])
+
+
+def normalized_acl_block(chunk):
+    lines=chunk.splitlines()
+    if len(lines)<3 or not any(x in lines[1]for x in[b'; Type: ACL;',b'; Type: DEFAULT ACL;']):return chunk
+    identifier=rb'(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z_0-9$]*)'
+    prefix=rb'(?:ALTER DEFAULT PRIVILEGES FOR ROLE '+identifier+rb'(?: IN SCHEMA '+identifier+rb')? )?'
+    revokes=[];grants=[];grant_phase=False
+    for line in lines[3:]:
+        if not line:continue
+        m=re.fullmatch(prefix+rb'(REVOKE|GRANT) .+;',line)
+        if not m:return chunk # Preserve session authorization/context or unknown SQL.
+        if m[1]==b'GRANT':grant_phase=True;grants.append(line)
+        elif grant_phase:return chunk # Never hide a revoke after a grant.
+        else:revokes.append(line)
+    # Independent revokes commute; grants after them commute. Every complete
+    # command, target/grantee/grantor/option and both operation phases remain.
+    return b'\n'.join(lines[:3])+b'\n\n'+b'\n'.join(sorted(revokes)+sorted(grants))
 
 
 def ident(s):

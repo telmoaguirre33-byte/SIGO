@@ -7,6 +7,16 @@ import respaldo as b
 
 
 class Guardas(unittest.TestCase):
+    def test_acl_grant_order_is_unordered_but_revoke_phase_and_privileges_are_preserved(self):
+        head=b'--\n-- Name: TABLE x; Type: ACL; Schema: public; Owner: postgres\n--\n\n'
+        a=head+b'REVOKE ALL ON TABLE x FROM PUBLIC;\nGRANT SELECT ON TABLE x TO anon;\nGRANT SELECT ON TABLE x TO authenticated;'
+        z=head+b'REVOKE ALL ON TABLE x FROM PUBLIC;\nGRANT SELECT ON TABLE x TO authenticated;\nGRANT SELECT ON TABLE x TO anon;'
+        self.assertEqual(b.normalized_acl_block(a),b.normalized_acl_block(z))
+        for changed in [z.replace(b'GRANT SELECT',b'GRANT ALL'),z.replace(b'FROM PUBLIC;',b'FROM anon;'),head+b'GRANT SELECT ON TABLE x TO anon;\nREVOKE ALL ON TABLE x FROM PUBLIC;\nGRANT SELECT ON TABLE x TO authenticated;']:
+            self.assertNotEqual(b.normalized_acl_block(a),b.normalized_acl_block(changed))
+        context=head+b'SET SESSION AUTHORIZATION anon;\nGRANT SELECT ON TABLE x TO authenticated;'
+        self.assertEqual(b.normalized_acl_block(context),context)
+
     def test_schema_object_order_can_change_but_function_bodies_acl_and_owners_cannot(self):
         def block(name,body):return b'--\n-- Name: '+name+b'; Type: FUNCTION; Schema: public; Owner: postgres\n--\n'+body+b'\n\n'
         one=block(b'one',b"CREATE FUNCTION one() RETURNS text AS $fn$\n--\n-- Name: decoy; Type: FUNCTION; Schema: public; Owner: postgres\n--\nselect 'a';\nselect 'b';\n$fn$ LANGUAGE SQL;")
