@@ -1,0 +1,23 @@
+{
+  "restore_status": "PASS_DATABASE_ARCHIVE",
+  "destination_network": "none",
+  "database_data_schema_roles_policies_acl_sequences": "MATCH",
+  "candidate_copy_gate": "PASS_EXACT_SQL_APPLIED_TO_ISOLATED_COPY_ROWS_UNCHANGED",
+  "rls_gate_limit": "Synthetic role matrix remains separate; shared consumer scope and production approval still required",
+  "scope_limitations": [
+    "Role LOGIN passwords",
+    "Storage object bytes",
+    "External configuration/secrets",
+    "Transient extension-owned tables not included by pg_dump"
+  ],
+  "deployment_gate": "NOT_AUTHORIZED_BY_THIS_REPORT",
+  "container": "removed_after_verification",
+  "test": "PASS_SYNTHETIC_ONLY",
+  "production_backup": "NOT_CAPTURED",
+  "candidate_applied_only_to_new_offline_copy": true,
+  "tampered_ciphertext_rejected": true,
+  "wrong_project_and_port_rejected": true,
+  "supabase_image_restore": "NOT_TESTED; image pull failed for lack of temporary extraction space",
+  "commercial_data_used": false,
+  "evidence_class": "SYNTHETIC_ONLY_NO_COMMERCIAL_DATA"
+}

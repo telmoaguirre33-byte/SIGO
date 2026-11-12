@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.gpg
+*.dump
+*.tar
+*.log
+pgpass
+service
+estado.json
+resultado-sin-secretos.json
