@@ -178,7 +178,12 @@ def safe_error(log):
                  'PRODUCT_POLICY_DRIFT_REVIEW_REQUIRED','PRODUCT_TABLE_ACL_DRIFT_REVIEW_REQUIRED',
                  'PRODUCT_COLUMN_ACL_REVIEW_REQUIRED','PRODUCT_COLUMN_ACL_DRIFT_REVIEW_REQUIRED']:
         if code.lower()in s:return code
-    for marker,code in [('password authentication failed','DB_AUTH_FAILED'),('tenant or user not found','POOLER_TENANT_NOT_AVAILABLE'),
+    for marker,code in [('permission denied for schema','SCHEMA_PRIVILEGE_DENIED'),
+                        ('permission denied for table','TABLE_PRIVILEGE_DENIED'),
+                        ('permission denied for function','FUNCTION_PRIVILEGE_DENIED'),
+                        ('permission denied to grant role','ROLE_GRANT_PRIVILEGE_DENIED'),
+                        ('permission denied to set parameter','PARAMETER_PRIVILEGE_DENIED'),
+                        ('password authentication failed','DB_AUTH_FAILED'),('tenant or user not found','POOLER_TENANT_NOT_AVAILABLE'),
                         ('certificate verify failed','TLS_VERIFICATION_FAILED'),('network is unreachable','TCP_UNREACHABLE'),
                         ('could not translate host name','DNS_FAILED'),('permission denied','PRIVILEGE_DENIED'),
                         ('no space left','DISK_FULL'),('is not available','EXTENSION_OR_COMPONENT_MISSING')]:
@@ -234,7 +239,7 @@ def main():
             try:result=cloud_pipeline.capture(docker,work,key,meta)
             except Exception:
                 print(json.dumps({'status':'CAPTURE_OR_RESTORE_FAILED','diagnostic':safe_error(b.LOG),
-                                  'production_ddl':False,'backup_artifacts_uploaded':False}),flush=True)
+                                  'phase':b.PHASE,'production_ddl':False,'backup_artifacts_uploaded':False}),flush=True)
                 raise
             print(json.dumps(result,sort_keys=True),flush=True);return 0
     return 0 if report['status']=='PREPARED' else 2

@@ -26,6 +26,13 @@ CLIENT_IMAGE = 'postgres:17.6'
 RESTORE_IMAGE = 'supabase/postgres:17.6.1.166'
 MAG = 1 << 256
 LOG = None
+PHASE = 'initialization'
+
+
+def phase(name):
+    global PHASE
+    PHASE=name
+    print(json.dumps({'backup_phase':name}),flush=True)
 
 
 def child_env():
@@ -178,6 +185,7 @@ def table_hash(pg, table, snapshot=None):
 
 
 def capture(pg, work, snapshot_hook=None):
+    phase('source_metadata_and_roles')
     version = int(pg.sql('show server_version_num;'))
     if not 170000 <= version < 180000:
         raise RuntimeError('Se requiere PostgreSQL 17; no continuar con otra versión.')
@@ -201,13 +209,16 @@ def capture(pg, work, snapshot_hook=None):
             meta = {k:json.loads(pg.sql(pre+q+'commit;')) for k,q in
                     [('tables',TABLES),('roles',ROLES),('policies',POLICIES),('extensions',EXTENSIONS),('large_objects',LARGE_OBJECTS)]}
             print('Capturando esquema y datos en un único snapshot…', flush=True)
+            phase('source_snapshot_archive')
             with (work/'database.dump').open('wb') as f:
                 run(pg.cmd('pg_dump','--format=custom','--create','--no-password',
                            '--lock-wait-timeout=5s','--snapshot='+snapshot), output=f)
             schema = run(pg.cmd('pg_dump','--schema-only','--create','--no-password','--snapshot='+snapshot))
             (work/'schema.sql').write_bytes(schema)
             print('Verificando datos del mismo snapshot (sin mostrar registros)…', flush=True)
+            phase('source_snapshot_row_integrity')
             meta['tables'] = [table_hash(pg, t, snapshot) for t in meta['tables']]
+            phase('source_roles_recheck')
             after = run(pg.cmd('pg_dumpall','--roles-only','--no-role-passwords','--no-password'))
             if normalized(roles) != normalized(after):
                 raise RuntimeError('Roles cambiaron durante captura. Repetir en ventana sin DDL/roles.')
@@ -217,6 +228,7 @@ def capture(pg, work, snapshot_hook=None):
         finally:
             if exporter.poll() is None:
                 exporter.kill(); exporter.wait()
+    phase('archive_sequence_inventory')
     toc = from_file(pg.cmd('pg_restore','--list'), work/'database.dump')
     (work/'toc.txt').write_bytes(toc)
     seq = b'\n'.join(line for line in toc.splitlines() if b'SEQUENCE SET ' in line)
@@ -252,6 +264,7 @@ def gpg(datafile, outfile, phrase, decrypt=False):
 
 
 def pack(work, folder, phrase):
+    phase('archive_encryption')
     tar = folder/'database-private.tar'
     with tarfile.open(tar,'w') as t:
         for p in work.iterdir(): t.add(p,arcname=p.name)
@@ -284,6 +297,7 @@ def unpack(encrypted, folder, phrase):
 
 
 def restore_files(docker, work, meta, image, keep=False, candidate_dir=None, candidate_probe=None):
+    phase('isolated_restore_initialization')
     name='sigo-restore-'+secrets.token_hex(6); volume=name+'-data'; box_started=False
     run(docker+['image','inspect',image], timeout=30)
     run(docker+['volume','create','--label','sigo.backup.local=true',volume])
@@ -305,16 +319,20 @@ def restore_files(docker, work, meta, image, keep=False, candidate_dir=None, can
                 if pg.sql('select 1;')=='1': break
             except RuntimeError: time.sleep(1)
         else: raise RuntimeError('El PostgreSQL aislado no inició; consultar log privado.')
+        phase('isolated_roles_restore')
         run(pg.cmd('psql','-Xq','-v','ON_ERROR_STOP=1'),(work/'roles.sql').read_bytes())
+        phase('isolated_database_restore')
         pg.sql('drop database postgres;') # Only this freshly created, network=none destination.
         with (work/'database.dump').open('rb') as src,LOG.open('ab') as err:
             p=subprocess.run(pg.cmd('pg_restore','--create','--exit-on-error','-d','template1'),
                              stdin=src,stdout=subprocess.DEVNULL,stderr=err,timeout=3600,env=child_env())
             if p.returncode: raise RuntimeError('Restore real falló; NO declarar respaldo recuperable.')
         pg.db=meta['database']
+        phase('isolated_schema_acl_comparison')
         schema=run(pg.cmd('pg_dump','--schema-only','--create','--no-password'))
         if hashlib.sha256(normalized(schema)).hexdigest()!=meta['schema_sha256']:
             raise RuntimeError('El esquema/ACL/funciones restaurados difieren del original.')
+        phase('isolated_roles_policies_extensions_comparison')
         roles=json.loads(pg.sql(ROLES)); expected_roles=meta['roles']
         roles=[r for r in roles if r['rolname']!='sigo_restore_operator']
         if roles!=expected_roles: raise RuntimeError('Difieren los atributos de roles.')
@@ -327,6 +345,7 @@ def restore_files(docker, work, meta, image, keep=False, candidate_dir=None, can
         if json.loads(pg.sql(POLICIES))!=meta['policies']: raise RuntimeError('Difieren políticas RLS.')
         if json.loads(pg.sql(EXTENSIONS))!=meta['extensions']: raise RuntimeError('Difieren extensiones/versiones.')
         if json.loads(pg.sql(LARGE_OBJECTS))!=meta['large_objects']: raise RuntimeError('Difieren large objects.')
+        phase('isolated_row_and_sequence_comparison')
         for expected in meta['tables']:
             if table_hash(pg,expected['table'])!=expected:
                 raise RuntimeError('Difieren datos restaurados. No aprobar el respaldo.')
@@ -338,6 +357,7 @@ def restore_files(docker, work, meta, image, keep=False, candidate_dir=None, can
                 raise RuntimeError('Difiere una secuencia restaurada.')
         candidate_status='NOT_RUN';copy_checks={}
         if candidate_dir:
+            phase('isolated_exact_sql_candidates')
             candidates=[('catalogo.sql','33dcd3c00c02535f8df262752bc148726345a240de71eb931565f746b8e68046'),
                         ('rls.sql','991d9a777676206cd91f517e8ec09454b54b2051b789350a46433c5a15fc8136')]
             for filename,expected in candidates:
@@ -356,7 +376,9 @@ def restore_files(docker, work, meta, image, keep=False, candidate_dir=None, can
                 raise RuntimeError('Falló gate local: contrato del endpoint.')
             null_session="begin read only;set local role authenticated;set local request.jwt.claim.sub='';select count(id)from public.productos;rollback;"
             if pg.sql(null_session)!='0': raise RuntimeError('Falló gate local: acceso sin sesión.')
+            phase('isolated_permissions_role_matrix')
             if candidate_probe:copy_checks=candidate_probe(pg,meta)
+            phase('isolated_post_sql_row_comparison')
             for expected in meta['tables']:
                 if table_hash(pg,expected['table'])!=expected:
                     raise RuntimeError('El ensayo de candidatos alteró filas; NO aprobar gate.')

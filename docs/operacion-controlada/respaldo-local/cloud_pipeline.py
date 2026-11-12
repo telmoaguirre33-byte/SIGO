@@ -200,8 +200,10 @@ def capture(docker,work,key,storage_meta):
         encrypted,wrapped,checked,meta=create_encrypted(pg,work)
     prefix=c.PREFIX+'/'+os.environ['GITHUB_RUN_ID']+'-'+os.environ.get('GITHUB_RUN_ATTEMPT','1')+'-'+secrets.token_hex(6)
     # Keep the wrapped random key durable before streaming the larger ciphertext.
+    b.phase('private_ciphertext_persistence')
     saved=persist(key,storage_meta,[wrapped,encrypted],prefix)
     saved['ciphertext_archive_sha256']=b.digest(encrypted)
+    print(json.dumps({'backup_phase':'private_ciphertext_persisted',**saved},sort_keys=True),flush=True)
     captured_seconds=round(time.monotonic()-started,3)
     b.run(docker+['pull',b.RESTORE_IMAGE])
     result=b.restore_files(docker,checked,meta,b.RESTORE_IMAGE,candidate_dir=ROOT,candidate_probe=validate_rls_copy)
