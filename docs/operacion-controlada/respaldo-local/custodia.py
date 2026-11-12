@@ -272,12 +272,24 @@ def main():
     with tempfile.TemporaryDirectory(prefix='sigo122-custody-') as tmp:
         work=Path(tmp);b.LOG=work/'private-diagnostic.log';b.LOG.touch(mode=0o600)
         docker=b.docker_command()
-        if sys.argv[1]=='exercise':
-            if any(os.getenv(k)for k in ['SUPABASE_DB_PASSWORD','SUPABASE_DB_URL','SUPABASE_SERVICE_ROLE_KEY','SUPABASE_ACCESS_TOKEN']):
-                raise RuntimeError('CUSTODY_EXERCISE_MUST_NOT_HAVE_PRODUCTION_SECRETS')
-            result=run_exercise(docker,work)
-        else:result=run_capture(docker,work)
-        print(json.dumps(result,sort_keys=True),flush=True)
+        try:
+            if sys.argv[1]=='exercise':
+                if any(os.getenv(k)for k in ['SUPABASE_DB_PASSWORD','SUPABASE_DB_URL','SUPABASE_SERVICE_ROLE_KEY','SUPABASE_ACCESS_TOKEN']):
+                    raise RuntimeError('CUSTODY_EXERCISE_MUST_NOT_HAVE_PRODUCTION_SECRETS')
+                result=run_exercise(docker,work)
+            else:result=run_capture(docker,work)
+            print(json.dumps(result,sort_keys=True),flush=True)
+        except Exception:
+            import traceback
+            frames=[{'function':f.name,'line':f.lineno} for f in traceback.extract_tb(sys.exc_info()[2])]
+            log=b.LOG.read_text(errors='replace')
+            categories=[label for marker,label in [
+                ('syntax error','SQL_SYNTAX'),('cannot execute','READ_ONLY_OR_ROLE'),
+                ('does not exist','MISSING_OBJECT'),('permission denied','PRIVILEGE_DENIED'),
+                ('could not','SERVER_OR_CONNECTION'),('constraint','CONSTRAINT')] if marker in log.lower()]
+            print(json.dumps({'safe_failure_frames':frames,'diagnostic_categories':categories,
+                              'private_diagnostic':c.safe_error(b.LOG)}),flush=True)
+            raise
 
 
 if __name__=='__main__':
