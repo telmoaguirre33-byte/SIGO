@@ -262,7 +262,7 @@ def prefix(snapshot=None):
     q = 'begin isolation level repeatable read read only;'
     if snapshot:
         q += 'set transaction snapshot ' + literal(snapshot) + ';'
-    return q + "set time zone 'UTC';set datestyle='ISO, YMD';set intervalstyle='postgres';set bytea_output='hex';set extra_float_digits=3;"
+    return q + "set local search_path=pg_catalog;set time zone 'UTC';set datestyle='ISO, YMD';set intervalstyle='postgres';set bytea_output='hex';set extra_float_digits=3;"
 
 
 def table_hash(pg, table, snapshot=None):
@@ -494,7 +494,7 @@ def restore_files(docker, work, meta, image, keep=False, candidate_dir=None, can
         globals_after=run(pg.cmd('pg_dumpall','--roles-only','--no-role-passwords','--no-password'))
         if role_sql(globals_after)!=role_sql((work/'roles.sql').read_bytes()):
             raise RuntimeError('Difieren configuración o membresías de roles restaurados.')
-        if json.loads(pg.sql(POLICIES))!=meta['policies']: raise RuntimeError('Difieren políticas RLS.')
+        if json.loads(pg.sql(prefix()+POLICIES+'commit;'))!=meta['policies']: raise RuntimeError('Difieren políticas RLS.')
         if json.loads(pg.sql(EXTENSIONS))!=meta['extensions']: raise RuntimeError('Difieren extensiones/versiones.')
         if json.loads(pg.sql(LARGE_OBJECTS))!=meta['large_objects']: raise RuntimeError('Difieren large objects.')
         phase('isolated_row_and_sequence_comparison')

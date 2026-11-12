@@ -78,7 +78,7 @@ def fixture(docker):
                 if pg.sql('select 1;')=='1':break
             except RuntimeError:time.sleep(1)
         else:raise RuntimeError('SYNTHETIC_SERVER_DID_NOT_START')
-        pg.sql('create role postgres login superuser createrole createdb;alter database postgres owner to postgres;')
+        pg.sql('create role postgres login superuser createrole createdb;alter database postgres owner to postgres;alter role postgres set search_path=public,auth,extensions;')
         pg.user='postgres'
         pg.sql("""create schema extensions;
 create extension pg_stat_statements with schema extensions;
@@ -89,6 +89,8 @@ create role anon;create role authenticated;create role service_role bypassrls;
 grant anon,authenticated,service_role to postgres with admin option;
 create schema auth;create table auth.users(id uuid primary key,email text,encrypted_password text);
 create function auth.uid()returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+alter table auth.users enable row level security;
+create policy fixture_auth_identity on auth.users for select using(auth.uid()=id);
 grant usage on schema auth to authenticated,anon;
 create table empresa_usuarios(empresa_id uuid,user_id uuid,activo boolean,rol text,permisos_extra text[] default '{}',permisos_denegados text[] default '{}',primary key(empresa_id,user_id));
 create table productos(id uuid primary key,empresa_id uuid,nombre text,marca text,descripcion text,categoria text,proveedor text,codigo_interno text,codigo_barras text,costo_actual numeric,costo_ultima_compra numeric,precio_venta numeric,margen_ganancia numeric,margen_porcentaje numeric,stock_actual numeric,stock_minimo numeric,stock_maximo numeric,unidad_medida text,activo boolean,iva_alicuota_id integer,iva_tasa numeric,precio_incluye_iva boolean);
