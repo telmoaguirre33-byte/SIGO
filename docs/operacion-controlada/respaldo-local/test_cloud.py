@@ -1,4 +1,4 @@
-import json,os,tempfile,unittest
+import base64,json,os,tempfile,unittest
 from pathlib import Path
 from unittest.mock import patch
 import cloud as c
@@ -6,6 +6,16 @@ import cloud_pipeline as p
 
 
 class CloudGuardas(unittest.TestCase):
+    def test_misnamed_service_key_is_not_sent_to_management_api(self):
+        with patch.dict(os.environ,{'SUPABASE_ACCESS_TOKEN':'"Bearer sb_secret_synthetic_only"'},clear=True),patch.object(c,'http')as http:
+            self.assertEqual(c.storage_key(),'sb_secret_synthetic_only');http.assert_not_called()
+
+    def test_foreign_jwt_key_is_rejected_before_network(self):
+        payload=base64.urlsafe_b64encode(json.dumps({'role':'service_role','ref':'other'}).encode()).decode().rstrip('=')
+        with patch.dict(os.environ,{'SUPABASE_ACCESS_TOKEN':'fake.'+payload+'.signature'},clear=True),patch.object(c,'http')as http:
+            with self.assertRaises(RuntimeError):c.storage_key()
+            http.assert_not_called()
+
     def test_foreign_database_never_probed(self):
         with patch.dict(os.environ,{'SUPABASE_DB_URL':'postgresql://postgres:dummy@db.other.supabase.co:5432/postgres'},clear=True):
             self.assertEqual(list(c.urls()),[])

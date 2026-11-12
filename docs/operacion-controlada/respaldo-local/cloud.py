@@ -32,22 +32,33 @@ def http(url, key, method='GET', data=None, headers=None, management=False):
 
 
 def storage_key():
-    value=os.getenv('SUPABASE_SERVICE_ROLE_KEY','')
-    if value:
-        if value.count('.')==2:
-            try:
-                claims=json.loads(base64.urlsafe_b64decode(value.split('.')[1]+'==='))
-                if claims.get('ref')!=b.PROJECT or claims.get('role')!='service_role':
-                    raise RuntimeError('STORAGE_KEY_SCOPE_REJECTED')
-            except (ValueError,KeyError):raise RuntimeError('STORAGE_KEY_FORMAT_REJECTED')
+    def clean(value):
+        value=value.strip()
+        for _ in range(2):
+            if len(value)>1 and value[0]in'\"\''and value[-1]==value[0]:value=value[1:-1].strip()
+            elif value.lower().startswith('bearer '):value=value[7:].strip()
+            else:break
         return value
-    token=os.getenv('SUPABASE_ACCESS_TOKEN','')
+    def service(value):
+        if value.startswith('sb_secret_'):return value
+        if value.count('.')==2:
+            claims=json.loads(base64.urlsafe_b64decode(value.split('.')[1]+'==='))
+            if claims.get('ref')==b.PROJECT and claims.get('role')=='service_role':return value
+        raise RuntimeError('STORAGE_KEY_SCOPE_OR_FORMAT_REJECTED')
+    value=clean(os.getenv('SUPABASE_SERVICE_ROLE_KEY',''))
+    if value:
+        return service(value)
+    token=clean(os.getenv('SUPABASE_ACCESS_TOKEN',''))
+    # Correct a misnamed existing secret without changing its value or sending
+    # credentials to another project. Service keys belong on the project API;
+    # sbp_ account tokens belong only on the management API.
+    if token.startswith('sb_secret_')or token.count('.')==2:return service(token)
     if token:
         values=json.loads(http('https://api.supabase.com/v1/projects/'+b.PROJECT+'/api-keys?reveal=true',token,management=True))
         for item in values:
             if item.get('name')=='service_role' or item.get('role')=='service_role':
                 key=item.get('api_key') or item.get('key')
-                if key:return key
+                if key:return service(key)
     raise RuntimeError('MISSING_PRIVATE_STORAGE_CREDENTIAL')
 
 
@@ -174,6 +185,8 @@ def main():
             report['private_storage_reason']='HTTP_'+str(exc.code) if isinstance(exc,urllib.error.HTTPError) else str(exc) if isinstance(exc,RuntimeError) else type(exc).__name__
             report['has_storage_service_key']=bool(os.getenv('SUPABASE_SERVICE_ROLE_KEY'))
             report['has_storage_management_token']=bool(os.getenv('SUPABASE_ACCESS_TOKEN'))
+            raw=os.getenv('SUPABASE_ACCESS_TOKEN','').strip().removeprefix('Bearer ').strip().strip('\"\'')
+            report['configured_storage_token_kind']='account_pat'if raw.startswith('sbp_')else'jwt'if raw.count('.')==2 else'project_secret'if raw.startswith('sb_secret_')else'unknown'
         try:
             with source(docker,work):report['comercial_tls_session_read_only']='PASS'
         except Exception as exc:

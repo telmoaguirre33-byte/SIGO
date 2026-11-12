@@ -8,10 +8,53 @@ import secrets
 import time
 from pathlib import Path
 from urllib.parse import quote
+from uuid import uuid4
 import cloud as c
 import respaldo as b
 
 ROOT=c.ROOT
+
+
+def validate_rls_copy(pg,meta):
+    # This object is created only for the new network=none restore destination.
+    # The superuser is a local recovery operator, never a production credential.
+    probe=b.PG(pg.docker,pg.box,'sigo_restore_operator',meta['database'])
+    member=json.loads(probe.sql("""select(select json_build_object('company',eu.empresa_id,'user',eu.user_id)
+from public.empresa_usuarios eu where eu.activo and eu.user_id is not null and eu.empresa_id is not null
+and exists(select 1 from public.productos p where p.empresa_id=eu.empresa_id and p.activo and upper(btrim(coalesce(p.categoria,'')))<>'NO_VENDIBLE')limit 1);""")or'null')
+    if not member:raise RuntimeError('RESTORED_COPY_HAS_NO_ACTIVE_MEMBER_WITH_CATALOGUE')
+    company=b.literal(member['company']);user=b.literal(member['user'])
+    foreign=json.loads(probe.sql("select(select to_json(p.empresa_id) from public.productos p where p.empresa_id<>"+company+" and p.activo and not exists(select 1 from public.empresa_usuarios eu where eu.empresa_id=p.empresa_id and eu.user_id="+user+" and eu.activo)limit 1);" )or'null')
+    foreign_company=b.literal(foreign or str(uuid4()))
+    def claims(uid):
+        value=json.dumps({'sub':uid,'role':'authenticated'})
+        return 'set local "request.jwt.claim.sub"='+b.literal(uid)+';set local "request.jwt.claims"='+b.literal(value)+';set local role authenticated;'
+    def reject_rpc(tenant):
+        return "do $$begin begin perform 1 from public.consultar_productos_sigo("+tenant+",'',0,1);raise exception 'RLS_RPC_NOT_REJECTED';exception when others then if sqlerrm<>'FORBIDDEN' then raise;end if;end;end$$;"
+    owner_sample=None
+    for role in ['owner','admin','seller','warehouse']:
+        change="update public.empresa_usuarios set rol="+b.literal(role)+",permisos_extra='{}',permisos_denegados='{}' where empresa_id="+company+' and user_id='+user+';'
+        result=json.loads(probe.sql('begin;'+change+claims(member['user'])+
+          "select json_build_object('own',(select count(id)from public.productos where empresa_id="+company+"),'foreign',(select count(id)from public.productos where empresa_id="+foreign_company+"),'sample',(select row_to_json(t)from public.consultar_productos_sigo("+company+",'',0,1)t));"+reject_rpc(foreign_company)+'rollback;'))
+        sample=result['sample']
+        if not(result['own']>0 and result['foreign']==0 and sample and sample['empresa_id']==member['company']):
+            raise RuntimeError('RESTORED_COPY_ROLE_OR_TENANT_READ_FAILED')
+        if role=='owner':owner_sample=sample
+        elif sample['costo_actual'] is not None or sample['costo_ultima_compra'] is not None:
+            raise RuntimeError('RESTORED_COPY_COST_MASK_FAILED')
+        if sample['id']!=owner_sample['id'] or sample['stock_actual']!=owner_sample['stock_actual']:
+            raise RuntimeError('RESTORED_COPY_PRODUCT_OR_STOCK_CHANGED_BY_ROLE')
+        expected_price=None if role=='warehouse' else owner_sample['precio_venta']
+        if sample['precio_venta']!=expected_price:raise RuntimeError('RESTORED_COPY_PRICE_MASK_FAILED')
+    denial="update public.empresa_usuarios set rol='owner',permisos_extra='{}',permisos_denegados=array['products.read']::text[] where empresa_id="+company+' and user_id='+user+';'
+    n=probe.sql('begin;'+denial+claims(member['user'])+'select count(id)from public.productos where empresa_id='+company+';'+reject_rpc(company)+'rollback;')
+    if n!='0':raise RuntimeError('RESTORED_COPY_EXPLICIT_DENY_FAILED')
+    outsider=str(uuid4())
+    n=probe.sql('begin;'+claims(outsider)+'select count(id)from public.productos;'+reject_rpc(company)+'rollback;')
+    if n!='0':raise RuntimeError('RESTORED_COPY_NONMEMBER_FAILED')
+    return {'role_matrix':['owner','admin','seller','warehouse'],'tenant_and_explicit_deny':'PASS',
+            'cost_price_stock_masks':'PASS','cross_tenant_existing_rows_checked':foreign is not None,
+            'local_permission_transactions_rolled_back':True}
 
 
 @contextlib.contextmanager
@@ -54,7 +97,7 @@ create table ventas_sinteticas(id bigserial primary key,total numeric(12,2));ins
 insert into auth.users values('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','synthetic@example.invalid','synthetic-not-a-real-password');
 insert into empresa_usuarios(empresa_id,user_id,activo,rol)values('11111111-1111-4111-8111-111111111111','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',true,'owner');
 insert into productos(id,empresa_id,nombre,marca,categoria,codigo_interno,codigo_barras,costo_actual,costo_ultima_compra,precio_venta,stock_actual,unidad_medida,activo)
-select md5(i::text)::uuid,'11111111-1111-4111-8111-111111111111','Artículo sintético '||i,'Marca QA','Ferretería','QA-'||i,'779'||lpad(i::text,10,'0'),1.99,1.99,4.95,10.125,'kg',true from generate_series(1,20)i;
+select md5(i::text)::uuid,case when i<=10 then '11111111-1111-4111-8111-111111111111'::uuid else'22222222-2222-4222-8222-222222222222'::uuid end,'Artículo sintético '||i,'Marca QA','Ferretería','QA-'||i,'779'||lpad(i::text,10,'0'),1.99,1.99,4.95,10.125,'kg',true from generate_series(1,20)i;
 select lo_from_bytea(0,decode('0102030405','hex'));
 """)
         migrations=ROOT.parents[2]/'supabase/migrations'
@@ -127,9 +170,10 @@ def persist(key,meta,paths,run_prefix):
 def exercise(docker,work):
     with fixture(docker) as pg:
         encrypted,wrapped,checked,meta=create_encrypted(pg,work)
-    result=b.restore_files(docker,checked,meta,b.RESTORE_IMAGE,candidate_dir=ROOT)
+    result=b.restore_files(docker,checked,meta,b.RESTORE_IMAGE,candidate_dir=ROOT,candidate_probe=validate_rls_copy)
     return {'status':'PASS_SYNTHETIC_MANAGED_IMAGE','managed_image':b.RESTORE_IMAGE,
             'restore_status':result['restore_status'],'candidate_copy_gate':result['candidate_copy_gate'],
+            'restored_copy_security_checks':result['restored_copy_security_checks'],
             'production_capture':False,'backup_artifacts_uploaded':False}
 
 
@@ -143,7 +187,7 @@ def capture(docker,work,key,storage_meta):
     saved['ciphertext_archive_sha256']=b.digest(encrypted)
     captured_seconds=round(time.monotonic()-started,3)
     b.run(docker+['pull',b.RESTORE_IMAGE])
-    result=b.restore_files(docker,checked,meta,b.RESTORE_IMAGE,candidate_dir=ROOT)
+    result=b.restore_files(docker,checked,meta,b.RESTORE_IMAGE,candidate_dir=ROOT,candidate_probe=validate_rls_copy)
     report={**saved,**result,'status':'PASS_PRODUCTION_DATABASE_ARCHIVE_AND_ISOLATED_COPY',
             'snapshot_exported_at_utc':meta['snapshot_exported_at_utc'],
             'capture_encrypt_and_store_seconds':captured_seconds,'total_seconds':round(time.monotonic()-started,3),

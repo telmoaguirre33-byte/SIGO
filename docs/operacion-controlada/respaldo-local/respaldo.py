@@ -273,7 +273,7 @@ def unpack(encrypted, folder, phrase):
     return meta
 
 
-def restore_files(docker, work, meta, image, keep=False, candidate_dir=None):
+def restore_files(docker, work, meta, image, keep=False, candidate_dir=None, candidate_probe=None):
     name='sigo-restore-'+secrets.token_hex(6); volume=name+'-data'; box_started=False
     run(docker+['image','inspect',image], timeout=30)
     run(docker+['volume','create','--label','sigo.backup.local=true',volume])
@@ -326,7 +326,7 @@ def restore_files(docker, work, meta, image, keep=False, candidate_dir=None):
             actual=json.loads(pg.sql('select json_build_object(\'value\',last_value,\'called\',is_called) from '+qualified+';'))
             if actual!={'value':seq['value'],'called':seq['called']}:
                 raise RuntimeError('Difiere una secuencia restaurada.')
-        candidate_status='NOT_RUN'
+        candidate_status='NOT_RUN';copy_checks={}
         if candidate_dir:
             candidates=[('catalogo.sql','33dcd3c00c02535f8df262752bc148726345a240de71eb931565f746b8e68046'),
                         ('rls.sql','991d9a777676206cd91f517e8ec09454b54b2051b789350a46433c5a15fc8136')]
@@ -346,6 +346,7 @@ def restore_files(docker, work, meta, image, keep=False, candidate_dir=None):
                 raise RuntimeError('Falló gate local: contrato del endpoint.')
             null_session="begin read only;set local role authenticated;set local request.jwt.claim.sub='';select count(id)from public.productos;rollback;"
             if pg.sql(null_session)!='0': raise RuntimeError('Falló gate local: acceso sin sesión.')
+            if candidate_probe:copy_checks=candidate_probe(pg,meta)
             for expected in meta['tables']:
                 if table_hash(pg,expected['table'])!=expected:
                     raise RuntimeError('El ensayo de candidatos alteró filas; NO aprobar gate.')
@@ -353,6 +354,7 @@ def restore_files(docker, work, meta, image, keep=False, candidate_dir=None):
         return {'restore_status':'PASS_DATABASE_ARCHIVE','destination_network':'none',
                 'database_data_schema_roles_policies_acl_sequences':'MATCH',
                 'candidate_copy_gate':candidate_status,
+                'restored_copy_security_checks':copy_checks,
                 'rls_gate_limit':'Synthetic role matrix remains separate; shared consumer scope and production approval still required',
                 'scope_limitations':meta['not_included'],
                 'deployment_gate':'NOT_AUTHORIZED_BY_THIS_REPORT',
