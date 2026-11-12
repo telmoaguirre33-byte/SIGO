@@ -1,168 +1,43 @@
-name: Supabase Production Preflight (read-only)
+name: SIGO 122 - respaldo privado en nube (sin publicar)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'supabase/migrations/**'
-      - '.github/workflows/supabase-production.yml'
-      - 'scripts/check-production-migrations.mjs'
-      - 'scripts/lint-production-readonly.sql'
   workflow_dispatch:
+    inputs:
+      action:
+        description: 'prepare: conexión/destino. capture: respaldo/restore, nunca SQL productivo.'
+        type: choice
+        options: [prepare, capture]
+        default: prepare
+        required: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: supabase-production
+  group: sigo-122-private-backup
   cancel-in-progress: false
 
 jobs:
-  preflight:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-      SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
-      PGOPTIONS: -c default_transaction_read_only=on -c statement_timeout=15000
-      PGCONNECT_TIMEOUT: 5
-
+  isolated-backup:
+    if: github.repository == 'telmoaguirre33-byte/SIGO' && github.ref == 'refs/heads/ops/122-respaldo-local'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          node-version: 24
-
-      - name: Check production database credentials
-        shell: bash
-        run: |
-          set -euo pipefail
-          command -v psql >/dev/null || { echo "::error::Postgres client is required for the read-only preflight."; exit 1; }
-          missing=0
-          for key in SUPABASE_PROJECT_REF; do
-            if [ -z "${!key}" ]; then
-              echo "::error title=Missing production secret::$key is not configured in GitHub Actions secrets."
-              missing=1
-            fi
-          done
-          if [ -z "${SUPABASE_DB_URL:-}" ] && [ -z "${SUPABASE_POOLER_URL:-}" ] && [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then
-            echo "::error title=Missing production database credential::Configure SUPABASE_DB_URL/SUPABASE_POOLER_URL or SUPABASE_DB_PASSWORD."
-            missing=1
-          fi
-          if [ "$missing" -ne 0 ]; then
-            echo "Production preflight cannot continue until database credentials are configured."
-            exit 1
-          fi
-          echo "Supabase production database credentials detected."
-
-      - name: Prepare safe database fallback
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -n "${SUPABASE_DB_URL:-}" ]; then
-            echo "::add-mask::$SUPABASE_DB_URL"
-            echo "SIGO_DB_URL=$SUPABASE_DB_URL" >> "$GITHUB_ENV"
-            echo "SIGO_DB_URL_SOURCE=configured" >> "$GITHUB_ENV"
-            echo "Configured database URL detected (session pooler recommended for hosted CI)."
-            exit 0
-          fi
-
-          if [ -n "${SUPABASE_POOLER_URL:-}" ]; then
-            echo "::add-mask::$SUPABASE_POOLER_URL"
-            echo "SIGO_DB_URL=$SUPABASE_POOLER_URL" >> "$GITHUB_ENV"
-            echo "SIGO_DB_URL_SOURCE=configured-pooler" >> "$GITHUB_ENV"
-            echo "Configured Supabase pooler URL detected."
-            exit 0
-          fi
-
-          encoded_password="$(python3 - <<'PY'
-          import os
-          from urllib.parse import quote
-          print(quote(os.environ['SUPABASE_DB_PASSWORD'], safe=''))
-          PY
-          )"
-          echo "::add-mask::$encoded_password"
-          echo "SIGO_DB_PASSWORD_ENCODED=$encoded_password" >> "$GITHUB_ENV"
-          db_url="postgresql://postgres:${encoded_password}@db.${SUPABASE_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require"
-          echo "::add-mask::$db_url"
-          echo "SIGO_DB_URL=$db_url" >> "$GITHUB_ENV"
-          echo "SIGO_DB_URL_SOURCE=direct" >> "$GITHUB_ENV"
-          echo "Direct database URL prepared. If hosted CI cannot use IPv6, the read-only connection step will discover the Supabase session pooler automatically."
-
-      - name: Resolve production database connection and read migration metadata
-        id: connection
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Every connection is read-only; no migration statements or business rows.
-          read_history() {
-            PGDATABASE="$1" timeout 7s psql -X --no-password -A -t -q -v ON_ERROR_STOP=1 >"$RUNNER_TEMP/sigo-migrations.json" 2>"$RUNNER_TEMP/sigo-db-error.txt" <<'SQL'
-          BEGIN READ ONLY;
-          SELECT json_build_object(
-            'read_only', current_setting('transaction_read_only') = 'on',
-            'migrations', coalesce(json_agg(json_build_object('version', version, 'name', name) ORDER BY version), '[]'::json)
-          ) FROM supabase_migrations.schema_migrations;
-          ROLLBACK;
-          SQL
-          }
-
-          if read_history "$SIGO_DB_URL"; then
-            echo "Postgres read-only metadata connection verified."
-            exit 0
-          fi
-
-          if [ "${SIGO_DB_URL_SOURCE:-}" = "direct" ] && [ -n "${SUPABASE_DB_PASSWORD:-}" ]; then
-            echo "Direct endpoint unavailable. Trying only Supabase-owned session poolers with a read-only metadata query."
-            regions=(
-              sa-east-1 us-east-1 us-east-2 us-west-1 us-west-2 ca-central-1
-              eu-west-1 eu-west-2 eu-west-3 eu-central-1 eu-central-2 eu-north-1
-              ap-southeast-1 ap-southeast-2 ap-northeast-1 ap-northeast-2 ap-south-1
-            )
-            for region in "${regions[@]}"; do
-              for pooler_generation in aws-0 aws-1; do
-                host="${pooler_generation}-${region}.pooler.supabase.com"
-                candidate="postgresql://postgres.${SUPABASE_PROJECT_REF}:${SIGO_DB_PASSWORD_ENCODED}@${host}:5432/postgres?sslmode=require"
-                echo "::add-mask::$candidate"
-                if read_history "$candidate"; then
-                  echo "SIGO_DB_URL=$candidate" >> "$GITHUB_ENV"
-                  echo "SIGO_DB_URL_SOURCE=auto-pooler:${pooler_generation}:${region}" >> "$GITHUB_ENV"
-                  echo "Supabase read-only session pooler resolved in ${pooler_generation}/${region}."
-                  exit 0
-                fi
-              done
-            done
-          fi
-          # Do not echo libpq diagnostics: a malformed secret URL could be echoed.
-          echo "::error title=Production database preflight unavailable::Cannot read migration metadata with the configured database/pooler credentials. No schema, history or Auth settings were changed."
-          exit 1
-
-      - name: Gate complete migration history and reviewed candidate hashes
-        shell: bash
-        run: |
-          set -euo pipefail
-          node scripts/check-production-migrations.mjs "$RUNNER_TEMP/sigo-migrations.json"
-
-      - name: Lint production database (read-only, even if history gate fails)
-        if: ${{ always() && steps.connection.outcome == 'success' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if ! PGDATABASE="$SIGO_DB_URL" psql -X --no-password -A -t -q -v ON_ERROR_STOP=1 \
-            -f scripts/lint-production-readonly.sql >"$RUNNER_TEMP/sigo-db-lint.json" 2>"$RUNNER_TEMP/sigo-db-lint-error.txt"; then
-            if grep -Fq 'LINT_EXTENSION_MISSING' "$RUNNER_TEMP/sigo-db-lint-error.txt"; then
-              echo "::error title=Production lint unavailable::plpgsql_check is not installed. This read-only preflight will not install it or waive lint."
-            else
-              echo "::error title=Production lint unavailable::The read-only PL/pgSQL check could not complete. No lint certification is available."
-            fi
-            exit 1
-          fi
-          if grep -Eq '"level"[[:space:]]*:[[:space:]]*"error"' "$RUNNER_TEMP/sigo-db-lint.json"; then
-            echo "::error title=Production database lint error::PL/pgSQL lint found an error. This preflight does not deploy or repair anything."
-            exit 1
-          fi
-          echo "Production database lint completed without error-level findings. This does not certify production activation."
+          persist-credentials: false
+      - name: Guardas unitarias de la herramienta existente
+        working-directory: docs/operacion-controlada/respaldo-local
+        run: python3 -m unittest test_respaldo.py
+      - name: Operador privado sin artifacts
+        working-directory: docs/operacion-controlada/respaldo-local
+        env:
+          SIGO_BACKUP_DATABASE_URL: ${{ secrets.SIGO_BACKUP_DATABASE_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          BACKUP_ACTION: ${{ inputs.action }}
+        run: python3 cloud.py "$BACKUP_ACTION"

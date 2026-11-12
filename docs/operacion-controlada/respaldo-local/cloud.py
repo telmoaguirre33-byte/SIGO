@@ -1,0 +1,165 @@
+#!/usr/bin/env python3
+"""SIGO #122: operador en Actions, sin artifacts ni SQL productivo de escritura."""
+import argparse
+import base64
+import contextlib
+import json
+import os
+import secrets
+import shutil
+import sys
+import tempfile
+import urllib.request
+from pathlib import Path
+from urllib.parse import quote, unquote, urlsplit
+import respaldo as b
+
+ROOT=Path(__file__).resolve().parent
+API='https://'+b.PROJECT+'.supabase.co'
+BUCKET='arca-secrets'
+PREFIX='_sigo_operaciones_respaldo_122'
+FINGERPRINT='D580F8EB13D2A678C849F66A07F4E88EF38EDD14'
+
+
+def http(url, key, method='GET', data=None, headers=None, management=False):
+    h={'Authorization':'Bearer '+key}
+    if not management:h['apikey']=key
+    if headers:h.update(headers)
+    req=urllib.request.Request(url,data=data,headers=h,method=method)
+    with urllib.request.urlopen(req,timeout=90) as response:return response.read()
+
+
+def storage_key():
+    value=os.getenv('SUPABASE_SERVICE_ROLE_KEY','')
+    if value:
+        if value.count('.')==2:
+            try:
+                claims=json.loads(base64.urlsafe_b64decode(value.split('.')[1]+'==='))
+                if claims.get('ref')!=b.PROJECT or claims.get('role')!='service_role':
+                    raise RuntimeError('STORAGE_KEY_SCOPE_REJECTED')
+            except (ValueError,KeyError):raise RuntimeError('STORAGE_KEY_FORMAT_REJECTED')
+        return value
+    token=os.getenv('SUPABASE_ACCESS_TOKEN','')
+    if token:
+        values=json.loads(http('https://api.supabase.com/v1/projects/'+b.PROJECT+'/api-keys?reveal=true',token,management=True))
+        for item in values:
+            if item.get('name')=='service_role' or item.get('role')=='service_role':
+                key=item.get('api_key') or item.get('key')
+                if key:return key
+    raise RuntimeError('MISSING_PRIVATE_STORAGE_CREDENTIAL')
+
+
+def bucket_metadata(key):
+    meta=json.loads(http(API+'/storage/v1/bucket/'+BUCKET,key))
+    if meta.get('id')!=BUCKET or meta.get('public') is not False:
+        raise RuntimeError('PRIVATE_STORAGE_SCOPE_REJECTED')
+    allowed=meta.get('allowed_mime_types')
+    if allowed and not any(x in allowed for x in ['*/*','application/octet-stream','application/pgp-encrypted','application/json']):
+        raise RuntimeError('PRIVATE_STORAGE_MIME_INCOMPATIBLE')
+    return meta
+
+
+def urls():
+    preferred=os.getenv('SIGO_BACKUP_DATABASE_URL','')
+    if preferred:
+        yield preferred
+        return
+    seen=set()
+    for name in ['SUPABASE_POOLER_URL','SUPABASE_DB_URL']:
+        value=os.getenv(name,'')
+        if not value:continue
+        u=urlsplit(value)
+        is_pooler=(u.hostname or '').endswith('.pooler.supabase.com') and unquote(u.username or '')=='postgres.'+b.PROJECT
+        is_direct=u.hostname=='db.'+b.PROJECT+'.supabase.co' and unquote(u.username or '')=='postgres'
+        if u.scheme not in ('postgres','postgresql') or u.port not in (None,5432) or unquote(u.path) not in ('','/postgres'):
+            continue
+        if is_pooler and value not in seen:
+            seen.add(value);yield value
+        elif is_direct and u.password is not None:
+            for generation in ['aws-0','aws-1']:
+                candidate='postgresql://postgres.'+b.PROJECT+':'+quote(unquote(u.password),safe='')+'@'+generation+'-us-east-2.pooler.supabase.com:5432/postgres'
+                if candidate not in seen:seen.add(candidate);yield candidate
+    password=os.getenv('SUPABASE_DB_PASSWORD','')
+    if password and os.getenv('SUPABASE_PROJECT_REF','')==b.PROJECT:
+        for generation in ['aws-0','aws-1']:
+            candidate='postgresql://postgres.'+b.PROJECT+':'+quote(password,safe='')+'@'+generation+'-us-east-2.pooler.supabase.com:5432/postgres'
+            if candidate not in seen:seen.add(candidate);yield candidate
+
+
+@contextlib.contextmanager
+def source(docker, work):
+    candidates=list(urls())
+    if not candidates:raise RuntimeError('MISSING_COMERCIAL_SESSION_CONNECTION')
+    config=work/'connection';config.mkdir(mode=0o700)
+    box='sigo-122-cloud-client-'+secrets.token_hex(6)
+    created=False
+    try:
+        b.run(docker+['pull',b.CLIENT_IMAGE])
+        selected=None
+        for candidate in candidates:
+            try:
+                b.credentials(candidate,config)
+                if not created:
+                    b.run(docker+['run','-d','--name',box,'--user',str(os.getuid())+':'+str(os.getgid()),
+                                 '--read-only','--tmpfs','/tmp:rw,mode=1777','--cap-drop','ALL','--security-opt','no-new-privileges',
+                                 '--mount','type=bind,src='+str(config)+',dst=/run/sigo,readonly',
+                                 '--entrypoint','/bin/sh',b.CLIENT_IMAGE,'-c','sleep 2147483647'])
+                    created=True
+                pg=b.PG(docker,box,service=True)
+                identity=json.loads(pg.sql("begin read only;select json_build_object('db',current_database(),'user',current_user,'read_only',current_setting('transaction_read_only'));rollback;"))
+                if identity!={'db':'postgres','user':'postgres','read_only':'on'}:
+                    raise RuntimeError('COMERCIAL_CONNECTION_IDENTITY_REJECTED')
+                selected=pg;break
+            except RuntimeError:continue
+        if selected is None:raise RuntimeError('COMERCIAL_SESSION_CONNECTION_FAILED')
+        # A failed capture after yield is never retried as another connection.
+        yield selected
+    finally:
+        if created:b.run(docker+['rm','-f','-v',box],timeout=30)
+        shutil.rmtree(config,ignore_errors=True)
+
+
+def safe_error(log):
+    s=log.read_text(errors='replace')[-1000000:].lower() if log.exists() else ''
+    for marker,code in [('password authentication failed','DB_AUTH_FAILED'),('tenant or user not found','POOLER_TENANT_NOT_AVAILABLE'),
+                        ('certificate verify failed','TLS_VERIFICATION_FAILED'),('network is unreachable','TCP_UNREACHABLE'),
+                        ('could not translate host name','DNS_FAILED'),('permission denied','PRIVILEGE_DENIED'),
+                        ('no space left','DISK_FULL'),('is not available','EXTENSION_OR_COMPONENT_MISSING')]:
+        if marker in s:return code
+    return 'SEE_PRIVATE_DIAGNOSTIC_NO_LOG_EXPORTED'
+
+
+def main():
+    os.umask(0o077)
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('action',choices=['prepare','capture'])
+    args=p.parse_args()
+    if os.getenv('GITHUB_REPOSITORY')!='telmoaguirre33-byte/SIGO' or os.getenv('GITHUB_REF')!='refs/heads/ops/122-respaldo-local':
+        raise RuntimeError('ONLY_AUTHORIZED_REPOSITORY_AND_OPERATIONS_BRANCH')
+    report={'production_ddl':False,'production_rls_changes':False,'business_data_changes':False,'backup_artifacts_uploaded':False}
+    with tempfile.TemporaryDirectory(prefix='sigo-122-private-') as tmp:
+        work=Path(tmp);b.LOG=work/'diagnostic-private.log';b.LOG.touch(mode=0o600)
+        docker=b.docker_command()
+        try:
+            key=storage_key();meta=bucket_metadata(key)
+            report['existing_private_storage_access']='PASS'
+            report['private_storage_file_limit']=meta.get('file_size_limit')
+        except Exception as exc:
+            key=None;report['existing_private_storage_access']='NOT_AVAILABLE'
+            report['private_storage_reason']=str(exc) if isinstance(exc,RuntimeError) else type(exc).__name__
+        try:
+            with source(docker,work):report['comercial_tls_session_read_only']='PASS'
+        except Exception as exc:
+            report['comercial_tls_session_read_only']='NOT_AVAILABLE'
+            report['connection_reason']=str(exc) if isinstance(exc,RuntimeError) else type(exc).__name__
+            report['connection_diagnostic']=safe_error(b.LOG)
+        report['status']='PREPARED' if key and report.get('comercial_tls_session_read_only')=='PASS' else 'NEEDS_PRIVATE_CONFIGURATION'
+        print(json.dumps(report,sort_keys=True),flush=True)
+        if args.action=='capture':raise RuntimeError('CAPTURE_REQUIRES_COMPLETED_PRIVATE_STORAGE_PIPELINE')
+    return 0 if report['status']=='PREPARED' else 2
+
+
+if __name__=='__main__':
+    try:sys.exit(main())
+    except Exception as exc:
+        print(json.dumps({'status':'NOT_COMPLETED','error':str(exc) if isinstance(exc,RuntimeError) else type(exc).__name__,'production_ddl':False}),flush=True)
+        sys.exit(1)
