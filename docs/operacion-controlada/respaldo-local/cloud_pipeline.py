@@ -193,6 +193,15 @@ def exercise(docker,work):
             'production_capture':False,'backup_artifacts_uploaded':False}
 
 
+def schema_probe(docker,work):
+    files=work/'metadata';files.mkdir(mode=0o700)
+    with c.source(docker,work)as pg:meta=b.capture(pg,files,schema_only=True)
+    b.run(docker+['pull',b.RESTORE_IMAGE])
+    result=b.restore_files(docker,files,meta,b.RESTORE_IMAGE)
+    return {'status':'PASS_SCHEMA_ONLY_PROBE','restore_status':result['restore_status'],
+            'production_capture':False,'production_ddl':False,'business_data_changes':False}
+
+
 def capture(docker,work,key,storage_meta):
     started=time.monotonic()
     with c.source(docker,work) as pg:

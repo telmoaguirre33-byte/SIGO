@@ -7,6 +7,15 @@ import respaldo as b
 
 
 class Guardas(unittest.TestCase):
+    def test_schema_diagnostic_never_prints_definitions_names_or_values(self):
+        import json
+        result=b.schema_difference_summary(b"CREATE FUNCTION private_name()returns text AS $$select 'sensitive_value'$$;",b"SET private_setting = 'other_sensitive_value';")
+        encoded=json.dumps(result)
+        for hidden in ['private_name','sensitive_value','private_setting','other_sensitive_value']:
+            self.assertNotIn(hidden,encoded)
+        self.assertFalse(result['same_line_multiset'])
+        self.assertTrue(b.schema_difference_summary(b'line a\nline b',b'line b\nline a')['same_line_multiset'])
+
     def test_bootstrap_restore_keeps_attributes_and_membership_grantor(self):
         sql=b'CREATE ROLE postgres;\nCREATE ROLE supabase_admin;\nALTER ROLE supabase_admin WITH SUPERUSER;\nGRANT pg_monitor TO postgres GRANTED BY supabase_admin;\n'
         restored=b.roles_for_bootstrap(sql,'supabase_admin')

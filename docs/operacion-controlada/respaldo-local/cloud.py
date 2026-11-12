@@ -193,7 +193,7 @@ def safe_error(log):
 
 def main():
     os.umask(0o077)
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('action',choices=['prepare','exercise','capture'])
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('action',choices=['prepare','exercise','capture','schema-probe'])
     args=p.parse_args()
     if os.getenv('GITHUB_REPOSITORY')!='telmoaguirre33-byte/SIGO' or os.getenv('GITHUB_REF')!='refs/heads/ops/122-respaldo-local':
         raise RuntimeError('ONLY_AUTHORIZED_REPOSITORY_AND_OPERATIONS_BRANCH')
@@ -233,10 +233,10 @@ def main():
             report['connection_diagnostic']=safe_error(b.LOG)
         report['status']='PREPARED' if key and report.get('comercial_tls_session_read_only')=='PASS' else 'NEEDS_PRIVATE_CONFIGURATION'
         print(json.dumps(report,sort_keys=True),flush=True)
-        if args.action=='capture':
+        if args.action in('capture','schema-probe'):
             if report['status']!='PREPARED':raise RuntimeError('PRIVATE_BACKUP_PREREQUISITES_NOT_APPROVED')
             import cloud_pipeline
-            try:result=cloud_pipeline.capture(docker,work,key,meta)
+            try:result=cloud_pipeline.schema_probe(docker,work)if args.action=='schema-probe'else cloud_pipeline.capture(docker,work,key,meta)
             except Exception:
                 print(json.dumps({'status':'CAPTURE_OR_RESTORE_FAILED','diagnostic':safe_error(b.LOG),
                                   'phase':b.PHASE,'production_ddl':False,'backup_artifacts_uploaded':False}),flush=True)

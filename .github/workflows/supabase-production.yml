@@ -6,7 +6,7 @@ on:
       action:
         description: 'prepare: conexión/destino. capture: respaldo/restore, nunca SQL productivo.'
         type: choice
-        options: [prepare, exercise, capture]
+        options: [prepare, exercise, capture, schema-probe]
         default: prepare
         required: true
 

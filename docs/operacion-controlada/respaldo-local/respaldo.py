@@ -3,6 +3,7 @@
 No instala migraciones en producción ni publica aplicaciones. Python 3.10+, Docker local, GnuPG.
 """
 import argparse
+from collections import Counter
 import getpass
 import hashlib
 import json
@@ -102,6 +103,23 @@ def normalized(b):
     return b'\n'.join(lines)
 
 
+def schema_difference_summary(before,after):
+    a=Counter(normalized(before).splitlines());z=Counter(normalized(after).splitlines())
+    # No definitions, identifiers, setting values or row data leave the runner.
+    families=[b'CREATE DATABASE ',b'ALTER DATABASE ',b'CREATE FUNCTION ',b'ALTER FUNCTION ',
+              b'CREATE TABLE ',b'ALTER TABLE ',b'CREATE POLICY ',b'CREATE INDEX ',
+              b'ALTER DEFAULT PRIVILEGES ',b'CREATE SCHEMA ',b'ALTER SCHEMA ',
+              b'CREATE EXTENSION ',b'COMMENT ON ',b'GRANT ',b'REVOKE ',b'SET ']
+    def classify(lines):
+        counts=Counter()
+        for line,n in lines.items():
+            category=next((prefix.decode().strip().replace(' ','_')for prefix in families if line.startswith(prefix)),'OTHER')
+            counts[category]+=n
+        return dict(counts)
+    return {'same_line_multiset':a==z,'source_only_line_categories':classify(a-z),
+            'restored_only_line_categories':classify(z-a)}
+
+
 def ident(s):
     return '"' + s.replace('"', '""') + '"'
 
@@ -197,7 +215,7 @@ def table_hash(pg, table, snapshot=None):
             'sha256_xor':f'{xor:064x}', 'sha256_square_sum':f'{square:064x}'}
 
 
-def capture(pg, work, snapshot_hook=None):
+def capture(pg, work, snapshot_hook=None,schema_only=False):
     phase('source_metadata_and_roles')
     version = int(pg.sql('show server_version_num;'))
     if not 170000 <= version < 180000:
@@ -219,7 +237,7 @@ def capture(pg, work, snapshot_hook=None):
             if snapshot_hook:
                 snapshot_hook()
             pre = prefix(snapshot)
-            meta = {k:json.loads(pg.sql(pre+q+'commit;')) for k,q in
+            meta = {k:[] if schema_only and k in('tables','large_objects')else json.loads(pg.sql(pre+q+'commit;')) for k,q in
                     [('tables',TABLES),('roles',ROLES),('policies',POLICIES),('extensions',EXTENSIONS),('large_objects',LARGE_OBJECTS)]}
             meta['bootstrap_role']=pg.sql('select rolname from pg_roles where oid=10;')
             bootstrap=next((r for r in meta['roles']if r['rolname']==meta['bootstrap_role']),None)
@@ -229,7 +247,7 @@ def capture(pg, work, snapshot_hook=None):
             phase('source_snapshot_archive')
             with (work/'database.dump').open('wb') as f:
                 run(pg.cmd('pg_dump','--format=custom','--create','--no-password',
-                           '--lock-wait-timeout=5s','--snapshot='+snapshot), output=f)
+                           '--lock-wait-timeout=5s','--snapshot='+snapshot,*(['--schema-only']if schema_only else[])), output=f)
             schema = run(pg.cmd('pg_dump','--schema-only','--create','--no-password','--snapshot='+snapshot))
             (work/'schema.sql').write_bytes(schema)
             print('Verificando datos del mismo snapshot (sin mostrar registros)…', flush=True)
@@ -265,8 +283,12 @@ def capture(pg, work, snapshot_hook=None):
     meta['captured_at_utc'] = datetime.now(timezone.utc).isoformat()
     meta['snapshot_exported_at_utc'] = snapshot_time
     meta['scope'] = 'PostgreSQL logical database archive plus roles/memberships without passwords'
+    meta['schema_only']=schema_only
     meta['not_included'] = ['Role LOGIN passwords','Storage object bytes','External configuration/secrets',
                             'Transient extension-owned tables not included by pg_dump']
+    if schema_only:
+        meta['scope']='Schema-only diagnostic; NOT a database data backup'
+        meta['not_included']+=['All table rows','All large object bytes','Sequence current values']
     (work/'manifest.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2))
     return meta
 
@@ -350,6 +372,7 @@ def restore_files(docker, work, meta, image, keep=False, candidate_dir=None, can
         phase('isolated_schema_acl_comparison')
         schema=run(pg.cmd('pg_dump','--schema-only','--create','--no-password'))
         if hashlib.sha256(normalized(schema)).hexdigest()!=meta['schema_sha256']:
+            print(json.dumps({'schema_comparison':schema_difference_summary((work/'schema.sql').read_bytes(),schema)}),flush=True)
             raise RuntimeError('El esquema/ACL/funciones restaurados difieren del original.')
         phase('isolated_roles_policies_extensions_comparison')
         roles=json.loads(pg.sql(ROLES)); expected_roles=meta['roles']
@@ -401,7 +424,7 @@ def restore_files(docker, work, meta, image, keep=False, candidate_dir=None, can
                 if table_hash(pg,expected['table'])!=expected:
                     raise RuntimeError('El ensayo de candidatos alteró filas; NO aprobar gate.')
             candidate_status='PASS_EXACT_SQL_APPLIED_TO_ISOLATED_COPY_ROWS_UNCHANGED'
-        return {'restore_status':'PASS_DATABASE_ARCHIVE','destination_network':'none',
+        return {'restore_status':'PASS_SCHEMA_ONLY'if meta.get('schema_only')else'PASS_DATABASE_ARCHIVE','destination_network':'none',
                 'database_data_schema_roles_policies_acl_sequences':'MATCH',
                 'candidate_copy_gate':candidate_status,
                 'restored_copy_security_checks':copy_checks,
