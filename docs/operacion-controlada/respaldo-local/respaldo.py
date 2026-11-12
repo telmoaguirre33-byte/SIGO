@@ -182,7 +182,7 @@ POLICIES = """select coalesce(json_agg(p),'[]'::json) from (
 select schemaname,tablename,policyname,permissive,
 array(select r from unnest(roles)r order by r) as roles,cmd,qual,with_check
 from pg_policies where schemaname !~ '^pg_' order by schemaname,tablename,policyname)p;"""
-EXTENSIONS = "select coalesce(json_agg(e),'[]'::json) from(select extname,extversion from pg_extension order by extname)e;"
+EXTENSIONS = "select coalesce(json_agg(e),'[]'::json) from(select extname,extversion,extowner::regrole::text as owner,extnamespace::regnamespace::text as schema from pg_extension order by extname)e;"
 LARGE_OBJECTS = "select coalesce(json_agg(l),'[]'::json) from(select oid,lomowner::regrole::text as owner,lomacl::text,md5(lo_get(oid)) as data_md5 from pg_largeobject_metadata order by oid)l;"
 
 
@@ -264,7 +264,9 @@ def capture(pg, work, snapshot_hook=None,schema_only=False):
             if exporter.poll() is None:
                 exporter.kill(); exporter.wait()
     phase('archive_sequence_inventory')
-    toc = from_file(pg.cmd('pg_restore','--list'), work/'database.dump')
+    # --create is also needed while listing, otherwise pg_restore hides database
+    # properties/comments/ACL from the selection list used by the staged restore.
+    toc = from_file(pg.cmd('pg_restore','--create','--list'), work/'database.dump')
     (work/'toc.txt').write_bytes(toc)
     seq = b'\n'.join(line for line in toc.splitlines() if b'SEQUENCE SET ' in line)
     (work/'sequences.list').write_bytes(seq+b'\n')
@@ -335,6 +337,46 @@ def unpack(encrypted, folder, phrase):
     return meta
 
 
+def restore_archive_preserving_extension_owners(pg,work,meta):
+    if pg.service or not pg.box.startswith('sigo-restore-'):
+        raise RuntimeError('La restauración por propietario requiere el destino aislado.')
+    initial=[];remaining=[];extensions={e['extname']:[]for e in meta['extensions']}
+    for line in(work/'toc.txt').read_bytes().splitlines():
+        m=re.match(rb'^\d+; \d+ \d+ (DATABASE|SCHEMA|EXTENSION) ',line)
+        if re.match(rb'^\d+; \d+ \d+ (COMMENT|ACL) - DATABASE ',line):initial.append(line)
+        elif not m:
+            if re.match(rb'^\d+;',line):remaining.append(line)
+        elif m[1]in(b'DATABASE',b'SCHEMA'):initial.append(line)
+        else:
+            found=[name for name in extensions if re.search(rb' EXTENSION - '+re.escape(name.encode())+rb'(?:\s|$)',line)]
+            if len(found)!=1:raise RuntimeError('Una extensión del archive necesita revisión.')
+            extensions[found[0]].append(line)
+    if not initial or any(len(lines)!=1 for name,lines in extensions.items()if name!='plpgsql')or len(extensions.get('plpgsql',[]))>1:
+        raise RuntimeError('El TOC no contiene el inventario exacto de extensiones.')
+    def restore(lines,database,create=False,role=None):
+        run(pg.cmd('sh','-c','cat > /tmp/sigo-restore-selection.list'),b'\n'.join(lines)+b'\n')
+        args=['--exit-on-error','--use-list=/tmp/sigo-restore-selection.list','-d',database]
+        if create:args.append('--create')
+        if role:args+=['--role',role]
+        from_file(pg.cmd('pg_restore',*args),work/'database.dump')
+    restore(initial,'template1',create=True)
+    pg.db=meta['database']
+    roles={r['rolname']:r for r in meta['roles']}
+    for extension in meta['extensions']:
+        if not extensions[extension['extname']]:continue # initdb supplies plpgsql; compared below.
+        owner=extension['owner']
+        if owner not in roles:raise RuntimeError('Falta el propietario original de una extensión.')
+        temporary_superuser=not roles[owner]['rolsuper']
+        try:
+            # Only this network=none copy: trusted extensions otherwise assign
+            # contained functions to bootstrap, changing original ownership/ACL.
+            if temporary_superuser:pg.sql('alter role '+ident(owner)+' superuser;')
+            restore(extensions[extension['extname']],pg.db,role=owner)
+        finally:
+            if temporary_superuser:pg.sql('alter role '+ident(owner)+' nosuperuser;')
+    restore(remaining,pg.db)
+
+
 def restore_files(docker, work, meta, image, keep=False, candidate_dir=None, candidate_probe=None):
     phase('isolated_restore_initialization')
     bootstrap=meta.get('bootstrap_role')
@@ -364,10 +406,7 @@ def restore_files(docker, work, meta, image, keep=False, candidate_dir=None, can
         run(pg.cmd('psql','-Xq','-v','ON_ERROR_STOP=1'),roles_input)
         phase('isolated_database_restore')
         pg.sql('drop database postgres;') # Only this freshly created, network=none destination.
-        with (work/'database.dump').open('rb') as src,LOG.open('ab') as err:
-            p=subprocess.run(pg.cmd('pg_restore','--create','--exit-on-error','-d','template1'),
-                             stdin=src,stdout=subprocess.DEVNULL,stderr=err,timeout=3600,env=child_env())
-            if p.returncode: raise RuntimeError('Restore real falló; NO declarar respaldo recuperable.')
+        restore_archive_preserving_extension_owners(pg,work,meta)
         pg.db=meta['database']
         phase('isolated_schema_acl_comparison')
         schema=run(pg.cmd('pg_dump','--schema-only','--create','--no-password'))

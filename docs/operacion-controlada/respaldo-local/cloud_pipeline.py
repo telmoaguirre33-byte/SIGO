@@ -69,15 +69,17 @@ def fixture(docker):
         b.run(docker+['run','--rm','--network','none','--user','0','--entrypoint','/bin/sh',
                      '--mount','type=volume,src='+volume+',dst=/sigo-data',image,
                      '-c','chown postgres:postgres /sigo-data; chmod 700 /sigo-data'])
-        command="initdb -D /sigo-data -U postgres --auth-local=trust --auth-host=reject --encoding=UTF8 >/tmp/init.log 2>&1 && exec postgres -D /sigo-data -k /tmp -c listen_addresses='' -c shared_preload_libraries=pg_stat_statements"
+        command="initdb -D /sigo-data -U supabase_admin --auth-local=trust --auth-host=reject --encoding=UTF8 >/tmp/init.log 2>&1 && exec postgres -D /sigo-data -k /tmp -c listen_addresses='' -c shared_preload_libraries=pg_stat_statements"
         b.run(docker+['run','-d','--network','none','--name',name,'--user','postgres','--entrypoint','/bin/sh',
                      '--mount','type=volume,src='+volume+',dst=/sigo-data',image,'-c',command])
-        started=True;pg=b.PG(docker,name,'postgres','postgres')
+        started=True;pg=b.PG(docker,name,'supabase_admin','postgres')
         for _ in range(60):
             try:
                 if pg.sql('select 1;')=='1':break
             except RuntimeError:time.sleep(1)
         else:raise RuntimeError('SYNTHETIC_SERVER_DID_NOT_START')
+        pg.sql('create role postgres login superuser createrole createdb;')
+        pg.user='postgres'
         pg.sql("""create schema extensions;
 create extension pg_stat_statements with schema extensions;
 create extension pgcrypto with schema extensions;
@@ -107,6 +109,7 @@ select lo_from_bytea(0,decode('0102030405','hex'));
         pg.sql(acl[acl.index('create or replace function public.permiso_sigo_valido'):acl.index('create or replace function public.permisos_sigo_validos')])
         granular=(migrations/'20260912102000_roles_operativos_hardening.sql').read_text()
         pg.sql(granular[granular.index('create or replace function public.tiene_permiso_empresa'):granular.index('revoke all on function public.tiene_permiso_empresa')])
+        pg.sql('alter role postgres nosuperuser;')
         yield pg
     finally:
         if started:b.run(docker+['rm','-f','-v',name],timeout=30)

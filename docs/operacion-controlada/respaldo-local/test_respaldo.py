@@ -7,6 +7,11 @@ import respaldo as b
 
 
 class Guardas(unittest.TestCase):
+    def test_extension_owner_restore_rejects_any_source_or_other_container(self):
+        from types import SimpleNamespace
+        for pg in [SimpleNamespace(service=True,box='sigo-restore-synthetic'),SimpleNamespace(service=False,box='source-box')]:
+            with self.assertRaises(RuntimeError):b.restore_archive_preserving_extension_owners(pg,Path('/nonexistent'),{})
+
     def test_schema_diagnostic_never_prints_definitions_names_or_values(self):
         import json
         result=b.schema_difference_summary(b"CREATE FUNCTION private_name()returns text AS $$select 'sensitive_value'$$;",b"SET private_setting = 'other_sensitive_value';")
