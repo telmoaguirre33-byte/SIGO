@@ -63,7 +63,8 @@ declare
   v_listas boolean;
   v_ventas_lectura boolean;
   v_ventas_escritura boolean;
-  v_patron text;
+  v_patrones text[];
+  v_codigo_patron text;
   v_ids uuid[] := p_ids;
   v_codigo text := btrim(coalesce(p_busqueda, ''));
 begin
@@ -92,7 +93,13 @@ begin
     ) c;
   end if;
   -- Tratar %, _ y barra como texto literal, nunca como comodines del usuario.
-  v_patron := '%' || replace(replace(replace(sigo_catalogo_privado.normalizar(v_codigo), E'\\', E'\\\\'), '%', E'\\%'), '_', E'\\_') || '%';
+  -- Todas las palabras deben coincidir, aunque se escriban en distinto orden.
+  -- La palabra más larga sirve de ancla indexable para evitar escanear el catálogo.
+  select array_agg('%' || replace(replace(replace(t, E'\\', E'\\\\'), '%', E'\\%'), '_', E'\\_') || '%' order by length(t) desc, t)
+    into v_patrones
+  from unnest(regexp_split_to_array(sigo_catalogo_privado.normalizar(v_codigo), E'\\s+')) t
+  where t <> '';
+  v_codigo_patron := '%' || replace(replace(replace(sigo_catalogo_privado.normalizar(v_codigo), E'\\', E'\\\\'), '%', E'\\%'), '_', E'\\_') || '%';
   return query
   select
     p.id,
@@ -125,7 +132,14 @@ begin
     and upper(btrim(coalesce(p.categoria, ''))) <> 'NO_VENDIBLE'
     and (v_ids is null or p.id = any(v_ids))
     and case when p_solo_codigo then true
-    else v_codigo = '' or sigo_catalogo_privado.normalizar(p.nombre || ' ' || coalesce(p.marca, '') || ' ' || coalesce(p.codigo_interno, '') || ' ' || coalesce(p.codigo_barras, '') || ' ' || coalesce(p.categoria, '')) like v_patron escape E'\\'
+    else v_codigo = '' or (
+      sigo_catalogo_privado.normalizar(p.nombre || ' ' || coalesce(p.marca, '') || ' ' || coalesce(p.codigo_interno, '') || ' ' || coalesce(p.codigo_barras, '') || ' ' || coalesce(p.categoria, '')) like v_patrones[1] escape E'\\'
+      and (
+        sigo_catalogo_privado.normalizar(p.nombre || ' ' || coalesce(p.marca, '') || ' ' || coalesce(p.categoria, '')) like all(v_patrones)
+        or sigo_catalogo_privado.normalizar(p.codigo_interno) like v_codigo_patron escape E'\\'
+        or sigo_catalogo_privado.normalizar(p.codigo_barras) like v_codigo_patron escape E'\\'
+      )
+    )
     end
   order by p.nombre, p.id
   limit p_limite offset p_offset;

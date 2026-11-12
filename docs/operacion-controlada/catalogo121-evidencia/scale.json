@@ -1,0 +1,120 @@
+{
+  "status": "PASS",
+  "sizes": [
+    {
+      "productsPerTenant": 1000,
+      "tenants": 2,
+      "positions": [
+        1,
+        500,
+        1000
+      ],
+      "firstPageMs": 4.596,
+      "searchMedianMs": 10.343,
+      "searchMaxMs": 14.75,
+      "allPagesWallMs": 201,
+      "concurrentCashiers": 8,
+      "concurrencyWallMs": 306
+    },
+    {
+      "productsPerTenant": 5000,
+      "tenants": 2,
+      "positions": [
+        1,
+        2500,
+        5000
+      ],
+      "firstPageMs": 4.697,
+      "searchMedianMs": 16.777,
+      "searchMaxMs": 19.338,
+      "allPagesWallMs": 769,
+      "concurrentCashiers": 8,
+      "concurrencyWallMs": 279
+    },
+    {
+      "productsPerTenant": 10000,
+      "tenants": 2,
+      "positions": [
+        1,
+        5000,
+        10000
+      ],
+      "firstPageMs": 4.906,
+      "searchMedianMs": 25.605,
+      "searchMaxMs": 29.864,
+      "allPagesWallMs": 2524,
+      "concurrentCashiers": 8,
+      "concurrencyWallMs": 309
+    },
+    {
+      "productsPerTenant": 15000,
+      "tenants": 2,
+      "positions": [
+        1,
+        7500,
+        15000
+      ],
+      "firstPageMs": 5.769,
+      "searchMedianMs": 37.03,
+      "searchMaxMs": 42.19,
+      "allPagesWallMs": 4743,
+      "concurrentCashiers": 8,
+      "concurrencyWallMs": 356
+    },
+    {
+      "productsPerTenant": 20000,
+      "tenants": 2,
+      "positions": [
+        1,
+        10000,
+        20000
+      ],
+      "firstPageMs": 4.21,
+      "searchMedianMs": 45.272,
+      "searchMaxMs": 50.166,
+      "allPagesWallMs": 3540,
+      "concurrentCashiers": 8,
+      "concurrencyWallMs": 400
+    },
+    {
+      "productsPerTenant": 30000,
+      "tenants": 2,
+      "positions": [
+        1,
+        15000,
+        30000
+      ],
+      "firstPageMs": 4.769,
+      "searchMedianMs": 69.159,
+      "searchMaxMs": 85.981,
+      "allPagesWallMs": 8049,
+      "concurrentCashiers": 8,
+      "concurrencyWallMs": 395
+    },
+    {
+      "productsPerTenant": 50000,
+      "tenants": 2,
+      "positions": [
+        1,
+        25000,
+        50000
+      ],
+      "firstPageMs": 5.312,
+      "searchMedianMs": 113.696,
+      "searchMaxMs": 128.976,
+      "allPagesWallMs": 24156,
+      "concurrentCashiers": 8,
+      "concurrencyWallMs": 570
+    }
+  ],
+  "cases": [
+    "begin/middle/end name/EAN/internal code",
+    "all words/reversed words/accents/case/brand/category",
+    "seven trades",
+    "literal percent/underscore/backslash/quote/slash",
+    "duplicate scanner code and alias",
+    "all pages/no duplicates/no tenant mix",
+    "eight simultaneous cashiers"
+  ],
+  "limitation": "Synthetic PostgreSQL measurements, not production latency or a commercial SLA"
+}

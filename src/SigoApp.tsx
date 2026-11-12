@@ -450,7 +450,7 @@ export function Productos({ empresaId, puedeEditar }: { empresaId: string; puede
           action={puedeEditar ? scanAction : "consultar"}
           onActionChange={puedeEditar ? setScanAction : undefined}
           onProduct={handleScan}
-          onQueryChange={(q) => { setSearch(q); setScanResult(null); }}
+          onQueryChange={(q) => { setSearch(q); if (q.trim()) setScanResult(null); }}
           onManualQuery={(query) => {
             return Boolean(query.trim()) && !/^\d{6,}$/.test(query.trim());
           }}

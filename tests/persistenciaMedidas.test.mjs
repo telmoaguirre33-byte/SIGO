@@ -18,6 +18,7 @@ async function moduloConRpc(rpc, archivo = "productos", extras = "") {
   }, from() { throw new Error("No se esperaba acceso directo a tablas"); } };
   let source = await readFile(new URL(`../src/${archivo}.ts`, import.meta.url), "utf8");
   source = source.replace('import { supabase } from "./supabase";', `const supabase = globalThis[${JSON.stringify(key)}];`)
+    .replaceAll('from "./erroresCatalogo"', `from ${JSON.stringify(new URL("../src/erroresCatalogo.ts", import.meta.url).href)}`)
     .replaceAll('from "./esperaCobro"', `from ${JSON.stringify(new URL("../src/esperaCobro.ts", import.meta.url).href)}`)
     .replaceAll('from "./ventaPorMedidas"', `from ${JSON.stringify(new URL("../src/ventaPorMedidas.ts", import.meta.url).href)}`)
     .replace('import { leerProductosPorIdsSigo } from "./productos";', 'const leerProductosPorIdsSigo = async () => [];');

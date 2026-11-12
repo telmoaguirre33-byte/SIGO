@@ -22,6 +22,8 @@ const E='11111111-1111-4111-8111-111111111111', O='33333333-3333-4333-8333-33333
 const A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', B='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const U='10000000-0000-4000-8000-000000000001', W='10000000-0000-4000-8000-000000000002';
 const OU='30000000-0000-4000-8000-000000000001', OW='30000000-0000-4000-8000-000000000002';
+const G='10000000-0000-4000-8000-000000000003', L='10000000-0000-4000-8000-000000000004', M='10000000-0000-4000-8000-000000000005';
+const OG='30000000-0000-4000-8000-000000000003', OL='30000000-0000-4000-8000-000000000004', OM='30000000-0000-4000-8000-000000000005';
 const C='20000000-0000-4000-8000-000000000001';
 const migration='supabase/migrations/20261022024847_manual_medidas_atomicas.sql';
 const source=fs.readFileSync(migration,'utf8');
@@ -39,7 +41,10 @@ create table qa_permissions(user_id uuid,empresa_id uuid,perm text,primary key(u
 insert into qa_permissions select u,e,p from unnest(array['${A}'::uuid,'${B}'::uuid]) u cross join unnest(array['${E}'::uuid,'${O}'::uuid]) e cross join unnest(array['sales.write','clients.read']) p where u='${A}'::uuid or e='${E}'::uuid;
 create function public.tiene_permiso_empresa(e uuid,p text) returns boolean language sql stable as $$select exists(select 1 from public.qa_permissions where user_id=auth.uid() and empresa_id=e and perm=p)$$;
 create table productos(id uuid primary key,empresa_id uuid not null,nombre text not null,precio_venta numeric,stock_actual numeric,unidad_medida text,activo boolean default true);
-insert into productos values('${U}','${E}','Unidad QA',100,1000,'unidad',true),('${W}','${E}','Peso QA',200,1000,'kg',true),('${OU}','${O}','Unidad otra empresa',100,1000,'unidad',true),('${OW}','${O}','Peso otra empresa',200,1000,'kg',true);
+insert into productos values('${U}','${E}','Unidad QA',100,1000,'unidad',true),('${W}','${E}','Peso QA',200,1000,'kg',true),('${OU}','${O}','Unidad otra empresa',100,1000,'unidad',true),('${OW}','${O}','Peso otra empresa',200,1000,'kg',true),
+('${G}','${E}','Gramos QA',1.99,1000,'g',true),('${L}','${E}','Litros QA',1.99,1000,'l',true),('${M}','${E}','Metros QA',1.99,1000,'m',true),
+('${OG}','${O}','Gramos otra QA',1.99,1000,'g',true),('${OL}','${O}','Litros otra QA',1.99,1000,'l',true),('${OM}','${O}','Metros otra QA',1.99,1000,'m',true);
+insert into productos select md5(e::text||':'||i)::uuid,e,'Producto sintético '||i,1.99,1000,'unidad',true from unnest(array['${E}'::uuid,'${O}'::uuid])e cross join generate_series(6,20000)i;
 create table clientes_sigo(id uuid primary key,empresa_id uuid not null,saldo_actual numeric default 0,limite_credito numeric,activo boolean default true,updated_at timestamptz default now());
 insert into clientes_sigo(id,empresa_id,limite_credito) values('${C}','${E}',10000);
 create table ventas_sigo(id uuid primary key default gen_random_uuid(),empresa_id uuid not null,cliente_id uuid references clientes_sigo,total numeric,medio_pago text,idempotency_key text not null,request_fingerprint text,created_by uuid,estado text default 'confirmada',unique(empresa_id,idempotency_key));
@@ -52,6 +57,7 @@ create function qa_assert(ok boolean,msg text) returns void language plpgsql as 
 `;
 const signature='public.confirmar_venta_sigo_v2(uuid,jsonb,text,text,uuid,numeric)';
 sql(fixture+'\n'+actual('sigo_precision_unidad','$$')+'\n'+actual('confirmar_venta_sigo_v2','$function$')+`\nrevoke all on function ${signature} from public,anon; grant execute on function ${signature} to authenticated;`);
+assert.equal(sql(`select min(n) from(select count(*)n from productos group by empresa_id)t`),'20000');
 const results=[];
 const pass=message=>{results.push(message);console.log('PASS: '+message);};
 const literal=v=>"'"+String(v).replaceAll("'","''")+"'";
@@ -61,23 +67,24 @@ function call(key, {empresa=E,product=U,quantity=1,unit='unidad',medio='efectivo
 const actor=(user=A)=>`set "qa.uid"=${literal(user)}; set role authenticated;`;
 const pay=(key,options={},user=A)=>sql(actor(user)+'select '+call(key,options)+';');
 const verify=(condition,message)=>sql(`select public.qa_assert((${condition}),${literal(message)});`);
-function snapshot(){return sql("select jsonb_build_object('sales',(select jsonb_agg(to_jsonb(t) order by id) from ventas_sigo t),'items',(select jsonb_agg(to_jsonb(t) order by id) from venta_items_sigo t),'cash',(select jsonb_agg(to_jsonb(t) order by id) from caja_movimientos_sigo t),'credit',(select jsonb_agg(to_jsonb(t) order by id) from cliente_movimientos_sigo t),'products',(select jsonb_agg(to_jsonb(t) order by id) from productos t),'clients',(select jsonb_agg(to_jsonb(t) order by id) from clientes_sigo t))::text;");}
+function snapshot(){return sql("select jsonb_build_object('sales',(select jsonb_agg(to_jsonb(t) order by id) from ventas_sigo t),'items',(select jsonb_agg(to_jsonb(t) order by id) from venta_items_sigo t),'cash',(select jsonb_agg(to_jsonb(t) order by id) from caja_movimientos_sigo t),'credit',(select jsonb_agg(to_jsonb(t) order by id) from cliente_movimientos_sigo t),'products',(select md5(string_agg(to_jsonb(t)::text,',' order by id)) from productos t),'clients',(select jsonb_agg(to_jsonb(t) order by id) from clientes_sigo t))::text;");}
 function rejected(expression,expected,user=A) {
   const before=snapshot();
   sql(actor(user)+`do $$begin begin perform ${expression}; raise exception 'QA_EXPECTED_REJECTION'; exception when raise_exception then if position(${literal(expected)} in sqlerrm)<>1 then raise; end if; end; end$$;`);
   assert.equal(snapshot(),before,expected+' must leave every sale/item/cash/stock/client value unchanged');
 }
 
-for(const [empresa,product,unit,quantity] of [[E,U,'unidad',1],[E,W,'kg',0.75],[O,OU,'unidad',1],[O,OW,'kg',0.75]]) {
+for(const [empresa,product,unit,quantity] of [[E,U,'unidad',1],[E,W,'kg',0.75],[E,G,'g',125],[E,L,'l',0.125],[E,M,'m',1.125],[O,OU,'unidad',1],[O,OW,'kg',0.75],[O,OG,'g',125],[O,OL,'l',0.125],[O,OM,'m',1.125]]) {
   const prefix='sequential-'+empresa+'-'+unit;
   const before=Number(sql(`select stock_actual from productos where id='${product}'`));
   const ids=[];
   for(let n=1;n<=3;n++)ids.push(pay(prefix+'-'+n,{empresa,product,unit,quantity}));
   assert.equal(new Set(ids).size,3);
+  if(['g','l','m'].includes(unit))verify(`select bool_and(total=round(${quantity}*1.99,2)) from ventas_sigo where idempotency_key like '${prefix}-%'`,'fractional quantity and cents preserved');
   verify(`select count(*)=3 from ventas_sigo where idempotency_key like '${prefix}-%'`,'three separate sequential sales');
   assert.equal(Number(sql(`select stock_actual from productos where id='${product}'`)),before-3*quantity);
 }
-pass('Three consecutive sales by unit and weight in each of two companies; exact stock delta');
+pass('20000 products per company; three consecutive sales by unidad/kg/g/l/m, exact stock delta and cents');
 
 // The first transaction commits; its response is intentionally discarded by the caller.
 const beforeLost=Number(sql(`select stock_actual from productos where id='${W}'`));
@@ -157,5 +164,5 @@ verify("select count(*)=0 from ventas_sigo v where (select coalesce(sum(subtotal
 verify("select count(*)=0 from ventas_sigo v where v.medio_pago<>'cuenta_corriente' and ((select count(*) from caja_movimientos_sigo m where m.venta_id=v.id)<>1 or (select sum(importe) from caja_movimientos_sigo m where m.venta_id=v.id) is distinct from v.total)",'every cash sale has exactly one matching cash amount');
 verify("select count(*)=0 from venta_items_sigo i join ventas_sigo v on v.id=i.venta_id join productos p on p.id=i.producto_id where i.empresa_id<>v.empresa_id or i.empresa_id<>p.empresa_id",'tenant boundaries preserved across headers/items/products');
 const artifact=process.env.COBRO104_DB_QA_DIR||'.test-build/cobro104-db';fs.mkdirSync(artifact,{recursive:true});
-fs.writeFileSync(artifact+'/db-summary.json',JSON.stringify({status:'PASS',postgres:17,syntheticOnly:true,actualRpcSource:migration,results,limitations:['Minimal fixture auth/ACL and tables do not test production RLS, triggers or schema drift.','No browser, network loss, fiscal issuance or physical devices; discarded-response test ignores the committed SQL result.']},null,2));
+fs.writeFileSync(artifact+'/db-summary.json',JSON.stringify({status:'PASS',postgres:17,syntheticOnly:true,syntheticProductsPerTenant:20000,tenants:2,units:['unidad','kg','g','l','m'],actualRpcSource:migration,results,limitations:['Minimal fixture auth/ACL and tables do not test production RLS, triggers or schema drift.','No browser, network loss, fiscal issuance or physical devices; discarded-response test ignores the committed SQL result.']},null,2));
 console.log('PASS: independent PostgreSQL 17 RPC verification ('+results.length+' cases); no commercial database or fiscal API accessed');

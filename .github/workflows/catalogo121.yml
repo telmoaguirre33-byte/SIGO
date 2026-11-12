@@ -24,7 +24,7 @@ jobs:
         with:
           node-version: 24
       - run: command -v psql || (sudo apt-get update && sudo apt-get install -y postgresql-client)
-      - name: Actual SQL and actual granular permissions with 15000 products per company
+      - name: Actual SQL and actual granular permissions with 20000 products per company
         env:
           SIGO_ISOLATED_TEST_DB: '1'
           PGHOST: 127.0.0.1
@@ -32,7 +32,10 @@ jobs:
           PGDATABASE: sigo_catalogo121_qa
           PGUSER: postgres
           PGPASSWORD: isolated_test_only
-        run: node scripts/test-catalogo121-db.mjs
+        run: |
+          node scripts/test-catalogo121-db.mjs
+          node scripts/test-catalogo121-scale.mjs
+          node scripts/test-catalogo121-rls.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -48,6 +51,7 @@ jobs:
           node-version: 24
       - run: npm ci --no-audit --no-fund
       - run: npm run build
+      - run: node --experimental-strip-types --test tests/erroresCatalogo.test.mjs
       - run: npx playwright install chromium
       - run: node scripts/test-catalogo121-browser.mjs
       - uses: actions/upload-artifact@v4

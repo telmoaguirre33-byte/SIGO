@@ -1,59 +1,77 @@
-# SIGO Gestión minorista — reparación candidata de #121
+# SIGO Gestión minorista — reparación de catálogo, Caja y búsqueda universal
 
-Estado: corrección preparada y probada con datos sintéticos. **No aplicada ni publicada en producción. Incidencia abierta hasta verificación posterior autorizada en FERRETERÍA DEL PUERTO.**
+PR #122 · incidencias #121 y #123 · 12/11/2026 UTC.
 
-Base revisada: `ccc20745db2be40b37e3fc8b472a84a3da4e1107`. Fecha: 12/11/2026 UTC.
+**Estado: candidato preparado y probado; no aplicado ni publicado en producción. No cerrar las incidencias hasta verificar el cliente después de una publicación autorizada.** Esta ampliación continúa la PR existente, conserva las protecciones de cobro y no cambia lógica fiscal ni estilos.
 
-## Alcance de la evidencia pública
+## Causa y comportamiento corregido
 
-Este informe se basa en el código del repositorio y pruebas sintéticas. Los detalles obtenidos mediante lecturas de producción se conservan en el informe local de la sesión; no se publican datos de clientes ni metadatos operativos privados en este repositorio público. No se ejecutó el listado lento ni EXPLAIN ANALYZE en producción.
+La RPC anterior materializa el catálogo entero y repite verificaciones de permisos por artículo antes de que se aplique la paginación externa. Caja espera esa descarga, la descarta al fallar y recorta las coincidencias locales a doce. El lector anterior también filtra después de construir el catálogo completo.
 
-## Causa y corrección
+La reparación aplica búsqueda, límite y paginación dentro de SQL, con siete evaluaciones de permisos por llamada; devuelve precio, stock y unidad en la misma lectura. Caja abre sin descargar productos/unidades y permite recorrer todas las coincidencias en páginas de cincuenta con orden estable nombre/ID. No hay tope total de catálogo.
 
-La carga de Productos y Caja esperaba terminar la descarga completa. Cada página reconstruía el catálogo con múltiples búsquedas de permisos por artículo; un fallo descartaba todos los resultados. Caja limitaba la búsqueda local a 12 coincidencias inaccesibles después del corte. Códigos y alias también sufrían la materialización completa en el servidor.
+La consulta encuentra nombre completo/parcial, una o varias palabras en distinto orden, marca, categoría/rubro, código interno y EAN, con/sin tildes y mayúsculas. Todas las palabras deben estar presentes. Los códigos se comparan como texto literal completo/parcial: un nombre numérico no toma sus dígitos del EAN de otro artículo. La palabra más larga ancla el índice de trigramas. `%`, `_`, barra y comillas del usuario se tratan literalmente.
 
-- Nueva RPC pública `consultar_productos_sigo`, `SECURITY INVOKER`, que delega en un esquema privado. El helper comprueba sesión, `products.read`, empresa y permisos por campo antes de leer. No depende de que la política RLS actual sea restrictiva.
-- Permisos constantes por llamada: siete evaluaciones, sin repetirlos por fila. El `LIMIT/OFFSET` se aplica dentro de SQL. Orden estable por nombre/ID. La página usa 50 filas más una de control, con acceso a todas las páginas; no limita el catálogo total.
-- Búsqueda por nombre completo/parcial, marca, código interno, EAN y categoría, sin distinguir tildes/mayúsculas. Los caracteres `%`, `_` y barra del usuario se tratan literalmente. El lector resuelve códigos exactos y alias con índices existentes; mantiene rechazo de ambigüedades e identidad LEGACY-DUP.
-- Precio, stock y unidad se obtienen en la misma lectura. Unidad desconocida sigue bloqueando la venta; no se reemplaza por unidad/pieza.
-- Consultas cancelables, debounce de 180 ms, plazo de 8 segundos y reintento explícito. Cambiar empresa/consulta invalida las filas anteriores; cambios de sesión invalidan los resultados. No hay caché compartida entre empresas.
-- Se elimina la descarga del catálogo/unidades en Caja y su recarga completa después de recuperar un cobro. Las búsquedas siguientes vuelven a consultar al servidor.
-- El cobro actual de main ya evitaba el catálogo antes de enviar la RPC. Se conserva ese comportamiento. Sus auxiliares opcionales de diagnóstico quedan acotados a IDs; no se reactivan ni se atribuye un delta de stock sin snapshot previo.
-- El listado antiguo conserva firma, campos y máscaras para exportaciones/informes, calculando sus permisos una sola vez. El importador solicita un catálogo completo al analizar un archivo; nunca usa la página visible como maestro íntegro.
+El lector usa coincidencia exacta por EAN, código interno o alias y conserva el rechazo de duplicados y LEGACY-DUP. Las ráfagas alfanuméricas resuelven el código sin esperar el catálogo; si no son un código y corresponden a una consulta escrita, pasan al buscador. La selección manual usa ID, flechas, Enter o mouse. Una unidad desconocida no se convierte en pieza.
 
-## Pruebas ejecutadas
+Las consultas son cancelables, con debounce de 180 ms y plazo de ocho segundos; empresa, sesión, consulta o página nuevas invalidan resultados anteriores. El cliente distingue **sin coincidencias** de **timeout**, **conexión**, **permisos/sesión** y **error del servidor**. El lector distingue código inexistente en el catálogo autorizado y código duplicado. Una falla técnica no se convierte en catálogo vacío exitoso.
 
-Archivos funcionales: `src/productos.ts` (RPC paginada/IDs), `src/useBusquedaProductos.ts` (ciclo de consulta), `src/SigoApp.tsx` (Productos), `src/VentaRapidaOperativa.tsx` (Caja), `src/barcode.ts` (lector), `src/ventas.ts` (auxiliares de stock), `src/StockImportAssistant.tsx` y `scripts/apply-stock-import-assistant.mjs` (maestro completo bajo demanda). SQL: `supabase/migrations/20261112021657_catalogo_busqueda_servidor_121.sql`. El resto son pruebas, su adaptador, workflow y evidencia; la lista exacta está en el diff de la PR.
+El cobro ya evitaba cargar el catálogo antes de enviar la RPC; se conserva ese comportamiento y la conciliación/idempotencia. Los auxiliares opcionales leen sólo IDs. El importador obtiene un maestro completo al analizar un archivo, sin interpretar la página visible como catálogo íntegro.
 
-PostgreSQL 17.11 aislado, sin red: **15.000 productos por empresa, dos empresas, 30.000 en total**. Se usa la función granular real más reciente del repositorio; Auth y tablas son fixtures sintéticos. Las 300 páginas recuperan exactamente 15.000 IDs distintos. Se verifican nombre, tildes, marca, códigos, alias, unidad, owner/admin/seller/warehouse, denegaciones explícitas, usuario anónimo, empresa ajena e IDs ajenos. El acceso directo por RLS del fixture está cerrado: la prueba no depende de una política abierta.
+## Capacidad medida con datos sintéticos
 
-| Medición local | Tiempo |
-| --- | ---: |
-| Primera página anterior, materializando 15.000 filas | 1.012,233 ms |
-| Primera página nueva | 6,192 ms |
-| Búsqueda `acople rapido profesion` | 4,945 ms |
-| Listado antiguo con permisos precalculados | 14,126 ms |
+PostgreSQL 17.6 local sin red, dos empresas independientes. Se ejecutan los siete tamaños pedidos, búsquedas de artículos inicial/central/final, todas las páginas, códigos/alias/duplicados, tildes, caracteres especiales y siete rubros: ferretería, supermercado, librería, carnicería, verdulería, fiambrería y limpieza. Se agregan controles de productos inactivos y stock cero; los primeros se excluyen y los segundos siguen siendo localizables.
 
-Son mediciones sintéticas, no SLA ni tiempos de producción. `pg_stat_user_functions` confirma siete llamadas de autorización por página.
+| Artículos activos por empresa | Primera página, ms | Búsqueda mediana, ms | Búsqueda máxima observada, ms | Cajeros simultáneos |
+| ---: | ---: | ---: | ---: | ---: |
+| 1000 | 4,596 | 10,343 | 14,750 | 8 |
+| 5000 | 4,697 | 16,777 | 19,338 | 8 |
+| 10000 | 4,906 | 25,605 | 29,864 | 8 |
+| 15000 | 5,769 | 37,030 | 42,190 | 8 |
+| 20000 | 4,210 | 45,272 | 50,166 | 8 |
+| 30000 | 4,769 | 69,159 | 85,981 | 8 |
+| 50000 | 5,312 | 113,696 | 128,976 | 8 |
 
-Chromium con componentes reales y transporte sintético: nueve casos, 15.000 productos por empresa. Incluye 120 ENCHUFES en páginas 50/50/20, selección del artículo 120 con teclado, nombres/tildes/marca/códigos, carrito, 625 g = 0,625 kg y 1,125 m, total $175, F9, F10 con ticket simulado, F11 con evento fiscal simulado, cuatro ventas consecutivas, Enter/Tab repetidos, foco, timeout/reintento y cancelación/cambio de empresa. No se permiten llamadas de red ajenas al origen `.invalid`.
+Se verificó que todos los IDs activos son recuperables una sola vez, sin mezcla de empresas: 400 páginas a 20.000 y 1.000 páginas a 50.000. Ocho procesos de cajero consultan simultáneamente bajo autorización real de la función del repositorio. Estas mediciones pertenecen al fixture; **no son una garantía de latencia en producción**.
 
-Regresiones ejecutadas: build, `verify:critical`, `test:manual-medidas`, `test:admin-notifications`; pruebas de medidas en Chromium; cobros en escritorio/móvil; sesiones reales del SDK con transporte sintético; ACK, mensajes, recuperación, diagnóstico y release guards; 30 comprobaciones del gate de migraciones. También pasó la regresión de la RPC transaccional real en otro PostgreSQL aislado: ocho casos, ventas consecutivas, respuesta perdida, dos cajeros concurrentes con claves iguales/distintas, rollback atómico, permisos y cuenta corriente.
+En la prueba funcional Chromium hay 20.000 productos por empresa (40.000 en total), trece casos y apertura de Caja de 838 ms en el entorno sintético, sin lectura inicial de catálogo. Incluye nombres/códigos/categorías, inicio/medio/final, 120 coincidencias en páginas 50/50/20, teclado/mouse, cambio de cantidad, lectores EAN/alfanuméricos, duplicados, errores diferenciados, timeout/reintento y cambio de empresa con respuesta anterior cancelada.
 
-Evidencia versionada en [catalogo121-evidencia](./catalogo121-evidencia/). Las mismas pruebas nuevas se ejecutan en `.github/workflows/catalogo121.yml`, con artefactos descargables. Los mocks anteriores se adaptaron a la nueva interfaz paginada conservando sus verificaciones de cobro.
+## Caja, cantidades y facturación
 
-**Límites:** no se probaron pistolas, impresoras ni dispositivos físicos. F10/F11 se verifican en fronteras simuladas; no se cobró ni emitió CAE real. No se midió la consulta corregida en producción porque aún no está instalada. Estas pruebas sintéticas no certifican el aislamiento global de producción. El asesor de Supabase no sustituye estas pruebas; su revisión del candidato queda para el preflight autorizado.
+Se verificaron unidad, kg, g, l y m; precio/cantidad/subtotal; 625 g = 0,625 kg y 1,125 m con total $175; además 125 g a $1,99/g + 0,375 l a $4,95/l = $250,61. F9 confirma sólo la venta simulada; F10 invoca sólo ticket simulado; F11 despacha el contrato fiscal existente a una frontera simulada. No se llama a un servicio fiscal real.
 
-## Gate de RLS previo
+La RPC transaccional real del repositorio se prueba en otro PostgreSQL aislado con **20.000 productos por empresa**. Hay tres ventas consecutivas para cada unidad, conservación de centavos/decimales, respuesta perdida, mismo intento recuperado, dos cajeros con claves iguales y distintas bajo bloqueo real, rollback atómico ante un artículo inválido y aislamiento de empresas. El snapshot de todos los productos se compara mediante hash para no truncar la evidencia al crecer el fixture.
 
-El repositorio ya contiene un gate y candidatos no autorizados en `docs/operacion-controlada/productos-rls/`. Esta PR no aplica esos candidatos ni modifica políticas globales. Prueba el aislamiento del endpoint nuevo con RLS cerrada en el fixture; no certifica todos los accesos de producción. Revisar el gate previo antes de una publicación autorizada; no aplicar a ciegas la carpeta completa de migraciones.
+Regresiones: build, verify:critical, test:manual-medidas, errores tipados, gate de migraciones (30 casos), medidas Chromium, cobros Chromium escritorio/móvil, SDK/sesiones/ACK y recuperación idempotente. CI reproduce las pruebas sobre el HEAD de esta PR. No se ejecutaron operaciones comerciales reales, CAE, impresoras ni dispositivos físicos.
 
-## Publicación propuesta, pendiente de autorización expresa
+Evidencia JSON y capturas: [catalogo121-evidencia](./catalogo121-evidencia/). `db.json` y `scale.json` contienen SQL/escala; `browser.json` las trece pruebas funcionales; `sale-db.json` la RPC de ventas; `rls.json` el candidato de seguridad. Los artefactos de Actions contienen las mediciones de cada corrida de CI.
 
-1. Revisar esta PR, CI y el estado actual de las definiciones/grants/índices. Confirmar respaldo recuperable de la base y guardar definiciones previas. La lectura de metadatos anterior **no es un backup de datos**. Revisar el gate previo de RLS y mantener el esquema privado fuera de los esquemas expuestos.
-2. Con respaldo y autorización, aplicar **sólo** `20261112021657_catalogo_busqueda_servidor_121.sql`. Es transaccional; `lock_timeout=2s` aborta si no obtiene los locks. Instala pg_trgm y crea dos índices. No contiene INSERT/UPDATE/DELETE sobre datos comerciales ni altera políticas. Requiere ventana controlada por los locks de creación de índices; si falla, no forzar ni ampliar indiscriminadamente el timeout.
-3. Validar RPC nueva y privilegios con la sesión autenticada autorizada, en lectura, antes de publicar la web. No usar service_role en navegador. No hay fallback a descarga masiva si falta la RPC: se muestra error recuperable. El orden DB → web evita esa incompatibilidad.
-4. Sólo con autorización de merge/publicación, publicar la web. No modificar TIENDA SIGO, Mayorista, otros repositorios ni datos de otras empresas.
-5. Verificar directamente en la sesión de FERRETERÍA DEL PUERTO: Productos responde; buscar ENCHUFE y ACOPLE RÁPIDO PROFESION…; nombre/código/EAN; selección y cantidades sin confirmar la venta. Vaciar/cancelar el carrito sin cobrar. No pulsar F9/F10/F11 en producción durante esta validación. Documentar tiempos/resultado en #121 y recién entonces considerar el cierre.
+## RLS: solución preparada y validada, no aplicada
 
-Rollback: volver primero a la web anterior. La migración conserva la RPC antigua compatible, por lo que no hace falta deshacer índices para recuperar la aplicación. Si fuera necesario revertir la definición antigua, usar la definición capturada y comparada con su SHA anterior; requiere autorización. No restaurar una base completa sobre ventas nuevas ni borrar registros para simular rollback. No se hizo merge, despliegue, reparación de historial ni aplicación de migraciones remotas.
+Se reutiliza el candidato existente de [productos-rls](./productos-rls/LEEME_OPERACION_NO_AUTORIZADA.md), fuera de supabase/migrations. La suite nueva ejecuta sus archivos exactos APPLY/ROLLBACK/APPLY en un PostgreSQL sintético con 50.000 activos por empresa y verifica owner, admin, seller y warehouse; denegación explícita; no miembro; sesión nula; acceso anónimo; bloqueo de DML/TRUNCATE directo; máscaras de las RPC; columnas de los consumidores directos minoristas y conservación de todas las filas. No se desactiva RLS.
+
+El candidato de catálogo usa endpoint público SECURITY INVOKER y helper privado con sesión, products.read y empresa explícitos; se prueba que rechaza otra empresa incluso con el fixture de políticas permisivas anteriores. Esto no sustituye la aplicación y revisión del gate global.
+
+**Pendiente productivo:** el candidato RLS modifica una tabla compartida. Antes de aplicarlo se debe confirmar su compatibilidad con consumidores externos y el alcance autorizado; no se inspeccionaron ni modificaron otros proyectos. El parche conserva lectura de las quince columnas documentadas dentro del tenant: no implementa masking intratenant de cada columna para consultas directas. Las RPC sí mantienen máscaras por permiso.
+
+El rollback global RLS existente reabriría privilegios anteriores y no es la recuperación automática recomendada. Ante regresión, conservar el aislamiento y usar la web/RPC compatibles o corregir hacia adelante. Su ejecución requiere decisión específica.
+
+## Respaldo, migración y publicación
+
+Respaldo de datos: **pendiente de verificación en el panel autorizado**. Se pidió acceso a Scheduled Backups → View y Physical backups/PITR → View del proyecto SIGO. Según la documentación de Supabase, Read-Only permite visualizar esos apartados; no hace falta permiso de restauración para inspeccionarlos. No se solicitan claves en el chat. Un snapshot de funciones o ACTIVE_HEALTHY no prueba que exista un respaldo recuperable.
+
+Se debe registrar referencia del backup, fecha, cobertura/retención, estado, ventana de pérdida de datos y mecanismo de restauración. Los backups de PostgreSQL incluyen metadatos de Storage, no sus objetos; no afirmar una cobertura que no tengan. Crear una restauración en otro proyecto puede generar costos y requiere autorización aparte.
+
+Migración exacta del buscador: `20261112021657_catalogo_busqueda_servidor_121.sql`, SHA-256 `33dcd3c00c02535f8df262752bc148726345a240de71eb931565f746b8e68046`. Todavía no aplicada a producción. Es transaccional y aborta si no obtiene los locks en dos segundos. Instala pg_trgm y dos índices; no modifica filas comerciales. El candidato RLS es otra operación explícita y no participa en despliegues automáticos.
+
+Secuencia pendiente: cerrar respaldo y revisión del gate RLS → confirmar hashes/CI/compatibilidad → acordar ventana y pedir autorización final → aplicar únicamente los SQL autorizados → verificar RPC y permisos → publicar sólo SIGO minorista → verificar el commit servido y el cliente. Nunca db push ni reparación indiscriminada del historial.
+
+Recuperación: un error previo a COMMIT conserva la base anterior. Si falla la web, volver al despliegue minorista anterior identificado en el informe privado, conservando el SQL compatible. Si se necesita revertir una función, usar el rollback específico con fingerprint, sin restaurar filas ni reabrir políticas globales. No restaurar una base completa sobre ventas nuevas. La recuperación de esquema está ensayada en PostgreSQL 17.6 con datos sintéticos; no equivale a restaurar un backup de producción.
+
+## Validación posterior obligatoria, aún pendiente
+
+Después de la publicación autorizada: ingresar al cliente autorizado y seleccionar varios artículos reales de distintos rubros y posiciones; comprobar nombre completo/parcial, palabras, marca/categoría, código/EAN, páginas, precios, unidad, selección y carrito; repetir búsquedas y registrar latencias/errores. Revisar la preparación de facturación sin pulsar confirmaciones que creen ventas, tickets o CAE. Cancelar el carrito de prueba. No cerrar #121/#123 antes de documentar esa verificación.
+
+## Archivos
+
+La continuación de #122 cambia sólo la consulta del catálogo, errores del buscador/lector, entrada alfanumérica del lector y conservación del resultado de lectura en Productos; el resto amplía pruebas, workflow y evidencia. Se preservan los archivos fiscales y los demás proyectos. La lista exacta se encuentra en Files changed de la PR.

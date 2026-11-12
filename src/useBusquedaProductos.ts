@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { buscarProductosSigo, type PaginaProductos } from "./productos";
 import { supabase } from "./supabase";
+import { errorCatalogo } from "./erroresCatalogo";
 
 // Sin caché compartida: al cambiar empresa/consulta no se reutilizan filas ni errores.
 export function useBusquedaProductos(empresaId: string, texto: string, buscarVacio = false) {
@@ -25,7 +26,7 @@ export function useBusquedaProductos(empresaId: string, texto: string, buscarVac
     let plazo: ReturnType<typeof setTimeout> | undefined;
     const timer = window.setTimeout(() => {
       plazo = setTimeout(() => {
-        setResultado({ clave, productos: [], hayMas: false, error: "La búsqueda demoró demasiado. Reintentá para consultar los productos." });
+        setResultado({ clave, productos: [], hayMas: false, error: errorCatalogo("timeout").message });
         controller.abort();
       }, 8000);
       void buscarProductosSigo(empresaId, texto, numero, controller.signal).then(datos => {
@@ -33,7 +34,7 @@ export function useBusquedaProductos(empresaId: string, texto: string, buscarVac
         if (!controller.signal.aborted) setResultado({ ...datos, clave, error: "" });
       }).catch(error => {
         clearTimeout(plazo);
-        if (!controller.signal.aborted) setResultado({ clave, productos: [], hayMas: false, error: error instanceof Error ? error.message : "No se pudieron consultar los productos." });
+        if (!controller.signal.aborted) setResultado({ clave, productos: [], hayMas: false, error: errorCatalogo(error).message });
       });
     }, texto.trim() ? 180 : 0);
     return () => { clearTimeout(timer); clearTimeout(plazo); controller.abort(); };

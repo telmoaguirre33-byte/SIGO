@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { errorCatalogo } from "./erroresCatalogo";
 import { cantidadEscaladaMedida, normalizarUnidadVenta, type UnidadVenta } from "./ventaPorMedidas";
 
 export type ProductoSigo = {
@@ -216,11 +217,14 @@ async function consultarCatalogo(empresaId: string, parametros: Record<string, u
   if (!empresaId) throw new Error("EMPRESA_REQUIRED");
   signal?.throwIfAborted();
   const consulta = supabase.rpc("consultar_productos_sigo", { p_empresa_id: empresaId, ...parametros });
-  const { data, error } = await (signal ? consulta.abortSignal(signal) : consulta);
+  let respuesta;
+  try { respuesta = await (signal ? consulta.abortSignal(signal) : consulta); }
+  catch (error) { signal?.throwIfAborted(); throw errorCatalogo(error); }
+  const { data, error } = respuesta;
   signal?.throwIfAborted();
-  if (error) throw new Error(mensajeErrorBackend(error, "No se pudieron consultar los productos. Reintentá la búsqueda."));
+  if (error) throw errorCatalogo(error);
   const productos = (data ?? []) as ProductoSigo[];
-  if (productos.some(p => p.empresa_id !== empresaId)) throw new Error("TENANT_PRODUCT_MISMATCH");
+  if (productos.some(p => p.empresa_id !== empresaId)) throw errorCatalogo("TENANT_PRODUCT_MISMATCH");
   return productos.map(p => ({ ...p, unidad_medida: normalizarUnidadVenta(p.unidad_medida) }));
 }
 

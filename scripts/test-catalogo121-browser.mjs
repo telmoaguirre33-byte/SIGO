@@ -13,14 +13,16 @@ const mocks={
  './ofertasProductos': 'export const listarOfertasProductos=async()=>[];export const ofertaVigente=()=>null;export const precioConOferta=p=>p;export const guardarOfertasProductos=async()=>{throw Error("Forbidden")};export const hoyArgentina=()=>"2026-11-12";',
  './GuardarCompraIA': 'export default function GuardarCompraIA(){return null}',
  './ventas': `export class VentaRechazadaSinCambiosError extends Error{};export const listarVentasRecientesSigo=async()=>[];
- export async function confirmarVentaSigo(input){window.__qa.confirms.push(structuredClone(input));for(const i of input.items)window.__qa.products.find(p=>p.id===i.productoId).stock_actual-=i.cantidad;return {ventaId:'22222222-2222-4222-8222-222222222222',verificacion:Promise.resolve({integridad:'ok',totalVerificado:input.items.reduce((s,i)=>s+i.cantidad*100,0)})}}`,
+ export async function confirmarVentaSigo(input){window.__qa.confirms.push(structuredClone(input));for(const i of input.items)window.__qa.products.find(p=>p.id===i.productoId).stock_actual-=i.cantidad;return {ventaId:'22222222-2222-4222-8222-222222222222',verificacion:Promise.resolve({integridad:'ok',totalVerificado:input.items.reduce((s,i)=>s+Math.round(i.cantidad*window.__qa.products.find(p=>p.id===i.productoId).precio_venta*100),0)/100})}}`,
  './ticketVenta': 'export const imprimirTicketVenta=async(...args)=>window.__qa.prints.push(args);',
 };
 function fixture(){
  const E='11111111-1111-4111-8111-111111111111',O='33333333-3333-4333-8333-333333333333';
  const normal=s=>String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+ const examples={19001:['TORNILLO acero galvanizado','Ferretería','unidad'],19002:['ARROZ integral bolsa','Supermercado','unidad'],19003:['CUADERNO rayado A4','Librería','unidad'],19004:['CARNE picada especial','Carnicería','kg'],19005:['TOMATE perita fresco','Verdulería','kg'],19006:['QUESO cremoso feteado','Fiambrería','kg'],19007:['DETERGENTE limón','Limpieza','l']};
  const qa=window.__qa={E,O,empresa:E,requests:[],confirms:[],prints:[],fiscal:[],forbidden:[],failNext:false,delay:0,products:[]};
- for(const empresa_id of [E,O])for(let i=1;i<=15000;i++)qa.products.push({id:empresa_id+':'+i,empresa_id,nombre:i===14999?'ACOPLE RÁPIDO PROFESIONAL':i>=14000&&i<14120?'ENCHUFE '+i:'Producto '+String(i).padStart(5,'0'),marca:'MARCAQA',codigo_interno:'INT-'+i,codigo_barras:'779'+String(i).padStart(10,'0'),precio_venta:100,stock_actual:100,unidad_medida:i===14999?'kg':i===14998?'m':'unidad',costo_actual:10,costo_ultima_compra:10,categoria:null});
+ for(const empresa_id of [E,O])for(let i=1;i<=20000;i++)qa.products.push({id:empresa_id+':'+i,empresa_id,nombre:i===14999?'ACOPLE RÁPIDO PROFESIONAL':i>=14000&&i<14120?'ENCHUFE '+i:'Producto '+String(i).padStart(5,'0'),marca:'MARCAQA',codigo_interno:'INT-'+i,codigo_barras:'779'+String(i).padStart(10,'0'),precio_venta:i===19997?1.99:i===19996?4.95:100,stock_actual:1000,unidad_medida:i===14999?'kg':i===14998?'m':i===19997?'g':i===19996?'l':'unidad',costo_actual:10,costo_ultima_compra:10,categoria:null});
+ for(const p of qa.products){const n=Number(p.codigo_interno.slice(4));if(examples[n]){p.nombre=examples[n][0];p.categoria=examples[n][1];p.unidad_medida=examples[n][2]}if([19990,19991].includes(n))p.codigo_barras='7799999999999'}
  qa.rpc=async(name,args,signal)=>{
   qa.requests.push({name,args:structuredClone(args)});
   if(name==='listar_modulos_empresa_sigo')return {data:[],error:null};
@@ -28,12 +30,16 @@ function fixture(){
   assertBound(args.p_limite<=501);
   const delay=qa.delay; await new Promise(r=>setTimeout(r,delay));
   if(signal?.aborted)throw new DOMException('Aborted','AbortError');
-  if(qa.failNext){qa.failNext=false;return {data:null,error:{message:'statement timeout sintético'}}}
+  if(qa.failNext){const kind=qa.failNext;qa.failNext=false;if(kind==='connection')throw new TypeError('Failed to fetch');return {data:null,error:kind==='permission'?{code:'42501',message:'FORBIDDEN'}:kind==='server'?{code:'XX000',message:'INTERNAL_ERROR'}:{code:'57014',message:'statement timeout sintético'}}}
   let rows=qa.products.filter(p=>p.empresa_id===args.p_empresa_id);
   if(args.p_ids)rows=rows.filter(p=>args.p_ids.includes(p.id));
   else if(args.p_solo_codigo)rows=rows.filter(p=>p.codigo_interno===args.p_busqueda||p.codigo_barras===args.p_busqueda);
-  else rows=rows.filter(p=>normal([p.nombre,p.marca,p.codigo_interno,p.codigo_barras].join(' ')).includes(normal(args.p_busqueda)));
+  else rows=rows.filter(p=>{
+    const q=normal(args.p_busqueda).trim();
+    return q.split(/\s+/).every(t=>normal([p.nombre,p.marca,p.categoria].join(' ')).includes(t))||normal(p.codigo_interno).includes(q)||normal(p.codigo_barras).includes(q);
+  });
   rows.sort((a,b)=>a.nombre.localeCompare(b.nombre)||a.id.localeCompare(b.id));
+  qa.lastCompleted={q:args.p_busqueda,empresa:args.p_empresa_id};
   return {data:structuredClone(rows.slice(args.p_offset??0,(args.p_offset??0)+(args.p_limite??51))),error:null};
  };
  function assertBound(v){if(!v)throw Error('Unbounded request')}
@@ -51,9 +57,9 @@ const input=()=>page.locator('.barcode-entry-row input');
 const suggestions=()=>page.locator('[data-pos-suggestion]');
 const cart=()=>page.locator('.sigo-pos-cart tbody tr');
 async function check(name,run){await run();cases.push(name);console.log('PASS:',name)}
-async function search(q,n=1){const start=Date.now();await input().fill(q);await page.waitForFunction(n=>document.querySelectorAll('[data-pos-suggestion]').length===n,n);timings.push({q,ms:Date.now()-start})}
+async function search(q,n=1){const start=Date.now();await input().fill(q);await page.waitForFunction(({q,n})=>window.__qa.lastCompleted?.q===q&&!document.body.textContent.includes('Buscando productos…')&&document.querySelectorAll('[data-pos-suggestion]').length===n,{q,n});timings.push({q,ms:Date.now()-start})}
 try{
- await page.goto(origin);await page.addScriptTag({content:built.outputFiles[0].text});await input().waitFor();
+ const opened=Date.now();await page.goto(origin);await page.addScriptTag({content:built.outputFiles[0].text});await input().waitFor();const cajaOpenMs=Date.now()-opened;assert.ok(cajaOpenMs<3000);
  await check('Caja starts without downloading products or units',async()=>{assert.equal(await page.evaluate(()=>window.__qa.requests.length),0)});
  await check('ENCHUFE: 120 matches, pages 50/50/20 and keyboard selects 120th',async()=>{
   await search('ENCHUFE',50);await page.getByRole('button',{name:'Más resultados',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[aria-label="Páginas de resultados de Caja"]').textContent.includes('Página 2')&&document.querySelectorAll('[data-pos-suggestion]').length===50);
@@ -62,7 +68,7 @@ try{
   await page.keyboard.press('F9');await page.waitForFunction(()=>window.__qa.confirms.length===1);await page.waitForFunction(()=>document.querySelectorAll('.sigo-pos-cart tbody tr').length===0);
  });
  await check('Full and partial name, accents, brand, internal code and EAN',async()=>{
-  for(const q of ['ACOPLE RÁPIDO PROFESIONAL','acople rapido profesion','INT-14999','7790000014999'])await search(q);
+  for(const q of ['ACOPLE RÁPIDO PROFESIONAL','acople rapido profesion','profesion ACOPLE rapido','INT-14999','7790000014999'])await search(q);
   await search('marcaqa',50);
  });
  await check('Weight, meters, cart totals, F10 ticket and F11 fiscal event are synthetic',async()=>{
@@ -80,6 +86,35 @@ try{
   await page.waitForFunction(()=>document.querySelector('.sigo-pos-cart tbody')?.textContent.includes('2 unidad'));
   assert.equal(await cart().count(),1);assert.match(await cart().innerText(),/2 unidad/);assert.equal(await input().evaluate(e=>e===document.activeElement),true);
   await page.keyboard.press('F9');await page.waitForFunction(()=>window.__qa.confirms.length===4);
+ });
+ await check('All trades and first/middle/last items selectable by mouse with quantity editing',async()=>{
+  for(const q of ['ferreteria','supermercado','libreria','carniceria','verduleria','fiambreria','limpieza'])await search(q);
+  for(const n of [1,10000,20000]){
+    await search('Producto '+String(n).padStart(5,'0'));await suggestions().first().click();await cart().waitFor();
+    await page.getByRole('button',{name:'Editar cantidad de Producto '+String(n).padStart(5,'0'),exact:true}).click();
+    await page.locator('#sigo-cantidad-medida').fill('2');await page.getByRole('button',{name:'Actualizar · Enter',exact:true}).click();
+    assert.match(await cart().innerText(),/2 unidad/);await page.locator('.sigo-pos-remove').click();
+  }
+ });
+ await check('Grams/liters preserve cents and decimals with the 20000-product catalog',async()=>{
+  await search('INT-19997');await input().press('Enter');await page.locator('#sigo-cantidad-medida').fill('125');await page.getByRole('button',{name:'Agregar · Enter',exact:true}).click();
+  await search('INT-19996');await input().press('Enter');await page.locator('#sigo-cantidad-medida').fill('0.375');await page.getByRole('button',{name:'Agregar · Enter',exact:true}).click();
+  assert.match(await page.locator('.sigo-pos-total').innerText(),/250,61/);await page.screenshot({path:artifact+'/centavos.png',fullPage:true});await page.keyboard.press('F9');await page.waitForFunction(()=>window.__qa.confirms.length===5);
+  const items=await page.evaluate(()=>window.__qa.confirms[4].items);assert.deepEqual(items.map(i=>[i.cantidad,i.unidadMedida]),[[125,'g'],[0.375,'l']]);
+ });
+ await check('Duplicate scanned code blocks selection instead of choosing a product',async()=>{
+  await page.waitForFunction(()=>document.querySelectorAll('.sigo-pos-cart tbody tr').length===0);
+  await input().fill('7799999999999');await input().press('Enter');await page.getByText('El código está duplicado dentro de esta empresa.',{exact:false}).waitFor();assert.equal(await cart().count(),0);
+  await input().fill('');await input().pressSequentially('INT-20000',{delay:1});await input().press('Enter');
+  await cart().waitFor();assert.match(await cart().innerText(),/Producto 20000/);await page.locator('.sigo-pos-remove').click();
+  await input().fill('7799999999998');await input().press('Enter');await page.getByText('No se encontró un producto con el código 7799999999998.',{exact:true}).waitFor();
+ });
+ await check('Connection, permission and server failures remain distinct from zero matches',async()=>{
+  for(const [kind,message] of [['connection','No se pudo conectar'],['permission','No tenés permiso'],['server','El servidor no pudo completar']]){
+    await page.evaluate(k=>window.__qa.failNext=k,kind);await input().fill(kind+' consulta');await page.getByText(message,{exact:false}).waitFor();
+    assert.equal(await page.getByText('No encontré productos.',{exact:false}).count(),0);
+  }
+  await input().fill('SIN-COINCIDENCIA-REAL');await page.getByText('No encontré productos.',{exact:false}).waitFor();
  });
  await check('Timeout displays error, retry succeeds without false empty result',async()=>{
   await page.evaluate(()=>window.__qa.failNext=true);await input().fill('acople');await page.getByRole('button',{name:'Reintentar búsqueda'}).waitFor();assert.equal(await page.getByText('No encontré productos.',{exact:false}).count(),0);
@@ -101,5 +136,5 @@ try{
  });
  await page.screenshot({path:artifact+'/productos.png',fullPage:true});
  assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(await page.evaluate(()=>window.__qa.forbidden),[]);
- await fs.writeFile(artifact+'/browser.json',JSON.stringify({status:'PASS',syntheticProductsPerTenant:15000,tenants:2,cases,timings,limitations:['Synthetic DB/payment/ticket/fiscal boundaries; no real sale, CAE, printer, physical scanner or production validation']},null,2));
+ await fs.writeFile(artifact+'/browser.json',JSON.stringify({status:'PASS',syntheticProductsPerTenant:20000,tenants:2,cajaOpenMs,cases,timings,limitations:['Synthetic DB/payment/ticket/fiscal boundaries; no real sale, CAE, printer, physical scanner or production validation']},null,2));
 }finally{await browser.close()}
