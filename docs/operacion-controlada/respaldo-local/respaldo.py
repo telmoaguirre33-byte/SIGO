@@ -28,6 +28,16 @@ MAG = 1 << 256
 LOG = None
 
 
+def child_env():
+    # Storage credentials belong only to the Python HTTP operator. PostgreSQL
+    # clients receive their own private pgpass mount, never administrative API
+    # keys. Do not pass either credential set to Docker/GnuPG subprocess envs.
+    blocked={'SIGO_BACKUP_STORAGE_KEY','SUPABASE_SERVICE_ROLE_KEY','SUPABASE_ACCESS_TOKEN',
+             'SIGO_BACKUP_DATABASE_URL','SUPABASE_DB_URL','SUPABASE_POOLER_URL',
+             'SUPABASE_DB_PASSWORD','PGPASSWORD'}
+    return {k:v for k,v in os.environ.items()if k not in blocked}
+
+
 def hidden(prompt):
     # Refuse a fallback that would echo a password in a redirected/headless shell.
     with warnings.catch_warnings():
@@ -38,7 +48,7 @@ def hidden(prompt):
 def run(cmd, data=None, output=None, timeout=1800):
     with LOG.open('ab') as err:
         p = subprocess.run(cmd, input=data, stdout=output or subprocess.PIPE,
-                           stderr=err, timeout=timeout)
+                           stderr=err, timeout=timeout,env=child_env())
     if p.returncode:
         raise RuntimeError('Comando falló; revisar el diagnóstico PRIVADO. No publicarlo sin redacción.')
     return p.stdout if output is None else None
@@ -46,7 +56,7 @@ def run(cmd, data=None, output=None, timeout=1800):
 
 def from_file(cmd, path):
     with path.open('rb') as src, LOG.open('ab') as err:
-        p=subprocess.run(cmd,stdin=src,stdout=subprocess.PIPE,stderr=err,timeout=1800)
+        p=subprocess.run(cmd,stdin=src,stdout=subprocess.PIPE,stderr=err,timeout=1800,env=child_env())
     if p.returncode: raise RuntimeError('Falló la lectura local del archive; revisar diagnóstico privado.')
     return p.stdout
 
@@ -151,7 +161,7 @@ def table_hash(pg, table, snapshot=None):
     count = total = xor = square = 0
     with LOG.open('ab') as err:
         p = subprocess.Popen(pg.cmd('psql', '-XqAt', '--no-password', '-v', 'ON_ERROR_STOP=1'),
-                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err)
+                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err,env=child_env())
         try:
             p.stdin.write(q.encode()); p.stdin.close()
             for row in p.stdout:
@@ -175,7 +185,7 @@ def capture(pg, work, snapshot_hook=None):
     (work/'roles.sql').write_bytes(roles)
     with LOG.open('ab') as err:
         exporter = subprocess.Popen(pg.cmd('psql','-XqAt','--no-password','-v','ON_ERROR_STOP=1'),
-                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err)
+                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err,env=child_env())
         try:
             exporter.stdin.write(b'begin isolation level repeatable read read only;select pg_export_snapshot();\n')
             exporter.stdin.flush()
@@ -299,7 +309,7 @@ def restore_files(docker, work, meta, image, keep=False, candidate_dir=None, can
         pg.sql('drop database postgres;') # Only this freshly created, network=none destination.
         with (work/'database.dump').open('rb') as src,LOG.open('ab') as err:
             p=subprocess.run(pg.cmd('pg_restore','--create','--exit-on-error','-d','template1'),
-                             stdin=src,stdout=subprocess.DEVNULL,stderr=err,timeout=3600)
+                             stdin=src,stdout=subprocess.DEVNULL,stderr=err,timeout=3600,env=child_env())
             if p.returncode: raise RuntimeError('Restore real falló; NO declarar respaldo recuperable.')
         pg.db=meta['database']
         schema=run(pg.cmd('pg_dump','--schema-only','--create','--no-password'))

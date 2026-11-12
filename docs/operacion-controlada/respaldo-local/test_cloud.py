@@ -6,6 +6,36 @@ import cloud_pipeline as p
 
 
 class CloudGuardas(unittest.TestCase):
+    def test_no_admin_credentials_in_subprocess_environment(self):
+        with patch.dict(os.environ,{'SUPABASE_SERVICE_ROLE_KEY':'dummy','SUPABASE_DB_PASSWORD':'dummy',
+                                     'HTTPS_PROXY':'http://configured-proxy','PATH':'/usr/bin'},clear=True):
+            env=c.b.child_env()
+            self.assertNotIn('SUPABASE_SERVICE_ROLE_KEY',env)
+            self.assertNotIn('SUPABASE_DB_PASSWORD',env)
+            self.assertEqual(env['HTTPS_PROXY'],'http://configured-proxy')
+            self.assertEqual(env['PATH'],'/usr/bin')
+
+    def test_storage_credential_never_leaves_project_or_calls_other_apis(self):
+        for url in ['https://other.supabase.co/storage/v1/bucket/'+c.BUCKET,
+                    c.API+'/rest/v1/productos',c.API+'/auth/v1/admin/users',
+                    c.API+'/storage/v1/bucket/other',c.API+'/storage/v1/object/authenticated/'+c.BUCKET+'/customer/certificate.pem']:
+            with patch.object(c.urllib.request,'build_opener')as opener:
+                with self.assertRaises(RuntimeError):c.http(url,'synthetic-storage-key')
+                opener.assert_not_called()
+
+    def test_service_key_cannot_be_sent_to_management_api(self):
+        with self.assertRaises(RuntimeError):
+            c.guard_http_destination('https://api.supabase.com/v1/projects/'+c.b.PROJECT+'/api-keys?reveal=true','sb_secret_synthetic','GET',None,True)
+
+    def test_no_redirect_can_forward_authorization(self):
+        with self.assertRaises(RuntimeError):c.NoCredentialRedirect().redirect_request(None,None,302,'',{},'https://other.invalid')
+
+    def test_only_new_backup_objects_and_no_deletion_or_upsert(self):
+        url=c.API+'/storage/v1/object/'+c.BUCKET+'/'+c.PREFIX+'/123-1-nonce/archive.gpg.00000.bin'
+        c.guard_http_destination(url,'dummy','POST',{'x-upsert':'false'},False)
+        for method,headers in [('DELETE',None),('PUT',None),('POST',{'x-upsert':'true'})]:
+            with self.assertRaises(RuntimeError):c.guard_http_destination(url,'dummy',method,headers,False)
+
     def test_customer_storage_paths_never_touched(self):
         with patch.object(c,'http')as http:
             for prefix in ['customer-id/certificates',c.PREFIX+'/../other']:

@@ -6,6 +6,7 @@ import contextlib
 import hashlib
 import json
 import os
+import re
 import secrets
 import shutil
 import sys
@@ -23,12 +24,40 @@ PREFIX='_sigo_operaciones_respaldo_122'
 FINGERPRINT='D580F8EB13D2A678C849F66A07F4E88EF38EDD14'
 
 
+class NoCredentialRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self,req,fp,code,msg,headers,newurl):
+        raise RuntimeError('BACKUP_HTTP_REDIRECT_REJECTED')
+
+
+def guard_http_destination(url,key,method,headers,management):
+    u=urlsplit(url)
+    if u.scheme!='https' or u.port not in(None,443)or u.username is not None or u.password is not None or u.fragment:
+        raise RuntimeError('BACKUP_HTTP_DESTINATION_REJECTED')
+    if management:
+        if not(key.startswith('sbp_')and u.hostname=='api.supabase.com' and method=='GET'
+               and u.path=='/v1/projects/'+b.PROJECT+'/api-keys' and u.query=='reveal=true'):
+            raise RuntimeError('BACKUP_MANAGEMENT_SCOPE_REJECTED')
+        return
+    if u.hostname!=b.PROJECT+'.supabase.co' or u.query:
+        raise RuntimeError('BACKUP_STORAGE_PROJECT_SCOPE_REJECTED')
+    if headers and any(k.lower()not in('content-type','x-upsert')for k in headers):
+        raise RuntimeError('BACKUP_HTTP_HEADER_OVERRIDE_REJECTED')
+    if method=='GET'and u.path=='/storage/v1/bucket/'+BUCKET:return
+    relative=re.escape(BUCKET+'/'+PREFIX)+r'/[A-Za-z0-9_-]+/[A-Za-z0-9][A-Za-z0-9_.-]*'
+    if method=='GET'and re.fullmatch('/storage/v1/object/authenticated/'+relative,u.path):return
+    if method=='POST'and re.fullmatch('/storage/v1/object/'+relative,u.path):
+        if headers and headers.get('x-upsert')=='false':return
+    raise RuntimeError('BACKUP_STORAGE_PATH_OR_OPERATION_REJECTED')
+
+
 def http(url, key, method='GET', data=None, headers=None, management=False):
+    guard_http_destination(url,key,method,headers,management)
     h={'Authorization':'Bearer '+key}
     if not management:h['apikey']=key
     if headers:h.update(headers)
     req=urllib.request.Request(url,data=data,headers=h,method=method)
-    with urllib.request.urlopen(req,timeout=90) as response:return response.read()
+    opener=urllib.request.build_opener(NoCredentialRedirect())
+    with opener.open(req,timeout=90) as response:return response.read()
 
 
 def storage_key():

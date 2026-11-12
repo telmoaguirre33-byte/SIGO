@@ -24,6 +24,20 @@ El token de cuenta anterior devuelve HTTP 401 y no es utilizable; no se modifica
 
 El valor nuevo sólo se proporciona al paso privado del operador. El job de ensayo sintético no recibe credenciales productivas. La integración no puede administrar secretos del repositorio y no intenta sortear ese permiso.
 
+## Privacidad y alcance de la credencial
+
+Se consultaron únicamente metadatos y políticas de COMERCIAL: el bucket es privado, `storage.objects` tiene RLS activo, no hay política de lectura para anon/public y el prefijo operativo no corresponde a una empresa reconocida por las políticas actuales. Los usuarios de las empresas no reciben acceso al respaldo mediante esas políticas. No se publican aquí expresiones de políticas ni datos comerciales.
+
+`service_role` es administrativa para **todo COMERCIAL** y omite RLS; guardarla con el nombre `SIGO_BACKUP_STORAGE_KEY` no reduce sus permisos. No es una credencial limitada al bucket o al prefijo. El ejecutor restringe su uso a HTTPS del dominio exacto de COMERCIAL, consulta de metadatos de ese bucket y creación/lectura de objetos del prefijo operativo. Rechaza redirecciones, otros proyectos, REST/Auth/Management, rutas comerciales, DELETE, PUT y upsert. La clave y las credenciales DB no se heredan en el entorno de los subprocesos Docker/GPG. Estas son restricciones verificadas del programa, no restricciones que imponga la propia clave ante otro programa.
+
+Alternativas evaluadas con la documentación oficial:
+
+- [Claves S3 de Storage](https://supabase.com/docs/guides/storage/s3/authentication): separan almacenamiento de las API Auth/REST, pero permiten todas las operaciones sobre todos los buckets y omiten RLS. No ofrecen por sí solas el permiso mínimo por carpeta. Este operador usa la API Storage y no interpreta claves S3 como `service_role`.
+- [JWT de un usuario dedicado y RLS](https://supabase.com/docs/guides/storage/security/access-control): permite limitar SELECT/INSERT al bucket y prefijo, sin UPDATE/DELETE. Es la opción de menor privilegio efectivo, pero requiere identidad/emisión del JWT y políticas específicas; las políticas actuales excluyen el respaldo. No se ha aplicado ningún cambio de seguridad para habilitarla.
+- URLs firmadas por objeto: pueden delegar operaciones específicas, pero requieren un emisor autorizado que firme las subidas y las lecturas de los objetos previstos. No existe todavía ese emisor en este flujo; no se presenta como una alternativa ya configurada.
+
+La ruta P0 ya preparada reutiliza temporalmente la clave existente de **COMERCIAL**, sólo en el ejecutor manual controlado. No la utiliza para consultas de datos SQL ni para acceder a otra aplicación. Se puede retirar después el secreto de Actions desde la interfaz privada; la integración no puede borrarlo y la clave compartida no caduca por eliminar esa copia. No rotar la clave compartida de producción para retirar el acceso del job. No se ha solicitado ni guardado su valor en chat, comentarios o archivos del repositorio.
+
 ## Operación del controlador
 
 El workflow existente `.github/workflows/supabase-production.yml` se reemplaza **sólo en esta rama**, con `workflow_dispatch` manual y guardas de repositorio/ref. La definición de main sigue intacta.
