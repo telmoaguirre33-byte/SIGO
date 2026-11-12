@@ -109,11 +109,11 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
         <section className="content">
           {section === "Inicio" && <Inicio empresa={empresa} onProductos={() => setSection("Productos")} onStock={() => setSection("Stock")} onCaja={() => setSection("Ventas")} />}
           {section === "Productos" && <Productos key={empresa.empresa_id} empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
-          {section === "Stock" && <Stock empresaId={empresa.empresa_id} />}
+          {section === "Stock" && <Stock key={empresa.empresa_id} empresaId={empresa.empresa_id} />}
           {section === "Lista de precios" && <ListaPreciosSection empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
           {section === "Ofertas y etiquetas" && <OfertasEtiquetasSection empresaId={empresa.empresa_id} />}
           {section === "Ventas por día" && <IngresosDiariosOperativos empresaId={empresa.empresa_id} />}
-          {section === "Stock vs Inventario" && <StockVsInventario empresaId={empresa.empresa_id} />}
+          {section === "Stock vs Inventario" && <StockVsInventario key={empresa.empresa_id} empresaId={empresa.empresa_id} />}
           {section === "Negocio seguro" && <NegocioSeguro />}
           {section === "Contabilidad" && (empresa.rol === "owner" || empresa.rol === "admin") && <Contabilidad empresaId={empresa.empresa_id} />}
           {section === "Ventas" && <VentaRapidaOperativa empresaId={empresa.empresa_id} puedeEditarProductos={puedeEditarProductos} />}
@@ -580,7 +580,7 @@ export function Productos({ empresaId, puedeEditar }: { empresaId: string; puede
   );
 }
 
-function Stock({ empresaId }: { empresaId: string }) {
+export function Stock({ empresaId }: { empresaId: string }) {
   const [productos, setProductos] = useState<ProductoSigo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -588,28 +588,41 @@ function Stock({ empresaId }: { empresaId: string }) {
   const [soloCriticos, setSoloCriticos] = useState(false);
   const [scanResult, setScanResult] = useState<BarcodeProduct | null>(null);
   const [seleccionValorizacion, setSeleccionValorizacion] = useState<Set<string>>(new Set());
+  const [paginaStock, setPaginaStock] = useState(0);
+  const solicitudStock = useRef<AbortController | null>(null);
+  const datosValidos = !loading && !error;
 
   async function cargar() {
+    solicitudStock.current?.abort();
+    const solicitud = new AbortController();
+    solicitudStock.current = solicitud;
+    const vigente = () => !solicitud.signal.aborted && solicitudStock.current === solicitud;
     setLoading(true);
     setError("");
+    setScanResult(null);
     try {
-      setProductos(await listarProductosSigo(empresaId));
+      const datos = await listarProductosSigo(empresaId, solicitud.signal);
+      if (vigente()) { setProductos(datos); setPaginaStock(0); }
     } catch (err) {
+      if (!vigente()) return;
       setProductos([]);
       setError(err instanceof Error ? err.message : "No se pudo cargar el stock");
     } finally {
-      setLoading(false);
+      if (vigente()) setLoading(false);
     }
   }
 
   useEffect(() => {
     void cargar();
+    return () => solicitudStock.current?.abort();
   }, [empresaId]);
+  useEffect(() => { setPaginaStock(0); }, [busqueda, soloCriticos]);
 
   const visibles = productos.filter((p) => p.stock_actual != null);
   const criticosCatalogo = visibles.filter((p) => p.stock_minimo != null && Number(p.stock_actual) <= Number(p.stock_minimo));
   const dineroStock = (valor:number) => valor.toLocaleString("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:2});
   function exportarStockExcel() {
+    if (!datosValidos) return;
     const esc = (v: unknown) => `"${String(v ?? "").replaceAll('"', '""')}"`;
     const lineas = [
       ["Producto","Código","Stock","Precio compra","Precio venta","Valorizado compra","Valorizado venta","Margen potencial"],
@@ -637,6 +650,9 @@ function Stock({ empresaId }: { empresaId: string }) {
     !termino || [p.nombre, p.codigo_interno, p.codigo_barras, p.marca]
       .some((valor) => valor && normalizarBusqueda(valor).includes(termino))
   );
+  const paginasStock = Math.max(1, Math.ceil(filas.length / 50));
+  const paginaActualStock = Math.min(paginaStock, paginasStock - 1);
+  const filasPaginaStock = filas.slice(paginaActualStock * 50, (paginaActualStock + 1) * 50);
   // Las tarjetas y la valorización usan la selección explícita o los filtros actuales.
   const productosValorizar = seleccionValorizacion.size
     ? filas.filter((p) => seleccionValorizacion.has(p.id))
@@ -661,18 +677,18 @@ function Stock({ empresaId }: { empresaId: string }) {
       </div>
 
       <div className="stats-grid">
-        <div className="stat-card"><span>Productos con stock visible</span><strong>{productosValorizar.length}</strong></div>
-        <div className="stat-card"><span>Unidades totales</span><strong>{totalUnidades.toLocaleString("es-AR")}</strong></div>
-        <div className="stat-card"><span>Stock crítico</span><strong>{criticos.length}</strong></div>
-        <div className="stat-card"><span>Sin stock</span><strong>{sinStock.length}</strong></div>
-        <div className="stat-card"><span>Valorizado a compra</span><strong>{dineroStock(stockValorCosto)}</strong></div>
-        <div className="stat-card"><span>Valorizado a venta</span><strong>{dineroStock(stockValorVenta)}</strong></div>
-        <div className="stat-card"><span>Margen potencial</span><strong>{dineroStock(margenPotencial)}</strong></div>
+        <div className="stat-card"><span>Productos con stock visible</span><strong>{datosValidos ? productosValorizar.length : "—"}</strong></div>
+        <div className="stat-card"><span>Unidades totales</span><strong>{datosValidos ? totalUnidades.toLocaleString("es-AR") : "—"}</strong></div>
+        <div className="stat-card"><span>Stock crítico</span><strong>{datosValidos ? criticos.length : "—"}</strong></div>
+        <div className="stat-card"><span>Sin stock</span><strong>{datosValidos ? sinStock.length : "—"}</strong></div>
+        <div className="stat-card"><span>Valorizado a compra</span><strong>{datosValidos ? dineroStock(stockValorCosto) : "—"}</strong></div>
+        <div className="stat-card"><span>Valorizado a venta</span><strong>{datosValidos ? dineroStock(stockValorVenta) : "—"}</strong></div>
+        <div className="stat-card"><span>Margen potencial</span><strong>{datosValidos ? dineroStock(margenPotencial) : "—"}</strong></div>
       </div>
 
       <div className="panel">
         <h3>Buscar stock por nombre o código</h3>
-        <BarcodeScanner
+        {datosValidos && <BarcodeScanner
           empresaId={empresaId}
           action="consultar"
           onQueryChange={(query) => { setBusqueda(query); setScanResult(null); }}
@@ -687,25 +703,26 @@ function Stock({ empresaId }: { empresaId: string }) {
             return productos.some((p) => normalizarBusqueda(p.nombre).includes(valor));
           }}
           onProduct={(producto) => { setScanResult(producto); setBusqueda(producto.codigo_barras || producto.codigo_interno || producto.nombre); }}
-        />
+        />}
         {scanResult && <p><strong>{scanResult.nombre}</strong> · Stock actual: {scanResult.stock_actual ?? "restringido"} · Mínimo: {scanResult.stock_minimo ?? "sin definir"}</p>}
       </div>
 
       <div className="panel">
         <div className="page-header">
           <div><h3>Detalle de stock</h3><p>Priorizá faltantes y productos bajo mínimo.</p></div>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button className="admin-button" onClick={() => setSeleccionValorizacion(new Set(filas.map(p=>p.id)))}>Marcar visibles</button><button className="admin-button" onClick={() => setSeleccionValorizacion(new Set())}>Todos</button><button className="admin-button" onClick={exportarStockExcel}>Exportar Excel</button><button className={soloCriticos ? "primary-button" : "admin-button"} onClick={() => setSoloCriticos((actual) => !actual)}>{soloCriticos ? "Ver todo" : "Solo críticos"}</button></div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button className="admin-button" disabled={!datosValidos} onClick={() => setSeleccionValorizacion(new Set(filasPaginaStock.map(p=>p.id)))}>Marcar visibles</button><button className="admin-button" disabled={!datosValidos} onClick={() => setSeleccionValorizacion(new Set())}>Todos</button><button className="admin-button" disabled={!datosValidos} onClick={exportarStockExcel}>Exportar Excel</button><button disabled={!datosValidos} className={soloCriticos ? "primary-button" : "admin-button"} onClick={() => setSoloCriticos((actual) => !actual)}>{soloCriticos ? "Ver todo" : "Solo críticos"}</button></div>
         </div>
         {loading && <p>Cargando stock…</p>}
-        {!loading && error && <p role="alert">{error}</p>}
-        {!loading && !error && (
+        {!loading && error && <div role="alert"><p>{error}</p><button type="button" className="admin-button" onClick={() => void cargar()}>Reintentar stock</button></div>}
+        {datosValidos && <nav aria-label="Páginas de stock"><span>Página {paginaActualStock + 1} de {paginasStock} · {filas.length} coincidencias</span><button className="admin-button" disabled={paginaActualStock === 0} onClick={() => setPaginaStock(paginaActualStock - 1)}>Anterior</button><button className="admin-button" disabled={paginaActualStock + 1 >= paginasStock} onClick={() => setPaginaStock(paginaActualStock + 1)}>Siguiente</button><button className="admin-button" disabled={paginaActualStock + 1 >= paginasStock} onClick={() => setPaginaStock(paginasStock - 1)}>Última página</button></nav>}
+        {datosValidos && (
           <div className="table-wrapper">
             <table className="products-table">
               <thead><tr><th aria-label="Seleccionar"></th><th>Producto</th><th>Código</th><th>Stock actual</th><th>Precio compra</th><th>Precio venta</th><th>Valor compra</th><th>Valor venta</th><th>Estado</th></tr></thead>
               <tbody>
-                {filas.map((p) => {
+                {filasPaginaStock.map((p) => {
                   const critico = p.stock_minimo != null && Number(p.stock_actual) <= Number(p.stock_minimo);
-                  return <tr key={p.id}><td><input type="checkbox" aria-label={`Valorizar ${p.nombre}`} checked={seleccionValorizacion.has(p.id)} onChange={(e)=>setSeleccionValorizacion(actual=>{const n=new Set(actual); if(e.target.checked)n.add(p.id);else n.delete(p.id);return n;})}/></td><td><strong>{p.nombre}</strong></td><td>{p.codigo_barras || p.codigo_interno || "-"}</td><td>{p.stock_actual}</td><td>{dineroStock(Number(p.costo_actual ?? p.costo_ultima_compra ?? 0))}</td><td>{dineroStock(Number(p.precio_venta ?? 0))}</td><td>{dineroStock(Number(p.stock_actual||0)*Number(p.costo_actual ?? p.costo_ultima_compra ?? 0))}</td><td>{dineroStock(Number(p.stock_actual||0)*Number(p.precio_venta ?? 0))}</td><td>{Number(p.stock_actual) <= 0 ? "SIN STOCK" : critico ? "CRÍTICO" : "OK"}</td></tr>;
+                  return <tr key={p.id} data-stock-product-id={p.id}><td><input type="checkbox" aria-label={`Valorizar ${p.nombre}`} checked={seleccionValorizacion.has(p.id)} onChange={(e)=>setSeleccionValorizacion(actual=>{const n=new Set(actual); if(e.target.checked)n.add(p.id);else n.delete(p.id);return n;})}/></td><td><strong>{p.nombre}</strong></td><td>{p.codigo_barras || p.codigo_interno || "-"}</td><td>{p.stock_actual}</td><td>{dineroStock(Number(p.costo_actual ?? p.costo_ultima_compra ?? 0))}</td><td>{dineroStock(Number(p.precio_venta ?? 0))}</td><td>{dineroStock(Number(p.stock_actual||0)*Number(p.costo_actual ?? p.costo_ultima_compra ?? 0))}</td><td>{dineroStock(Number(p.stock_actual||0)*Number(p.precio_venta ?? 0))}</td><td>{Number(p.stock_actual) <= 0 ? "SIN STOCK" : critico ? "CRÍTICO" : "OK"}</td></tr>;
                 })}
               </tbody>
             </table>

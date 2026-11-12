@@ -30,6 +30,7 @@ function fixture(){
   assertBound(args.p_limite<=501);
   const delay=qa.delay; await new Promise(r=>setTimeout(r,delay));
   if(signal?.aborted)throw new DOMException('Aborted','AbortError');
+  if(args.p_limite===500&&qa.stockFailOffset!=null&&args.p_offset>=qa.stockFailOffset){qa.stockFailOffset=null;return {data:null,error:{code:'57014',message:'statement timeout sintético'}}}
   if(qa.failNext){const kind=qa.failNext;qa.failNext=false;if(kind==='connection')throw new TypeError('Failed to fetch');return {data:null,error:kind==='permission'?{code:'42501',message:'FORBIDDEN'}:kind==='server'?{code:'XX000',message:'INTERNAL_ERROR'}:{code:'57014',message:'statement timeout sintético'}}}
   let rows=qa.products.filter(p=>p.empresa_id===args.p_empresa_id);
   if(args.p_ids)rows=rows.filter(p=>args.p_ids.includes(p.id));
@@ -40,13 +41,13 @@ function fixture(){
   });
   rows.sort((a,b)=>a.nombre.localeCompare(b.nombre)||a.id.localeCompare(b.id));
   qa.lastCompleted={q:args.p_busqueda,empresa:args.p_empresa_id};
-  return {data:structuredClone(rows.slice(args.p_offset??0,(args.p_offset??0)+(args.p_limite??51))),error:null};
+  return {data:structuredClone(rows.slice(args.p_offset??0,(args.p_offset??0)+(args.p_limite===500&&qa.stockWireCap?Math.min(args.p_limite,qa.stockWireCap):(args.p_limite??51)))),error:null};
  };
  function assertBound(v){if(!v)throw Error('Unbounded request')}
  for(const name of ['sigo:arca:venta','sigo:fiscal:caja'])window.addEventListener(name,e=>qa.fiscal.push({name,detail:e.detail}));
  window.fetch=window.open=window.print=(...args)=>{qa.forbidden.push(args);throw Error('External access forbidden')};
 }
-const built=await build({stdin:{resolveDir:process.cwd(),loader:'tsx',contents:`import React from 'react';import {createRoot} from 'react-dom/client';import POS from './src/VentaRapidaOperativa';import {Productos} from './src/SigoApp';import {leerProductosPorIdsSigo} from './src/productos';(${fixture.toString()})();const root=createRoot(document.getElementById('root'));window.__qa.readIds=leerProductosPorIdsSigo;window.__qa.render=(modo,empresa=window.__qa.E)=>{window.__qa.empresa=empresa;root.render(modo==='productos'?<Productos key={empresa} empresaId={empresa} puedeEditar={false}/>:<POS empresaId={empresa}/>)};window.__qa.render('pos');`},bundle:true,write:false,format:'iife',platform:'browser',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"','import.meta.env':'{}'},plugins:[{name:'synthetic',setup(b){b.onResolve({filter:/^\.\//},a=>mocks[a.path]?{path:a.path,namespace:'qa'}:null);b.onLoad({filter:/.*/,namespace:'qa'},a=>({contents:mocks[a.path],loader:'tsx'}));b.onLoad({filter:/\.css$/},()=>({contents:'',loader:'text'}));}}]});
+const built=await build({stdin:{resolveDir:process.cwd(),loader:'tsx',contents:`import React from 'react';import {createRoot} from 'react-dom/client';import POS from './src/VentaRapidaOperativa';import {Productos,Stock} from './src/SigoApp';import {leerProductosPorIdsSigo,listarProductosSigo} from './src/productos';(${fixture.toString()})();const root=createRoot(document.getElementById('root'));window.__qa.readIds=leerProductosPorIdsSigo;window.__qa.readAll=listarProductosSigo;window.__qa.render=(modo,empresa=window.__qa.E)=>{window.__qa.empresa=empresa;root.render(modo==='stock'?<Stock key={empresa} empresaId={empresa}/>:modo==='productos'?<Productos key={empresa} empresaId={empresa} puedeEditar={false}/>:<POS empresaId={empresa}/>)};window.__qa.render('pos');`},bundle:true,write:false,format:'iife',platform:'browser',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"','import.meta.env':'{}'},plugins:[{name:'synthetic',setup(b){b.onResolve({filter:/^\.\//},a=>mocks[a.path]?{path:a.path,namespace:'qa'}:null);b.onLoad({filter:/.*/,namespace:'qa'},a=>({contents:mocks[a.path],loader:'tsx'}));b.onLoad({filter:/\.css$/},()=>({contents:'',loader:'text'}));}}]});
 const css=(await Promise.all(['src/index.css','src/caja-ventas.css','src/barcode-scanner.css'].map(f=>fs.readFile(f,'utf8')))).join('\n');
 const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
 const context=await browser.newContext({viewport:{width:1280,height:1000},serviceWorkers:'block'});
@@ -135,6 +136,37 @@ try{
   assert.equal((await page.evaluate(()=>window.__qa.requests)).every(r=>r.name==='consultar_productos_sigo'||r.name==='listar_modulos_empresa_sigo'),true);
  });
  await page.screenshot({path:artifact+'/productos.png',fullPage:true});
+ await check('Stock partial timeout never becomes zero indicators and retry loads 20000 with only 50 DOM rows',async()=>{
+  await page.evaluate(()=>{window.__qa.stockFailOffset=500;window.__qa.delay=20;window.__qa.render('stock')});
+  await page.getByText('Cargando stock…',{exact:true}).waitFor();
+  assert.deepEqual(await page.locator('.stock-page-compact .stat-card strong').allTextContents(),Array(7).fill('—'));
+  await page.getByRole('button',{name:'Reintentar stock',exact:true}).waitFor();
+  assert.deepEqual(await page.locator('.stock-page-compact .stat-card strong').allTextContents(),Array(7).fill('—'));
+  assert.equal(await page.locator('[data-stock-product-id]').count(),0);
+  assert.equal(await page.getByRole('button',{name:'Exportar Excel',exact:true}).isDisabled(),true);
+  assert.equal(await page.getByText('No hay stock visible para mostrar.',{exact:true}).count(),0);
+  await page.evaluate(()=>window.__qa.delay=0);await page.getByRole('button',{name:'Reintentar stock',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('.stock-page-compact .stat-card strong')?.textContent==='20000');
+  assert.equal(await page.locator('[data-stock-product-id]').count(),50);
+  await page.getByRole('button',{name:'Última página',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('[aria-label="Páginas de stock"]')?.textContent.includes('Página 400 de 400'));
+  assert.match(await page.locator('.stock-page-compact .products-table').innerText(),/Producto 20000/);
+  await page.screenshot({path:artifact+'/stock.png',fullPage:true});
+ });
+ await check('Stock cancels old tenant loads and never shows prior-company indicators or rows',async()=>{
+  await page.evaluate(()=>{window.__qa.delay=200;window.__qa.render('stock',window.__qa.E)});
+  await page.waitForTimeout(35);
+  await page.evaluate(()=>{window.__qa.delay=0;window.__qa.render('stock',window.__qa.O)});
+  await page.waitForFunction(()=>document.querySelector('.stock-page-compact .stat-card strong')?.textContent==='20000');
+  await page.waitForTimeout(250);
+  assert.equal(await page.locator('[data-stock-product-id]').count(),50);
+  assert.equal(await page.evaluate(()=>Array.from(document.querySelectorAll('[data-stock-product-id]')).every(e=>e.dataset.stockProductId.startsWith(window.__qa.O+':'))),true);
+ });
+ await check('Complete catalog readers continue beyond a lower PostgREST page cap without bulk/unit RPCs',async()=>{
+  const result=await page.evaluate(async()=>{const q=window.__qa;q.stockWireCap=137;try{const rows=await q.readAll(q.E);return {count:rows.length,unique:new Set(rows.map(p=>p.id)).size,first:rows.some(p=>p.codigo_interno==='INT-1'),middle:rows.some(p=>p.codigo_interno==='INT-10000'),last:rows.some(p=>p.codigo_interno==='INT-20000')}}finally{q.stockWireCap=null}});
+  assert.deepEqual(result,{count:20000,unique:20000,first:true,middle:true,last:true});
+  assert.equal((await page.evaluate(()=>window.__qa.requests)).every(r=>r.name==='consultar_productos_sigo'||r.name==='listar_modulos_empresa_sigo'),true);
+ });
  assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(await page.evaluate(()=>window.__qa.forbidden),[]);
  await fs.writeFile(artifact+'/browser.json',JSON.stringify({status:'PASS',syntheticProductsPerTenant:20000,tenants:2,cajaOpenMs,cases,timings,limitations:['Synthetic DB/payment/ticket/fiscal boundaries; no real sale, CAE, printer, physical scanner or production validation']},null,2));
 }finally{await browser.close()}

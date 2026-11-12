@@ -2,7 +2,7 @@
   "status": "PASS",
   "syntheticProductsPerTenant": 20000,
   "tenants": 2,
-  "cajaOpenMs": 838,
+  "cajaOpenMs": 797,
   "cases": [
     "Caja starts without downloading products or units",
     "ENCHUFE: 120 matches, pages 50/50/20 and keyboard selects 120th",
@@ -16,24 +16,27 @@
     "Timeout displays error, retry succeeds without false empty result",
     "Aborted old query and tenant change never show former tenant rows",
     "Products initial page and server search reach beyond 14000, next page works",
-    "Readback requests only selected IDs and all RPCs stay bounded"
+    "Readback requests only selected IDs and all RPCs stay bounded",
+    "Stock partial timeout never becomes zero indicators and retry loads 20000 with only 50 DOM rows",
+    "Stock cancels old tenant loads and never shows prior-company indicators or rows",
+    "Complete catalog readers continue beyond a lower PostgREST page cap without bulk/unit RPCs"
   ],
   "timings": [
     {
       "q": "ENCHUFE",
-      "ms": 219
+      "ms": 224
     },
     {
       "q": "ACOPLE RÁPIDO PROFESIONAL",
-      "ms": 238
+      "ms": 237
     },
     {
       "q": "acople rapido profesion",
-      "ms": 211
+      "ms": 217
     },
     {
       "q": "profesion ACOPLE rapido",
-      "ms": 229
+      "ms": 215
     },
     {
       "q": "INT-14999",
@@ -41,15 +44,15 @@
     },
     {
       "q": "7790000014999",
-      "ms": 217
+      "ms": 233
     },
     {
       "q": "marcaqa",
-      "ms": 205
+      "ms": 220
     },
     {
       "q": "acople rapido profesion",
-      "ms": 211
+      "ms": 213
     },
     {
       "q": "INT-14998",
@@ -57,19 +60,19 @@
     },
     {
       "q": "ENCHUFE 14001",
-      "ms": 215
+      "ms": 218
     },
     {
       "q": "ferreteria",
-      "ms": 219
+      "ms": 210
     },
     {
       "q": "supermercado",
-      "ms": 216
+      "ms": 218
     },
     {
       "q": "libreria",
-      "ms": 218
+      "ms": 215
     },
     {
       "q": "carniceria",
@@ -77,7 +80,7 @@
     },
     {
       "q": "verduleria",
-      "ms": 215
+      "ms": 216
     },
     {
       "q": "fiambreria",
@@ -85,15 +88,15 @@
     },
     {
       "q": "limpieza",
-      "ms": 204
+      "ms": 216
     },
     {
       "q": "Producto 00001",
-      "ms": 213
+      "ms": 217
     },
     {
       "q": "Producto 10000",
-      "ms": 208
+      "ms": 211
     },
     {
       "q": "Producto 20000",
@@ -101,11 +104,11 @@
     },
     {
       "q": "INT-19997",
-      "ms": 211
+      "ms": 210
     },
     {
       "q": "INT-19996",
-      "ms": 211
+      "ms": 216
     }
   ],
   "limitations": [

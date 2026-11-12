@@ -38,7 +38,9 @@ const newBlock = `export async function listarProductosSigo(empresaId: string): 
   return productos;
 }`;
 
-if (source.includes(oldBlock)) {
+if (source.includes('const pagina = await consultarCatalogo(empresaId, { p_busqueda: "", p_offset: from, p_limite: pageSize }, signal);')) {
+  // El lector completo ya usa páginas SQL acotadas; conservar esa implementación.
+} else if (source.includes(oldBlock)) {
   source = source.replace(oldBlock, newBlock);
 } else if (!source.includes("PostgREST/Supabase puede limitar una respuesta a 1000 filas")) {
   throw new Error("PRODUCT_CATALOG_PAGINATION_TARGET_NOT_FOUND");

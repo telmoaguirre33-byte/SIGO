@@ -267,26 +267,19 @@ export async function listarUnidadesProductoSigo(empresaId: string, signal?: Abo
 
 export async function listarProductosSigo(empresaId: string, signal?: AbortSignal): Promise<ProductoSigo[]> {
   if (!empresaId) throw new Error("EMPRESA_REQUIRED");
-  // PostgREST/Supabase puede limitar una respuesta a 1000 filas. Conservamos paginación
-  // y orden estable, también para unidades; nunca completar faltantes como piezas.
-  const pageSize = 1000;
+  // Lectores completos (stock, informes/importación) reutilizan el endpoint SQL
+  // paginado. No materializar el catálogo entero dentro de la RPC por cada página.
+  // Avanzar por filas recibidas hasta una página vacía respeta incluso un límite
+  // PostgREST inferior al solicitado; nunca confundirlo con el fin del catálogo.
+  const pageSize = 500;
   const productos: ProductoSigo[] = [];
-  for (let from = 0; ; from += pageSize) {
-    signal?.throwIfAborted();
-    const consulta = supabase.rpc("listar_productos_sigo", { p_empresa_id: empresaId })
-      .order("nombre").order("id").range(from, from + pageSize - 1);
-    const { data, error } = await (signal ? consulta.abortSignal(signal) : consulta);
-    signal?.throwIfAborted();
-    if (error) throw new Error(mensajeErrorBackend(error, "No se pudieron cargar los productos."));
-    const pagina = (data ?? []) as ProductoSigo[];
+  for (let from = 0; ;) {
+    const pagina = await consultarCatalogo(empresaId, { p_busqueda: "", p_offset: from, p_limite: pageSize }, signal);
+    if (pagina.length === 0) break;
     productos.push(...pagina);
-    if (pagina.length < pageSize) break;
+    from += pagina.length;
   }
-  // Un error de unidades no oculta el catálogo, pero jamás autoriza vender por pieza.
-  let unidades: Record<string, UnidadVenta | null> = {};
-  try { unidades = await listarUnidadesProductoSigo(empresaId, signal); } catch { /* fail closed por producto */ }
-  signal?.throwIfAborted();
-  return productos.map((producto) => ({ ...producto, unidad_medida: unidades[producto.id] ?? null }));
+  return productos;
 }
 
 export async function guardarProductoSigo(input: GuardarProductoSigoInput): Promise<string> {

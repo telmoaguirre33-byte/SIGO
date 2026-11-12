@@ -18,6 +18,10 @@ Las consultas son cancelables, con debounce de 180 ms y plazo de ocho segundos; 
 
 El cobro ya evitaba cargar el catálogo antes de enviar la RPC; se conserva ese comportamiento y la conciliación/idempotencia. Los auxiliares opcionales leen sólo IDs. El importador obtiene un maestro completo al analizar un archivo, sin interpretar la página visible como catálogo íntegro.
 
+Stock, Compras e Informes conservan su contrato de lectura completa, pero reutilizan ahora `consultar_productos_sigo` en páginas SQL de hasta 500 con las unidades incluidas. Ya no materializan el catálogo entero en una RPC por cada página ni vuelven a descargar todas las unidades. Avanzan por la cantidad efectivamente recibida hasta una página vacía: un límite REST inferior no oculta los artículos siguientes. La transferencia completa sigue siendo necesaria para los cálculos/exportaciones actuales; los agregados SQL son una mejora posterior, sin confundir esa lectura completa con la búsqueda de Caja.
+
+Stock muestra 50 filas por pantalla, con navegación hasta la última página y valorización sobre el conjunto filtrado/seleccionado completo. Durante carga o error los indicadores muestran «—», no ceros; las exportaciones/selecciones se bloquean hasta completar la lectura. Un error en una página intermedia invalida el resultado completo y ofrece reintento. Se cancela el pedido anterior y se reinicia el componente por empresa para descartar datos atrasados de otro comercio.
+
 ## Capacidad medida con datos sintéticos
 
 PostgreSQL 17.6 local sin red, dos empresas independientes. Se ejecutan los siete tamaños pedidos, búsquedas de artículos inicial/central/final, todas las páginas, códigos/alias/duplicados, tildes, caracteres especiales y siete rubros: ferretería, supermercado, librería, carnicería, verdulería, fiambrería y limpieza. Se agregan controles de productos inactivos y stock cero; los primeros se excluyen y los segundos siguen siendo localizables.
@@ -34,7 +38,7 @@ PostgreSQL 17.6 local sin red, dos empresas independientes. Se ejecutan los siet
 
 Se verificó que todos los IDs activos son recuperables una sola vez, sin mezcla de empresas: 400 páginas a 20.000 y 1.000 páginas a 50.000. Ocho procesos de cajero consultan simultáneamente bajo autorización real de la función del repositorio. Estas mediciones pertenecen al fixture; **no son una garantía de latencia en producción**.
 
-En la prueba funcional Chromium hay 20.000 productos por empresa (40.000 en total), trece casos y apertura de Caja de 838 ms en el entorno sintético, sin lectura inicial de catálogo. Incluye nombres/códigos/categorías, inicio/medio/final, 120 coincidencias en páginas 50/50/20, teclado/mouse, cambio de cantidad, lectores EAN/alfanuméricos, duplicados, errores diferenciados, timeout/reintento y cambio de empresa con respuesta anterior cancelada.
+En la prueba funcional Chromium hay 20.000 productos por empresa (40.000 en total), dieciséis casos y apertura de Caja de 797 ms en el entorno sintético, sin lectura inicial de catálogo. Incluye nombres/códigos/categorías, inicio/medio/final, 120 coincidencias en páginas 50/50/20, teclado/mouse, cambio de cantidad, lectores EAN/alfanuméricos, duplicados, errores diferenciados, timeout/reintento y cambio de empresa con respuesta anterior cancelada.
 
 ## Caja, cantidades y facturación
 
@@ -44,7 +48,7 @@ La RPC transaccional real del repositorio se prueba en otro PostgreSQL aislado c
 
 Regresiones: build, verify:critical, test:manual-medidas, errores tipados, gate de migraciones (30 casos), medidas Chromium, cobros Chromium escritorio/móvil, SDK/sesiones/ACK y recuperación idempotente. CI reproduce las pruebas sobre el HEAD de esta PR. No se ejecutaron operaciones comerciales reales, CAE, impresoras ni dispositivos físicos.
 
-Evidencia JSON y capturas: [catalogo121-evidencia](./catalogo121-evidencia/). `db.json` y `scale.json` contienen SQL/escala; `browser.json` las trece pruebas funcionales; `sale-db.json` la RPC de ventas; `rls.json` el candidato de seguridad. Los artefactos de Actions contienen las mediciones de cada corrida de CI.
+Evidencia JSON y capturas: [catalogo121-evidencia](./catalogo121-evidencia/). `db.json` y `scale.json` contienen SQL/escala; `browser.json` las dieciséis pruebas funcionales; `sale-db.json` la RPC de ventas; `rls.json` el candidato de seguridad. Los artefactos de Actions contienen las mediciones de cada corrida de CI.
 
 ## RLS: solución preparada y validada, no aplicada
 
@@ -58,15 +62,15 @@ El rollback global RLS existente reabriría privilegios anteriores y no es la re
 
 ## Respaldo, migración y publicación
 
-Respaldo de datos: **pendiente de verificación en el panel autorizado**. Se pidió acceso a Scheduled Backups → View y Physical backups/PITR → View del proyecto SIGO. Según la documentación de Supabase, Read-Only permite visualizar esos apartados; no hace falta permiso de restauración para inspeccionarlos. No se solicitan claves en el chat. Un snapshot de funciones o ACTIVE_HEALTHY no prueba que exista un respaldo recuperable.
+Respaldo real de PostgreSQL COMERCIAL **recuperado y verificado**: [Actions 43317161295](https://github.com/telmoaguirre33-byte/SIGO/actions/runs/43317161295), snapshot del 12/11/2026 22:09:12 UTC. Captura consistente READ ONLY, cifrado y persistencia privada/readback PASS; restore sin red y datos/esquema/funciones/roles/membresías/RLS/ACL/extensiones/secuencias MATCH. Ambos SQL exactos se aplicaron sobre la copia real, con owner/admin/seller/warehouse, aislamiento, deny/no miembro, máscaras y todas las filas intactas. No se aplicó SQL productivo. [Procedimiento y cobertura](https://github.com/telmoaguirre33-byte/SIGO/blob/f168a9f/docs/operacion-controlada/respaldo-local/NUBE.md).
 
-Se debe registrar referencia del backup, fecha, cobertura/retención, estado, ventana de pérdida de datos y mecanismo de restauración. Los backups de PostgreSQL incluyen metadatos de Storage, no sus objetos; no afirmar una cobertura que no tengan. Crear una restauración en otro proyecto puede generar costos y requiere autorización aparte.
+El plan Free no incluye respaldos automáticos. Esta copia lógica no incluye passwords LOGIN, bytes físicos Storage ni secretos/configuración externos. La clave privada destinataria permanece separada y su disponibilidad/coincidencia se verificó. La revisión RLS abarca consumidores minoristas; no certifica integraciones externas ni otros proyectos. Sigue siendo necesaria autorización específica para los SQL y el despliegue.
 
 Migración exacta del buscador: `20261112021657_catalogo_busqueda_servidor_121.sql`, SHA-256 `33dcd3c00c02535f8df262752bc148726345a240de71eb931565f746b8e68046`. Todavía no aplicada a producción. Es transaccional y aborta si no obtiene los locks en dos segundos. Instala pg_trgm y dos índices; no modifica filas comerciales. El candidato RLS es otra operación explícita y no participa en despliegues automáticos.
 
-Secuencia pendiente: cerrar respaldo y revisión del gate RLS → confirmar hashes/CI/compatibilidad → acordar ventana y pedir autorización final → aplicar únicamente los SQL autorizados → verificar RPC y permisos → publicar sólo SIGO minorista → verificar el commit servido y el cliente. Nunca db push ni reparación indiscriminada del historial.
+Secuencia pendiente: confirmar CI del último HEAD/compatibilidad → acordar ventana y pedir autorización final específica de catálogo/RLS y web → aplicar únicamente los SQL autorizados → verificar RPC y permisos → publicar sólo SIGO minorista → verificar el commit servido y el cliente. Nunca db push ni reparación indiscriminada del historial.
 
-Recuperación: un error previo a COMMIT conserva la base anterior. Si falla la web, volver al despliegue minorista anterior identificado en el informe privado, conservando el SQL compatible. Si se necesita revertir una función, usar el rollback específico con fingerprint, sin restaurar filas ni reabrir políticas globales. No restaurar una base completa sobre ventas nuevas. La recuperación de esquema está ensayada en PostgreSQL 17.6 con datos sintéticos; no equivale a restaurar un backup de producción.
+Recuperación: un error previo a COMMIT conserva la base anterior. Si falla la web, volver al despliegue minorista anterior identificado en el informe privado, conservando el SQL compatible. Si se necesita revertir una función, usar el rollback específico con fingerprint, sin restaurar filas ni reabrir políticas globales. No restaurar una base completa sobre ventas nuevas. La recuperación de funciones sigue ensayada; además se restauró/verificó el archive real de producción en copia aislada. Esa copia no autoriza restaurar datos sobre ventas nuevas.
 
 ## Validación posterior obligatoria, aún pendiente
 
