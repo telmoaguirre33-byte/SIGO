@@ -7,6 +7,14 @@ import respaldo as b
 
 
 class Guardas(unittest.TestCase):
+    def test_bootstrap_restore_keeps_attributes_and_membership_grantor(self):
+        sql=b'CREATE ROLE postgres;\nCREATE ROLE supabase_admin;\nALTER ROLE supabase_admin WITH SUPERUSER;\nGRANT pg_monitor TO postgres GRANTED BY supabase_admin;\n'
+        restored=b.roles_for_bootstrap(sql,'supabase_admin')
+        self.assertEqual(restored,sql.replace(b'CREATE ROLE supabase_admin;\n',b''))
+        for bad in [sql.replace(b'CREATE ROLE supabase_admin;\n',b''),sql+b'CREATE ROLE supabase_admin;\n']:
+            with self.assertRaises(RuntimeError):b.roles_for_bootstrap(bad,'supabase_admin')
+        with self.assertRaises(RuntimeError):b.roles_for_bootstrap(sql,'unreviewed')
+
     def test_tls_and_pgpass_without_environment_or_argument_secrets(self):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)

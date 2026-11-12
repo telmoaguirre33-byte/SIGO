@@ -20,7 +20,7 @@ ROOT=c.ROOT
 def validate_rls_copy(pg,meta):
     # This object is created only for the new network=none restore destination.
     # The superuser is a local recovery operator, never a production credential.
-    probe=b.PG(pg.docker,pg.box,'sigo_restore_operator',meta['database'])
+    probe=b.PG(pg.docker,pg.box,meta['bootstrap_role'],meta['database'])
     member=json.loads(probe.sql("""select(select json_build_object('company',eu.empresa_id,'user',eu.user_id)
 from public.empresa_usuarios eu where eu.activo and eu.user_id is not null and eu.empresa_id is not null
 and exists(select 1 from public.productos p where p.empresa_id=eu.empresa_id and p.activo and upper(btrim(coalesce(p.categoria,'')))<>'NO_VENDIBLE')limit 1);""")or'null')

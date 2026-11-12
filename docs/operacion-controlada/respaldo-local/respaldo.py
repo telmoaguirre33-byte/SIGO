@@ -110,6 +110,19 @@ def literal(s):
     return "'" + s.replace("'", "''") + "'"
 
 
+def roles_for_bootstrap(sql, bootstrap):
+    # initdb must use the source bootstrap role (OID 10). PostgreSQL 17 checks
+    # GRANTED BY against that identity for predefined-role memberships. Keep all
+    # original ALTER/GRANT statements; omit only its already-existing CREATE.
+    if bootstrap not in ('supabase_admin','postgres'):
+        raise RuntimeError('El rol bootstrap requiere revisión antes de restaurar.')
+    creates={('CREATE ROLE '+bootstrap+';').encode(),('CREATE ROLE '+ident(bootstrap)+';').encode()}
+    lines=sql.splitlines()
+    if sum(line in creates for line in lines)!=1:
+        raise RuntimeError('El archive no declara exactamente una vez el rol bootstrap.')
+    return b'\n'.join(line for line in lines if line not in creates)+b'\n'
+
+
 class PG:
     def __init__(self, docker, box, user=None, db=None, service=False, socket='/tmp'):
         self.docker, self.box, self.user, self.db, self.service = docker, box, user, db, service
@@ -208,6 +221,10 @@ def capture(pg, work, snapshot_hook=None):
             pre = prefix(snapshot)
             meta = {k:json.loads(pg.sql(pre+q+'commit;')) for k,q in
                     [('tables',TABLES),('roles',ROLES),('policies',POLICIES),('extensions',EXTENSIONS),('large_objects',LARGE_OBJECTS)]}
+            meta['bootstrap_role']=pg.sql('select rolname from pg_roles where oid=10;')
+            bootstrap=next((r for r in meta['roles']if r['rolname']==meta['bootstrap_role']),None)
+            if not bootstrap or not bootstrap['rolsuper']:
+                raise RuntimeError('La identidad bootstrap necesita revisión para la copia aislada.')
             print('Capturando esquema y datos en un único snapshot…', flush=True)
             phase('source_snapshot_archive')
             with (work/'database.dump').open('wb') as f:
@@ -298,6 +315,8 @@ def unpack(encrypted, folder, phrase):
 
 def restore_files(docker, work, meta, image, keep=False, candidate_dir=None, candidate_probe=None):
     phase('isolated_restore_initialization')
+    bootstrap=meta.get('bootstrap_role')
+    roles_input=roles_for_bootstrap((work/'roles.sql').read_bytes(),bootstrap)
     name='sigo-restore-'+secrets.token_hex(6); volume=name+'-data'; box_started=False
     run(docker+['image','inspect',image], timeout=30)
     run(docker+['volume','create','--label','sigo.backup.local=true',volume])
@@ -305,22 +324,22 @@ def restore_files(docker, work, meta, image, keep=False, candidate_dir=None, can
         run(docker+['run','--rm','--network','none','--user','0','--entrypoint','/bin/sh',
                     '--mount','type=volume,src='+volume+',dst=/sigo-data',image,
                     '-c','chown postgres:postgres /sigo-data; chmod 700 /sigo-data'])
-        script="initdb -D /sigo-data -U sigo_restore_operator --auth-local=trust --auth-host=reject --encoding=UTF8 > /tmp/init.log 2>&1 && exec postgres -D /sigo-data -k /tmp -c listen_addresses='' -c shared_preload_libraries=pg_stat_statements"
+        script="initdb -D /sigo-data -U \"$1\" --auth-local=trust --auth-host=reject --encoding=UTF8 > /tmp/init.log 2>&1 && exec postgres -D /sigo-data -k /tmp -c listen_addresses='' -c shared_preload_libraries=pg_stat_statements"
         run(docker+['run','-d','--network','none','--name',name,'--label','sigo.backup.local=true',
                     '--user','postgres','--entrypoint','/bin/sh','--mount',
-                    'type=volume,src='+volume+',dst=/sigo-data',image,'-c',script])
+                    'type=volume,src='+volume+',dst=/sigo-data',image,'-c',script,'sigo-isolated-restore',bootstrap])
         box_started=True
         info=json.loads(run(docker+['inspect',name]))[0]
         if info['HostConfig']['NetworkMode']!='none' or info['HostConfig']['PortBindings']:
             raise RuntimeError('El destino de restore debe estar sin red ni puertos.')
-        pg=PG(docker,name,'sigo_restore_operator','template1')
+        pg=PG(docker,name,bootstrap,'template1')
         for _ in range(60):
             try:
                 if pg.sql('select 1;')=='1': break
             except RuntimeError: time.sleep(1)
         else: raise RuntimeError('El PostgreSQL aislado no inició; consultar log privado.')
         phase('isolated_roles_restore')
-        run(pg.cmd('psql','-Xq','-v','ON_ERROR_STOP=1'),(work/'roles.sql').read_bytes())
+        run(pg.cmd('psql','-Xq','-v','ON_ERROR_STOP=1'),roles_input)
         phase('isolated_database_restore')
         pg.sql('drop database postgres;') # Only this freshly created, network=none destination.
         with (work/'database.dump').open('rb') as src,LOG.open('ab') as err:
@@ -334,11 +353,10 @@ def restore_files(docker, work, meta, image, keep=False, candidate_dir=None, can
             raise RuntimeError('El esquema/ACL/funciones restaurados difieren del original.')
         phase('isolated_roles_policies_extensions_comparison')
         roles=json.loads(pg.sql(ROLES)); expected_roles=meta['roles']
-        roles=[r for r in roles if r['rolname']!='sigo_restore_operator']
         if roles!=expected_roles: raise RuntimeError('Difieren los atributos de roles.')
         def role_sql(b):
             return b'\n'.join(x for x in normalized(b).splitlines() if x and
-                              not x.startswith(b'--') and b'sigo_restore_operator' not in x)
+                              not x.startswith(b'--'))
         globals_after=run(pg.cmd('pg_dumpall','--roles-only','--no-role-passwords','--no-password'))
         if role_sql(globals_after)!=role_sql((work/'roles.sql').read_bytes()):
             raise RuntimeError('Difieren configuración o membresías de roles restaurados.')
