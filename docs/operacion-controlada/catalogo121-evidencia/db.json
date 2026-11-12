@@ -1,0 +1,19 @@
+{
+  "status": "PASS",
+  "postgres": "17.11 (Debian 17.11-1.pgdg13+2)",
+  "syntheticProductsPerTenant": 15000,
+  "tenants": 2,
+  "baselineFirst51Ms": 1012.233,
+  "newFirst51Ms": 6.192,
+  "searchMs": 4.945,
+  "legacyOptimizedMs": 14.126,
+  "permissionCallsPerPage": 7,
+  "cases": [
+    "all 15000 reachable without duplicates",
+    "accent/partial/full/brand/internal/EAN/alias",
+    "RLS and owner/admin/seller/warehouse/deny/anonymous",
+    "cross-tenant IDs rejected",
+    "literal wildcard and invalid arguments"
+  ],
+  "limitation": "Synthetic PostgreSQL fixture; not a measurement of the production database"
+}

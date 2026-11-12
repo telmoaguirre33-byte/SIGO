@@ -1,3 +1,4 @@
+import { useBusquedaProductos } from "./useBusquedaProductos";
 import Contabilidad from "./Contabilidad";
 import { cantidadEscaladaMedida, formatoStockMedida, pasoCantidadMedida, UNIDADES_VENTA, type UnidadVenta } from "./ventaPorMedidas";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
@@ -107,7 +108,7 @@ export default function SigoApp({ empresa, initialSection = "Inicio", purchasesO
       <main className="main" style={purchasesOnly ? {width:"100%",maxWidth:"100%",margin:0} : undefined}>
         <section className="content">
           {section === "Inicio" && <Inicio empresa={empresa} onProductos={() => setSection("Productos")} onStock={() => setSection("Stock")} onCaja={() => setSection("Ventas")} />}
-          {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
+          {section === "Productos" && <Productos key={empresa.empresa_id} empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
           {section === "Stock" && <Stock empresaId={empresa.empresa_id} />}
           {section === "Lista de precios" && <ListaPreciosSection empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}
           {section === "Ofertas y etiquetas" && <OfertasEtiquetasSection empresaId={empresa.empresa_id} />}
@@ -203,16 +204,16 @@ function Inicio({ empresa, onProductos, onStock, onCaja }: { empresa: EmpresaOpe
   );
 }
 
-function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar: boolean }) {
-  const [productos, setProductos] = useState<ProductoSigo[]>([]);
-  const [loading, setLoading] = useState(true);
+export function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar: boolean }) {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<ProductoSigo | null>(null);
   const [form, setForm] = useState<ProductoForm>(productoVacio);
-  const [unidadesProducto, setUnidadesProducto] = useState<Record<string, UnidadVenta | null>>({});
-  const [unidadesDisponibles, setUnidadesDisponibles] = useState(false);
+  const buscador = useBusquedaProductos(empresaId, search, true);
+  const productos = buscador.productos;
+  const loading = buscador.loading;
+  const unidadesDisponibles = !buscador.error && !loading;
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
@@ -227,27 +228,12 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
   const productSearchRef = useRef<HTMLDivElement | null>(null);
 
   async function cargar() {
-    setLoading(true);
     setError("");
-    try {
-      setProductos(await listarProductosSigo(empresaId));
-      try {
-        setUnidadesProducto(await listarUnidadesProductoSigo(empresaId));
-        setUnidadesDisponibles(true);
-      } catch {
-        setUnidadesDisponibles(false);
-        setUnidadesProducto({});
-      }
-    } catch (err) {
-      setProductos([]);
-      setError(err instanceof Error ? err.message : "No se pudieron cargar los productos");
-    } finally {
-      setLoading(false);
-    }
+    setScanResult(null);
+    buscador.refrescar();
   }
 
   useEffect(() => {
-    void cargar();
     let activo = true;
     void listarModulosEmpresa(empresaId)
       .then((mods) => { if (activo) { setEanHabilitado(Boolean(mods.find((m) => m.clave === "busqueda_ean")?.habilitado)); } })
@@ -259,12 +245,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
     if (!puedeEditar && scanAction !== "consultar") setScanAction("consultar");
   }, [puedeEditar, scanAction]);
 
-  const filtrados = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return productos;
-    return productos.filter((p) => [p.nombre, p.codigo_interno, p.codigo_barras, p.marca, p.categoria]
-      .filter(Boolean).join(" ").toLowerCase().includes(q));
-  }, [productos, search]);
+  const filtrados = productos;
 
   function abrirNuevo() {
     if (!puedeEditar) return;
@@ -290,7 +271,7 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
       stockMaximo: producto.stock_maximo == null ? "" : String(producto.stock_maximo),
       stockInicial: "",
       costoReferencia: "",
-      unidadMedida: unidadesProducto[producto.id] ?? "",
+      unidadMedida: producto.unidad_medida ?? "",
     });
     setFormError("");
     setAjusteStock(false);
@@ -307,11 +288,11 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
   }
 
   function handleScan(producto: BarcodeProduct, action: BarcodeAction) {
+    if (producto.empresa_id !== empresaId) return;
     setScanResult(producto);
     setSearch(producto.codigo_barras || producto.codigo_interno || producto.nombre);
     if (action === "editar" && puedeEditar) {
-      const original = productos.find((item) => item.id === producto.id);
-      if (original) abrirEdicion(original);
+      if (producto.empresa_id === empresaId) abrirEdicion(producto);
     }
   }
 
@@ -469,19 +450,15 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
           action={puedeEditar ? scanAction : "consultar"}
           onActionChange={puedeEditar ? setScanAction : undefined}
           onProduct={handleScan}
-          onQueryChange={setSearch}
+          onQueryChange={(q) => { setSearch(q); setScanResult(null); }}
           onManualQuery={(query) => {
-            const q = query.trim().toLowerCase();
-            if (!q) return false;
-            const exactCode = productos.some((p) => p.codigo_barras?.toLowerCase() === q || p.codigo_interno?.toLowerCase() === q);
-            if (exactCode) return false;
-            return productos.some((p) => [p.nombre, p.marca, p.categoria].filter(Boolean).join(" ").toLowerCase().includes(q));
+            return Boolean(query.trim()) && !/^\d{6,}$/.test(query.trim());
           }}
         />
         {search.trim() && !scanResult && (
           <div className="product-search-suggestions" role="listbox">
             {filtrados.slice(0,12).map((p,i)=><button type="button" key={p.id} className={i===productoSugerido?"active":""} onClick={()=>{setSearch(p.nombre);setScanResult(p);if(puedeEditar&&scanAction==="editar")abrirEdicion(p)}}><strong>{p.nombre}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} · Stock {p.stock_actual??0}</span></button>)}
-            {filtrados.length===0&&<div className="table-empty">No se encontraron productos.</div>}
+            {!loading&&!buscador.error&&filtrados.length===0&&<div className="table-empty">No se encontraron productos.</div>}
           </div>
         )}
         {scanResult && (
@@ -490,8 +467,8 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
       </div>
 
       {loading && <div className="panel"><p>Cargando productos…</p></div>}
-      {!loading && error && <div className="panel"><h3>No se pudieron cargar los productos</h3><p>{error}</p></div>}
-      {!loading && !error && (
+      {!loading && (error || buscador.error) && <div className="panel"><h3>No se pudieron cargar los productos</h3><p>{error || buscador.error}</p><button type="button" onClick={() => void cargar()}>Reintentar</button></div>}
+      {!loading && !error && !buscador.error && (
         <div className="panel products-list-panel">
           <div className="table-wrapper products-list-scroll">
             <table className="products-table">
@@ -521,6 +498,8 @@ function Productos({ empresaId, puedeEditar }: { empresaId: string; puedeEditar:
           </div>
         </div>
       )}
+
+      {(buscador.pagina > 0 || buscador.hayMas) && <nav aria-label="Páginas de productos"><button type="button" disabled={loading || buscador.pagina === 0} onClick={() => buscador.irPagina(buscador.pagina - 1)}>Anteriores</button><span> Página {buscador.pagina + 1} </span><button type="button" disabled={loading || !buscador.hayMas} onClick={() => buscador.irPagina(buscador.pagina + 1)}>Más productos</button></nav>}
 
       {formOpen && puedeEditar && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) cerrarForm(); }}>

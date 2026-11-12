@@ -1,3 +1,4 @@
+import { catalogo121MockAdapter } from './fixtures/catalogo121-mock-adapter.mjs';
 // Real React/POS, ventas.ts and Supabase SDK. HTTP, credentials, printer and fiscal outputs are synthetic.
 // Restores pre-dispatch actor-change coverage removed from the old preflight-dependent fixture.
 import assert from 'node:assert/strict';
@@ -88,7 +89,7 @@ const mocks = {
   './adminPush':'export const cerrarSesionConPushRevocado=async()=>{};export const notificarAltaEmpresaAdmin=async()=>{};',
 };
 const out = process.cwd()+'/.test-build/cobro104-release-guards.mjs';
-await build({stdin:{contents:'export {default as POS} from "./src/VentaRapidaOperativa";export {default as Gate} from "./src/SigoAuthGate";',resolveDir:process.cwd(),loader:'tsx'},outfile:out,bundle:true,format:'esm',platform:'node',jsx:'automatic',external:['react','react-dom','react/jsx-runtime'],define:{'import.meta.env':JSON.stringify({VITE_MERCADOPAGO_SUBSCRIPTION_URL:''})},plugins:[{name:'no-live-services',setup(b){b.onResolve({filter:/^\.\//},a=>mocks[a.path]?{path:a.path,namespace:'boundary'}:null);b.onLoad({filter:/.*/,namespace:'boundary'},a=>({contents:mocks[a.path],loader:'tsx',resolveDir:process.cwd()}));b.onLoad({filter:/\.css$/},()=>({contents:'',loader:'text'}));}}]});
+await build({stdin:{contents:'export {default as POS} from "./src/VentaRapidaOperativa";export {default as Gate} from "./src/SigoAuthGate";',resolveDir:process.cwd(),loader:'tsx'},outfile:out,bundle:true,format:'esm',platform:'node',jsx:'automatic',external:['react','react-dom','react/jsx-runtime'],define:{'import.meta.env':JSON.stringify({VITE_MERCADOPAGO_SUBSCRIPTION_URL:''})},plugins:[{name:'no-live-services',setup(b){b.onResolve({filter:/^\.\//},a=>mocks[a.path]?{path:a.path,namespace:'boundary'}:null);b.onLoad({filter:/.*/,namespace:'boundary'},a=>({contents:mocks[a.path] + (a.path === './productos' ? catalogo121MockAdapter : ''),loader:'tsx',resolveDir:process.cwd()}));b.onLoad({filter:/\.css$/},()=>({contents:'',loader:'text'}));}}]});
 const { POS, Gate } = await import(pathToFileURL(out));
 async function settle() { await act(async()=>{await new Promise(r=>setTimeout(r,30));}); }
 async function waitFor(check, message) { const until=Date.now()+4000;while(!check()&&Date.now()<until)await settle();assert.ok(check(),message); }

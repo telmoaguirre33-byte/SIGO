@@ -1,3 +1,4 @@
+import { catalogo121MockAdapter } from './fixtures/catalogo121-mock-adapter.mjs';
 // Independent HTTP-ACK integration: actual Supabase SDK thenable/parser, ventas.ts, POS and sessionStorage.
 // All HTTP is synthetic; no network, credentials, fiscal listeners or physical devices.
 // Run after npm run build. Optional COBRO104_REAL_DEADLINE=1 runs an additional real 25-second wait.
@@ -64,7 +65,7 @@ const mocks={
  './BarcodeScanner':'import React from "react";export default function Scanner(p){return React.createElement("button",{id:"add",onClick:()=>p.onProduct(globalThis.__audit.products(p.empresaId)[0])},"Add");}',
 };
 const out=root+'/.test-build/cobro104-ack-ui.mjs';
-await build({stdin:{contents:'export {default as POS} from "./src/VentaRapidaOperativa";export {huellaPayloadCobro} from "./src/intentoCobro";',resolveDir:root,loader:'tsx'},outfile:out,bundle:true,format:'esm',platform:'node',jsx:'automatic',external:['react','react-dom','react/jsx-runtime'],plugins:[{name:'service-boundaries-real-sdk',setup(b){if(baseline)b.onLoad({filter:/\/(VentaRapidaOperativa\.tsx|ventas\.ts|intentoCobro\.ts)$/},async a=>({contents:await fs.readFile(baseline+'/src/'+a.path.split('/').at(-1),'utf8'),loader:a.path.endsWith('.tsx')?'tsx':'ts',resolveDir:root+'/src'}));b.onResolve({filter:/^\.\//},a=>mocks[a.path]?{path:a.path,namespace:'boundary'}:null);b.onLoad({filter:/.*/,namespace:'boundary'},a=>({contents:mocks[a.path],resolveDir:root}));}}]});
+await build({stdin:{contents:'export {default as POS} from "./src/VentaRapidaOperativa";export {huellaPayloadCobro} from "./src/intentoCobro";',resolveDir:root,loader:'tsx'},outfile:out,bundle:true,format:'esm',platform:'node',jsx:'automatic',external:['react','react-dom','react/jsx-runtime'],plugins:[{name:'service-boundaries-real-sdk',setup(b){if(baseline)b.onLoad({filter:/\/(VentaRapidaOperativa\.tsx|ventas\.ts|intentoCobro\.ts)$/},async a=>({contents:await fs.readFile(baseline+'/src/'+a.path.split('/').at(-1),'utf8'),loader:a.path.endsWith('.tsx')?'tsx':'ts',resolveDir:root+'/src'}));b.onResolve({filter:/^\.\//},a=>mocks[a.path]?{path:a.path,namespace:'boundary'}:null);b.onLoad({filter:/.*/,namespace:'boundary'},a=>({contents:mocks[a.path] + (a.path === './productos' ? catalogo121MockAdapter : ''),resolveDir:root}));}}]});
 const {POS,huellaPayloadCobro}=await import(pathToFileURL(out));
 async function settle(){await act(async()=>{await new Promise(r=>setTimeout(r,20))});}
 async function mount(e){activeCompany=e;document.body.innerHTML='<div id="root"></div>';reactRoot=createRoot(document.getElementById('root'));await act(async()=>reactRoot.render(React.createElement(React.StrictMode,null,React.createElement(POS,{empresaId:e}))));await settle();}

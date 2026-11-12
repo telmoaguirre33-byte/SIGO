@@ -1,4 +1,6 @@
 import { supabase } from "./supabase";
+import { useBusquedaProductos } from "./useBusquedaProductos";
+import { normalizarUnidadVenta } from "./ventaPorMedidas";
 import { actualizarSesionCobro, cambioIdentidadCobro, type SesionCobro } from "./sesionCobro";
 import { avisoCobroConfirmado } from "./avisoCobroConfirmado";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -7,9 +9,9 @@ import EditorCantidadMedida from "./EditorCantidadMedida";
 import { cantidadEscaladaMedida, consolidarCantidadMedida, formatoCantidadMedida, formatoStockMedida, pasoCantidadMedida, precioUnitarioConDescuentosMedida, stockRestanteMedida, subtotalMedida, type UnidadVenta } from "./ventaPorMedidas";
 import { crearIntentoCobro, guardarIntentoCobro, leerIntentoCobro, registrarCobroConfirmado, registrarCobroRechazado, type IntentoCobro } from "./intentoCobro";
 import { imprimirTicketVenta } from "./ticketVenta";
-import { isLegacyDuplicateProduct, normalizeBarcode, type BarcodeProduct } from "./barcode";
+import { isLegacyDuplicateProduct, type BarcodeProduct } from "./barcode";
 import { listarClientesSigo, type ClienteSigo } from "./clientes";
-import { guardarProductoSigo, listarProductosSigo, listarUnidadesProductoSigo, type ProductoSigo } from "./productos";
+import { guardarProductoSigo, type ProductoSigo } from "./productos";
 import { listarOfertasProductos, ofertaVigente, type OfertaProducto } from "./ofertasProductos";
 import {
   confirmarVentaSigo,
@@ -46,15 +48,15 @@ function precioUnitarioVenta(item: ItemVenta, ofertas: OfertaProducto[], descuen
 
 export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos = false }: { empresaId: string; puedeEditarProductos?: boolean }) {
   const [items, setItems] = useState<ItemVenta[]>([]);
-  const [unidadesProducto, setUnidadesProducto] = useState<Record<string, UnidadVenta | null>>({});
-  const [unidadesCargadas, setUnidadesCargadas] = useState(false);
   const [productoPorMedida, setProductoPorMedida] = useState<BarcodeProduct | null>(null);
   const [reemplazandoCantidad, setReemplazandoCantidad] = useState(false);
-  const [catalogo, setCatalogo] = useState<ProductoSigo[]>([]);
   const [ofertas, setOfertas] = useState<OfertaProducto[]>([]);
   const [ofertasError, setOfertasError] = useState("");
   const [busquedaProducto, setBusquedaProducto] = useState("");
-  const [catalogoError, setCatalogoError] = useState("");
+  const buscador = useBusquedaProductos(empresaId, busquedaProducto);
+  const catalogo = buscador.productos;
+  const catalogoError = buscador.error;
+  const unidadesProducto = Object.fromEntries([...catalogo, ...items.map(i => i.producto), ...(productoPorMedida ? [productoPorMedida] : [])].map(p => [p.id, normalizarUnidadVenta(p.unidad_medida)]));
   const [productoBloqueado, setProductoBloqueado] = useState<{ producto: BarcodeProduct; razon: "precio" | "stock" } | null>(null);
   const [precioRapido, setPrecioRapido] = useState("");
   const [guardandoPrecio, setGuardandoPrecio] = useState(false);
@@ -129,14 +131,10 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     if (operacionCobroRef.current && operacionCobroRef.current.empresa !== empresaId) operacionCobroRef.current.controller.abort();
     empresaActivaRef.current = empresaId;
     setItems([]);
-    setUnidadesProducto({});
-    setUnidadesCargadas(false);
     setProductoPorMedida(null);
-    setCatalogo([]);
     setOfertas([]);
     setOfertasError("");
     setBusquedaProducto("");
-    setCatalogoError("");
     setProductoBloqueado(null);
     setPrecioRapido("");
     setMedioPago("efectivo");
@@ -161,9 +159,8 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     }
 
     async function cargar() {
-      const [clientesResultado, catalogoResultado, ofertasResultado] = await Promise.allSettled([
+      const [clientesResultado, ofertasResultado] = await Promise.allSettled([
         listarClientesSigo(empresaId),
-        listarProductosSigo(empresaId),
         listarOfertasProductos(empresaId),
       ]);
       if (!cancelled && empresaActivaRef.current === empresaId) {
@@ -171,11 +168,6 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         else {
           setClientes([]);
           setClientesError(clientesResultado.reason instanceof Error ? clientesResultado.reason.message : "No se pudieron cargar los clientes.");
-        }
-        if (catalogoResultado.status === "fulfilled") setCatalogo(catalogoResultado.value);
-        else {
-          setCatalogo([]);
-          setCatalogoError(catalogoResultado.reason instanceof Error ? catalogoResultado.reason.message : "No se pudo cargar el catálogo para búsqueda manual.");
         }
         if (ofertasResultado.status === "fulfilled") setOfertas(ofertasResultado.value);
         else {
@@ -186,17 +178,6 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       if (!cancelled && empresaActivaRef.current === empresaId) await cargarVentasRecientes(empresaId);
     }
     void cargar();
-    // Unidad ausente o fallo de lectura: nunca degradar a venta por pieza.
-    void listarUnidadesProductoSigo(empresaId).then((mapa) => {
-      if (cancelled || empresaActivaRef.current !== empresaId) return;
-      setUnidadesProducto(mapa);
-      setUnidadesCargadas(true);
-    }).catch((err) => {
-      if (cancelled || empresaActivaRef.current !== empresaId) return;
-      setUnidadesProducto({});
-      setUnidadesCargadas(false);
-      setError(err instanceof Error ? err.message : "No se pudieron verificar las unidades. Actualizá antes de vender.");
-    });
     return () => { cancelled = true; };
     // cargarVentasRecientes depende únicamente del mismo empresaId del efecto.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -207,17 +188,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     [clientes, clienteId],
   );
 
-  const productosEncontrados = useMemo(() => {
-    const q = busquedaProducto.trim().toLocaleLowerCase("es-AR");
-    if (q.length < 2) return [];
-    return catalogo
-      .filter((producto) => [producto.nombre, producto.codigo_interno, producto.codigo_barras, producto.marca]
-        .filter(Boolean)
-        .join(" ")
-        .toLocaleLowerCase("es-AR")
-        .includes(q))
-      .slice(0, 12);
-  }, [busquedaProducto, catalogo]);
+  const productosEncontrados = catalogo;
 
   productosEncontradosRef.current = productosEncontrados;
   const productoSeleccionadoVisibleId = productosEncontrados.some((producto) => producto.id === productoSeleccionadoId)
@@ -285,6 +256,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       return true;
     }
     if (key === "Enter" && consultaActiva) {
+      if (/^\d{6,}$/.test(busquedaProducto.trim())) return false;
       const producto = resultados.find((fila) => fila.id === productoSeleccionadoIdRef.current);
       if (producto) seleccionarProductoManual(producto);
       return true;
@@ -326,7 +298,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
       });
       if (empresaActivaRef.current !== empresaOperacion) return;
       const actualizado: BarcodeProduct = { ...original, precio_venta: precio };
-      setCatalogo((actual) => actual.map((item) => item.id === original.id ? { ...item, precio_venta: precio } : item));
+      buscador.refrescar();
       setProductoBloqueado(null);
       setPrecioRapido("");
       setBusquedaProducto("");
@@ -344,9 +316,9 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   function agregar(producto: BarcodeProduct) {
     if (cajaBloqueada || confirmacionEnCursoRef.current) return;
     if (productoPorMedida) { setError("Terminá o cancelá la cantidad en edición antes de agregar otro producto."); return; }
-    const unidad = unidadesProducto[producto.id];
+    const unidad = normalizarUnidadVenta(producto.unidad_medida);
     if (producto.empresa_id !== empresaId || isLegacyDuplicateProduct(producto)) { setError("No se pudo verificar el producto en la empresa activa."); return; }
-    if (!unidadesCargadas || !unidad) {
+    if (!unidad) {
       setError(`${producto.nombre}: unidad de venta sin verificar. Revisá el producto y actualizá el catálogo; no se agregó al carrito.`);
       return;
     }
@@ -361,8 +333,8 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
   function agregarCantidad(producto: BarcodeProduct, cantidadAgregar: number, reemplazar = false) {
     if (cajaBloqueada || confirmacionEnCursoRef.current) return;
     setError(""); setExito(""); setAdvertencia(""); setProductoBloqueado(null);
-    const unidad = unidadesProducto[producto.id];
-    if (producto.empresa_id !== empresaId || isLegacyDuplicateProduct(producto) || !unidadesCargadas || !unidad) {
+    const unidad = normalizarUnidadVenta(producto.unidad_medida);
+    if (producto.empresa_id !== empresaId || isLegacyDuplicateProduct(producto) || !unidad) {
       setError(`${producto.nombre}: no se pudo verificar el producto y su unidad en esta empresa.`);
       return;
     }
@@ -454,7 +426,6 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
     && Number(clienteSeleccionado.saldo_actual || 0) + total > Number(clienteSeleccionado.limite_credito);
 
   const puedeConfirmar = !cajaBloqueada && items.length > 0
-    && unidadesCargadas
     && !productoPorMedida
     && total > 0
     && !ofertasError
@@ -588,20 +559,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
           if (avisoVigente()) setError(printErr instanceof Error ? printErr.message : "La venta se confirmó, pero no se pudo abrir la impresión del ticket.");
         });
       }
-      // En recuperación el catálogo puede contener ya el stock descontado: releer, no restarlo otra vez.
-      if (!recuperar) {
-        const cantidadesVendidas = new Map(intento.payload.items.map((item) => [item.productoId, item.cantidad]));
-        setCatalogo((actual) => actual.map((producto) => {
-          const cantidad = cantidadesVendidas.get(producto.id);
-          return cantidad ? { ...producto, stock_actual: Math.max(0, Number(producto.stock_actual ?? 0) - cantidad) } : producto;
-        }));
-      } else {
-        void listarProductosSigo(empresaConfirmacion).then((data) => {
-          if (avisoVigente()) setCatalogo(data);
-        }).catch(() => {
-          if (avisoVigente()) setCatalogoError("El cobro fue recuperado, pero no se pudo actualizar el catálogo. Recargá antes de otra venta.");
-        });
-      }
+      buscador.refrescar();
       setItems([]);
       setBusquedaProducto("");
       setProductoSeleccionadoId(null);
@@ -687,7 +645,7 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         <button type="button" disabled={cajaBloqueada} onClick={()=>setDescuentoAbierto(v=>!v)}>◇ <strong>DESCUENTO</strong><small>F6 · {descuentoPct}%</small></button>
       </div>
       {descuentoAbierto&&!cajaBloqueada&&<div className="sigo-pos-discount"><strong>Descuento</strong>{[0,5,10,15,20].map(n=><button type="button" className={descuentoPct===n?"active":""} onClick={()=>{setDescuentoPct(n);setDescuentoAbierto(false)}} key={n}>{n}%</button>)}<label>Otro % <input type="number" min="0" max="99.99" step="0.01" value={descuentoPct} onChange={e=>setDescuentoPct(Math.max(0,Math.min(99.99,Number(e.target.value)||0)))}/></label></div>}
-      {productoPorMedida && unidadesCargadas && unidadesProducto[productoPorMedida.id] && <EditorCantidadMedida
+      {productoPorMedida && unidadesProducto[productoPorMedida.id] && <EditorCantidadMedida
         key={`${productoPorMedida.id}-${reemplazandoCantidad ? "editar" : "agregar"}`}
         nombre={productoPorMedida.nombre}
         unidad={unidadesProducto[productoPorMedida.id]!}
@@ -721,9 +679,12 @@ export default function VentaRapidaOperativa({ empresaId, puedeEditarProductos =
         </> : errorPersistenciaCobro}
       </div>}
       <div className="sigo-pos-scan">
-        {!cajaBloqueada && !productoPorMedida && <BarcodeScanner key={scannerInstanceKey} empresaId={empresaId} action="vender" onCachedCode={(code)=>{const encontrados=catalogo.filter((p)=>p.empresa_id===empresaId&&(normalizeBarcode(p.codigo_barras??"")===code||normalizeBarcode(p.codigo_interno??"")===code));return encontrados.length?encontrados:null}} onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null)}} onManualQuery={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null);return !/^\\d{6,}$/.test(query.trim())}} onProductSearchKeyDown={manejarTeclaBusquedaProducto}/>}
+        {!cajaBloqueada && !productoPorMedida && <BarcodeScanner key={scannerInstanceKey} empresaId={empresaId} action="vender" onProduct={agregar} onBlockedProduct={marcarProductoBloqueado} onQueryChange={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null)}} onManualQuery={(query)=>{setBusquedaProducto(query);productoSeleccionadoIdRef.current=null;setProductoSeleccionadoId(null);return !/^\d{6,}$/.test(query.trim())}} onProductSearchKeyDown={manejarTeclaBusquedaProducto}/>}
 
-        {busquedaProducto.trim()&&productosEncontrados.length>0&&<div className="sigo-pos-results">{productosEncontrados.map((p)=><button type="button" data-pos-suggestion="" data-product-id={p.id} aria-selected={p.id===productoSeleccionadoVisibleId} className={p.id===productoSeleccionadoVisibleId?"active":""} key={p.id} onMouseEnter={()=>{productoSeleccionadoIdRef.current=p.id;setProductoSeleccionadoId(p.id)}} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}{Number(p.stock_actual??0)<=0?" · SIN STOCK":""}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} / {p.unidad_medida ?? "unidad sin verificar"} · Stock {formatoStockMedida(Number(p.stock_actual ?? 0), p.unidad_medida)}</span></button>)}</div>}{busquedaProducto.trim()&&productosEncontrados.length===0&&!catalogoError&&<div className="sigo-pos-results"><div className="table-empty">No encontré productos. Probá con nombre, marca, código interno o EAN.</div></div>}
+        {busquedaProducto.trim()&&productosEncontrados.length>0&&<div className="sigo-pos-results">{productosEncontrados.map((p)=><button type="button" data-pos-suggestion="" data-product-id={p.id} aria-selected={p.id===productoSeleccionadoVisibleId} className={p.id===productoSeleccionadoVisibleId?"active":""} key={p.id} onMouseEnter={()=>{productoSeleccionadoIdRef.current=p.id;setProductoSeleccionadoId(p.id)}} onClick={()=>seleccionarProductoManual(p)}><strong>{p.nombre}{Number(p.stock_actual??0)<=0?" · SIN STOCK":""}</strong><span>{p.codigo_interno||p.codigo_barras||"Sin código"} · $ {Number(p.precio_venta||0).toLocaleString("es-AR")} / {p.unidad_medida ?? "unidad sin verificar"} · Stock {formatoStockMedida(Number(p.stock_actual ?? 0), p.unidad_medida)}</span></button>)}</div>}{busquedaProducto.trim()&&!buscador.loading&&productosEncontrados.length===0&&!catalogoError&&<div className="sigo-pos-results"><div className="table-empty">No encontré productos. Probá con nombre, marca, código interno o EAN.</div></div>}
+        {buscador.loading && <p role="status">Buscando productos…</p>}
+        {catalogoError && <p role="alert">{catalogoError} <button type="button" onClick={buscador.refrescar}>Reintentar búsqueda</button></p>}
+        {busquedaProducto.trim() && (buscador.pagina > 0 || buscador.hayMas) && <nav aria-label="Páginas de resultados de Caja"><button type="button" disabled={buscador.loading || buscador.pagina === 0} onClick={() => buscador.irPagina(buscador.pagina - 1)}>Anteriores</button><span> Página {buscador.pagina + 1} </span><button type="button" disabled={buscador.loading || !buscador.hayMas} onClick={() => buscador.irPagina(buscador.pagina + 1)}>Más resultados</button></nav>}
       </div>
       {productoBloqueado&&<div className="form-error"><strong>{productoBloqueado.producto.nombre}</strong> · {productoBloqueado.razon==="stock"?"Sin stock disponible.":"Sin precio válido."}</div>}
       {error&&<p className="form-error" role="alert">{error}</p>}{ofertasError&&<p className="form-error" role="alert">No se puede cobrar hasta comprobar los precios de oferta: {ofertasError}</p>}{exito&&<span className="sigo-pos-success-inline" role="status">{exito}</span>}{advertencia&&<p data-cobro-diagnostico="" className={advertenciaRevision || cajaBloqueada ? "form-error" : "sigo-pos-verification-note"} role={advertenciaRevision || cajaBloqueada ? "alert" : "status"}>{advertencia}</p>}

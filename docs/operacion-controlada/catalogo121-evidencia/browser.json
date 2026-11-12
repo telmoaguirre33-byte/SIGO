@@ -1,0 +1,57 @@
+{
+  "status": "PASS",
+  "syntheticProductsPerTenant": 15000,
+  "tenants": 2,
+  "cases": [
+    "Caja starts without downloading products or units",
+    "ENCHUFE: 120 matches, pages 50/50/20 and keyboard selects 120th",
+    "Full and partial name, accents, brand, internal code and EAN",
+    "Weight, meters, cart totals, F10 ticket and F11 fiscal event are synthetic",
+    "Repeated barcode Enter/Tab adds units, clears and focuses scanner",
+    "Timeout displays error, retry succeeds without false empty result",
+    "Aborted old query and tenant change never show former tenant rows",
+    "Products initial page and server search reach beyond 14000, next page works",
+    "Readback requests only selected IDs and all RPCs stay bounded"
+  ],
+  "timings": [
+    {
+      "q": "ENCHUFE",
+      "ms": 213
+    },
+    {
+      "q": "ACOPLE RÁPIDO PROFESIONAL",
+      "ms": 212
+    },
+    {
+      "q": "acople rapido profesion",
+      "ms": 200
+    },
+    {
+      "q": "INT-14999",
+      "ms": 200
+    },
+    {
+      "q": "7790000014999",
+      "ms": 200
+    },
+    {
+      "q": "marcaqa",
+      "ms": 227
+    },
+    {
+      "q": "acople rapido profesion",
+      "ms": 221
+    },
+    {
+      "q": "INT-14998",
+      "ms": 206
+    },
+    {
+      "q": "ENCHUFE 14001",
+      "ms": 205
+    }
+  ],
+  "limitations": [
+    "Synthetic DB/payment/ticket/fiscal boundaries; no real sale, CAE, printer, physical scanner or production validation"
+  ]
+}

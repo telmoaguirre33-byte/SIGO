@@ -1,3 +1,4 @@
+import { catalogo121MockAdapter } from './fixtures/catalogo121-mock-adapter.mjs';
 // Real GoTrue auth + PostgREST + React POS. All HTTP and commercial rows are synthetic.
 // No accessToken override, auth replacement, real credentials, printer or fiscal API.
 import assert from 'node:assert/strict';
@@ -78,7 +79,7 @@ const out=process.cwd()+'/.test-build/cobro104-auth-lifecycle.mjs';
 await build({stdin:{contents:'export {default as POS} from "./src/VentaRapidaOperativa";export {default as Gate} from "./src/SigoAuthGate";',resolveDir:process.cwd(),loader:'tsx'},outfile:out,bundle:true,format:'esm',platform:'node',jsx:'automatic',external:['react','react-dom','react/jsx-runtime'],define:{'import.meta.env':JSON.stringify({VITE_PUBLIC_APP_URL:'https://auth-lifecycle.invalid/',VITE_MERCADOPAGO_SUBSCRIPTION_URL:''})},plugins:[{name:'local-http-only',setup(b){
   if(baseline)b.onLoad({filter:/\/(VentaRapidaOperativa|SigoAuthGate)\.tsx$/},async a=>({contents:await fs.readFile(baseline+'/src/'+a.path.split('/').at(-1),'utf8'),loader:'tsx',resolveDir:process.cwd()+'/src'}));
   b.onResolve({filter:/^\.\//},a=>mocks[a.path]?{path:a.path,namespace:'boundary'}:null);
-  b.onLoad({filter:/.*/,namespace:'boundary'},a=>({contents:mocks[a.path],loader:'tsx',resolveDir:process.cwd()}));
+  b.onLoad({filter:/.*/,namespace:'boundary'},a=>({contents:mocks[a.path] + (a.path === './productos' ? catalogo121MockAdapter : ''),loader:'tsx',resolveDir:process.cwd()}));
   b.onLoad({filter:/\.css$/},()=>({contents:'',loader:'text'}));
 }}]});
 const {POS, Gate}=await import(pathToFileURL(out));

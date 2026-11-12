@@ -20,7 +20,7 @@ async function moduloConRpc(rpc, archivo = "productos", extras = "") {
   source = source.replace('import { supabase } from "./supabase";', `const supabase = globalThis[${JSON.stringify(key)}];`)
     .replaceAll('from "./esperaCobro"', `from ${JSON.stringify(new URL("../src/esperaCobro.ts", import.meta.url).href)}`)
     .replaceAll('from "./ventaPorMedidas"', `from ${JSON.stringify(new URL("../src/ventaPorMedidas.ts", import.meta.url).href)}`)
-    .replace('import { listarProductosSigo } from "./productos";', 'const listarProductosSigo = async () => [];');
+    .replace('import { leerProductosPorIdsSigo } from "./productos";', 'const leerProductosPorIdsSigo = async () => [];');
   const js = stripTypeScriptTypes(source + extras, { mode: "transform" });
   const result = await import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
   delete globalThis[key];

@@ -1,0 +1,57 @@
+name: Catalogo 121 synthetic performance and tenant isolation
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: sigo_catalogo121_qa
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: isolated_test_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: command -v psql || (sudo apt-get update && sudo apt-get install -y postgresql-client)
+      - name: Actual SQL and actual granular permissions with 15000 products per company
+        env:
+          SIGO_ISOLATED_TEST_DB: '1'
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGDATABASE: sigo_catalogo121_qa
+          PGUSER: postgres
+          PGPASSWORD: isolated_test_only
+        run: node scripts/test-catalogo121-db.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: catalogo121-postgres
+          path: artifacts/catalogo121
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npx playwright install chromium
+      - run: node scripts/test-catalogo121-browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: catalogo121-browser
+          path: artifacts/catalogo121

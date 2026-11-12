@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type ChangeEvent } from "react";
-import type { ProductoSigo } from "./productos";
+import { listarProductosSigo, type ProductoSigo } from "./productos";
 import { analizarFacturaCompraSigo } from "./facturaIA";
 import {
   descargarPlantillaStockSigo,
@@ -12,13 +12,14 @@ import {
 
 export default function StockImportAssistant({
   empresaId,
-  productos,
+  productos: _productosPagina,
   onImported,
 }: {
   empresaId: string;
   productos: ProductoSigo[];
   onImported: () => void | Promise<void>;
 }) {
+  const [productos, setProductos] = useState<ProductoSigo[]>([]);
   const excelRef = useRef<HTMLInputElement>(null);
   const fotoRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
@@ -58,7 +59,9 @@ export default function StockImportAssistant({
     setResultados(null);
     try {
       const matriz = await leerArchivoStock(file);
-      const preparado = prepararImportacionStock(matriz, productos);
+      const catalogoCompleto = await listarProductosSigo(empresaId);
+      setProductos(catalogoCompleto);
+      const preparado = prepararImportacionStock(matriz, catalogoCompleto);
       setArchivo(file.name);
       setResumen(preparado);
     } catch (err) {
@@ -87,7 +90,9 @@ export default function StockImportAssistant({
           String(item.costo_unitario),
         ]),
       ];
-      const preparado = prepararImportacionStock(matriz, productos);
+      const catalogoCompleto = await listarProductosSigo(empresaId);
+      setProductos(catalogoCompleto);
+      const preparado = prepararImportacionStock(matriz, catalogoCompleto);
       setArchivo(`Factura con IA · ${file.name}`);
       setResumen(preparado);
     } catch (err) {

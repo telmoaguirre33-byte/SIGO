@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import type { UnidadVenta } from "./ventaPorMedidas";
 
 export type BarcodeAction =
   | "vender"
@@ -7,6 +8,7 @@ export type BarcodeAction =
   | "editar";
 
 export type BarcodeProduct = {
+  unidad_medida?: UnidadVenta | null;
   id: string;
   empresa_id: string;
   codigo_interno: string | null;
@@ -64,10 +66,12 @@ export async function buscarProductoPorCodigo(
   }
 
   const { data, error } = await supabase.rpc(
-    "buscar_producto_codigo_sigo",
+    "consultar_productos_sigo",
     {
       p_empresa_id: empresaId,
-      p_codigo: codigo,
+      p_busqueda: codigo,
+      p_solo_codigo: true,
+      p_limite: 10,
     },
   );
 

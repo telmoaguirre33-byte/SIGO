@@ -57,7 +57,7 @@ await build({
     b.onResolve({filter:/^\.\//},a=>['./supabase','./productos'].includes(a.path)?{path:a.path,namespace:'qa'}:null);
     b.onLoad({filter:/.*/,namespace:'qa'},a=>({contents:a.path==='./supabase'
       ?'export const supabase=globalThis.__diagQA.supabase;'
-      :'export const listarProductosSigo=()=>globalThis.__diagQA.readCatalog();',loader:'ts'}));
+      :'export const leerProductosPorIdsSigo=()=>globalThis.__diagQA.readCatalog();',loader:'ts'}));
   }}],
 });
 const { confirmarVentaSigo, avisoCobroConfirmado } = await import(pathToFileURL(process.cwd()+'/.test-build/cobro104-diagnostico-integracion.mjs'));

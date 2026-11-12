@@ -209,6 +209,40 @@ export class ProductoGuardadoSinVerificarError extends Error {
   }
 }
 
+export type PaginaProductos = { productos: ProductoSigo[]; hayMas: boolean };
+export const TAMANO_PAGINA_PRODUCTOS = 50;
+
+async function consultarCatalogo(empresaId: string, parametros: Record<string, unknown>, signal?: AbortSignal): Promise<ProductoSigo[]> {
+  if (!empresaId) throw new Error("EMPRESA_REQUIRED");
+  signal?.throwIfAborted();
+  const consulta = supabase.rpc("consultar_productos_sigo", { p_empresa_id: empresaId, ...parametros });
+  const { data, error } = await (signal ? consulta.abortSignal(signal) : consulta);
+  signal?.throwIfAborted();
+  if (error) throw new Error(mensajeErrorBackend(error, "No se pudieron consultar los productos. Reintentá la búsqueda."));
+  const productos = (data ?? []) as ProductoSigo[];
+  if (productos.some(p => p.empresa_id !== empresaId)) throw new Error("TENANT_PRODUCT_MISMATCH");
+  return productos.map(p => ({ ...p, unidad_medida: normalizarUnidadVenta(p.unidad_medida) }));
+}
+
+// El límite es por página, no por catálogo. Una fila adicional indica si hay otra página.
+export async function buscarProductosSigo(empresaId: string, texto = "", pagina = 0, signal?: AbortSignal): Promise<PaginaProductos> {
+  if (!Number.isSafeInteger(pagina) || pagina < 0) throw new Error("PAGE_INVALID");
+  const filas = await consultarCatalogo(empresaId, {
+    p_busqueda: texto.trim(), p_offset: pagina * TAMANO_PAGINA_PRODUCTOS,
+    p_limite: TAMANO_PAGINA_PRODUCTOS + 1,
+  }, signal);
+  return { productos: filas.slice(0, TAMANO_PAGINA_PRODUCTOS), hayMas: filas.length > TAMANO_PAGINA_PRODUCTOS };
+}
+
+export async function leerProductosPorIdsSigo(empresaId: string, ids: string[], signal?: AbortSignal): Promise<ProductoSigo[]> {
+  const unicos = [...new Set(ids)];
+  const productos: ProductoSigo[] = [];
+  for (let i = 0; i < unicos.length; i += 100) {
+    productos.push(...await consultarCatalogo(empresaId, { p_ids: unicos.slice(i, i + 100), p_limite: 100 }, signal));
+  }
+  return productos;
+}
+
 export async function listarUnidadesProductoSigo(empresaId: string, signal?: AbortSignal): Promise<Record<string, UnidadVenta | null>> {
   if (!empresaId) throw new Error("EMPRESA_REQUIRED");
   const mapa: Record<string, UnidadVenta | null> = {};

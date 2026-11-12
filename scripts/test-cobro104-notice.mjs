@@ -1,3 +1,4 @@
+import { catalogo121MockAdapter } from './fixtures/catalogo121-mock-adapter.mjs';
 // Real POS + ventas.ts + React; services and commercial rows are in memory.
 // Tests both the pinned production defect and the fixed candidate. No real payment.
 import assert from 'node:assert/strict';
@@ -69,7 +70,7 @@ const out=process.cwd()+'/.test-build/cobro104-notice.mjs';
 await build({stdin:{contents:'export {default as POS} from "./src/VentaRapidaOperativa";',resolveDir:process.cwd(),loader:'tsx'},outfile:out,bundle:true,format:'esm',platform:'node',jsx:'automatic',external:['react','react-dom','react/jsx-runtime'],plugins:[{name:'isolated-boundaries',setup(b){
   if(baseline)b.onLoad({filter:/\/VentaRapidaOperativa\.tsx$/},async()=>({contents:await fs.readFile(baseline,'utf8'),loader:'tsx',resolveDir:process.cwd()+'/src'}));
   b.onResolve({filter:/^\.\//},a=>mocks[a.path]?{path:a.path,namespace:'qa'}:null);
-  b.onLoad({filter:/.*/,namespace:'qa'},a=>({contents:mocks[a.path],loader:'tsx',resolveDir:process.cwd()}));
+  b.onLoad({filter:/.*/,namespace:'qa'},a=>({contents:mocks[a.path] + (a.path === './productos' ? catalogo121MockAdapter : ''),loader:'tsx',resolveDir:process.cwd()}));
 }}]});
 const {POS}=await import(pathToFileURL(out));
 async function settle(ms=30){await act(async()=>{await new Promise(r=>setTimeout(r,ms));});}
