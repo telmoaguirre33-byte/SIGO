@@ -283,6 +283,15 @@ def main():
             import traceback
             frames=[{'function':f.name,'line':f.lineno} for f in traceback.extract_tb(sys.exc_info()[2])]
             log=b.LOG.read_text(errors='replace')
+            if sys.argv[1]=='exercise':
+                messages=[]
+                for line in log.splitlines():
+                    if 'ERROR:' in line:
+                        message=line.split('ERROR:',1)[1]
+                        message=re.sub(r"'[^']*'|\"[^\"]*\"",'[quoted value]',message)
+                        message=re.sub(r'[A-Za-z0-9+/=_-]{24,}','[value]',message)
+                        messages.append(message[:240])
+                print(json.dumps({'synthetic_only_redacted_error_classes':messages[-3:]}),flush=True)
             categories=[label for marker,label in [
                 ('syntax error','SQL_SYNTAX'),('cannot execute','READ_ONLY_OR_ROLE'),
                 ('does not exist','MISSING_OBJECT'),('permission denied','PRIVILEGE_DENIED'),
