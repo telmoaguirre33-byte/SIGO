@@ -196,6 +196,7 @@ def exercise(docker,work):
 def capture(docker,work,key,storage_meta):
     started=time.monotonic()
     with c.source(docker,work) as pg:
+        b.LOG.write_text('')
         encrypted,wrapped,checked,meta=create_encrypted(pg,work)
     prefix=c.PREFIX+'/'+os.environ['GITHUB_RUN_ID']+'-'+os.environ.get('GITHUB_RUN_ATTEMPT','1')+'-'+secrets.token_hex(6)
     # Keep the wrapped random key durable before streaming the larger ciphertext.
