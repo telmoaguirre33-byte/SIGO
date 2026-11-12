@@ -86,6 +86,7 @@ create extension pgcrypto with schema extensions;
 create extension "uuid-ossp" with schema extensions;
 create extension supabase_vault;
 create role anon;create role authenticated;create role service_role bypassrls;
+grant anon,authenticated,service_role to postgres with admin option;
 create schema auth;create table auth.users(id uuid primary key,email text,encrypted_password text);
 create function auth.uid()returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
 grant usage on schema auth to authenticated,anon;
