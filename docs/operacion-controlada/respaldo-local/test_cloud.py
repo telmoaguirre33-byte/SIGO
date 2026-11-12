@@ -6,6 +6,12 @@ import cloud_pipeline as p
 
 
 class CloudGuardas(unittest.TestCase):
+    def test_customer_storage_paths_never_touched(self):
+        with patch.object(c,'http')as http:
+            for prefix in ['customer-id/certificates',c.PREFIX+'/../other']:
+                with self.assertRaises(RuntimeError):p.persist('dummy',{},[],prefix)
+            http.assert_not_called()
+
     def test_misnamed_service_key_is_not_sent_to_management_api(self):
         with patch.dict(os.environ,{'SUPABASE_ACCESS_TOKEN':'"Bearer sb_secret_synthetic_only"'},clear=True),patch.object(c,'http')as http:
             self.assertEqual(c.storage_key(),'sb_secret_synthetic_only');http.assert_not_called()

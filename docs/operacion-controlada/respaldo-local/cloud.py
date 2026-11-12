@@ -206,5 +206,6 @@ def main():
 if __name__=='__main__':
     try:sys.exit(main())
     except Exception as exc:
-        print(json.dumps({'status':'NOT_COMPLETED','error':str(exc) if isinstance(exc,RuntimeError) else type(exc).__name__,'production_ddl':False}),flush=True)
+        error='HTTP_'+str(exc.code)if isinstance(exc,urllib.error.HTTPError)else str(exc)if isinstance(exc,RuntimeError)else type(exc).__name__
+        print(json.dumps({'status':'NOT_COMPLETED','error':error,'production_ddl':False}),flush=True)
         sys.exit(1)

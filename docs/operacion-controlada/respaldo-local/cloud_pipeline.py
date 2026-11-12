@@ -4,8 +4,10 @@ import contextlib
 import hashlib
 import json
 import os
+import re
 import secrets
 import time
+import urllib.error
 from pathlib import Path
 from urllib.parse import quote
 from uuid import uuid4
@@ -135,6 +137,8 @@ def create_encrypted(pg,work):
 
 
 def persist(key,meta,paths,run_prefix):
+    if not re.fullmatch(re.escape(c.PREFIX)+r'/[A-Za-z0-9_-]+',run_prefix):
+        raise RuntimeError('BACKUP_STORAGE_PREFIX_SCOPE_REJECTED')
     allowed=meta.get('allowed_mime_types') or ['*/*']
     binary=any(x in allowed for x in ['*/*','application/octet-stream','application/pgp-encrypted'])
     mime='application/octet-stream' if binary else 'application/json'
@@ -146,10 +150,22 @@ def persist(key,meta,paths,run_prefix):
     def put(name,body,content_type):
         relative=run_prefix+'/'+name
         url=c.API+'/storage/v1/object/'+c.BUCKET+'/'+quote(relative,safe='/')
-        c.http(url,key,method='POST',data=body,headers={'Content-Type':content_type,'x-upsert':'false'})
-        actual=c.http(c.API+'/storage/v1/object/authenticated/'+c.BUCKET+'/'+quote(relative,safe='/'),key)
-        if hashlib.sha256(actual).digest()!=hashlib.sha256(body).digest():raise RuntimeError('PRIVATE_STORAGE_READBACK_MISMATCH')
-        return relative
+        download=c.API+'/storage/v1/object/authenticated/'+c.BUCKET+'/'+quote(relative,safe='/')
+        for attempt in range(3):
+            try:
+                c.http(url,key,method='POST',data=body,headers={'Content-Type':content_type,'x-upsert':'false'})
+            except urllib.error.HTTPError as exc:
+                if exc.code not in (400,409,429,500,502,503,504):raise
+                # An interrupted upload may already exist: validate it, never overwrite.
+            try:
+                actual=c.http(download,key)
+                if hashlib.sha256(actual).digest()!=hashlib.sha256(body).digest():
+                    raise RuntimeError('PRIVATE_STORAGE_READBACK_MISMATCH')
+                return relative
+            except urllib.error.HTTPError as exc:
+                if exc.code not in (404,429,500,502,503,504)or attempt==2:raise
+                time.sleep(1+attempt)
+        raise RuntimeError('PRIVATE_STORAGE_UPLOAD_NOT_VERIFIED')
     for path in paths:
         if not path.name.endswith('.gpg'):raise RuntimeError('ONLY_ENCRYPTED_BACKUP_FILES_MAY_LEAVE_RUNNER')
         entry={'name':path.name,'sha256':b.digest(path),'chunks':[]}
