@@ -10,6 +10,7 @@ import shutil
 import sys
 import tempfile
 import urllib.request
+import urllib.error
 from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit
 import respaldo as b
@@ -91,6 +92,11 @@ def source(docker, work):
     candidates=list(urls())
     if not candidates:raise RuntimeError('MISSING_COMERCIAL_SESSION_CONNECTION')
     config=work/'connection';config.mkdir(mode=0o700)
+    # Docker's slim client image does not inherit the runner's trusted CA store.
+    # Mount the existing trusted system bundle; keep verify-full and hostname checks.
+    trusted_ca=Path('/etc/ssl/certs/ca-certificates.crt')
+    if not trusted_ca.is_file():raise RuntimeError('RUNNER_TRUSTED_CA_BUNDLE_UNAVAILABLE')
+    shutil.copyfile(trusted_ca,config/'trusted-ca.pem')
     box='sigo-122-cloud-client-'+secrets.token_hex(6)
     created=False
     try:
@@ -99,6 +105,8 @@ def source(docker, work):
         for candidate in candidates:
             try:
                 b.credentials(candidate,config)
+                service=config/'service'
+                service.write_text(service.read_text().replace('sslrootcert=system','sslrootcert=/run/sigo/trusted-ca.pem'))
                 if not created:
                     b.run(docker+['run','-d','--name',box,'--user',str(os.getuid())+':'+str(os.getgid()),
                                  '--read-only','--tmpfs','/tmp:rw,mode=1777','--cap-drop','ALL','--security-opt','no-new-privileges',
@@ -145,7 +153,9 @@ def main():
             report['private_storage_file_limit']=meta.get('file_size_limit')
         except Exception as exc:
             key=None;report['existing_private_storage_access']='NOT_AVAILABLE'
-            report['private_storage_reason']=str(exc) if isinstance(exc,RuntimeError) else type(exc).__name__
+            report['private_storage_reason']='HTTP_'+str(exc.code) if isinstance(exc,urllib.error.HTTPError) else str(exc) if isinstance(exc,RuntimeError) else type(exc).__name__
+            report['has_storage_service_key']=bool(os.getenv('SUPABASE_SERVICE_ROLE_KEY'))
+            report['has_storage_management_token']=bool(os.getenv('SUPABASE_ACCESS_TOKEN'))
         try:
             with source(docker,work):report['comercial_tls_session_read_only']='PASS'
         except Exception as exc:
