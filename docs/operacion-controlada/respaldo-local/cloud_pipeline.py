@@ -60,7 +60,7 @@ and exists(select 1 from public.productos p where p.empresa_id=eu.empresa_id and
 
 
 @contextlib.contextmanager
-def fixture(docker):
+def fixture(docker,vault_key=False):
     name='sigo-122-fixture-'+secrets.token_hex(6);volume=name+'-data';started=False
     image=b.RESTORE_IMAGE
     b.run(docker+['pull',image])
@@ -70,6 +70,14 @@ def fixture(docker):
                      '--mount','type=volume,src='+volume+',dst=/sigo-data',image,
                      '-c','chown postgres:postgres /sigo-data; chmod 700 /sigo-data'])
         command="initdb -D /sigo-data -U supabase_admin --auth-local=trust --auth-host=reject --encoding=UTF8 >/tmp/init.log 2>&1 && exec postgres -D /sigo-data -k /tmp -c listen_addresses='' -c shared_preload_libraries=pg_stat_statements"
+        if vault_key:
+            # Synthetic container only: managed COMERCIAL already has its Vault
+            # root key. This disposable root key never leaves the no-network fixture.
+            key=secrets.token_hex(32)
+            setup="printf '%s\\n' '#!/bin/sh' 'echo "+key+"' >/tmp/sigo-getkey;chmod 700 /tmp/sigo-getkey;"
+            command=command.replace('&& exec postgres','&& '+setup+' exec postgres').replace(
+                'shared_preload_libraries=pg_stat_statements',
+                'shared_preload_libraries=pg_stat_statements,pgsodium -c pgsodium.getkey_script=/tmp/sigo-getkey')
         b.run(docker+['run','-d','--network','none','--name',name,'--user','postgres','--entrypoint','/bin/sh',
                      '--mount','type=volume,src='+volume+',dst=/sigo-data',image,'-c',command])
         started=True;pg=b.PG(docker,name,'supabase_admin','postgres')

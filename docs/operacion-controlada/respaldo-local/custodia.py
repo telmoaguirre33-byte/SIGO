@@ -224,7 +224,7 @@ def run_exercise(docker,work):
     b.phase('synthetic_new_recovery_key')
     package=create_key(work);fp=package['fingerprint'];c.FINGERPRINT=fp
     b.phase('synthetic_fixture_start')
-    with p.fixture(docker) as pg:
+    with p.fixture(docker,vault_key=True) as pg:
         # Synthetic source starts without the catalog already installed in COMERCIAL.
         b.phase('synthetic_existing_catalogue')
         pg.sql((c.ROOT/'catalogo.sql').read_text())
