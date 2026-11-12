@@ -221,12 +221,17 @@ def run_capture(docker,work):
 
 def run_exercise(docker,work):
     from unittest.mock import patch
+    b.phase('synthetic_new_recovery_key')
     package=create_key(work);fp=package['fingerprint'];c.FINGERPRINT=fp
+    b.phase('synthetic_fixture_start')
     with p.fixture(docker) as pg:
         # Synthetic source starts without the catalog already installed in COMERCIAL.
+        b.phase('synthetic_existing_catalogue')
         pg.sql((c.ROOT/'catalogo.sql').read_text())
+        b.phase('synthetic_vault_save')
         save_key(pg,package,'sigo122_recovery_synthetic')
         package=None
+        b.phase('synthetic_vault_retrieve')
         package=retrieve_key(pg,'sigo122_recovery_synthetic',fp)
         files=work/'capture';files.mkdir(mode=0o700);meta=b.capture(pg,files)
         phrase=secrets.token_urlsafe(48)
@@ -279,5 +284,5 @@ if __name__=='__main__':
     try:main()
     except Exception as exc:
         code=str(exc)if isinstance(exc,RuntimeError) and re.fullmatch('[A-Z0-9_]+',str(exc))else'PRIVATE_DIAGNOSTIC_ONLY'
-        print(json.dumps({'status':'NOT_COMPLETED','error':code,'phase':b.PHASE,'diagnostic':c.safe_error(b.LOG)if b.LOG else'NOT_STARTED'}),flush=True)
+        print(json.dumps({'status':'NOT_COMPLETED','error':code,'exception_type':type(exc).__name__,'phase':b.PHASE,'diagnostic':c.safe_error(b.LOG)if b.LOG else'NOT_STARTED'}),flush=True)
         sys.exit(1)
