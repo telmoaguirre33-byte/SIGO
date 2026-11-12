@@ -1,0 +1,157 @@
+"""Reuse the verified backup tool in an isolated Actions runner; no artifacts."""
+import base64
+import contextlib
+import hashlib
+import json
+import os
+import secrets
+import time
+from pathlib import Path
+from urllib.parse import quote
+import cloud as c
+import respaldo as b
+
+ROOT=c.ROOT
+
+
+@contextlib.contextmanager
+def fixture(docker):
+    name='sigo-122-fixture-'+secrets.token_hex(6);volume=name+'-data';started=False
+    image=b.RESTORE_IMAGE
+    b.run(docker+['pull',image])
+    b.run(docker+['volume','create','--label','sigo.backup.synthetic=true',volume])
+    try:
+        b.run(docker+['run','--rm','--network','none','--user','0','--entrypoint','/bin/sh',
+                     '--mount','type=volume,src='+volume+',dst=/sigo-data',image,
+                     '-c','chown postgres:postgres /sigo-data; chmod 700 /sigo-data'])
+        command="initdb -D /sigo-data -U postgres --auth-local=trust --auth-host=reject --encoding=UTF8 >/tmp/init.log 2>&1 && exec postgres -D /sigo-data -k /tmp -c listen_addresses='' -c shared_preload_libraries=pg_stat_statements"
+        b.run(docker+['run','-d','--network','none','--name',name,'--user','postgres','--entrypoint','/bin/sh',
+                     '--mount','type=volume,src='+volume+',dst=/sigo-data',image,'-c',command])
+        started=True;pg=b.PG(docker,name,'postgres','postgres')
+        for _ in range(60):
+            try:
+                if pg.sql('select 1;')=='1':break
+            except RuntimeError:time.sleep(1)
+        else:raise RuntimeError('SYNTHETIC_SERVER_DID_NOT_START')
+        pg.sql("""create schema extensions;
+create extension pg_stat_statements with schema extensions;
+create extension pgcrypto with schema extensions;
+create extension "uuid-ossp" with schema extensions;
+create extension supabase_vault;
+create role anon;create role authenticated;create role service_role bypassrls;
+create schema auth;create table auth.users(id uuid primary key,email text,encrypted_password text);
+create function auth.uid()returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+grant usage on schema auth to authenticated,anon;
+create table empresa_usuarios(empresa_id uuid,user_id uuid,activo boolean,rol text,permisos_extra text[] default '{}',permisos_denegados text[] default '{}',primary key(empresa_id,user_id));
+create table productos(id uuid primary key,empresa_id uuid,nombre text,marca text,descripcion text,categoria text,proveedor text,codigo_interno text,codigo_barras text,costo_actual numeric,costo_ultima_compra numeric,precio_venta numeric,margen_ganancia numeric,margen_porcentaje numeric,stock_actual numeric,stock_minimo numeric,stock_maximo numeric,unidad_medida text,activo boolean,iva_alicuota_id integer,iva_tasa numeric,precio_incluye_iva boolean);
+create table producto_codigos_alias_sigo(empresa_id uuid,producto_id uuid,codigo text,unique(empresa_id,codigo));
+alter table productos enable row level security;grant all on productos to anon,authenticated,service_role;
+create policy lectura_productos on productos for select to anon,authenticated using(true);
+create policy editar_productos on productos for update to anon,authenticated using(true) with check(true);
+create policy insertar_productos on productos for insert to anon,authenticated with check(true);
+create policy eliminar_productos on productos for delete to anon,authenticated using(true);
+create table ventas_sinteticas(id bigserial primary key,total numeric(12,2));insert into ventas_sinteticas(total)values(250.61);
+insert into auth.users values('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','synthetic@example.invalid','synthetic-not-a-real-password');
+insert into empresa_usuarios(empresa_id,user_id,activo,rol)values('11111111-1111-4111-8111-111111111111','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',true,'owner');
+insert into productos(id,empresa_id,nombre,marca,categoria,codigo_interno,codigo_barras,costo_actual,costo_ultima_compra,precio_venta,stock_actual,unidad_medida,activo)
+select md5(i::text)::uuid,'11111111-1111-4111-8111-111111111111','Artículo sintético '||i,'Marca QA','Ferretería','QA-'||i,'779'||lpad(i::text,10,'0'),1.99,1.99,4.95,10.125,'kg',true from generate_series(1,20)i;
+select lo_from_bytea(0,decode('0102030405','hex'));
+""")
+        migrations=ROOT.parents[2]/'supabase/migrations'
+        acl=(migrations/'20260909201500_permisos_backend.sql').read_text()
+        pg.sql(acl[acl.index('create or replace function public.permiso_sigo_valido'):acl.index('create or replace function public.permisos_sigo_validos')])
+        granular=(migrations/'20260912102000_roles_operativos_hardening.sql').read_text()
+        pg.sql(granular[granular.index('create or replace function public.tiene_permiso_empresa'):granular.index('revoke all on function public.tiene_permiso_empresa')])
+        yield pg
+    finally:
+        if started:b.run(docker+['rm','-f','-v',name],timeout=30)
+        b.run(docker+['volume','rm',volume],timeout=30)
+
+
+def public_encrypt(path,out,work):
+    home=work/'recipient';home.mkdir(mode=0o700,exist_ok=True)
+    b.run(['gpg','--homedir',str(home),'--batch','--import',str(ROOT/'cloud-recovery-public.asc')])
+    listing=b.run(['gpg','--homedir',str(home),'--batch','--with-colons','--list-keys']).decode()
+    fingerprints=[line.split(':')[9]for line in listing.splitlines()if line.startswith('fpr:')]
+    if fingerprints!=[c.FINGERPRINT]:raise RuntimeError('BACKUP_RECIPIENT_KEY_MISMATCH')
+    b.run(['gpg','--homedir',str(home),'--batch','--yes','--trust-model','always',
+           '--recipient',c.FINGERPRINT,'--cipher-algo','AES256','--output',str(out),'--encrypt',str(path)])
+
+
+def create_encrypted(pg,work):
+    files=work/'capture';files.mkdir(mode=0o700)
+    b.capture(pg,files)
+    phrase=secrets.token_urlsafe(48)
+    encrypted=b.pack(files,work,phrase)
+    phrasefile=work/'phrase';phrasefile.write_text(phrase);phrasefile.chmod(0o600)
+    wrapped=work/'recovery-phrase.gpg'
+    public_encrypt(phrasefile,wrapped,work);phrasefile.unlink()
+    checked=work/'checked';checked.mkdir(mode=0o700)
+    checked_meta=b.unpack(encrypted,checked,phrase)
+    return encrypted,wrapped,checked,checked_meta
+
+
+def persist(key,meta,paths,run_prefix):
+    allowed=meta.get('allowed_mime_types') or ['*/*']
+    binary=any(x in allowed for x in ['*/*','application/octet-stream','application/pgp-encrypted'])
+    mime='application/octet-stream' if binary else 'application/json'
+    limit=meta.get('file_size_limit') or 50*1024*1024
+    raw_size=min(4*1024*1024,limit-4096) if binary else min(3*1024*1024,(limit-4096)*3//4)
+    if raw_size<4096:raise RuntimeError('PRIVATE_STORAGE_FILE_LIMIT_INCOMPATIBLE')
+    if sum(p.stat().st_size for p in paths)>128*1024*1024:raise RuntimeError('PRIVATE_STORAGE_FREE_QUOTA_SAFETY_LIMIT')
+    manifest={'format':'sigo-encrypted-backup-v1','public_recipient':c.FINGERPRINT,'files':[]}
+    def put(name,body,content_type):
+        relative=run_prefix+'/'+name
+        url=c.API+'/storage/v1/object/'+c.BUCKET+'/'+quote(relative,safe='/')
+        c.http(url,key,method='POST',data=body,headers={'Content-Type':content_type,'x-upsert':'false'})
+        actual=c.http(c.API+'/storage/v1/object/authenticated/'+c.BUCKET+'/'+quote(relative,safe='/'),key)
+        if hashlib.sha256(actual).digest()!=hashlib.sha256(body).digest():raise RuntimeError('PRIVATE_STORAGE_READBACK_MISMATCH')
+        return relative
+    for path in paths:
+        if not path.name.endswith('.gpg'):raise RuntimeError('ONLY_ENCRYPTED_BACKUP_FILES_MAY_LEAVE_RUNNER')
+        entry={'name':path.name,'sha256':b.digest(path),'chunks':[]}
+        with path.open('rb') as f:
+            i=0
+            for raw in iter(lambda:f.read(raw_size),b''):
+                body=raw if binary else json.dumps({'format':'sigo-pgp-ciphertext','base64':base64.b64encode(raw).decode()}).encode()
+                name=path.name+'.'+str(i).zfill(5)+('.bin'if binary else'.json')
+                relative=put(name,body,mime)
+                entry['chunks'].append({'path':relative,'sha256':hashlib.sha256(body).hexdigest(),'encoding':'binary'if binary else'json-base64'})
+                i+=1
+        manifest['files'].append(entry)
+    body=json.dumps(manifest,sort_keys=True).encode()
+    put('encrypted-index.json',body,'application/json'if'application/json'in allowed or'*/*'in allowed else mime)
+    return {'private_backup_prefix':run_prefix,'ciphertext_archive_sha256':manifest['files'][0]['sha256'],'private_storage_readback':'PASS'}
+
+
+def exercise(docker,work):
+    with fixture(docker) as pg:
+        encrypted,wrapped,checked,meta=create_encrypted(pg,work)
+    result=b.restore_files(docker,checked,meta,b.RESTORE_IMAGE,candidate_dir=ROOT)
+    return {'status':'PASS_SYNTHETIC_MANAGED_IMAGE','managed_image':b.RESTORE_IMAGE,
+            'restore_status':result['restore_status'],'candidate_copy_gate':result['candidate_copy_gate'],
+            'production_capture':False,'backup_artifacts_uploaded':False}
+
+
+def capture(docker,work,key,storage_meta):
+    started=time.monotonic()
+    with c.source(docker,work) as pg:
+        encrypted,wrapped,checked,meta=create_encrypted(pg,work)
+    prefix=c.PREFIX+'/'+os.environ['GITHUB_RUN_ID']+'-'+os.environ.get('GITHUB_RUN_ATTEMPT','1')+'-'+secrets.token_hex(6)
+    # Keep the wrapped random key durable before streaming the larger ciphertext.
+    saved=persist(key,storage_meta,[wrapped,encrypted],prefix)
+    saved['ciphertext_archive_sha256']=b.digest(encrypted)
+    captured_seconds=round(time.monotonic()-started,3)
+    b.run(docker+['pull',b.RESTORE_IMAGE])
+    result=b.restore_files(docker,checked,meta,b.RESTORE_IMAGE,candidate_dir=ROOT)
+    report={**saved,**result,'status':'PASS_PRODUCTION_DATABASE_ARCHIVE_AND_ISOLATED_COPY',
+            'snapshot_exported_at_utc':meta['snapshot_exported_at_utc'],
+            'capture_encrypt_and_store_seconds':captured_seconds,'total_seconds':round(time.monotonic()-started,3),
+            'production_ddl':False,'production_rls_changes':False,'business_data_changes':False,'backup_artifacts_uploaded':False,
+            'application_deployed':False,'storage_scope':'new encrypted backup objects only, existing private bucket'}
+    # This report contains no rows/credentials; keep its persistent copy private too.
+    allowed=storage_meta.get('allowed_mime_types')or['*/*']
+    report_mime='application/json'if'application/json'in allowed or'*/*'in allowed else'application/octet-stream'
+    c.http(c.API+'/storage/v1/object/'+c.BUCKET+'/'+quote(prefix+'/verified-report.json',safe='/'),key,
+           method='POST',data=json.dumps(report).encode(),headers={'Content-Type':report_mime,'x-upsert':'false'})
+    return report

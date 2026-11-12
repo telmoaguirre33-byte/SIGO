@@ -6,7 +6,7 @@ on:
       action:
         description: 'prepare: conexión/destino. capture: respaldo/restore, nunca SQL productivo.'
         type: choice
-        options: [prepare, capture]
+        options: [prepare, exercise, capture]
         default: prepare
         required: true
 
@@ -28,8 +28,13 @@ jobs:
           persist-credentials: false
       - name: Guardas unitarias de la herramienta existente
         working-directory: docs/operacion-controlada/respaldo-local
-        run: python3 -m unittest test_respaldo.py
+        run: python3 -m unittest test_respaldo.py test_cloud.py
+      - name: Ensayo con imagen Supabase sin credenciales productivas
+        if: inputs.action == 'exercise'
+        working-directory: docs/operacion-controlada/respaldo-local
+        run: python3 cloud.py exercise
       - name: Operador privado sin artifacts
+        if: inputs.action != 'exercise' 
         working-directory: docs/operacion-controlada/respaldo-local
         env:
           SIGO_BACKUP_DATABASE_URL: ${{ secrets.SIGO_BACKUP_DATABASE_URL }}

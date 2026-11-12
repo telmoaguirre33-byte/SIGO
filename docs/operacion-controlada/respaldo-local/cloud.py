@@ -3,6 +3,7 @@
 import argparse
 import base64
 import contextlib
+import hashlib
 import json
 import os
 import secrets
@@ -97,6 +98,10 @@ def source(docker, work):
     trusted_ca=Path('/etc/ssl/certs/ca-certificates.crt')
     if not trusted_ca.is_file():raise RuntimeError('RUNNER_TRUSTED_CA_BUNDLE_UNAVAILABLE')
     shutil.copyfile(trusted_ca,config/'trusted-ca.pem')
+    official=ROOT/'supabase-ca.crt'
+    if hashlib.sha256(official.read_bytes()).hexdigest()!='700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7':
+        raise RuntimeError('SUPABASE_OFFICIAL_CA_FINGERPRINT_MISMATCH')
+    with (config/'trusted-ca.pem').open('ab') as f:f.write(b'\n'+official.read_bytes())
     box='sigo-122-cloud-client-'+secrets.token_hex(6)
     created=False
     try:
@@ -139,7 +144,7 @@ def safe_error(log):
 
 def main():
     os.umask(0o077)
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('action',choices=['prepare','capture'])
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('action',choices=['prepare','exercise','capture'])
     args=p.parse_args()
     if os.getenv('GITHUB_REPOSITORY')!='telmoaguirre33-byte/SIGO' or os.getenv('GITHUB_REF')!='refs/heads/ops/122-respaldo-local':
         raise RuntimeError('ONLY_AUTHORIZED_REPOSITORY_AND_OPERATIONS_BRANCH')
@@ -147,6 +152,19 @@ def main():
     with tempfile.TemporaryDirectory(prefix='sigo-122-private-') as tmp:
         work=Path(tmp);b.LOG=work/'diagnostic-private.log';b.LOG.touch(mode=0o600)
         docker=b.docker_command()
+        if args.action=='exercise':
+            if any(os.getenv(k)for k in ['SIGO_BACKUP_DATABASE_URL','SUPABASE_DB_URL','SUPABASE_POOLER_URL','SUPABASE_DB_PASSWORD','SUPABASE_SERVICE_ROLE_KEY','SUPABASE_ACCESS_TOKEN']):
+                raise RuntimeError('SYNTHETIC_EXERCISE_MUST_NOT_RECEIVE_PRODUCTION_CREDENTIALS')
+            import cloud_pipeline
+            try:result=cloud_pipeline.exercise(docker,work)
+            except Exception:
+                # This branch has no production credentials/data; diagnose only
+                # the explicitly synthetic managed-image compatibility exercise.
+                print('SYNTHETIC_ONLY_DIAGNOSTIC_BEGIN',flush=True)
+                print(b.LOG.read_text(errors='replace')[-6000:],flush=True)
+                print('SYNTHETIC_ONLY_DIAGNOSTIC_END',flush=True)
+                raise
+            print(json.dumps(result,sort_keys=True),flush=True);return 0
         try:
             key=storage_key();meta=bucket_metadata(key)
             report['existing_private_storage_access']='PASS'
@@ -164,7 +182,11 @@ def main():
             report['connection_diagnostic']=safe_error(b.LOG)
         report['status']='PREPARED' if key and report.get('comercial_tls_session_read_only')=='PASS' else 'NEEDS_PRIVATE_CONFIGURATION'
         print(json.dumps(report,sort_keys=True),flush=True)
-        if args.action=='capture':raise RuntimeError('CAPTURE_REQUIRES_COMPLETED_PRIVATE_STORAGE_PIPELINE')
+        if args.action=='capture':
+            if report['status']!='PREPARED':raise RuntimeError('PRIVATE_BACKUP_PREREQUISITES_NOT_APPROVED')
+            import cloud_pipeline
+            result=cloud_pipeline.capture(docker,work,key,meta)
+            print(json.dumps(result,sort_keys=True),flush=True);return 0
     return 0 if report['status']=='PREPARED' else 2
 
 
