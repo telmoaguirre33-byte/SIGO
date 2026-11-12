@@ -6,8 +6,8 @@ on:
       action:
         description: 'prepare: conexión/destino. capture: respaldo/restore, nunca SQL productivo.'
         type: choice
-        options: [prepare, exercise, capture, schema-probe]
-        default: prepare
+        options: [custody-exercise, custody-capture]
+        default: custody-exercise
         required: true
 
 permissions:
@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   isolated-backup:
-    if: github.repository == 'telmoaguirre33-byte/SIGO' && github.ref == 'refs/heads/ops/122-respaldo-local'
+    if: github.repository == 'telmoaguirre33-byte/SIGO' && github.ref == 'refs/heads/ops/122-custodia-recuperable'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -28,13 +28,13 @@ jobs:
           persist-credentials: false
       - name: Guardas unitarias de la herramienta existente
         working-directory: docs/operacion-controlada/respaldo-local
-        run: python3 -m unittest test_respaldo.py test_cloud.py
+        run: python3 -m unittest test_respaldo.py test_cloud.py test_custodia.py
       - name: Ensayo con imagen Supabase sin credenciales productivas
-        if: inputs.action == 'exercise'
+        if: inputs.action == 'custody-exercise'
         working-directory: docs/operacion-controlada/respaldo-local
-        run: python3 cloud.py exercise
+        run: python3 custodia.py exercise
       - name: Operador privado sin artifacts
-        if: inputs.action != 'exercise'
+        if: inputs.action == 'custody-capture'
         working-directory: docs/operacion-controlada/respaldo-local
         env:
           SIGO_BACKUP_DATABASE_URL: ${{ secrets.SIGO_BACKUP_DATABASE_URL }}
@@ -45,4 +45,4 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SIGO_BACKUP_STORAGE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           BACKUP_ACTION: ${{ inputs.action }}
-        run: python3 cloud.py "$BACKUP_ACTION"
+        run: python3 custodia.py capture

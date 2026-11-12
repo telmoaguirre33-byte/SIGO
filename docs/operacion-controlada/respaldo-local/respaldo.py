@@ -449,7 +449,7 @@ def restore_archive_preserving_extension_owners(pg,work,meta):
     restore(remaining,pg.db)
 
 
-def restore_files(docker, work, meta, image, keep=False, candidate_dir=None, candidate_probe=None):
+def restore_files(docker, work, meta, image, keep=False, candidate_dir=None, candidate_probe=None, rls_only=False):
     phase('isolated_restore_initialization')
     bootstrap=meta.get('bootstrap_role')
     roles_input=roles_for_bootstrap((work/'roles.sql').read_bytes(),bootstrap)
@@ -512,6 +512,8 @@ def restore_files(docker, work, meta, image, keep=False, candidate_dir=None, can
             phase('isolated_exact_sql_candidates')
             candidates=[('catalogo.sql','33dcd3c00c02535f8df262752bc148726345a240de71eb931565f746b8e68046'),
                         ('rls.sql','991d9a777676206cd91f517e8ec09454b54b2051b789350a46433c5a15fc8136')]
+            if rls_only:
+                candidates=candidates[1:]
             for filename,expected in candidates:
                 path=candidate_dir/filename
                 if digest(path)!=expected: raise RuntimeError('SQL candidato no coincide con el hash aprobado para ensayo.')
