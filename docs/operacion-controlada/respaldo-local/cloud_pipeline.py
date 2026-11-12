@@ -78,7 +78,7 @@ def fixture(docker):
                 if pg.sql('select 1;')=='1':break
             except RuntimeError:time.sleep(1)
         else:raise RuntimeError('SYNTHETIC_SERVER_DID_NOT_START')
-        pg.sql('create role postgres login superuser createrole createdb;')
+        pg.sql('create role postgres login superuser createrole createdb;alter database postgres owner to postgres;')
         pg.user='postgres'
         pg.sql("""create schema extensions;
 create extension pg_stat_statements with schema extensions;

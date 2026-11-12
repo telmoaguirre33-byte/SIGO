@@ -120,6 +120,49 @@ def schema_difference_summary(before,after):
             'restored_only_line_categories':classify(z-a)}
 
 
+def normalized_schema(data):
+    # pg_dump can reorder independent objects after OIDs change on restore.
+    # Compare complete named blocks, never sorted lines/statements inside a
+    # function. Detect dump headers only outside SQL strings/dollar bodies.
+    lines=normalized(data).splitlines();starts=[];footer=None
+    quote=None;escaped=False;block_depth=0
+    for number,line in enumerate(lines):
+        if quote is None and block_depth==0 and number and lines[number-1]==b'--' and number+1<len(lines)and lines[number+1]==b'--':
+            if line.startswith(b'-- Name: ')and all(x in line for x in[b'; Type: ',b'; Schema: ',b'; Owner: ']):starts.append(number-1)
+            elif line==b'-- PostgreSQL database dump complete':footer=number-1
+        i=0
+        while i<len(line):
+            if quote in(b"'",b'"'):
+                if escaped and line[i:i+1]==b'\\':i+=2;continue
+                if line[i:i+1]==quote:
+                    if line[i+1:i+2]==quote:i+=2;continue
+                    quote=None
+                i+=1;continue
+            if quote is not None:
+                end=line.find(quote,i)
+                if end<0:break
+                i=end+len(quote);quote=None;continue
+            if block_depth:
+                if line[i:i+2]==b'/*':block_depth+=1;i+=2
+                elif line[i:i+2]==b'*/':block_depth-=1;i+=2
+                else:i+=1
+                continue
+            if line[i:i+2]==b'--':break
+            if line[i:i+2]==b'/*':block_depth=1;i+=2;continue
+            if line[i:i+1]in(b"'",b'"'):
+                quote=line[i:i+1];escaped=quote==b"'"and i>0 and line[i-1:i].lower()==b'e';i+=1;continue
+            if line[i:i+1]==b'$':
+                match=re.match(rb'\$(?:[A-Za-z_][A-Za-z_0-9]*)?\$',line[i:])
+                if match:quote=match[0];i+=len(quote);continue
+            i+=1
+    if quote is not None or block_depth:raise RuntimeError('El esquema requiere revisión de su delimitación SQL.')
+    if not starts:return normalized(data)
+    end=footer if footer is not None else len(lines)
+    def content(first,last):return b'\n'.join(lines[first:last]).rstrip(b'\n')
+    chunks=[content(first,last)for first,last in zip(starts,starts[1:]+[end])]
+    return b'\n\n'.join([content(0,starts[0]),*sorted(chunks),content(end,len(lines))])
+
+
 def ident(s):
     return '"' + s.replace('"', '""') + '"'
 
@@ -280,7 +323,7 @@ def capture(pg, work, snapshot_hook=None,schema_only=False):
     if len(parsed) != sum(b'SEQUENCE SET ' in line for line in seq.splitlines()):
         raise RuntimeError('Formato de secuencias no reconocido: revisión necesaria.')
     meta['database'] = pg.sql('select current_database();')
-    meta['schema_sha256'] = hashlib.sha256(normalized(schema)).hexdigest()
+    meta['schema_sha256'] = hashlib.sha256(normalized_schema(schema)).hexdigest()
     meta['files_sha256'] = {p.name:digest(p) for p in work.iterdir() if p.is_file()}
     meta['captured_at_utc'] = datetime.now(timezone.utc).isoformat()
     meta['snapshot_exported_at_utc'] = snapshot_time
@@ -410,7 +453,7 @@ def restore_files(docker, work, meta, image, keep=False, candidate_dir=None, can
         pg.db=meta['database']
         phase('isolated_schema_acl_comparison')
         schema=run(pg.cmd('pg_dump','--schema-only','--create','--no-password'))
-        if hashlib.sha256(normalized(schema)).hexdigest()!=meta['schema_sha256']:
+        if hashlib.sha256(normalized_schema(schema)).hexdigest()!=meta['schema_sha256']:
             print(json.dumps({'schema_comparison':schema_difference_summary((work/'schema.sql').read_bytes(),schema)}),flush=True)
             raise RuntimeError('El esquema/ACL/funciones restaurados difieren del original.')
         phase('isolated_roles_policies_extensions_comparison')

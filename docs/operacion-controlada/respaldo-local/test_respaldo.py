@@ -7,6 +7,17 @@ import respaldo as b
 
 
 class Guardas(unittest.TestCase):
+    def test_schema_object_order_can_change_but_function_bodies_acl_and_owners_cannot(self):
+        def block(name,body):return b'--\n-- Name: '+name+b'; Type: FUNCTION; Schema: public; Owner: postgres\n--\n'+body+b'\n\n'
+        one=block(b'one',b"CREATE FUNCTION one() RETURNS text AS $fn$\n--\n-- Name: decoy; Type: FUNCTION; Schema: public; Owner: postgres\n--\nselect 'a';\nselect 'b';\n$fn$ LANGUAGE SQL;")
+        two=block(b'two',b'REVOKE ALL ON FUNCTION two() FROM PUBLIC;')
+        prefix=b'-- PostgreSQL database dump\n\n';footer=b'--\n-- PostgreSQL database dump complete\n--\n'
+        original=prefix+one+two+footer
+        reordered=prefix+two+one+footer
+        self.assertEqual(b.normalized_schema(original),b.normalized_schema(reordered))
+        for changed in [reordered.replace(b"select 'a';\nselect 'b';",b"select 'b';\nselect 'a';"),reordered.replace(b'REVOKE',b'GRANT'),reordered.replace(b'Owner: postgres',b'Owner: anon')]:
+            self.assertNotEqual(b.normalized_schema(original),b.normalized_schema(changed))
+
     def test_extension_owner_restore_rejects_any_source_or_other_container(self):
         from types import SimpleNamespace
         for pg in [SimpleNamespace(service=True,box='sigo-restore-synthetic'),SimpleNamespace(service=False,box='source-box')]:
