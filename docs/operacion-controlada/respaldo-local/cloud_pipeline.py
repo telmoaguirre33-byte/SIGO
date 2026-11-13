@@ -77,7 +77,7 @@ def fixture(docker,vault_key=False):
             setup="printf '%s\\n' '#!/bin/sh' 'echo "+key+"' >/tmp/sigo-getkey;chmod 700 /tmp/sigo-getkey;"
             command=command.replace('&& exec postgres','&& '+setup+' exec postgres').replace(
                 'shared_preload_libraries=pg_stat_statements',
-                'shared_preload_libraries=pg_stat_statements,pgsodium -c pgsodium.getkey_script=/tmp/sigo-getkey')
+                'shared_preload_libraries=pg_stat_statements,supabase_vault -c vault.getkey_script=/tmp/sigo-getkey')
         b.run(docker+['run','-d','--network','none','--name',name,'--user','postgres','--entrypoint','/bin/sh',
                      '--mount','type=volume,src='+volume+',dst=/sigo-data',image,'-c',command])
         started=True;pg=b.PG(docker,name,'supabase_admin','postgres')
