@@ -197,6 +197,11 @@ test('connection shell reads only the fixed metadata query, and failure cannot l
     assert.equal(result.status, failure ? 1 : 0, result.stderr);
     assert.doesNotMatch(result.stdout + result.stderr, /do-not-log/);
     const capture = JSON.parse(fs.readFileSync(path.join(dir,'capture.json'),'utf8'));
+    // A URI in PGDATABASE is a default database name, not an expanded libpq
+    // connection string. Ensure the selected endpoint reaches the client.
+    const dbnameIndex = capture.args.indexOf('--dbname');
+    assert.ok(dbnameIndex >= 0, 'psql must receive the selected connection URI explicitly');
+    assert.equal(capture.args[dbnameIndex + 1], 'postgresql://synthetic:do-not-log@db.fixture.invalid/postgres');
     assert.match(capture.sql, /^BEGIN READ ONLY;/);
     assert.match(capture.sql, /FROM supabase_migrations\.schema_migrations;/);
     assert.match(capture.sql, /ROLLBACK;/);

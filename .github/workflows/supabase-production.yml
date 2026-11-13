@@ -101,7 +101,7 @@ jobs:
           set -euo pipefail
           # Every connection is read-only; no migration statements or business rows.
           read_history() {
-            PGDATABASE="$1" timeout 7s psql -X --no-password -A -t -q -v ON_ERROR_STOP=1 >"$RUNNER_TEMP/sigo-migrations.json" 2>"$RUNNER_TEMP/sigo-db-error.txt" <<'SQL'
+            timeout 7s psql -X --no-password -A -t -q -v ON_ERROR_STOP=1 --dbname "$1" >"$RUNNER_TEMP/sigo-migrations.json" 2>"$RUNNER_TEMP/sigo-db-error.txt" <<'SQL'
           BEGIN READ ONLY;
           SELECT json_build_object(
             'read_only', current_setting('transaction_read_only') = 'on',
@@ -152,7 +152,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if ! PGDATABASE="$SIGO_DB_URL" psql -X --no-password -A -t -q -v ON_ERROR_STOP=1 \
+          if ! psql -X --no-password -A -t -q -v ON_ERROR_STOP=1 --dbname "$SIGO_DB_URL" \
             -f scripts/lint-production-readonly.sql >"$RUNNER_TEMP/sigo-db-lint.json" 2>"$RUNNER_TEMP/sigo-db-lint-error.txt"; then
             if grep -Fq 'LINT_EXTENSION_MISSING' "$RUNNER_TEMP/sigo-db-lint-error.txt"; then
               echo "::error title=Production lint unavailable::plpgsql_check is not installed. This read-only preflight will not install it or waive lint."
