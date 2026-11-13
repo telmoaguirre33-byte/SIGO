@@ -6,7 +6,7 @@ on:
       action:
         description: 'prepare: conexión/destino. capture: respaldo/restore, nunca SQL productivo.'
         type: choice
-        options: [custody-exercise, custody-capture, custody-verify, rls-execute]
+        options: [custody-exercise, custody-capture, custody-verify, rls-execute, rls-verify]
         default: custody-exercise
         required: true
       approval_comment_id:
@@ -39,7 +39,7 @@ jobs:
         working-directory: docs/operacion-controlada/respaldo-local
         run: python3 custodia.py exercise
       - name: Operador privado sin artifacts
-        if: inputs.action == 'custody-capture' || inputs.action == 'custody-verify' || inputs.action == 'rls-execute'
+        if: inputs.action == 'custody-capture' || inputs.action == 'custody-verify' || inputs.action == 'rls-execute' || inputs.action == 'rls-verify'
         working-directory: docs/operacion-controlada/respaldo-local
         env:
           SIGO_BACKUP_DATABASE_URL: ${{ secrets.SIGO_BACKUP_DATABASE_URL }}
@@ -52,7 +52,7 @@ jobs:
           BACKUP_ACTION: ${{ inputs.action }}
           SIGO_RLS_APPROVAL_COMMENT: ${{ inputs.approval_comment_id }}
         run: |
-          if [ "$BACKUP_ACTION" = "rls-execute" ]; then
+          if [ "$BACKUP_ACTION" = "rls-execute" ] || [ "$BACKUP_ACTION" = "rls-verify" ]; then
             python3 rls_autorizado.py
           elif [ "$BACKUP_ACTION" = "custody-verify" ]; then
             python3 custodia.py verify

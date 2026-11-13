@@ -63,7 +63,7 @@ where eu.activo and eu.user_id is not null
 and not('products.read'=any(coalesce(eu.permisos_denegados,'{}'::text[])))
 and(eu.rol in('owner','admin','seller','warehouse')or'products.read'=any(coalesce(eu.permisos_extra,'{}'::text[])))
 order by eu.empresa_id,(eu.rol='owner')desc,eu.user_id)t;"""))
-    totals=json.loads(pg.sql("select coalesce(json_object_agg(empresa_id::text,n),'{}')from(select empresa_id,count(*)n from public.productos group by empresa_id)t;"))
+    totals=json.loads(pg.sql("select coalesce(json_object_agg(empresa_id::text,n),'{}')from(select empresa_id,count(*)n from public.productos where empresa_id is not null group by empresa_id)t;"))
     tenants=json.loads(pg.sql('select coalesce(json_agg(id),\'[]\')from public.empresas;'))
     if len(members)!=32:raise RuntimeError('RLS_COMPANY_SCOPE_REVIEW_REQUIRED')
     denials=0
@@ -79,7 +79,7 @@ order by eu.empresa_id,(eu.rol='owner')desc,eu.user_id)t;"""))
             denials+=1
             reject+="do $$begin begin perform 1 from public.consultar_productos_sigo("+b.literal(tenant)+"::uuid,'',0,1);raise exception 'RLS_CROSS_TENANT_RPC_ACCEPTED';exception when others then if sqlerrm<>'FORBIDDEN'then raise;end if;end;end$$;"
         q=('begin read only;set local statement_timeout=\'60s\';set local request.jwt.claim.sub='+uid+';set local request.jwt.claims='+claims+';set local role authenticated;'
-           "select json_build_object('visible',count(id),'outside',count(id)filter(where not(empresa_id=any("+array+"))))from public.productos;"+reject+'rollback;')
+           "select json_build_object('visible',count(id),'outside',count(id)filter(where empresa_id is null or not(empresa_id=any("+array+"))))from public.productos;"+reject+'rollback;')
         result=json.loads(pg.sql(q))
         if result['outside']!=0 or result['visible']!=sum(int(totals.get(x,0))for x in allowed):
             raise RuntimeError('RLS_PRODUCTION_COMPANY_ISOLATION_FAILED')
@@ -112,13 +112,27 @@ def run(docker,work):
             'extra_production_sql_mutations':False,'application_deployed':False}
 
 
+def run_verify(docker,work):
+    approved_bytes()
+    with c.source(docker,work)as pg:
+        verify_postconditions(pg)
+        b.phase('rls_postconditions_verified_read_only')
+        checks=read_only_isolation(pg)
+        retained=int(pg.sql('select count(*)from public.productos where empresa_id is null;'))
+    return {'status':'PASS_PRODUCTION_RLS_READ_ONLY_VERIFICATION','sql_sha256':APPROVED_SHA,
+            'isolation':checks,'legacy_products_without_company_retained':retained,
+            'source_read_only':True,'rls_reexecuted':False,'business_data_changes':False}
+
+
 def main():
     os.umask(0o077)
     if os.getenv('GITHUB_REPOSITORY')!='telmoaguirre33-byte/SIGO'or os.getenv('GITHUB_REF')!='refs/heads/ops/122-custodia-recuperable':
         raise RuntimeError('RLS_ONLY_AUTHORIZED_OPERATOR_BRANCH')
     with tempfile.TemporaryDirectory(prefix='sigo122-rls-private-')as tmp:
         work=Path(tmp);b.LOG=work/'private.log';b.LOG.touch(mode=0o600)
-        try:print(json.dumps(run(b.docker_command(),work),sort_keys=True),flush=True)
+        try:
+            result=run_verify(b.docker_command(),work)if os.getenv('BACKUP_ACTION')=='rls-verify'else run(b.docker_command(),work)
+            print(json.dumps(result,sort_keys=True),flush=True)
         except Exception as exc:
             code=str(exc)if isinstance(exc,RuntimeError)and str(exc).replace('_','').isalnum()else'PRIVATE_DIAGNOSTIC_ONLY'
             print(json.dumps({'status':'STOPPED_NO_AUTOMATIC_RETRY','error':code,'diagnostic':c.safe_error(b.LOG)}),flush=True)
