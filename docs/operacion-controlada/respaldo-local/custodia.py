@@ -264,11 +264,34 @@ def run_exercise(docker,work):
     return {**result,'status':'PASS_SYNTHETIC_VAULT_KEY_READBACK_AND_DOWNLOAD_RESTORE','production_changes':False}
 
 
+def verify_existing(docker,work):
+    name='sigo122_recovery_43333884244_1_d94779477c9a'
+    fp='B4351B6353DB8CF23F1DCB487F44AF9057C0D65F'
+    prefix=c.PREFIX+'/43333884244-1-d94779477c9a'
+    expected='ec6b8ad65c1047b27dccdb591d39228c81dfd841afe41609ce743d14b634fcc9'
+    key=c.storage_key();c.bucket_metadata(key)
+    downloaded=download_persisted(key,prefix,work,fp)
+    if b.digest(downloaded['COMERCIAL-backup.tar.gpg'])!=expected:
+        raise RuntimeError('CUSTODY_CURRENT_ARCHIVE_HASH_MISMATCH')
+    with c.source(docker,work)as pg:package=retrieve_key(pg,name,fp)
+    phrase=recover_phrase(downloaded['recovery-phrase.gpg'],work,package);package=None
+    checked=work/'checked';checked.mkdir(mode=0o700)
+    meta=b.unpack(downloaded['COMERCIAL-backup.tar.gpg'],checked,phrase);phrase=None
+    report=json.loads(c.http(c.API+'/storage/v1/object/authenticated/'+c.BUCKET+'/'+prefix+'/verified-report.json',key))
+    if report.get('status')!='PASS_ADMIN_CUSTODY_AND_REAL_RESTORE' or report.get('ciphertext_archive_sha256')!=expected:
+        raise RuntimeError('CUSTODY_EXISTING_RESTORE_REPORT_REJECTED')
+    return {'status':'PASS_CURRENT_VAULT_STORAGE_DECRYPT_AND_ARCHIVE_INTEGRITY',
+            'ciphertext_archive_sha256':expected,'vault_secret_name':name,
+            'snapshot_exported_at_utc':meta['snapshot_exported_at_utc'],
+            'original_restore_run':43333884244,'source_read_only':True,
+            'new_backup_or_key_created':False,'production_changes':False}
+
+
 def main():
     os.umask(0o077)
     if os.getenv('GITHUB_REPOSITORY')!='telmoaguirre33-byte/SIGO' or os.getenv('GITHUB_REF')!='refs/heads/ops/122-custodia-recuperable':
         raise RuntimeError('CUSTODY_ONLY_AUTHORIZED_OPERATOR_BRANCH')
-    if sys.argv[1:] not in (['capture'],['exercise']):raise RuntimeError('CUSTODY_ACTION_REJECTED')
+    if sys.argv[1:] not in (['capture'],['exercise'],['verify']):raise RuntimeError('CUSTODY_ACTION_REJECTED')
     with tempfile.TemporaryDirectory(prefix='sigo122-custody-') as tmp:
         work=Path(tmp);b.LOG=work/'private-diagnostic.log';b.LOG.touch(mode=0o600)
         docker=b.docker_command()
@@ -277,6 +300,7 @@ def main():
                 if any(os.getenv(k)for k in ['SUPABASE_DB_PASSWORD','SUPABASE_DB_URL','SUPABASE_SERVICE_ROLE_KEY','SUPABASE_ACCESS_TOKEN']):
                     raise RuntimeError('CUSTODY_EXERCISE_MUST_NOT_HAVE_PRODUCTION_SECRETS')
                 result=run_exercise(docker,work)
+            elif sys.argv[1]=='verify':result=verify_existing(docker,work)
             else:result=run_capture(docker,work)
             print(json.dumps(result,sort_keys=True),flush=True)
         except Exception:

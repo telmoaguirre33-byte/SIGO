@@ -6,7 +6,7 @@ on:
       action:
         description: 'prepare: conexión/destino. capture: respaldo/restore, nunca SQL productivo.'
         type: choice
-        options: [custody-exercise, custody-capture]
+        options: [custody-exercise, custody-capture, custody-verify]
         default: custody-exercise
         required: true
 
@@ -34,7 +34,7 @@ jobs:
         working-directory: docs/operacion-controlada/respaldo-local
         run: python3 custodia.py exercise
       - name: Operador privado sin artifacts
-        if: inputs.action == 'custody-capture'
+        if: inputs.action == 'custody-capture' || inputs.action == 'custody-verify'
         working-directory: docs/operacion-controlada/respaldo-local
         env:
           SIGO_BACKUP_DATABASE_URL: ${{ secrets.SIGO_BACKUP_DATABASE_URL }}
@@ -45,4 +45,9 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SIGO_BACKUP_STORAGE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           BACKUP_ACTION: ${{ inputs.action }}
-        run: python3 custodia.py capture
+        run: |
+          if [ "$BACKUP_ACTION" = "custody-verify" ]; then
+            python3 custodia.py verify
+          else
+            python3 custodia.py capture
+          fi
