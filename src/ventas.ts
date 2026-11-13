@@ -1,6 +1,6 @@
 import { esperarCobro } from "./esperaCobro";
 import { supabase } from "./supabase";
-import { listarProductosSigo } from "./productos";
+import { leerProductosPorIdsSigo } from "./productos";
 import { cantidadEscaladaMedida, normalizarUnidadVenta, subtotalMedida, type UnidadVenta } from "./ventaPorMedidas";
 
 export type MedioPagoSigo =
@@ -283,7 +283,7 @@ async function capturarStockAntes(
 ): Promise<SnapshotStockVenta | null> {
   if (estadoReintento !== "nueva") return null;
   try {
-    const productos = await listarProductosSigo(empresaId, signal);
+    const productos = await leerProductosPorIdsSigo(empresaId, items.map(item => item.productoId), signal);
     signal.throwIfAborted();
     const porId = new Map(productos.map((producto) => [producto.id, producto]));
     const snapshot: SnapshotStockVenta = new Map();
@@ -358,7 +358,7 @@ async function verificarDetalleYStockVenta(
     }
 
     signal.throwIfAborted();
-    const productosDespues = await listarProductosSigo(empresaId, signal);
+    const productosDespues = await leerProductosPorIdsSigo(empresaId, items.map(item => item.productoId), signal);
     signal.throwIfAborted();
     const despuesPorId = new Map(productosDespues.map((producto) => [producto.id, producto]));
     let huboMovimientoConcurrente = false;

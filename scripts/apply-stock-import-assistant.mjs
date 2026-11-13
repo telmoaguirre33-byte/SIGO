@@ -10,8 +10,8 @@ if (!app.includes(importLine)) {
   app = app.replace(importAnchor, `${importAnchor}\n${importLine}`);
 }
 
-const renderOld = '          {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}';
-const renderNew = '          {section === "Productos" && <Productos empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} puedeImportar={can(empresa.rol, "products.write") && can(empresa.rol, "stock.write") && (can(empresa.rol, "sales.write") || can(empresa.rol, "price_lists.read"))} />}';
+const renderOld = '          {section === "Productos" && <Productos key={empresa.empresa_id} empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} />}';
+const renderNew = '          {section === "Productos" && <Productos key={empresa.empresa_id} empresaId={empresa.empresa_id} puedeEditar={puedeEditarProductos} puedeImportar={can(empresa.rol, "products.write") && can(empresa.rol, "stock.write") && (can(empresa.rol, "sales.write") || can(empresa.rol, "price_lists.read"))} />}';
 if (!app.includes(renderNew)) {
   if (!app.includes(renderOld)) throw new Error("No se encontró el render de Productos para habilitar importación segura");
   app = app.replace(renderOld, renderNew);
@@ -25,7 +25,7 @@ if (!app.includes(signatureNew)) {
 }
 
 const actionOld = '{puedeEditar ? <button className="primary-button" onClick={abrirNuevo}>Nuevo producto</button> : <span>Modo solo lectura</span>}';
-const actionNew = `{puedeEditar ? (\n            <>\n              {puedeImportar && <StockImportAssistant empresaId={empresaId} productos={productos} onImported={() => cargar()} />}\n              <button className="primary-button" onClick={abrirNuevo}>Nuevo producto</button>\n            </>\n          ) : <span>Modo solo lectura</span>}`;
+const actionNew = `{puedeEditar ? (\n            <>\n              {puedeImportar && <StockImportAssistant empresaId={empresaId} key={empresaId} productos={productos} onImported={() => cargar()} />}\n              <button className="primary-button" onClick={abrirNuevo}>Nuevo producto</button>\n            </>\n          ) : <span>Modo solo lectura</span>}`;
 if (!app.includes("<StockImportAssistant empresaId={empresaId}")) {
   if (!app.includes(actionOld)) throw new Error("No se encontró el botón Nuevo producto para integrar importación de stock");
   app = app.replace(actionOld, actionNew);

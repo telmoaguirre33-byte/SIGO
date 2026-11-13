@@ -1,3 +1,4 @@
+import { catalogo121MockAdapter } from './fixtures/catalogo121-mock-adapter.mjs';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 import { JSDOM } from 'jsdom';
@@ -81,7 +82,7 @@ const mocks = {
   './productos': 'export const listarProductosSigo=async(e,s)=>globalThis.__cobro.readProducts(e,s);export const listarUnidadesProductoSigo=async(e)=>Object.fromEntries(globalThis.__cobro.products(e).map(p=>[p.id,p.unidad_medida]));export const guardarProductoSigo=async()=>{throw new Error("Product write forbidden")};',
   './ofertasProductos': 'export const listarOfertasProductos=async()=>[];export const ofertaVigente=()=>null;',
 };
-await build({ stdin: { contents: 'export { default as POS } from "./src/VentaRapidaOperativa";export * from "./src/intentoCobro";', resolveDir: process.cwd(), loader: 'tsx' }, outfile: '.test-build/cobro-recuperacion-flow.mjs', bundle: true, platform: 'node', format: 'esm', jsx: 'automatic', external: ['react', 'react-dom', 'react/jsx-runtime'], plugins: [{ name: 'synthetic-services', setup(b) { b.onResolve({ filter: /^\.\// }, a => mocks[a.path] ? { path: a.path, namespace: 'synthetic' } : null); b.onLoad({ filter: /.*/, namespace: 'synthetic' }, a => ({ contents: mocks[a.path], resolveDir: process.cwd() })); } }] });
+await build({ stdin: { contents: 'export { default as POS } from "./src/VentaRapidaOperativa";export * from "./src/intentoCobro";', resolveDir: process.cwd(), loader: 'tsx' }, outfile: '.test-build/cobro-recuperacion-flow.mjs', bundle: true, platform: 'node', format: 'esm', jsx: 'automatic', external: ['react', 'react-dom', 'react/jsx-runtime'], plugins: [{ name: 'synthetic-services', setup(b) { b.onResolve({ filter: /^\.\// }, a => mocks[a.path] ? { path: a.path, namespace: 'synthetic' } : null); b.onLoad({ filter: /.*/, namespace: 'synthetic' }, a => ({ contents: mocks[a.path] + (a.path === './productos' ? catalogo121MockAdapter : ''), resolveDir: process.cwd() })); } }] });
 const { POS, crearIntentoCobro, guardarIntentoCobro, leerIntentoCobro, registrarCobroConfirmado, huellaPayloadCobro } = await import(pathToFileURL(process.cwd() + '/.test-build/cobro-recuperacion-flow.mjs'));
 let root;
 async function mount(empresa = E) { document.body.innerHTML = '<div id="root"></div>'; root = createRoot(document.getElementById('root')); await act(async () => root.render(React.createElement(React.StrictMode, {}, React.createElement(POS, { empresaId: empresa })))); await settle(); }

@@ -1,3 +1,4 @@
+import { catalogo121MockAdapter } from './fixtures/catalogo121-mock-adapter.mjs';
 // Synthetic browser QA. No authentication, fiscal service, payment, scale or printer.
 // CI: node scripts/test-venta-medidas-browser.mjs (after playwright install chromium).
 import assert from "node:assert/strict";
@@ -15,9 +16,9 @@ const artifacts = process.env.MEDIDAS_QA_DIR || await fs.mkdtemp(path.join(os.tm
 await fs.mkdir(artifacts, { recursive: true });
 const mocks = {
   "./supabase": `export const supabase = { auth: { onAuthStateChange(cb) { cb("INITIAL_SESSION", { user: { id: "medidas-synthetic-user" } }); return { data: { subscription: { unsubscribe() {} } } }; } }, rpc: async (name, args) => {
-    if (name !== 'buscar_producto_codigo_sigo') throw new Error('Unexpected synthetic RPC: '+name);
+    if (name !== 'consultar_productos_sigo') throw new Error('Unexpected synthetic RPC: '+name);
     if (args.p_empresa_id !== globalThis.__qa.empresaId) throw new Error('Unexpected tenant');
-    return {data: globalThis.__qa.products.filter(p => p.codigo_barras === args.p_codigo || p.codigo_interno === args.p_codigo),error:null};
+    return {data: globalThis.__qa.products.filter(p => p.codigo_barras === args.p_busqueda || p.codigo_interno === args.p_busqueda),error:null};
   }, from() { throw new Error('Unexpected database read'); } };`,
   "./clientes": "export const listarClientesSigo = async () => [];",
   "./productos": `export const listarProductosSigo = async () => structuredClone(globalThis.__qa.products);
@@ -49,7 +50,7 @@ window.addEventListener('keydown',e=>{if(['F9','F10','F11','F12'].includes(e.key
 createRoot(document.getElementById('root')).render(<VentaRapidaOperativa empresaId={empresaId} />);
 ` }, bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"production"' }, plugins: [{ name: "synthetic-services", setup(b) {
   b.onResolve({ filter: /^\.\// }, args => mocks[args.path] ? { path: args.path, namespace: "synthetic" } : null);
-  b.onLoad({ filter: /.*/, namespace: "synthetic" }, args => ({ contents: mocks[args.path], loader: "js", resolveDir: root }));
+  b.onLoad({ filter: /.*/, namespace: "synthetic" }, args => ({ contents: mocks[args.path] + (args.path === './productos' ? catalogo121MockAdapter : ''), loader: "js", resolveDir: root }));
 } }] });
 const css = (await Promise.all(["src/index.css", "src/caja-ventas.css", "src/barcode-scanner.css"].map(file => fs.readFile(path.join(root, file), "utf8")))).join("\n");
 const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"><style>${css}</style></head><body><div id="root"></div></body></html>`;

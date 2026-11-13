@@ -1,0 +1,29 @@
+{
+  "status": "PASS",
+  "postgres": 17,
+  "syntheticOnly": true,
+  "actualRpcSource": "supabase/migrations/20261022024847_manual_medidas_atomicas.sql",
+  "results": [
+    "20000 products per company; three consecutive sales by unidad/kg/g/l/m, exact stock delta and cents",
+    "Discarded committed response and exact-key retry return same UUID with no additional sale/cash/stock",
+    "Two authenticated cashiers with different keys: proven lock contention, two sales/cash entries and exactly two stock deductions",
+    "Two authenticated cashiers with same key: proven lock contention, same UUID, one sale/cash entry and one stock deduction",
+    "Same key with changed payload rejects and preserves the complete persisted state",
+    "Later product failure rolls back earlier item, stock, sale header and cash atomically",
+    "Missing auth, forbidden tenant and revoked sales permission (including retry) reject without any persisted change; anon execution and direct inserts forbidden",
+    "Credit sale and retry create one client movement, exact balance and no cash entry"
+  ],
+  "limitations": [
+    "Minimal fixture auth/ACL and tables do not test production RLS, triggers or schema drift.",
+    "No browser, network loss, fiscal issuance or physical devices; discarded-response test ignores the committed SQL result."
+  ],
+  "syntheticProductsPerTenant": 20000,
+  "tenants": 2,
+  "units": [
+    "unidad",
+    "kg",
+    "g",
+    "l",
+    "m"
+  ]
+}

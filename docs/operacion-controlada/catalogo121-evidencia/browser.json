@@ -1,0 +1,117 @@
+{
+  "status": "PASS",
+  "syntheticProductsPerTenant": 20000,
+  "tenants": 2,
+  "cajaOpenMs": 797,
+  "cases": [
+    "Caja starts without downloading products or units",
+    "ENCHUFE: 120 matches, pages 50/50/20 and keyboard selects 120th",
+    "Full and partial name, accents, brand, internal code and EAN",
+    "Weight, meters, cart totals, F10 ticket and F11 fiscal event are synthetic",
+    "Repeated barcode Enter/Tab adds units, clears and focuses scanner",
+    "All trades and first/middle/last items selectable by mouse with quantity editing",
+    "Grams/liters preserve cents and decimals with the 20000-product catalog",
+    "Duplicate scanned code blocks selection instead of choosing a product",
+    "Connection, permission and server failures remain distinct from zero matches",
+    "Timeout displays error, retry succeeds without false empty result",
+    "Aborted old query and tenant change never show former tenant rows",
+    "Products initial page and server search reach beyond 14000, next page works",
+    "Readback requests only selected IDs and all RPCs stay bounded",
+    "Stock partial timeout never becomes zero indicators and retry loads 20000 with only 50 DOM rows",
+    "Stock cancels old tenant loads and never shows prior-company indicators or rows",
+    "Complete catalog readers continue beyond a lower PostgREST page cap without bulk/unit RPCs"
+  ],
+  "timings": [
+    {
+      "q": "ENCHUFE",
+      "ms": 224
+    },
+    {
+      "q": "ACOPLE RÁPIDO PROFESIONAL",
+      "ms": 237
+    },
+    {
+      "q": "acople rapido profesion",
+      "ms": 217
+    },
+    {
+      "q": "profesion ACOPLE rapido",
+      "ms": 215
+    },
+    {
+      "q": "INT-14999",
+      "ms": 217
+    },
+    {
+      "q": "7790000014999",
+      "ms": 233
+    },
+    {
+      "q": "marcaqa",
+      "ms": 220
+    },
+    {
+      "q": "acople rapido profesion",
+      "ms": 213
+    },
+    {
+      "q": "INT-14998",
+      "ms": 209
+    },
+    {
+      "q": "ENCHUFE 14001",
+      "ms": 218
+    },
+    {
+      "q": "ferreteria",
+      "ms": 210
+    },
+    {
+      "q": "supermercado",
+      "ms": 218
+    },
+    {
+      "q": "libreria",
+      "ms": 215
+    },
+    {
+      "q": "carniceria",
+      "ms": 218
+    },
+    {
+      "q": "verduleria",
+      "ms": 216
+    },
+    {
+      "q": "fiambreria",
+      "ms": 216
+    },
+    {
+      "q": "limpieza",
+      "ms": 216
+    },
+    {
+      "q": "Producto 00001",
+      "ms": 217
+    },
+    {
+      "q": "Producto 10000",
+      "ms": 211
+    },
+    {
+      "q": "Producto 20000",
+      "ms": 211
+    },
+    {
+      "q": "INT-19997",
+      "ms": 210
+    },
+    {
+      "q": "INT-19996",
+      "ms": 216
+    }
+  ],
+  "limitations": [
+    "Synthetic DB/payment/ticket/fiscal boundaries; no real sale, CAE, printer, physical scanner or production validation"
+  ]
+}

@@ -18,9 +18,10 @@ async function moduloConRpc(rpc, archivo = "productos", extras = "") {
   }, from() { throw new Error("No se esperaba acceso directo a tablas"); } };
   let source = await readFile(new URL(`../src/${archivo}.ts`, import.meta.url), "utf8");
   source = source.replace('import { supabase } from "./supabase";', `const supabase = globalThis[${JSON.stringify(key)}];`)
+    .replaceAll('from "./erroresCatalogo"', `from ${JSON.stringify(new URL("../src/erroresCatalogo.ts", import.meta.url).href)}`)
     .replaceAll('from "./esperaCobro"', `from ${JSON.stringify(new URL("../src/esperaCobro.ts", import.meta.url).href)}`)
     .replaceAll('from "./ventaPorMedidas"', `from ${JSON.stringify(new URL("../src/ventaPorMedidas.ts", import.meta.url).href)}`)
-    .replace('import { listarProductosSigo } from "./productos";', 'const listarProductosSigo = async () => [];');
+    .replace('import { leerProductosPorIdsSigo } from "./productos";', 'const leerProductosPorIdsSigo = async () => [];');
   const js = stripTypeScriptTypes(source + extras, { mode: "transform" });
   const result = await import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
   delete globalThis[key];
@@ -30,14 +31,17 @@ const input = { empresaId: "empresa-1", nombre: "Queso", precioVenta: 123.45, st
 const producto = { id: "producto-1", empresa_id: "empresa-1", nombre: "Queso", activo: true, costo_actual: 0, costo_ultima_compra: 0, precio_venta: 123.45, stock_actual: 1.5 };
 
 test("catálogo nunca transforma unidad desconocida o error RPC en unidad", async () => {
-  for (const respuesta of [
-    { data: [{ producto_id: producto.id, unidad_medida: "desconocida" }], error: null },
-    { data: [], error: null },
-    { data: null, error: { message: "Falló la conexión" } },
-  ]) {
-    const { listarProductosSigo } = await moduloConRpc(async (nombre) => nombre === "listar_productos_sigo" ? { data: [producto], error: null } : respuesta);
+  for (const unidad_medida of ["desconocida", null, undefined]) {
+    const { listarProductosSigo } = await moduloConRpc(async (nombre, params) => {
+      assert.equal(nombre, "consultar_productos_sigo");
+      return { data: params.p_offset ? [] : [{ ...producto, unidad_medida }], error: null };
+    });
     assert.equal((await listarProductosSigo("empresa-1"))[0].unidad_medida, null);
   }
+  let llamadas = 0;
+  const api = await moduloConRpc(async () => { llamadas++; return { data: null, error: { code: "08006", message: "Connection lost" } }; });
+  await assert.rejects(api.listarProductosSigo("empresa-1"));
+  assert.equal(llamadas, 1, "a technical error never becomes a usable catalog or a legacy fallback");
 });
 
 test("alta producto+unidad usa una sola escritura atómica y verifica unidad", async () => {
@@ -102,18 +106,19 @@ test("venta consolida duplicados en enteros y preserva exactamente milésimas", 
   assert.throws(() => consolidarItemsVenta([{ productoId: "p", cantidad: Number.MAX_SAFE_INTEGER }]), /tres decimales/);
 });
 
-test("catálogo y unidades paginan más de 1000 productos sin omitir el peso", async () => {
-  const catalogo = Array.from({ length: 1001 }, (_, i) => ({ ...producto, id: `p-${i}` }));
+test("catálogo y unidades paginan en SQL más de 1000 productos sin omitir el peso", async () => {
+  const catalogo = Array.from({ length: 1001 }, (_, i) => ({ ...producto, id: `p-${i}`, unidad_medida: "kg" }));
   const rangos = [];
-  const { listarProductosSigo } = await moduloConRpc(async (nombre, params, range) => {
-    rangos.push([nombre, ...range]);
-    const source = nombre === "listar_productos_sigo" ? catalogo : catalogo.map((p) => ({ producto_id: p.id, unidad_medida: "kg" }));
-    return { data: source.slice(range[0], range[1] + 1), error: null };
+  const { listarProductosSigo } = await moduloConRpc(async (nombre, params) => {
+    assert.equal(nombre, "consultar_productos_sigo");
+    assert.ok(params.p_limite <= 500);
+    rangos.push(params.p_offset);
+    return { data: catalogo.slice(params.p_offset, params.p_offset + params.p_limite), error: null };
   });
   const cargados = await listarProductosSigo("empresa-1");
   assert.equal(cargados.length, 1001);
   assert.equal(cargados[1000].unidad_medida, "kg");
-  assert.equal(rangos.length, 4);
+  assert.deepEqual(rangos, [0, 500, 1000, 1001]);
 });
 
 test("excepción de transporte durante escritura bloquea reenvío optimista", async () => {
@@ -195,21 +200,22 @@ test("cancelación del catálogo llega al transporte y bloquea páginas/unidades
     return { data: Array.from({ length: 1000 }, (_, i) => ({ ...producto, id: String(i) })), error: null };
   });
   await assert.rejects(api.listarProductosSigo("empresa-1", controller.signal), /DEADLINE/);
-  assert.deepEqual(llamadas, ["listar_productos_sigo"]);
+  assert.deepEqual(llamadas, ["consultar_productos_sigo"]);
   await assert.rejects(api.listarUnidadesProductoSigo("empresa-1", controller.signal), /DEADLINE/);
   assert.equal(llamadas.length, 1, "an already expired signal never starts another request");
 });
 
-test("cancelación durante unidades no devuelve catálogo vendible ni continúa paginando", async () => {
+test("cancelación de otra página con unidades no devuelve catálogo parcial vendible", async () => {
   const controller = new AbortController();
   const llamadas = [];
-  const api = await moduloConRpc(async (nombre, _params, _range, signal) => {
+  const api = await moduloConRpc(async (nombre, params, _range, signal) => {
     llamadas.push(nombre);
     assert.equal(signal, controller.signal);
-    if (nombre === "listar_productos_sigo") return { data: [producto], error: null };
+    assert.equal(nombre, "consultar_productos_sigo");
+    if (params.p_offset === 0) return { data: [{ ...producto, unidad_medida: "kg" }], error: null };
     controller.abort(new Error("UNITS_DEADLINE"));
-    return { data: Array.from({ length: 1000 }, () => ({ producto_id: producto.id, unidad_medida: "kg" })), error: null };
+    return { data: [{ ...producto, id: "producto-2", unidad_medida: "kg" }], error: null };
   });
   await assert.rejects(api.listarProductosSigo("empresa-1", controller.signal), /UNITS_DEADLINE/);
-  assert.deepEqual(llamadas, ["listar_productos_sigo", "listar_unidades_producto_sigo"]);
+  assert.deepEqual(llamadas, ["consultar_productos_sigo", "consultar_productos_sigo"]);
 });

@@ -1,3 +1,4 @@
+import { errorCatalogo } from "./erroresCatalogo";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   buscarProductoPorCodigo,
@@ -152,6 +153,11 @@ export default function BarcodeScanner({
         && requestRef.current === requestId;
       if (!contextoVigente) return;
       if (matches.length === 0) {
+        if (source === "wedge" && !/^\d+$/.test(normalized) && onManualQuery?.(normalized)) {
+          setCode(normalized);
+          focusScanner();
+          return;
+        }
         setError(`No se encontró un producto con el código ${normalized}.`);
         if (source === "camera") setCameraStatus("Código leído, pero no existe en esta empresa.");
         return;
@@ -204,7 +210,7 @@ export default function BarcodeScanner({
         && actionActivaRef.current === actionOperacion
         && requestRef.current === requestId
       ) {
-        setError("No se pudo consultar el código. Verificá conexión, permisos y empresa activa.");
+        setError(errorCatalogo(e).message);
       }
     } finally {
       inFlightRef.current = false;
@@ -485,7 +491,7 @@ export default function BarcodeScanner({
               const now = Date.now();
               if (now - inputWedgeRef.current.lastAt > SCANNER_GAP_MS) inputWedgeRef.current.buffer = "";
               inputWedgeRef.current.lastAt = now;
-              inputWedgeRef.current.buffer = /^\d$/.test(e.key)
+              inputWedgeRef.current.buffer = !/\s/.test(e.key)
                 ? inputWedgeRef.current.buffer + e.key
                 : "";
               return;
@@ -497,7 +503,7 @@ export default function BarcodeScanner({
               const scan = normalizeBarcode(inputWedgeRef.current.buffer);
               const scanWasFast = Date.now() - inputWedgeRef.current.lastAt <= SCANNER_GAP_MS * 2;
               inputWedgeRef.current = { buffer: "", lastAt: 0 };
-              if (scan.length >= 4 && /^\d{4,}$/.test(scan) && scanWasFast) {
+              if (scan.length >= 4 && !/\s/.test(scan) && scanWasFast) {
                 e.preventDefault();
                 e.stopPropagation();
                 setCode("");

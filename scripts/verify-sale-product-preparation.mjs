@@ -14,7 +14,7 @@ for (const token of [
 }
 
 for (const token of [
-  "listarProductosSigo(empresaId)",
+  "useBusquedaProductos(empresaId, busquedaProducto)",
   "isLegacyDuplicateProduct(producto)",
   'onBlockedProduct={marcarProductoBloqueado}',
   "onProductSearchKeyDown={manejarTeclaBusquedaProducto}",

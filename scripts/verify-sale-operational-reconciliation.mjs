@@ -42,7 +42,7 @@ if (!ventas.includes('confirmar_venta_sigo_v2')) {
   throw new Error("Sale confirmation must remain on the hardened transactional RPC");
 }
 
-if (!ventas.includes('listarProductosSigo')) {
+if (!ventas.includes('leerProductosPorIdsSigo') || ventas.includes('await listarProductosSigo(')) {
   throw new Error("Post-sale verification must keep optional tenant product stock checks");
 }
 

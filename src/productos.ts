@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { errorCatalogo } from "./erroresCatalogo";
 import { cantidadEscaladaMedida, normalizarUnidadVenta, type UnidadVenta } from "./ventaPorMedidas";
 
 export type ProductoSigo = {
@@ -209,6 +210,43 @@ export class ProductoGuardadoSinVerificarError extends Error {
   }
 }
 
+export type PaginaProductos = { productos: ProductoSigo[]; hayMas: boolean };
+export const TAMANO_PAGINA_PRODUCTOS = 50;
+
+async function consultarCatalogo(empresaId: string, parametros: Record<string, unknown>, signal?: AbortSignal): Promise<ProductoSigo[]> {
+  if (!empresaId) throw new Error("EMPRESA_REQUIRED");
+  signal?.throwIfAborted();
+  const consulta = supabase.rpc("consultar_productos_sigo", { p_empresa_id: empresaId, ...parametros });
+  let respuesta;
+  try { respuesta = await (signal ? consulta.abortSignal(signal) : consulta); }
+  catch (error) { signal?.throwIfAborted(); throw errorCatalogo(error); }
+  const { data, error } = respuesta;
+  signal?.throwIfAborted();
+  if (error) throw errorCatalogo(error);
+  const productos = (data ?? []) as ProductoSigo[];
+  if (productos.some(p => p.empresa_id !== empresaId)) throw errorCatalogo("TENANT_PRODUCT_MISMATCH");
+  return productos.map(p => ({ ...p, unidad_medida: normalizarUnidadVenta(p.unidad_medida) }));
+}
+
+// El límite es por página, no por catálogo. Una fila adicional indica si hay otra página.
+export async function buscarProductosSigo(empresaId: string, texto = "", pagina = 0, signal?: AbortSignal): Promise<PaginaProductos> {
+  if (!Number.isSafeInteger(pagina) || pagina < 0) throw new Error("PAGE_INVALID");
+  const filas = await consultarCatalogo(empresaId, {
+    p_busqueda: texto.trim(), p_offset: pagina * TAMANO_PAGINA_PRODUCTOS,
+    p_limite: TAMANO_PAGINA_PRODUCTOS + 1,
+  }, signal);
+  return { productos: filas.slice(0, TAMANO_PAGINA_PRODUCTOS), hayMas: filas.length > TAMANO_PAGINA_PRODUCTOS };
+}
+
+export async function leerProductosPorIdsSigo(empresaId: string, ids: string[], signal?: AbortSignal): Promise<ProductoSigo[]> {
+  const unicos = [...new Set(ids)];
+  const productos: ProductoSigo[] = [];
+  for (let i = 0; i < unicos.length; i += 100) {
+    productos.push(...await consultarCatalogo(empresaId, { p_ids: unicos.slice(i, i + 100), p_limite: 100 }, signal));
+  }
+  return productos;
+}
+
 export async function listarUnidadesProductoSigo(empresaId: string, signal?: AbortSignal): Promise<Record<string, UnidadVenta | null>> {
   if (!empresaId) throw new Error("EMPRESA_REQUIRED");
   const mapa: Record<string, UnidadVenta | null> = {};
@@ -229,26 +267,19 @@ export async function listarUnidadesProductoSigo(empresaId: string, signal?: Abo
 
 export async function listarProductosSigo(empresaId: string, signal?: AbortSignal): Promise<ProductoSigo[]> {
   if (!empresaId) throw new Error("EMPRESA_REQUIRED");
-  // PostgREST/Supabase puede limitar una respuesta a 1000 filas. Conservamos paginación
-  // y orden estable, también para unidades; nunca completar faltantes como piezas.
-  const pageSize = 1000;
+  // Lectores completos (stock, informes/importación) reutilizan el endpoint SQL
+  // paginado. No materializar el catálogo entero dentro de la RPC por cada página.
+  // Avanzar por filas recibidas hasta una página vacía respeta incluso un límite
+  // PostgREST inferior al solicitado; nunca confundirlo con el fin del catálogo.
+  const pageSize = 500;
   const productos: ProductoSigo[] = [];
-  for (let from = 0; ; from += pageSize) {
-    signal?.throwIfAborted();
-    const consulta = supabase.rpc("listar_productos_sigo", { p_empresa_id: empresaId })
-      .order("nombre").order("id").range(from, from + pageSize - 1);
-    const { data, error } = await (signal ? consulta.abortSignal(signal) : consulta);
-    signal?.throwIfAborted();
-    if (error) throw new Error(mensajeErrorBackend(error, "No se pudieron cargar los productos."));
-    const pagina = (data ?? []) as ProductoSigo[];
+  for (let from = 0; ;) {
+    const pagina = await consultarCatalogo(empresaId, { p_busqueda: "", p_offset: from, p_limite: pageSize }, signal);
+    if (pagina.length === 0) break;
     productos.push(...pagina);
-    if (pagina.length < pageSize) break;
+    from += pagina.length;
   }
-  // Un error de unidades no oculta el catálogo, pero jamás autoriza vender por pieza.
-  let unidades: Record<string, UnidadVenta | null> = {};
-  try { unidades = await listarUnidadesProductoSigo(empresaId, signal); } catch { /* fail closed por producto */ }
-  signal?.throwIfAborted();
-  return productos.map((producto) => ({ ...producto, unidad_medida: unidades[producto.id] ?? null }));
+  return productos;
 }
 
 export async function guardarProductoSigo(input: GuardarProductoSigoInput): Promise<string> {

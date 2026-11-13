@@ -63,13 +63,23 @@ test('only the reviewed V4 pending migration still block automatic activation', 
 });
 
 test('observed 99 local /107 remote metadata fails closed with 14 historical pending and 23 remote-only', () => {
-  assert.equal(local.length, drift.localCount);
-  assert.equal(observedRemote.length, drift.liveCount);
-  const result = assessMigrationHistory(local, envelope(observedRemote));
+  // Preserve the recorded historical fixture when later candidates are added.
+  const historical = local.filter(row => row.version <= '20261022024847');
+  const historicalRemote = [...rows(historical.filter(row => !pending.has(row.version))), ...drift.remoteOnly];
+  assert.equal(historical.length, drift.localCount);
+  assert.equal(historicalRemote.length, drift.liveCount);
+  const result = assessMigrationHistory(historical, envelope(historicalRemote));
   assert.equal(result.exitCode, 2);
   assert.equal(result.unexpectedPending.length, 14);
   assert.equal(result.remoteOnly.length, 23);
   assert.equal(result.reviewedPending.length, 1);
+});
+
+test('catalogue candidate is blocked when absent from an otherwise aligned remote history', () => {
+  const result = assessMigrationHistory(local, envelope(rows(local.filter(row => row.name !== 'catalogo_busqueda_servidor_121'))));
+  assert.equal(result.status, 'BLOCKED_HISTORY_DRIFT');
+  assert.equal(result.unexpectedPending.some(row => row.name === 'catalogo_busqueda_servidor_121'), true);
+  assert.equal(result.productionAuthorized, false);
 });
 
 test('recording the new V4 ID cannot hide the remaining historical discrepancies', () => {

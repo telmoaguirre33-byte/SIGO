@@ -1,0 +1,17 @@
+{
+  "status": "PASS",
+  "syntheticProductsPerTenant": 50000,
+  "tenants": 2,
+  "actualCandidate": "docs/operacion-controlada/productos-rls/02_APLICAR_PRODUCTOS_RLS_NO_AUTORIZADO.sql",
+  "cases": [
+    "owner/admin/seller/warehouse read only their company",
+    "explicit deny/null session/nonmember",
+    "anon and direct DML/TRUNCATE denied",
+    "old and new RPCs remain usable with permission masking",
+    "apply/rollback/reapply preserve every product row"
+  ],
+  "limitations": [
+    "Prepared RLS candidate was applied only to an explicitly isolated synthetic PostgreSQL fixture",
+    "Global production RLS and external/shared-table consumers require explicit scope review and authorization; no production gate is certified by this test"
+  ]
+}
