@@ -32,8 +32,11 @@ if (api.includes('itemsRaw.slice(0, MAX_INVOICE_ITEMS)') || api.includes('raw.it
 if (!api.includes('cuitArgentinoValido(cuitLeido)')) throw new Error('Invoice AI regression: server must validate Argentine CUIT check digit');
 if (!api.includes('Number.isFinite')) throw new Error('Invoice AI regression: server must reject non-finite numeric values');
 if (!api.includes('signal: controller.signal')) throw new Error('Invoice AI regression: Gemini request must have a timeout signal');
-if (api.includes('OPENAI_API_KEY') || api.includes('api.openai.com')) {
-  throw new Error('Invoice AI regression: purchase document analyzer must use Gemini, not OpenAI');
+if (!api.includes('OPENAI_API_KEY') || !api.includes('api.openai.com/v1/chat/completions')) {
+  throw new Error('Invoice AI regression: optional OpenAI invoice provider missing');
+}
+if (!api.includes('normalizarFacturaIA(leido)') || !api.includes('purchases.write')) {
+  throw new Error('Invoice AI regression: provider must preserve invoice validation and permissions');
 }
 if (!api.includes('responseMimeType: "application/json"') || !api.includes('responseSchema: FACTURA_RESPONSE_SCHEMA')) {
   throw new Error('Invoice AI regression: Gemini output must remain constrained to the invoice JSON contract');
