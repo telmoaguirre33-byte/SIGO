@@ -6,9 +6,14 @@ on:
       action:
         description: 'prepare: conexión/destino. capture: respaldo/restore, nunca SQL productivo.'
         type: choice
-        options: [custody-exercise, custody-capture, custody-verify]
+        options: [custody-exercise, custody-capture, custody-verify, rls-execute]
         default: custody-exercise
         required: true
+      approval_comment_id:
+        description: 'Only for rls-execute: exact owner authorization comment ID.'
+        type: string
+        default: ''
+        required: false
 
 permissions:
   contents: read
@@ -28,13 +33,13 @@ jobs:
           persist-credentials: false
       - name: Guardas unitarias de la herramienta existente
         working-directory: docs/operacion-controlada/respaldo-local
-        run: python3 -m unittest test_respaldo.py test_cloud.py test_custodia.py
+        run: python3 -m unittest test_respaldo.py test_cloud.py test_custodia.py test_rls_autorizado.py
       - name: Ensayo con imagen Supabase sin credenciales productivas
         if: inputs.action == 'custody-exercise'
         working-directory: docs/operacion-controlada/respaldo-local
         run: python3 custodia.py exercise
       - name: Operador privado sin artifacts
-        if: inputs.action == 'custody-capture' || inputs.action == 'custody-verify'
+        if: inputs.action == 'custody-capture' || inputs.action == 'custody-verify' || inputs.action == 'rls-execute'
         working-directory: docs/operacion-controlada/respaldo-local
         env:
           SIGO_BACKUP_DATABASE_URL: ${{ secrets.SIGO_BACKUP_DATABASE_URL }}
@@ -45,8 +50,11 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SIGO_BACKUP_STORAGE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           BACKUP_ACTION: ${{ inputs.action }}
+          SIGO_RLS_APPROVAL_COMMENT: ${{ inputs.approval_comment_id }}
         run: |
-          if [ "$BACKUP_ACTION" = "custody-verify" ]; then
+          if [ "$BACKUP_ACTION" = "rls-execute" ]; then
+            python3 rls_autorizado.py
+          elif [ "$BACKUP_ACTION" = "custody-verify" ]; then
             python3 custodia.py verify
           else
             python3 custodia.py capture
