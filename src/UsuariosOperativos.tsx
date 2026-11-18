@@ -117,7 +117,7 @@ export default function UsuariosOperativos({ empresaId, actorRol }: { empresaId:
   }
 
   function puedePersonalizarPermisos(usuario: UsuarioEmpresaSigo) {
-    return actorRol === "owner" && usuario.rol !== "owner";
+    return (actorRol === "owner" && usuario.rol !== "owner") || (actorRol === "admin" && (usuario.rol === "seller" || usuario.rol === "warehouse"));
   }
 
   async function guardarUsuario(usuario: UsuarioEmpresaSigo, nextRol: SigoRole, nextActivo: boolean) {
@@ -153,7 +153,7 @@ export default function UsuariosOperativos({ empresaId, actorRol }: { empresaId:
       <div className="page-header">
         <div>
           <h2>Usuarios y permisos</h2>
-          <p>Administrá el equipo de esta empresa sin mezclar accesos entre tenants. El Propietario puede personalizar permisos por empleado; las restricciones se aplican también en backend.</p>
+          <p>Administrá el equipo de esta empresa sin mezclar accesos entre tenants. El Propietario configura permisos del equipo; el Administrador puede configurar vendedores y depósito de su empresa, sin otorgar permisos que no posee. Las restricciones se aplican también en backend.</p>
         </div>
         <button className="admin-button" onClick={() => void cargar()} disabled={loading}>Actualizar</button>
       </div>
@@ -279,7 +279,7 @@ export default function UsuariosOperativos({ empresaId, actorRol }: { empresaId:
         </div>
       </div>
 
-      {permissionUser && actorRol === "owner" ? (
+      {permissionUser && puedePersonalizarPermisos(permissionUser) ? (
         <PermisosUsuarioModal
           empresaId={empresaId}
           usuario={permissionUser}
