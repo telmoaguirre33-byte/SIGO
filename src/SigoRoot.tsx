@@ -304,6 +304,9 @@ export default function SigoRoot() {
             : empresaActiva && <small>{empresaActiva.empresa_nombre} · {etiquetaRol(empresaActiva.rol)}</small>}
         </div>
         <div className="topbar-actions sigo-context-actions" role="navigation" aria-label="Módulos habilitados">
+          {!matrixMode && empresaActiva && workspacePermitido(empresaActiva.rol, "informes") && (
+            <button className="admin-button sigo-daily-sales-toolbar" type="button" onClick={() => window.dispatchEvent(new Event("sigo:abrir-ventas-dia"))}>Ventas por día</button>
+          )}
           {isSuperadmin ? (
             <button className={matrixMode ? "primary-button" : "admin-button"} onClick={() => setMatrixMode(true)}>Matriz</button>
           ) : null}
