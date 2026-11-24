@@ -200,6 +200,8 @@ export default function MobileOperationsMenu() {
                 </div>}
               </section>
 
+              {puedeAdministrar && <button className="sigo-mobile-drawer-item" type="button" onClick={abrirIngresos}><span>↗</span><strong>Ventas por día</strong><b>›</b></button>}
+
               {puedeAdministrar ? (
                 <section>
                   <button className="sigo-mobile-drawer-section" type="button" onClick={() => setGrupo(grupo === "egresos" ? null : "egresos")}>
