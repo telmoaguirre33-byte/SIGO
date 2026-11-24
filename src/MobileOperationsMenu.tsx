@@ -165,11 +165,6 @@ export default function MobileOperationsMenu() {
           <span aria-hidden="true">☰</span>
           <strong>Menú</strong>
         </button>
-        {puedeAdministrar && (
-          <button className="sigo-mobile-income-trigger" type="button" onClick={abrirIngresos}>
-            <span aria-hidden="true">↗</span><strong>Ventas por día</strong>
-          </button>
-        )}
       </div>
 
       {abierto && (
