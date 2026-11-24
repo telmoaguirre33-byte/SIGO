@@ -45,7 +45,7 @@ export default function IngresosLauncher() {
     function resolverHost() {
       const encontrado = document.querySelector<HTMLElement>(".sigo-report-catalog");
       setHost((actual) => actual === encontrado ? actual : encontrado);
-      if (!encontrado) setOpen(false);
+
     }
 
     resolverHost();
@@ -56,10 +56,21 @@ export default function IngresosLauncher() {
 
   async function abrir() {
     const activa = await cargarEmpresa();
-    if (activa) setOpen(true);
+    if (activa && ["owner", "admin"].includes(activa.rol)) setOpen(true);
   }
 
-  if (!empresa || !host) return null;
+  useEffect(() => {
+    const abrirDirecto = () => { void abrir(); };
+    const cambiarEmpresa = () => { setOpen(false); void cargarEmpresa(); };
+    window.addEventListener("sigo:abrir-ventas-dia", abrirDirecto);
+    window.addEventListener("sigo:empresa-activa-cambiada", cambiarEmpresa);
+    return () => {
+      window.removeEventListener("sigo:abrir-ventas-dia", abrirDirecto);
+      window.removeEventListener("sigo:empresa-activa-cambiada", cambiarEmpresa);
+    };
+  }, [cargarEmpresa]);
+
+  if (!empresa || !["owner", "admin"].includes(empresa.rol)) return null;
 
   const card = (
     <button
@@ -77,7 +88,7 @@ export default function IngresosLauncher() {
 
   return (
     <>
-      {createPortal(card, host)}
+      {host && createPortal(card, host)}
       {open && (
         <div className="sigo-income-overlay" role="dialog" aria-modal="true" aria-label="Ingresos por día">
           <div className="sigo-income-overlay-topbar">
