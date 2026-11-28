@@ -18,17 +18,7 @@ const ONBOARDING_MODE_METADATA_KEY = "sigo_onboarding_mode";
 const OWNER_ONBOARDING_MODE = "owner";
 const STAFF_ONBOARDING_MODE = "member";
 const SIGO_TRIAL_DAYS = 30;
-const SIGO_TRIAL_MS = SIGO_TRIAL_DAYS * 24 * 60 * 60 * 1000;
-const SIGO_TRIAL_POLICY_EFFECTIVE_AT = Date.parse("2026-09-20T17:00:00.000Z");
 const MERCADOPAGO_SUBSCRIPTION_URL = String(import.meta.env.VITE_MERCADOPAGO_SUBSCRIPTION_URL ?? "").trim();
-
-function pruebaVencida(session: Session) {
-  const metadata = session.user.user_metadata ?? {};
-  if (metadata[ONBOARDING_MODE_METADATA_KEY] !== OWNER_ONBOARDING_MODE) return false;
-  const createdAt = Date.parse(session.user.created_at);
-  if (!Number.isFinite(createdAt) || createdAt < SIGO_TRIAL_POLICY_EFFECTIVE_AT) return false;
-  return Date.now() >= createdAt + SIGO_TRIAL_MS;
-}
 
 function esLimiteTemporal(errorMessage: string) {
   const normalized = errorMessage.toLowerCase();
@@ -50,8 +40,6 @@ function mensajeAcceso(errorMessage: string) {
 export default function SigoAuthGate({ children }: Props) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [accesoTemporal, setAccesoTemporal] = useState<{ usuario: string; permitido: boolean } | null>(null);
-  const sesionConPruebaVencida = session && pruebaVencida(session) ? session : null;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -92,10 +80,8 @@ export default function SigoAuthGate({ children }: Props) {
       }
       // Only an explicit sign-out tears down the cashier. A transient event
       // without a session must not discard a cart or orphan its payment ACK.
-      if (event === "SIGNED_OUT") {
-        setAccesoTemporal(null);
-        setSession(null);
-      } else if (nextSession) setSession(nextSession);
+      if (event === "SIGNED_OUT") setSession(null);
+      else if (nextSession) setSession(nextSession);
       setLoading(false);
     });
 
@@ -104,36 +90,6 @@ export default function SigoAuthGate({ children }: Props) {
       listener.subscription.unsubscribe();
     };
   }, []);
-
-  useEffect(() => {
-    if (!sesionConPruebaVencida || mode === "recovery") return;
-    const consulta = new AbortController();
-    let activa = true;
-    const registrarResultado = (permitido: boolean) => {
-      if (activa) setAccesoTemporal({ usuario: sesionConPruebaVencida.user.id, permitido });
-    };
-    const limite = window.setTimeout(() => {
-      consulta.abort();
-      registrarResultado(false);
-    }, 5000);
-
-    void (async () => {
-      try {
-        const { data, error } = await supabase.rpc("sigo_acceso_temporal_127").abortSignal(consulta.signal);
-        if (!consulta.signal.aborted) registrarResultado(!error && data === true);
-      } catch {
-        if (!consulta.signal.aborted) registrarResultado(false);
-      } finally {
-        window.clearTimeout(limite);
-      }
-    })();
-
-    return () => {
-      activa = false;
-      window.clearTimeout(limite);
-      consulta.abort();
-    };
-  }, [sesionConPruebaVencida, mode]);
 
   useEffect(() => {
     const abrirSuscripcionDesdePanel = () => {
@@ -436,27 +392,7 @@ export default function SigoAuthGate({ children }: Props) {
   }
 
   if (loading) return <main className="sigo-auth-screen"><section className="sigo-auth-card">Verificando sesión…</section></main>;
-  if (session && mode !== "recovery") {
-    if (!sesionConPruebaVencida || (accesoTemporal?.usuario === session.user.id && accesoTemporal.permitido)) return <>{children}</>;
-    if (accesoTemporal?.usuario !== session.user.id) {
-      return <main className="sigo-auth-screen"><section className="sigo-auth-card" role="status">Verificando acceso…</section></main>;
-    }
-    return (
-      <main className="sigo-auth-screen">
-        <section className="sigo-auth-card" aria-labelledby="sigo-trial-expired-title">
-          <div className="sigo-auth-brand">
-            <div className="sigo-auth-brand-mark" aria-hidden="true"><img width="180" height="180" src="/sigo-logo-oficial.png" alt="" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "inherit" }} /></div>
-            <div className="sigo-auth-brand-copy"><strong>SIGO</strong><span>Sistema Inteligente de Gestión Operativa</span></div>
-          </div>
-          <h1 id="sigo-trial-expired-title">Finalizó tu prueba de 30 días</h1>
-          <p className="sigo-auth-subtitle">Tus datos siguen guardados. Activá la suscripción para continuar usando SIGO.</p>
-          {error ? <div className="sigo-auth-error" role="alert">{error}</div> : null}
-          <button className="sigo-auth-submit sigo-mercadopago-button" type="button" onClick={abrirMercadoPago}>Activar con Mercado Pago</button>
-          <button className="sigo-auth-secondary" type="button" onClick={() => void cerrarSesionConPushRevocado()}>Cerrar sesión</button>
-        </section>
-      </main>
-    );
-  }
+  if (session && mode !== "recovery") return <>{children}</>;
 
   const campoPassword = (value: string, onChange: (value: string) => void, autoComplete: string) => (
     <label className="sigo-auth-field">

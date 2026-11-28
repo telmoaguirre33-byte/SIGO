@@ -20,7 +20,7 @@ function harness() {
   const slots = [], listeners = new Map();
   const state = {
     user: { id: "user-a", email: "test@example.invalid", user_metadata: {} },
-    companies: [company()], authError: null, listError: null, pendingList: null, pendingAuth: null,
+    tieneMembresias: false, companies: [company()], authError: null, listError: null, pendingList: null, pendingAuth: null,
     value: null, workspace: "operacion", mode: "menu", draft: null,
     tenantState: "loading", changes: [], states: [], reads: 0, provisions: 0, signouts: 0,
     tree: null, warnings: [],
@@ -86,6 +86,7 @@ function harness() {
       return state.companies.map(x => ({ ...x }));
     },
     crearEmpresaSigo: async () => { state.provisions++; state.companies = [company("new")]; return "new"; },
+    tieneMembresiasSigo: async () => state.tieneMembresias,
     guardarEmpresaActiva: () => {},
     leerEmpresaActivaGuardada: () => null,
     resolverEmpresaActiva: (list, preferred) => list.find(x => x.empresa_id === preferred) ?? list[0] ?? null,

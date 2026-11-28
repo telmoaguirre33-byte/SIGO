@@ -179,6 +179,13 @@ export async function cargarMisEmpresas(): Promise<EmpresaOperativa[]> {
   }
 }
 
+export async function tieneMembresiasSigo(userId: string): Promise<boolean> {
+  const { data, error } = await supabase.from("empresa_usuarios")
+    .select("empresa_id").eq("user_id", userId).limit(1);
+  if (error) throw error;
+  return (data?.length ?? 0) > 0;
+}
+
 export async function crearEmpresaSigo(nombre: string): Promise<string> {
   const limpio = nombre.trim();
   if (!limpio) throw new Error("EMPRESA_NOMBRE_REQUIRED");
