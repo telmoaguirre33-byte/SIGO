@@ -5,7 +5,8 @@ import InformesOperativos from "./InformesOperativos";
 import MatrizAdmin from "./MatrizAdmin";
 import PortalCliente from "./PortalCliente";
 import SigoApp from "./SigoApp";
-import TenantSwitcher from "./TenantSwitcher";
+import TenantSwitcher, { type TenantState } from "./TenantSwitcher";
+import AvisoVencimiento from "./AvisoVencimiento";
 import UsuariosOperativos from "./UsuariosOperativos";
 import {
   cargarMisEmpresas,
@@ -35,7 +36,6 @@ const WORKSPACE_LABELS: Record<SigoWorkspace, string> = {
 const PENDING_EMPRESA_METADATA_KEY = "sigo_empresa_nombre";
 const ONBOARDING_MODE_METADATA_KEY = "sigo_onboarding_mode";
 const STAFF_ONBOARDING_MODE = "member";
-type TenantState = "loading" | "ready" | "empty" | "error";
 type EmptyTenantMode = "checking" | "member" | "owner";
 
 export default function SigoRoot() {
@@ -326,6 +326,7 @@ export default function SigoRoot() {
         )}
       </div>
 
+      {!matrixMode && empresaActiva && tenantState === "ready" && <AvisoVencimiento key={empresaActiva.empresa_id} empresaId={empresaActiva.empresa_id} />}
       {!tenantReady || tenantState === "loading" ? (
         <main className="sigo-onboarding-card" aria-live="polite"><h1>Preparando SIGO…</h1><p>Estamos cargando tu empresa y tus permisos.</p></main>
       ) : tenantState === "error" ? (
@@ -334,7 +335,15 @@ export default function SigoRoot() {
           <div className="sigo-recovery-actions"><button className="primary-button" type="button" onClick={() => { setAutoRetryCount(0); setTenantRetryKey((value) => value + 1); }}>Reintentar ahora</button><button className="sigo-recovery-secondary" type="button" onClick={() => void cambiarUsuario()}>Volver al ingreso</button></div>
           <div className="sigo-recovery-foot">Tus datos permanecen protegidos. SIGO no modifica información mientras completa la reconexión.</div>
         </main>
-      ) : empresaActiva ? contenidoPrincipal : emptyTenantMode === "member" ? (
+      ) : tenantState === "blocked" && !matrixMode ? (
+        <main className="sigo-recovery">
+          <div className="sigo-recovery-head"><h1>Acceso a la empresa no disponible</h1><p>Contactá a la administración de SIGO para revisar el estado de tu acceso.</p></div>
+          <div className="sigo-recovery-actions">
+            <button className="primary-button" type="button" onClick={() => setTenantRetryKey((value) => value + 1)}>Actualizar acceso</button>
+            <button className="sigo-recovery-secondary" type="button" onClick={() => void cambiarUsuario()}>Volver al ingreso</button>
+          </div>
+        </main>
+      ) : empresaActiva || (matrixMode && isSuperadmin) ? contenidoPrincipal : emptyTenantMode === "member" ? (
         <main className="sigo-recovery" role="status" aria-live="polite">
           <div className="sigo-recovery-head">
             <div className="sigo-recovery-brand"><div className="sigo-recovery-mark"><img src="/sigo-logo-oficial.png" alt="" width="42" height="42" style={{ display: "block", width: "100%", height: "100%", objectFit: "contain" }} /></div><div><strong>SIGO</strong><span>Sistema Inteligente de Gestión Operativa</span></div></div>

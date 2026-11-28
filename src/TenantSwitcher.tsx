@@ -5,12 +5,13 @@ import {
   guardarEmpresaActiva,
   leerEmpresaActivaGuardada,
   resolverEmpresaActiva,
+  tieneMembresiasSigo,
   type EmpresaOperativa,
 } from "./tenant";
 import { supabase } from "./supabase";
 import { cerrarSesionConPushRevocado } from "./adminPush";
 
-type TenantState = "loading" | "ready" | "empty" | "error";
+export type TenantState = "loading" | "ready" | "empty" | "blocked" | "error";
 
 type ContextoCargado = { userId: string; empresa: EmpresaOperativa | null };
 
@@ -76,9 +77,19 @@ export default function TenantSwitcher({ value, onChange, onStateChange, disable
       let disponibles = await cargarMisEmpresas();
       if (requestRef.current !== requestId) return;
 
-      // La empresa sigue siendo el contenedor técnico que separa datos, pero ya no bloquea el acceso.
-      // Si el usuario autenticado todavía no tiene ninguna, SIGO crea un espacio operativo mínimo
-      // automáticamente y continúa. Luego el nombre/datos de empresa se pueden editar normalmente.
+      if (disponibles.length === 0) {
+        const tieneMembresias = await tieneMembresiasSigo(currentUserId);
+        if (requestRef.current !== requestId) return;
+        if (tieneMembresias) {
+          contextoRef.current = { userId: currentUserId, empresa: null };
+          setEmpresas([]);
+          onChange(null);
+          onStateChange?.("blocked");
+          return;
+        }
+      }
+
+      // El alta automática se reserva para usuarios sin membresías previas.
       if (disponibles.length === 0 && !contextoAnterior) {
         const metadataNombre = String(currentUser?.user_metadata?.sigo_empresa_nombre ?? "").trim();
         const emailNombre = String(currentUser?.email ?? "").split("@")[0]?.trim() ?? "";
