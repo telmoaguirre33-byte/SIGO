@@ -7,6 +7,7 @@ import {
   resolverEmpresaActiva,
   type EmpresaOperativa,
 } from "./tenant";
+import { limitarEmpresasPorAcceso } from "./accesoComercial";
 import { supabase } from "./supabase";
 import { cerrarSesionConPushRevocado } from "./adminPush";
 
@@ -101,6 +102,7 @@ export default function TenantSwitcher({ value, onChange, onStateChange, disable
         if (metadataError) console.warn("No se pudo limpiar el nombre pendiente de empresa", metadataError);
       }
 
+      disponibles = await limitarEmpresasPorAcceso(disponibles);
       if (requestRef.current !== requestId) return;
       setUserId(currentUserId);
       setEmpresas(disponibles);

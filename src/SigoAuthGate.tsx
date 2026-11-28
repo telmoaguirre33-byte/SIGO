@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { esAccesoVigente, misAccesosComerciales } from "./accesoComercial";
 import { supabase } from "./supabase";
 import { cerrarSesionConPushRevocado, notificarAltaEmpresaAdmin } from "./adminPush";
 import "./auth.css";
@@ -12,23 +13,15 @@ type BeforeInstallPromptEvent = Event & {
 };
 type AuthMode = "login" | "register" | "register_member" | "subscription" | "recovery";
 
-const SIGO_PRODUCTION_URL = "https://comercial-lilac.vercel.app/";
+const SIGO_PRODUCTION_URL = String(import.meta.env.VITE_PUBLIC_APP_URL ?? "https://www.sigo-gestion.com/").replace(/\/?$/, "/");
 const PENDING_EMPRESA_METADATA_KEY = "sigo_empresa_nombre";
 const ONBOARDING_MODE_METADATA_KEY = "sigo_onboarding_mode";
 const OWNER_ONBOARDING_MODE = "owner";
 const STAFF_ONBOARDING_MODE = "member";
 const SIGO_TRIAL_DAYS = 30;
-const SIGO_TRIAL_MS = SIGO_TRIAL_DAYS * 24 * 60 * 60 * 1000;
-const SIGO_TRIAL_POLICY_EFFECTIVE_AT = Date.parse("2026-09-20T17:00:00.000Z");
 const MERCADOPAGO_SUBSCRIPTION_URL = String(import.meta.env.VITE_MERCADOPAGO_SUBSCRIPTION_URL ?? "").trim();
 
-function pruebaVencida(session: Session) {
-  const metadata = session.user.user_metadata ?? {};
-  if (metadata[ONBOARDING_MODE_METADATA_KEY] !== OWNER_ONBOARDING_MODE) return false;
-  const createdAt = Date.parse(session.user.created_at);
-  if (!Number.isFinite(createdAt) || createdAt < SIGO_TRIAL_POLICY_EFFECTIVE_AT) return false;
-  return Date.now() >= createdAt + SIGO_TRIAL_MS;
-}
+type AccesoSesion = "permitido" | "suspendida" | "prueba_vencida" | "pago_vencido" | "error";
 
 function esLimiteTemporal(errorMessage: string) {
   const normalized = errorMessage.toLowerCase();
@@ -50,6 +43,30 @@ function mensajeAcceso(errorMessage: string) {
 export default function SigoAuthGate({ children }: Props) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [acceso, setAcceso] = useState<{ usuario: string; estado: AccesoSesion } | null>(null);
+  const [reintentoAcceso, setReintentoAcceso] = useState(0);
+  const usuarioId = session?.user.id;
+
+  useEffect(() => {
+    if (!usuarioId) {
+      setAcceso(null);
+      return;
+    }
+    let vigente = true;
+    void misAccesosComerciales().then((filas) => {
+      if (!vigente) return;
+      const estado = filas.length === 0 || filas.some((fila) => esAccesoVigente(fila.estado))
+        ? "permitido"
+        : filas.some((fila) => fila.estado === "pago_vencido") ? "pago_vencido"
+        : filas.some((fila) => fila.estado === "prueba_vencida") ? "prueba_vencida"
+        : "suspendida";
+      setAcceso({ usuario: usuarioId, estado });
+    }).catch(() => {
+      if (vigente) setAcceso({ usuario: usuarioId, estado: "error" });
+    });
+    return () => { vigente = false; };
+  }, [usuarioId, reintentoAcceso]);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -402,7 +419,10 @@ export default function SigoAuthGate({ children }: Props) {
 
   if (loading) return <main className="sigo-auth-screen"><section className="sigo-auth-card">Verificando sesión…</section></main>;
   if (session && mode !== "recovery") {
-    if (!pruebaVencida(session)) return <>{children}</>;
+    if (acceso?.usuario !== usuarioId) return <main className="sigo-auth-screen"><section className="sigo-auth-card">Verificando acceso…</section></main>;
+    if (acceso?.estado === "permitido") return <>{children}</>;
+    const estado = acceso?.estado;
+    const requierePago = estado === "prueba_vencida" || estado === "pago_vencido";
     return (
       <main className="sigo-auth-screen">
         <section className="sigo-auth-card" aria-labelledby="sigo-trial-expired-title">
@@ -410,10 +430,19 @@ export default function SigoAuthGate({ children }: Props) {
             <div className="sigo-auth-brand-mark" aria-hidden="true"><img width="180" height="180" src="/sigo-logo-oficial.png" alt="" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "inherit" }} /></div>
             <div className="sigo-auth-brand-copy"><strong>SIGO</strong><span>Sistema Inteligente de Gestión Operativa</span></div>
           </div>
-          <h1 id="sigo-trial-expired-title">Finalizó tu prueba de 30 días</h1>
-          <p className="sigo-auth-subtitle">Tus datos siguen guardados. Activá la suscripción para continuar usando SIGO.</p>
+          <h1 id="sigo-trial-expired-title">{estado === "prueba_vencida" ? "Finalizó tu prueba de 30 días"
+            : estado === "pago_vencido" ? "Tu suscripción requiere renovación"
+            : estado === "suspendida" ? "Tu acceso está suspendido"
+            : "No pudimos verificar tu acceso"}</h1>
+          <p className="sigo-auth-subtitle">{requierePago
+            ? "Tus datos siguen guardados. Si ya pagaste, volvé a verificar el acceso."
+            : estado === "suspendida" ? "Contactá a la administración de SIGO." : "Volvé a intentar en unos segundos."}</p>
           {error ? <div className="sigo-auth-error" role="alert">{error}</div> : null}
-          <button className="sigo-auth-submit sigo-mercadopago-button" type="button" onClick={abrirMercadoPago}>Activar con Mercado Pago</button>
+          {requierePago && <button className="sigo-auth-submit sigo-mercadopago-button" type="button" onClick={abrirMercadoPago}>Activar con Mercado Pago</button>}
+          <button className="sigo-auth-secondary" type="button" onClick={() => {
+            setAcceso(null);
+            setReintentoAcceso((valor) => valor + 1);
+          }}>Verificar acceso</button>
           <button className="sigo-auth-secondary" type="button" onClick={() => void cerrarSesionConPushRevocado()}>Cerrar sesión</button>
         </section>
       </main>
