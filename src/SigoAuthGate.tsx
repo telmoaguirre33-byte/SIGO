@@ -50,6 +50,9 @@ function mensajeAcceso(errorMessage: string) {
 export default function SigoAuthGate({ children }: Props) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [accesoTemporal, setAccesoTemporal] = useState<{ usuario: string; permitido: boolean } | null>(null);
+  const sesionConPruebaVencida = session && pruebaVencida(session) ? session : null;
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -89,8 +92,10 @@ export default function SigoAuthGate({ children }: Props) {
       }
       // Only an explicit sign-out tears down the cashier. A transient event
       // without a session must not discard a cart or orphan its payment ACK.
-      if (event === "SIGNED_OUT") setSession(null);
-      else if (nextSession) setSession(nextSession);
+      if (event === "SIGNED_OUT") {
+        setAccesoTemporal(null);
+        setSession(null);
+      } else if (nextSession) setSession(nextSession);
       setLoading(false);
     });
 
@@ -99,6 +104,36 @@ export default function SigoAuthGate({ children }: Props) {
       listener.subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!sesionConPruebaVencida || mode === "recovery") return;
+    const consulta = new AbortController();
+    let activa = true;
+    const registrarResultado = (permitido: boolean) => {
+      if (activa) setAccesoTemporal({ usuario: sesionConPruebaVencida.user.id, permitido });
+    };
+    const limite = window.setTimeout(() => {
+      consulta.abort();
+      registrarResultado(false);
+    }, 5000);
+
+    void (async () => {
+      try {
+        const { data, error } = await supabase.rpc("sigo_acceso_temporal_127").abortSignal(consulta.signal);
+        if (!consulta.signal.aborted) registrarResultado(!error && data === true);
+      } catch {
+        if (!consulta.signal.aborted) registrarResultado(false);
+      } finally {
+        window.clearTimeout(limite);
+      }
+    })();
+
+    return () => {
+      activa = false;
+      window.clearTimeout(limite);
+      consulta.abort();
+    };
+  }, [sesionConPruebaVencida, mode]);
 
   useEffect(() => {
     const abrirSuscripcionDesdePanel = () => {
@@ -402,7 +437,10 @@ export default function SigoAuthGate({ children }: Props) {
 
   if (loading) return <main className="sigo-auth-screen"><section className="sigo-auth-card">Verificando sesión…</section></main>;
   if (session && mode !== "recovery") {
-    if (!pruebaVencida(session)) return <>{children}</>;
+    if (!sesionConPruebaVencida || (accesoTemporal?.usuario === session.user.id && accesoTemporal.permitido)) return <>{children}</>;
+    if (accesoTemporal?.usuario !== session.user.id) {
+      return <main className="sigo-auth-screen"><section className="sigo-auth-card" role="status">Verificando acceso…</section></main>;
+    }
     return (
       <main className="sigo-auth-screen">
         <section className="sigo-auth-card" aria-labelledby="sigo-trial-expired-title">
