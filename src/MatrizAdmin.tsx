@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import type { EstadoComercial } from "./accesoComercial";
 import {
   validarReadinessSigoAdministracion,
   type OperationalReadinessResult,
 } from "./operationalReadiness";
 import { supabase } from "./supabase";
 import AdminNotifications from "./AdminNotifications";
+
+type PagoComercial = { importe_ars: number; registrado_en: string; proximo_pago: string };
 
 type EmpresaMatriz = {
   empresa_id: string;
@@ -26,6 +29,9 @@ type EmpresaMatriz = {
   busqueda_ean_habilitada?: boolean;
   lector_celular_habilitado?: boolean;
   mayorista_habilitado?: boolean;
+  estado_comercial?: EstadoComercial;
+  proximo_pago?: string | null;
+  historial_pagos?: PagoComercial[];
 };
 
 type Resumen = {
@@ -68,17 +74,24 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
   const [mayoristaError, setMayoristaError] = useState("");
   const [readinessLoading, setReadinessLoading] = useState(false);
 
+  const [pago, setPago] = useState<{ empresaId: string; operacionId: string; importe: string; vencimiento: string } | null>(null);
+
   async function cargar() {
     setLoading(true);
     setError("");
     try {
-      const [resumenResp, empresasResp, mayoristaResp] = await Promise.all([
+      const [resumenResp, empresasResp, mayoristaResp, comercialResp] = await Promise.all([
         supabase.rpc("matriz_resumen_sigo"),
         supabase.rpc("matriz_listar_empresas_sigo"),
         supabase.rpc("matriz_listar_mayorista_modulos_sigo"),
+        supabase.rpc("matriz_accesos_comerciales_sigo"),
       ]);
       if (resumenResp.error) throw resumenResp.error;
       if (empresasResp.error) throw empresasResp.error;
+      const estadosComerciales = new Map(
+        ((comercialResp.data ?? []) as Array<{ empresa_id: string; estado: EstadoComercial; fecha_proximo_pago: string | null; inicio_prueba: string; historial: PagoComercial[] }>)
+          .map((fila) => [fila.empresa_id, fila]),
+      );
       setMayoristaDisponible(!mayoristaResp.error);
       setMayoristaError(mayoristaResp.error ? "El módulo Mayorista requiere su migración de base de datos y permisos; queda desactivado." : "");
       const estadosMayorista = new Map<string, boolean>(
@@ -102,7 +115,7 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
         created_at: String(fila.created_at ?? ""),
         owner_email: typeof fila.owner_email === "string" ? fila.owner_email : null,
         owner_telefono: typeof fila.owner_telefono === "string" ? fila.owner_telefono : null,
-        trial_started_at: String(fila.trial_started_at ?? fila.created_at ?? ""),
+        trial_started_at: String(estadosComerciales.get(String(fila.empresa_id))?.inicio_prueba ?? fila.trial_started_at ?? fila.created_at ?? ""),
         trial_days: normalizarNumero(fila.trial_days) || 30,
         usuarios_activos: normalizarNumero(fila.usuarios_activos),
         administradores: normalizarNumero(fila.administradores),
@@ -113,6 +126,9 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
         busqueda_ean_habilitada: Boolean(fila.busqueda_ean_habilitada),
         lector_celular_habilitado: Boolean(fila.lector_celular_habilitado),
         mayorista_habilitado: estadosMayorista.get(String(fila.empresa_id)) ?? false,
+        estado_comercial: estadosComerciales.get(String(fila.empresa_id))?.estado,
+        proximo_pago: estadosComerciales.get(String(fila.empresa_id))?.fecha_proximo_pago,
+        historial_pagos: estadosComerciales.get(String(fila.empresa_id))?.historial,
       })));
     } catch (e) {
       console.error(e);
@@ -133,7 +149,7 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
       const inicio = new Date(empresa.trial_started_at || empresa.created_at);
       const vence = new Date(inicio.getTime() + empresa.trial_days * 86400000);
       const inicioIso = Number.isFinite(inicio.getTime()) ? inicio.toISOString().slice(0,10) : "";
-      const venceIso = Number.isFinite(vence.getTime()) ? vence.toISOString().slice(0,10) : "";
+      const venceIso = empresa.proximo_pago ?? (Number.isFinite(vence.getTime()) ? vence.toISOString().slice(0,10) : "");
       return coincideTexto && (!fechaInicio || inicioIso === fechaInicio) && (!fechaVencimiento || venceIso === fechaVencimiento);
     });
   }, [empresas, busqueda, fechaInicio, fechaVencimiento]);
@@ -183,6 +199,34 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
     } catch (e) {
       console.error(e);
       setError("No se pudo copiar automáticamente la evidencia; podés seleccionarla manualmente.");
+    }
+  }
+
+  async function registrarPago(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!pago || workingId) return;
+    setError("");
+    setMensaje("");
+    setWorkingId(pago.empresaId);
+    try {
+      const { error: errorPago } = await supabase.rpc("matriz_registrar_pago_sigo", {
+        p_empresa_id: pago.empresaId,
+        p_operacion_id: pago.operacionId,
+        p_importe: Number(pago.importe),
+        p_proximo_pago: pago.vencimiento,
+      });
+      if (errorPago) throw errorPago;
+      setPago(null);
+      setMensaje("Pago registrado y suscripción renovada.");
+      await cargar();
+    } catch (e) {
+      const detalle = (e as { message?: string }).message;
+      setError(detalle === "VENCIMIENTO_INVALIDO"
+        ? "El próximo pago debe ser futuro y posterior al vencimiento registrado."
+        : detalle === "EMPRESA_SUSPENDIDA" ? "La empresa está suspendida."
+        : "No pudimos confirmar el registro del pago. Podés reintentar con los mismos datos.");
+    } finally {
+      setWorkingId(null);
     }
   }
 
@@ -430,14 +474,27 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
                     const inicio = new Date(empresa.trial_started_at || empresa.created_at);
                     const vence = new Date(inicio.getTime() + empresa.trial_days * 86400000);
                     const dias = Math.ceil((vence.getTime() - Date.now()) / 86400000);
-                    const vencida = dias <= 0;
-                    const porVencer = !vencida && dias <= 10;
+                    const estado = empresa.estado_comercial;
+                    const vencida = estado === "prueba_vencida" || estado === "pago_vencido" || estado === "suspendida";
+                    const porVencer = estado === "prueba" && dias <= 10;
+                    const etiqueta = {
+                      pagada: "PAGO VIGENTE",
+                      pago_vencido: "PAGO VENCIDO",
+                      prueba: "PRUEBA VIGENTE",
+                      prueba_vencida: "PRUEBA VENCIDA",
+                      suspendida: "SUSPENDIDA",
+                      anterior: "SIN VENCIMIENTO DE PRUEBA",
+                      superadmin: "ADMINISTRACIÓN",
+                    };
                     const tel = telefonoWhatsApp(empresa.owner_telefono);
                     return <div className="sigo-matriz-commercial">
                       <span>Alta <strong>{fechaCorta(new Date(empresa.created_at))}</strong></span>
-                      <span>Prueba <strong>{fechaCorta(inicio)}</strong></span>
-                      <span>Vence <strong>{fechaCorta(vence)}</strong></span>
-                      <span className={vencida ? "trial-expired" : porVencer ? "trial-warning" : "trial-ok"}><strong>{vencida ? "PRUEBA VENCIDA" : `${dias} días`}</strong></span>
+                      {empresa.proximo_pago ? <span>Próximo pago <strong>{empresa.proximo_pago.split("-").reverse().join("/")}</strong></span>
+                        : (estado === "prueba" || estado === "prueba_vencida") && <>
+                          <span>Prueba <strong>{fechaCorta(inicio)}</strong></span>
+                          <span>Vence <strong>{fechaCorta(vence)}</strong></span>
+                        </>}
+                      <span className={vencida ? "trial-expired" : porVencer ? "trial-warning" : "trial-ok"}><strong>{estado ? etiqueta[estado] : "ESTADO COMERCIAL NO DISPONIBLE"}</strong></span>
                       {tel ? <a className="sigo-matriz-whatsapp" href={`https://wa.me/${tel}?text=${encodeURIComponent("Hola, te contacto desde SIGO Gestión por tu suscripción.")}`} target="_blank" rel="noreferrer" title={empresa.owner_telefono ?? "WhatsApp"} aria-label={`WhatsApp de ${empresa.nombre}`}><img src="/whatsapp.svg" alt="" /></a> : <span className="sigo-no-phone">Sin teléfono</span>}
                     </div>;
                   })()}
@@ -449,7 +506,29 @@ export default function MatrizAdmin({ onOpenEmpresa }: Props) {
                     <span><strong>{empresa.clientes_portal}</strong> clientes</span>
                   </div>
 
+                  {!!empresa.historial_pagos?.length && <details>
+                    <summary>Últimos pagos registrados</summary>
+                    <ul>{empresa.historial_pagos.map((registro, indice) => <li key={indice}>
+                      {fechaCorta(new Date(registro.registrado_en))} · {registro.importe_ars.toLocaleString("es-AR", { style: "currency", currency: "ARS" })}
+                      {" · Próximo pago "}{registro.proximo_pago.split("-").reverse().join("/")}
+                    </li>)}</ul>
+                  </details>}
+                  {pago?.empresaId === empresa.empresa_id && (
+                    <form className="sigo-matriz-commercial" onSubmit={(event) => void registrarPago(event)}>
+                      <label>Importe en ARS <input type="number" min="0.01" max="999999999999.99" step="0.01" required value={pago.importe} disabled={Boolean(workingId)}
+                        onChange={(event) => setPago({ ...pago, importe: event.target.value, operacionId: crypto.randomUUID() })} /></label>
+                      <label>Próximo pago <input type="date" required value={pago.vencimiento} disabled={Boolean(workingId)}
+                        onChange={(event) => setPago({ ...pago, vencimiento: event.target.value, operacionId: crypto.randomUUID() })} /></label>
+                      <button type="submit" className="primary-button" disabled={Boolean(workingId)}>Confirmar pago</button>
+                      <button type="button" className="admin-button" disabled={Boolean(workingId)} onClick={() => setPago(null)}>Cancelar</button>
+                    </form>
+                  )}
                   <div className="sigo-matriz-actions">
+                    {pago?.empresaId !== empresa.empresa_id && <button type="button" className="admin-button"
+                      disabled={Boolean(workingId) || !empresa.estado_comercial || empresa.estado_comercial === "suspendida"}
+                      onClick={() => setPago({ empresaId: empresa.empresa_id, operacionId: crypto.randomUUID(), importe: "", vencimiento: "" })}>
+                      Registrar pago y renovar
+                    </button>}
                     <button className={empresa.busqueda_ean_habilitada ? "admin-button" : "primary-button"} type="button" disabled={workingId === empresa.empresa_id} onClick={() => void cambiarBusquedaEan(empresa)}>
                       {empresa.busqueda_ean_habilitada ? "EAN: Activo" : "Agregar módulo EAN"}
                     </button>
